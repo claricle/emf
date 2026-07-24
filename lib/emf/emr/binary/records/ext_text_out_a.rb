@@ -7,24 +7,17 @@ module Emf
   module Emr
     module Binary
       module Records
-        # EMR_EXTTEXTOUTA per MS-EMF 2.3.8.1. Same layout as ExtTextOutW
-        # except the string is 8-bit ANSI (codepage-dependent) rather
-        # than UTF-16LE.
+        # EMR_EXTTEXTOUTA per MS-EMF 2.3.8.1. Same EMRTEXT layout as
+        # ExtTextOutW except the string is 8-bit ANSI.
         class ExtTextOutA < Emf::Emr::Binary::WithBounds
           uint32 :i_graphics_mode
           float :ex_scale
           float :ey_scale
-          int16 :wmf_rect_left
-          int16 :wmf_rect_top
-          int16 :wmf_rect_right
-          int16 :wmf_rect_bottom
+          point_l :ptl_reference
           uint32 :n_chars
           uint32 :off_string
           uint32 :f_options
-          int16 :wmf_rect2_left
-          int16 :wmf_rect2_top
-          int16 :wmf_rect2_right
-          int16 :wmf_rect2_bottom
+          rectl :rcl
           uint32 :off_dx
           rest :trailing
         end
