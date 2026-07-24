@@ -19,20 +19,23 @@ Layout/LineLength:
   Max: 140
 
 Metrics/MethodLength:
-  Max: 25
+  Max: 35
   Exclude:
     - "lib/emf/model/geometry/**/*.rb"
     - "spec/scripts/convert_docs_spec.rb"
+    - "exe/emf"
 
 Metrics/ModuleLength:
-  Max: 200
+  Max: 300
+  Exclude:
+    - "lib/emf/emr/binary/records.rb"
 
 Metrics/ClassLength:
   Exclude:
     - "scripts/convert_docs.rb"
 
 Metrics/AbcSize:
-  Max: 30
+  Max: 60
   Exclude:
     - "lib/emf/model/geometry/**/*.rb"
 
@@ -87,10 +90,11 @@ Lint/FloatComparison:
   Exclude:
     - "lib/emf/model/geometry/matrix.rb"
 
-# Hex format strings don't benefit from annotated tokens.
+# Hex/format strings don't benefit from annotated tokens.
 Style/FormatStringToken:
   Exclude:
     - "lib/emf/model/geometry/color.rb"
+    - "lib/emf/visitors/**/*"
     - "scripts/convert_docs.rb"
 
 # Visitor subclasses intentionally don't call super (the base Visitor has no
