@@ -5,15 +5,16 @@ module Emf
     class Metafile
       include Enumerable
 
-      def initialize(format:, header:, records:, errors: [], emf_plus: nil)
+      def initialize(format:, header:, records:, errors: [], emf_plus: nil, trailing: "")
         @format = format
         @header = header
         @records = records.freeze
         @errors = errors.freeze
         @emf_plus = emf_plus
+        @trailing = trailing.freeze
       end
 
-      attr_reader :format, :header, :records, :errors, :emf_plus
+      attr_reader :format, :header, :records, :errors, :emf_plus, :trailing
 
       def each(&block)
         return to_enum unless block

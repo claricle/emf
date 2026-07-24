@@ -16,6 +16,7 @@ module Emf
             raise SerializeError, "cannot serialize #{record.class} (TODO 10 lands domain to_wire)"
           end
         end
+        bytes << metafile.trailing
         bytes
       end
     end
