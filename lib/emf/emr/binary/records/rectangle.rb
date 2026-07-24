@@ -1,14 +1,16 @@
 # frozen_string_literal: true
 
 require "bindata"
-require "emf/emr/binary/with_bounds"
+require "emf/emr/binary/record"
 
 module Emf
   module Emr
     module Binary
       module Records
-        class Rectangle < Emf::Emr::Binary::WithBounds
-          rectl :rcl_box
+        # EMR_RECTANGLE: emr + rclBox per MS-EMF 2.3.5.
+        # No rclBounds.
+        class Rectangle < Emf::Emr::Binary::Record
+  rectl :rcl_box
         end
       end
     end
