@@ -8,6 +8,7 @@ module Emf
       module_function
 
       def call(bytes)
+        raise FormatError, "input too large (#{bytes.bytesize} > #{MAX_INPUT_BYTES}); refusing to parse" if bytes.bytesize > MAX_INPUT_BYTES
         raise FormatError, "not an EMF file (signature mismatch)" unless Emf::Detector.call(bytes) == :emf
 
         io = StringIO.new(bytes, "rb")
@@ -76,11 +77,19 @@ module Emf
         Binary::TypeCodes::POLYBEZIER16 => { count_offset: 24, element_size: 4 },
         Binary::TypeCodes::POLYBEZIERTO16 => { count_offset: 24, element_size: 4 },
         Binary::TypeCodes::POLYLINETO16 => { count_offset: 24, element_size: 4 },
-        Binary::TypeCodes::POLYDRAW => { count_offset: 24, element_size: 9 }, # 8 + 1 byte type
-        Binary::TypeCodes::POLYDRAW16 => { count_offset: 24, element_size: 5 }
+        Binary::TypeCodes::POLYDRAW => { count_offset: 24, element_size: 9 },
+        Binary::TypeCodes::POLYDRAW16 => { count_offset: 24, element_size: 5 },
+        # Multi-polygon records have TWO variable arrays: aPolyCounts
+        # (nPolys uint32s) and aptl/apts (cTotal entries of element_size).
+        Binary::TypeCodes::POLYPOLYGON => { count_offset: 24, count2_offset: 28, element_size: 8 },
+        Binary::TypeCodes::POLYPOLYLINE => { count_offset: 24, count2_offset: 28, element_size: 8 },
+        Binary::TypeCodes::POLYPOLYGON16 => { count_offset: 24, count2_offset: 28, element_size: 4 },
+        Binary::TypeCodes::POLYPOLYLINE16 => { count_offset: 24, count2_offset: 28, element_size: 4 }
       }.freeze
 
       MAX_SANE_ARRAY_LENGTH = 1_000_000
+      # Bounds the whole-file parse: a 100 MB EMF is unusual; refuse bigger.
+      MAX_INPUT_BYTES = 200 * 1024 * 1024
 
       def variable_array_sane?(type_id, n_size, head, payload)
         spec = VARIABLE_ARRAY_RECORDS[type_id]
@@ -89,13 +98,26 @@ module Emf
         full = head + payload
         return true if full.bytesize < spec[:count_offset] + 4
 
-        offset = spec[:count_offset]
-        count = full.getbyte(offset) |
-                (full.getbyte(offset + 1) << 8) |
-                (full.getbyte(offset + 2) << 16) |
-                (full.getbyte(offset + 3) << 24)
+        count = read_uint32(full, spec[:count_offset])
+        return false if count > MAX_SANE_ARRAY_LENGTH
+
         bytes_needed = spec[:count_offset] + 4 + (count * spec[:element_size])
-        count <= MAX_SANE_ARRAY_LENGTH && bytes_needed <= n_size
+        return false if bytes_needed > n_size
+
+        # Multi-array records also need to validate the second count.
+        return true unless spec[:count2_offset]
+
+        count2 = read_uint32(full, spec[:count2_offset])
+        return false if count2 > MAX_SANE_ARRAY_LENGTH
+
+        bytes_needed + (count2 * spec[:element_size]) <= n_size
+      end
+
+      def read_uint32(bytes, offset)
+        bytes.getbyte(offset) |
+          (bytes.getbyte(offset + 1) << 8) |
+          (bytes.getbyte(offset + 2) << 16) |
+          (bytes.getbyte(offset + 3) << 24)
       end
 
       def read_record(io, offset, errors)
