@@ -29,6 +29,7 @@ module Emf
         autoload :SetWindowExtEx, "emf/emr/binary/records/set_window_ext_ex"
         autoload :SetViewportOrgEx, "emf/emr/binary/records/set_viewport_org_ex"
         autoload :SetViewportExtEx, "emf/emr/binary/records/set_viewport_ext_ex"
+        autoload :SetBrushOrgEx, "emf/emr/binary/records/set_brush_org_ex"
         autoload :MoveToEx, "emf/emr/binary/records/move_to_ex"
         autoload :LineTo, "emf/emr/binary/records/line_to"
         autoload :Rectangle, "emf/emr/binary/records/rectangle"
@@ -38,6 +39,8 @@ module Emf
         autoload :ArcTo, "emf/emr/binary/records/arc_to"
         autoload :Chord, "emf/emr/binary/records/chord"
         autoload :Pie, "emf/emr/binary/records/pie"
+        autoload :AngleArc, "emf/emr/binary/records/angle_arc"
+        autoload :SetArcDirection, "emf/emr/binary/records/set_arc_direction"
         autoload :Polygon, "emf/emr/binary/records/polygon"
         autoload :Polyline, "emf/emr/binary/records/polyline"
         autoload :PolyBezier, "emf/emr/binary/records/poly_bezier"
@@ -48,6 +51,8 @@ module Emf
         autoload :PolyBezierTo16, "emf/emr/binary/records/poly_bezier_to16"
         autoload :PolylineTo, "emf/emr/binary/records/polyline_to"
         autoload :PolylineTo16, "emf/emr/binary/records/polyline_to16"
+        autoload :PolyDraw, "emf/emr/binary/records/poly_draw"
+        autoload :PolyDraw16, "emf/emr/binary/records/poly_draw16"
         autoload :PolyPolyline, "emf/emr/binary/records/poly_polyline"
         autoload :PolyPolygon, "emf/emr/binary/records/poly_polygon"
         autoload :PolyPolyline16, "emf/emr/binary/records/poly_polyline16"
@@ -71,11 +76,58 @@ module Emf
         autoload :CreateFontIndirectW, "emf/emr/binary/records/create_font_indirect_w"
         autoload :ExtCreatePen, "emf/emr/binary/records/ext_create_pen"
         autoload :StretchDIBits, "emf/emr/binary/records/stretch_dibits"
+        autoload :SetPixelV, "emf/emr/binary/records/set_pixel_v"
+        autoload :SetMetArgn, "emf/emr/binary/records/set_metargn"
+        autoload :OffsetClipRgn, "emf/emr/binary/records/offset_clip_rgn"
+        autoload :ExcludeClipRect, "emf/emr/binary/records/exclude_clip_rect"
+        autoload :IntersectClipRect, "emf/emr/binary/records/intersect_clip_rect"
+        autoload :ExtSelectClipRgn, "emf/emr/binary/records/ext_select_clip_rgn"
+        autoload :ScaleViewportExtEx, "emf/emr/binary/records/scale_viewport_ext_ex"
+        autoload :ScaleWindowExtEx, "emf/emr/binary/records/scale_window_ext_ex"
+        autoload :SetMapperFlags, "emf/emr/binary/records/set_mapper_flags"
+        autoload :RealizePalette, "emf/emr/binary/records/realize_palette"
+        autoload :SelectPalette, "emf/emr/binary/records/select_palette"
+        autoload :CreatePalette, "emf/emr/binary/records/create_palette"
+        autoload :ResizePalette, "emf/emr/binary/records/resize_palette"
+        autoload :SetPaletteEntries, "emf/emr/binary/records/set_palette_entries"
+        autoload :ExtFloodFill, "emf/emr/binary/records/ext_flood_fill"
+        autoload :FillRgn, "emf/emr/binary/records/fill_rgn"
+        autoload :FrameRgn, "emf/emr/binary/records/frame_rgn"
+        autoload :InvertRgn, "emf/emr/binary/records/invert_rgn"
+        autoload :PaintRgn, "emf/emr/binary/records/paint_rgn"
+        autoload :BitBlt, "emf/emr/binary/records/bit_blt"
+        autoload :StretchBlt, "emf/emr/binary/records/stretch_blt"
+        autoload :MaskBlt, "emf/emr/binary/records/mask_blt"
+        autoload :PlgBlt, "emf/emr/binary/records/plg_blt"
+        autoload :SetDIBitsToDevice, "emf/emr/binary/records/set_dibits_to_device"
+        autoload :AlphaBlend, "emf/emr/binary/records/alpha_blend"
+        autoload :TransparentBlt, "emf/emr/binary/records/transparent_blt"
+        autoload :SetLayout, "emf/emr/binary/records/set_layout"
+        autoload :SetIcmMode, "emf/emr/binary/records/set_icm_mode"
+        autoload :CreateMonoBrush, "emf/emr/binary/records/create_mono_brush"
+        autoload :CreateDibPatternBrushPt, "emf/emr/binary/records/create_dib_pattern_brush_pt"
+        autoload :GradientFill, "emf/emr/binary/records/gradient_fill"
+        autoload :SmallTextOut, "emf/emr/binary/records/small_text_out"
+        autoload :DrawEscape, "emf/emr/binary/records/draw_escape"
+        autoload :ExtEscape, "emf/emr/binary/records/ext_escape"
+        autoload :NamedEscape, "emf/emr/binary/records/named_escape"
+        autoload :ColorCorrectPalette, "emf/emr/binary/records/color_correct_palette"
+        autoload :SetIcmProfileA, "emf/emr/binary/records/set_icm_profile_a"
+        autoload :SetIcmProfileW, "emf/emr/binary/records/set_icm_profile_w"
+        autoload :ForceUfiMapping, "emf/emr/binary/records/force_ufi_mapping"
+        autoload :SetLinkedUfis, "emf/emr/binary/records/set_linked_ufis"
+        autoload :ColorMatchToTargetW, "emf/emr/binary/records/colormatch_to_target_w"
+        autoload :CreateColorspaceW, "emf/emr/binary/records/create_colorspace_w"
+        autoload :CreateColorspace, "emf/emr/binary/records/create_colorspace"
+        autoload :SetColorspace, "emf/emr/binary/records/set_colorspace"
+        autoload :DeleteColorspace, "emf/emr/binary/records/delete_colorspace"
+        autoload :GlsRecord, "emf/emr/binary/records/gls_record"
+        autoload :GlsBoundedRecord, "emf/emr/binary/records/gls_bounded_record"
+        autoload :PolyTextOutA, "emf/emr/binary/records/poly_textout_a"
+        autoload :PolyTextOutW, "emf/emr/binary/records/poly_textout_w"
+        autoload :PixelFormat, "emf/emr/binary/records/pixel_format"
+        autoload :SetTextJustification, "emf/emr/binary/records/set_text_justification"
 
-        # Maps EMR_* integer type codes to wire class names. Adding a record:
-        # 1. Add a wire class file under records/.
-        # 2. Add an autoload line above.
-        # 3. Add an entry here.
         TYPE_TO_NAME = {
           Binary::TypeCodes::EOF => :Eof,
           Binary::TypeCodes::SETTEXTCOLOR => :SetTextColor,
@@ -96,6 +148,7 @@ module Emf
           Binary::TypeCodes::SETWINDOWEXTEX => :SetWindowExtEx,
           Binary::TypeCodes::SETVIEWPORTORGEX => :SetViewportOrgEx,
           Binary::TypeCodes::SETVIEWPORTEXTEX => :SetViewportExtEx,
+          Binary::TypeCodes::SETBRUSHORGEX => :SetBrushOrgEx,
           Binary::TypeCodes::MOVETOEX => :MoveToEx,
           Binary::TypeCodes::LINETO => :LineTo,
           Binary::TypeCodes::RECTANGLE => :Rectangle,
@@ -105,6 +158,8 @@ module Emf
           Binary::TypeCodes::ARCTO => :ArcTo,
           Binary::TypeCodes::CHORD => :Chord,
           Binary::TypeCodes::PIE => :Pie,
+          Binary::TypeCodes::ANGLEARC => :AngleArc,
+          Binary::TypeCodes::SETARCDIRECTION => :SetArcDirection,
           Binary::TypeCodes::POLYGON => :Polygon,
           Binary::TypeCodes::POLYLINE => :Polyline,
           Binary::TypeCodes::POLYBEZIER => :PolyBezier,
@@ -115,6 +170,8 @@ module Emf
           Binary::TypeCodes::POLYBEZIERTO16 => :PolyBezierTo16,
           Binary::TypeCodes::POLYLINETO => :PolylineTo,
           Binary::TypeCodes::POLYLINETO16 => :PolylineTo16,
+          Binary::TypeCodes::POLYDRAW => :PolyDraw,
+          Binary::TypeCodes::POLYDRAW16 => :PolyDraw16,
           Binary::TypeCodes::POLYPOLYLINE => :PolyPolyline,
           Binary::TypeCodes::POLYPOLYGON => :PolyPolygon,
           Binary::TypeCodes::POLYPOLYLINE16 => :PolyPolyline16,
@@ -137,7 +194,58 @@ module Emf
           Binary::TypeCodes::EXTTEXTOUTA => :ExtTextOutA,
           Binary::TypeCodes::EXTCREATEFONTINDIRECTW => :CreateFontIndirectW,
           Binary::TypeCodes::EXTCREATEPEN => :ExtCreatePen,
-          Binary::TypeCodes::STRETCHDIBITS => :StretchDIBits
+          Binary::TypeCodes::STRETCHDIBITS => :StretchDIBits,
+          Binary::TypeCodes::SETPIXELV => :SetPixelV,
+          Binary::TypeCodes::OFFSETCLIPRGN => :OffsetClipRgn,
+          Binary::TypeCodes::SETMETARGN => :SetMetArgn,
+          Binary::TypeCodes::EXCLUDECLIPRECT => :ExcludeClipRect,
+          Binary::TypeCodes::INTERSECTCLIPRECT => :IntersectClipRect,
+          Binary::TypeCodes::SCALEVIEWPORTEXTEX => :ScaleViewportExtEx,
+          Binary::TypeCodes::SCALEWINDOWEXTEX => :ScaleWindowExtEx,
+          Binary::TypeCodes::SETMAPPERFLAGS => :SetMapperFlags,
+          Binary::TypeCodes::REALIZEPALETTE => :RealizePalette,
+          Binary::TypeCodes::SELECTPALETTE => :SelectPalette,
+          Binary::TypeCodes::CREATEPALETTE => :CreatePalette,
+          Binary::TypeCodes::RESIZEPALETTE => :ResizePalette,
+          Binary::TypeCodes::SETPALETTEENTRIES => :SetPaletteEntries,
+          Binary::TypeCodes::EXTFLOODFILL => :ExtFloodFill,
+          Binary::TypeCodes::EXTSELECTCLIPRGN => :ExtSelectClipRgn,
+          Binary::TypeCodes::FILLRGN => :FillRgn,
+          Binary::TypeCodes::FRAMERGN => :FrameRgn,
+          Binary::TypeCodes::INVERTRGN => :InvertRgn,
+          Binary::TypeCodes::PAINTRGN => :PaintRgn,
+          Binary::TypeCodes::BITBLT => :BitBlt,
+          Binary::TypeCodes::STRETCHBLT => :StretchBlt,
+          Binary::TypeCodes::MASKBLT => :MaskBlt,
+          Binary::TypeCodes::PLGBLT => :PlgBlt,
+          Binary::TypeCodes::SETDIBITSTODEVICE => :SetDIBitsToDevice,
+          Binary::TypeCodes::ALPHABLEND => :AlphaBlend,
+          Binary::TypeCodes::SETLAYOUT => :SetLayout,
+          Binary::TypeCodes::TRANSPARENTBLT => :TransparentBlt,
+          Binary::TypeCodes::GRADIENTFILL => :GradientFill,
+          Binary::TypeCodes::SETICMMODE => :SetIcmMode,
+          Binary::TypeCodes::CREATEMONOBRUSH => :CreateMonoBrush,
+          Binary::TypeCodes::CREATEDIBPATTERNBRUSHPT => :CreateDibPatternBrushPt,
+          Binary::TypeCodes::SMALLTEXTOUT => :SmallTextOut,
+          Binary::TypeCodes::DRAWESCAPE => :DrawEscape,
+          Binary::TypeCodes::EXTESCAPE => :ExtEscape,
+          Binary::TypeCodes::NAMEDESCAPE => :NamedEscape,
+          Binary::TypeCodes::COLORCORRECTPALETTE => :ColorCorrectPalette,
+          Binary::TypeCodes::SETICMPROFILEA => :SetIcmProfileA,
+          Binary::TypeCodes::SETICMPROFILEW => :SetIcmProfileW,
+          Binary::TypeCodes::FORCEUFIMAPPING => :ForceUfiMapping,
+          Binary::TypeCodes::SETLINKEDUFIS => :SetLinkedUfis,
+          Binary::TypeCodes::COLORMATCHTOTARGETW => :ColorMatchToTargetW,
+          Binary::TypeCodes::CREATECOLORSPACEW => :CreateColorspaceW,
+          Binary::TypeCodes::CREATECOLORSPACE => :CreateColorspace,
+          Binary::TypeCodes::SETCOLORSPACE => :SetColorspace,
+          Binary::TypeCodes::DELETECOLORSPACE => :DeleteColorspace,
+          Binary::TypeCodes::GLSRECORD => :GlsRecord,
+          Binary::TypeCodes::GLSBOUNDEDRECORD => :GlsBoundedRecord,
+          Binary::TypeCodes::POLYTEXTOUTA => :PolyTextOutA,
+          Binary::TypeCodes::POLYTEXTOUTW => :PolyTextOutW,
+          Binary::TypeCodes::PIXELFORMAT => :PixelFormat,
+          Binary::TypeCodes::SETTEXTJUSTIFICATION => :SetTextJustification
         }.freeze
 
         def self.lookup(type_id)

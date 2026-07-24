@@ -7,8 +7,11 @@ module Emf
   module Emr
     module Binary
       module Records
-        # EMR_STROKE_AND_FILL_PATH: emr + rclBounds per MS-EMF 2.3.5.9/2.3.5.38/2.3.5.39.
-        class StrokeAndFillPath < Emf::Emr::Binary::WithBounds
+        class GradientFill < Emf::Emr::Binary::WithBounds
+          uint32 :n_ver
+          uint32 :n_tri
+          uint32 :ul_mode
+          rest :body
         end
       end
     end
