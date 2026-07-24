@@ -1,0 +1,75 @@
+= Format notes
+
+Quirks of each format that future maintainers must know.
+
+== EMF
+
+=== Variable-length header
+
+The `ENHMETAHEADER` record's `nSize` is variable:
+
+* **88 bytes** — fixed portion only (iType through szlMillimeters).
+* **100 bytes** — adds win95 fields cbPixelFormat, offPixelFormat,
+  bOpenGL.
+* **108 bytes** — adds win98 field szlMicrometers.
+* **More** — optional UTF-16LE description string at offDescription.
+
+The wire class `Emf::Emr::Binary::Header` uses bindata's `onlyif:` to
+declare the win95/win98 fields conditionally on `n_size`, then captures
+any remaining bytes as `trailing` for byte-faithful round-trip.
+
+=== Records without rclBounds
+
+Per MS-EMF 2.3.5, the closed-shape records (`EMR_RECTANGLE`,
+`EMR_ELLIPSE`, `EMR_ROUNDRECT`, `EMR_ARC`, `EMR_CHORD`, `EMR_PIE`,
+`EMR_ARCTO`) carry `rclBox` only — no `rclBounds`. The wire classes
+inherit from `Emf::Emr::Binary::Record` (header only), not from
+`WithBounds`.
+
+The path-rendering records (`EMR_FILLPATH`, `EMR_STROKEPATH`,
+`EMR_STROKEANDFILLPATH`) DO have `rclBounds` per spec but some EMF
+writers omit it (nSize=8 in those files). Our wire classes inherit from
+`WithBounds` per spec; if the source has fewer bytes, the parser falls
+through to `Raw` to preserve the bytes verbatim.
+
+=== SelectClipPath nSize=12
+
+`EMR_SELECTCLIPPATH` per spec is `emr + rclBounds + regionMode` (28
+bytes) but real-world files often have nSize=12 (just `emr +
+regionMode`). Our wire class declares the spec form; non-conforming
+files fall through to `Raw`.
+
+=== Trailing data after EMR_EOF
+
+Some EMF writers append bytes after the `EMR_EOF` record. The parser
+captures these as `Metafile#trailing` and the serializer re-emits them.
+
+=== EMF+ container
+
+EMF+ records travel inside `EMR_COMMENT` records with identifier
+`0x2B464D45` ("EMF+" little-endian). The parser extracts the payload
+bytes and stashes them on `Metafile#emf_plus`. Structured parsing is
+TODO 14.
+
+== WMF
+
+WMF is detected by either:
+
+* APM (Aldus Placeable Metafile) header magic `0x9AC6CDD7` (uint32 LE
+  of bytes `0xD7 0xCD 0xC6 0x9A`).
+* Standard METAHEADER (`metafile_type` of 1 or 2, `header_size` of 9
+  words).
+
+Parser is TODO 07.
+
+== EMF+
+
+EMF+ uses its own 12-byte common record header
+(`uint16 type, uint16 flags, uint32 size, uint32 data_size`). The high
+bit (`0x4000`) is the EMF+ record flag; the actual type code is
+`type & 0x3FFF`. The first record in an EMF+ stream is always the EMF+
+Header (type 0x4001).
+
+EMF+ Object records can be split across multiple EMF Comment payloads;
+the parser must accumulate chunks until the Object is complete. This is
+TODO 14's `ObjectAccumulator`.

@@ -1,61 +1,116 @@
-# TODO Progress — 2026-07-24
+# TODO Progress — 2026-07-24 (second pass)
 
 This file summarises what's been implemented vs what remains. Each TODO
 file in this directory has its own detailed scope; this is the roll-up.
 
-## Done (foundation + working EMF MVP)
+## Done
 
-| # | Title | Status |
-|---|---|---|
-| 01 | Bootstrap gem skeleton | done — gem builds, specs run, rubocop clean |
-| 02 | Convert MS spec .docx → GFM markdown | done — script + 4 specs, 21 chapter files generated for MS-EMF, MS-WMF, MS-EMFPLUS |
-| 03 | Binary primitives & codec | done — 11 bindata primitives + codec, all round-trip specced |
-| 04 | Geometry value types | done — 8 value types (Point, PointF, PointS, Size, Rect, RectS, Color, Matrix) |
-| 05 | Metafile container, Record base, Visitor base | done — Metafile enumerable, Record abstract, Visitor with register_visit |
-| 06 | Format detector | done — APM WMF, standard WMF, EMF, garbage, short input |
-| 09 | EMF wire layer | partial — 61 of ~122 record types declared, header fully parsed, registry + Raw fallback |
-| 10 | EMF domain layer | partial — Header + WireAdapter; per-record domain classes land in TODO 10 follow-up |
-| 11 | EMF parser | MVP done — single-pass, per-record error trapping, EMF+ payload extraction stub; 2-pass path association lands in TODO 11 follow-up |
-| 15 | Public API surface | MVP done — Emf.parse / .parse_file / .serialize / .serialize_file / .detect_format |
+### Foundation (TODOs 01–06) — fully complete
+- Gem scaffold, error hierarchy, bindata primitives, geometry value
+  types, Metafile container, Record base, Visitor base, format detector.
+
+### TODO 02 — Reference doc converter — fully complete
+- `scripts/convert_docs.rb` (rubyzip + nokogiri).
+- 21 chapter files generated across MS-WMF, MS-EMF, MS-EMFPLUS.
+- 4 specs including a synthetic-docx end-to-end test.
+
+### TODO 09 — EMF wire layer — substantially complete
+- 117 of ~122 EMR_* types declared as bindata wire classes.
+- Header wire class supports 88/100/108-byte variants + trailing bytes.
+- Registry + autoload + Raw fallback for the few remaining types.
+- TypeCodes module documents the canonical numeric constants.
+
+### TODO 10 — EMF domain layer — MVP complete
+- `Emf::Model::Emr::Header` preserves all 18 wire fields + trailing.
+- `Emf::Model::Emr::Records::WireAdapter` wraps every other wire class.
+- Per-record semantic classes deferred (WireAdapter carries type_id and
+  the underlying wire for emfsvg to dispatch on).
+
+### TODO 11 — EMF parser — MVP complete
+- Reads variable-length header, walks records, dispatches via registry.
+- Per-record error trapping via `Emf::ParseError`.
+- Variable-array sanity check (prevents pathological hangs).
+- EMF+ payload extraction (raw bytes on `Metafile#emf_plus`).
+- Post-EOF trailing bytes captured on `Metafile#trailing`.
+- 2-pass path association deferred (TODO 11 follow-up).
+
+### TODO 15 — Public API — fully complete
+- `Emf.parse`, `parse_file`, `serialize`, `serialize_file`,
+  `detect_format`. Auto-dispatches WMF vs EMF.
+
+### TODO 16 — Round-trip harness — fully complete
+- `spec/emf/round_trip_spec.rb` walks every non-corrupted fixture
+  (186 + 21 + 1 = 208) and asserts byte-identical round-trip.
+
+### TODO 17 — Corrupted-resilience spec — fully complete
+- `spec/emf/corrupted_resilience_spec.rb` walks all 21 `emf-corrupted/`
+  files. Asserts no crash, no hang (5s timeout). All 21 pass.
+
+### TODO 18 — Visitors — fully complete
+- `Emf::Visitors::Stats` produces record-class histogram.
+- `Emf::Visitors::Dump` produces human-readable dump.
+- Both override `visit_emr_wire_record` for the catch-all adapter.
+
+### TODO 19 — CLI — fully complete
+- `exe/emf` with subcommands: `version`, `info`, `dump`, `validate`,
+  `stats`, `round-trip`, `help`.
+- Tested end-to-end against `spec/fixtures/simple/image1.emf`.
+
+### TODO 20 — Documentation — fully complete
+- `README.adoc` rewritten with synopsis, CLI usage, architecture,
+  constraints, roadmap.
+- `docs/architecture.adoc` — three-layer design + MECE table.
+- `docs/format_notes.adoc` — per-format quirks (header variants,
+  records without rclBounds, SelectClipPath nSize=12, trailing data,
+  EMF+ container).
+- `CONTRIBUTING.adoc` — branch policy, code style, constraints,
+  how-to-add-a-record.
+- `CHANGELOG.adoc` — Keep-a-Changelog format starting at 0.1.0.
+
+### TODO 21 — CI — fully complete
+- `.github/workflows/test.yml`: matrix on Ruby 3.1/3.2/3.3/3.4 across
+  Ubuntu and macOS. Runs specs, rubocop, gem build.
+- `.github/workflows/release.yml`: tag-triggered (`v*`) release to
+  rubygems.org + GitHub release. Gated on tag push, not on main commits.
+- No AI attribution anywhere.
 
 ## Verification (against spec/fixtures/)
 
-- 75 specs, 0 failures.
-- Rubocop clean (122 files, 0 offenses).
-- Byte-identical round-trip on 137/186 EMF fixtures (74%).
-- All 186 EMF fixtures parse without raising.
-- Simple fixture (image1.emf): 3538 records, 0 errors, byte-identical round-trip.
-- Converter output verified against all three MS spec .docx.
+- **306 specs, 0 failures** (up from 75 in the first pass).
+- Rubocop clean (179 files).
+- Gem builds.
+- **Byte-identical round-trip on 100% of EMF fixtures**: 186/186 in
+  `emf/`, 21/21 in `emf-ea/`, 1/1 in `simple/`.
+- All 21 `emf-corrupted/` files parse without crashing or hanging.
 
 ## Remaining work
 
-### P0 — landing the full EMF MVP
+### P0 — semantic refinements
 
 | # | Title | Why |
 |---|---|---|
-| 09 | EMF wire layer — finish remaining EMR_* types | ~60 more record types needed for 100% round-trip on all fixtures |
-| 10 | EMF domain layer — replace WireAdapter with semantic classes | emfsvg needs typed records, not raw bindata wrappers |
-| 11 | EMF parser — 2-pass path association | emfsvg needs path→renderer back-references |
-| 16 | Round-trip harness — every non-corrupted fixture | strongest correctness signal |
-| 17 | Corrupted-resilience spec — emf-corrupted/ corpus | proves no crashes/hangs |
+| 10 | Replace `WireAdapter` with semantic per-record domain classes | emfsvg gets `Polygon#points` instead of `wire.aptl` |
+| 11 | 2-pass path association (BEGINPATH ↔ FILLPATH/STROKEPATH) | emfsvg's path rendering needs the back-reference |
 
-### P1 — completing the formats and tooling
+### P1 — additional formats and tooling
 
 | # | Title | Why |
 |---|---|---|
 | 07 | WMF wire + domain + parser | second format |
 | 08 | Source WMF fixtures | can't validate WMF without |
-| 12 | EMF+ wire layer (~60 records) | third format |
+| 12 | EMF+ wire layer (~58 records) | third format |
 | 13 | EMF+ domain layer | mirror |
-| 14 | EMF+ parser (consumes EMR_COMMENT payload) | wires EMF+ into Metafile#emf_plus |
-| 18 | Visitors: Dump and Stats | debugging + spec assertions |
-| 19 | exe/emf CLI | user-facing tool |
-| 20 | Documentation | README + architecture + format notes |
-| 21 | CI | GitHub Actions matrix |
+| 14 | EMF+ parser (consumes EMR_COMMENT payload) | wires EMF+ into `Metafile#emf_plus` |
 
-## Known issues to address in TODO 10/11 follow-ups
+## Known improvements for a future PR
 
-1. **49 EMF fixtures don't byte-round-trip yet** (21 EOFError on reparse, 28 record-count drift). Most are EMF+ carriers and records with field layouts we stubbed (`rest :body`). Fix: complete the wire classes for the remaining ~60 EMR_* types in TODO 09.
-2. **EMF+ extraction stashes raw bytes**, not a parsed `Metafile`. The structured extraction lands in TODO 14.
-3. **Path association (BEGINPATH..ENDPATH ↔ FILLPATH/STROKEPATH) is not built**. emfsvg's rendering of EMF paths will need this; lands in TODO 11.
-4. **WireAdapter wraps the bindata record**, not a true semantic class. emfsvg gets type_id + raw fields; proper `Emf::Model::Emr::Records::Polygon` etc. land in TODO 10.
+1. **SelectClipPath wire class** is currently spec-form (28 bytes) but
+   real-world files often have nSize=12 (header + regionMode only, no
+   rclBounds). Non-conforming files fall through to Raw. Fix: make the
+   rclBounds field conditional on nSize, or split into two classes.
+2. **`Stats#visit_emr_wire_record`** tallies by underlying wire class
+   (e.g. `WireAdapter(Comment)`). Once TODO 10 lands semantic classes,
+   the histogram will show `Polygon`, `Polyline`, etc. directly.
+3. **Header to_wire** preserves `trailing` bytes verbatim but doesn't
+   semantically model the optional description string or pixel format
+   data. A future refactor could parse them properly.

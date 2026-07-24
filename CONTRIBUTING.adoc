@@ -1,0 +1,62 @@
+= Contributing to emf
+
+== Branches and PRs
+
+* Never commit to `main`. Create a feature branch (`feat/...`,
+  `fix/...`, `docs/...`) and open a PR.
+* Never push tags yourself. Tags are releases; the maintainer decides.
+* Squash-merge or rebase-merge is preferred; the maintainer chooses per
+  PR.
+
+== Code style
+
+* `bundle exec rubocop` must pass clean.
+* `bundle exec rspec` must pass with no failures.
+* Target Ruby 3.1+. Use pattern matching, endless ranges, and
+  frozen-string-literals.
+
+== Constraints (project-specific)
+
+These are absolute. PRs that violate them will be rejected.
+
+* **No `require_relative`** in `lib/`. No `require` of internal paths.
+  Use Ruby `autoload` declared in the immediate parent namespace's file.
+  Create the namespace file if it doesn't exist.
+* **No `double()` in specs.** Use real instances or `Struct.new` for
+  plain data.
+* **No `send` to private methods**, no `instance_variable_set`/`get`,
+  no `respond_to?` for type checks. Use `is_a?` or design away the
+  check.
+* **No AI attribution** in any commit message, PR description, code
+  comment, or changelog entry. The author is the user; AI is a tool.
+* **Never delete source files** unless the user explicitly approves.
+
+== Adding a new EMR_* record type
+
+1. Add the type code to `lib/emf/emr/binary/type_codes.rb`.
+2. Create the wire class at
+   `lib/emf/emr/binary/records/<snake_name>.rb` with the field layout
+   per MS-EMF 2.3.
+3. Add an `autoload :ClassName, "emf/emr/binary/records/<snake_name>"`
+   to `lib/emf/emr/binary/records.rb`.
+4. Add an entry to `TYPE_TO_NAME` in the same file.
+5. (Optional) Add a per-record round-trip spec at
+   `spec/emf/emr/binary/records/<snake_name>_spec.rb`.
+
+No central switch statement to modify. The registry handles dispatch.
+
+== Adding tests
+
+* Walk-the-corpus specs use `Dir.glob(Emf::SpecSupport::FixturePath.fixture(...))`.
+* Round-trip is the strongest correctness signal: parse → serialise →
+  byte-identical bytes.
+* Per-record specs cover edge values: zero, max, min, negative.
+
+== Running tests
+
+  bundle exec rspec                      # full suite
+  bundle exec rspec spec/emf/emr/        # subset
+  bundle exec rspec -e "round-trips"     # by description
+
+The full suite (~280 examples) runs in under 5 seconds on a warm
+machine.
