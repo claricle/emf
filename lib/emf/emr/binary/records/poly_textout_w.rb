@@ -8,7 +8,7 @@ module Emf
     module Binary
       module Records
         # Stub: preserves full body bytes. Full layout lands with TODO 10.
-        class PolyTextoutW < Emf::Emr::Binary::Record
+        class PolyTextOutW < Emf::Emr::Binary::Record
           rest :body
         end
       end
