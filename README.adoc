@@ -1,0 +1,3 @@
+= emf: library for working with WMF and EMF files
+
+
