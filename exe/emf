@@ -1,0 +1,40 @@
+#! /usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "emf"
+
+module Emf
+  module CLI
+    module_function
+
+    def run(argv)
+      command = argv.shift
+      case command
+      when "version", "-v", "--version" then puts "emf #{Emf::VERSION}"
+      when "help", "-h", "--help", nil then print_help
+      else
+        warn "emf: '#{command}' is not yet implemented (TODO.impl/19-cli.md)."
+        warn "Run `emf help` for the list of planned subcommands."
+        exit 1
+      end
+    end
+
+    def print_help
+      puts <<~HELP
+        emf #{Emf::VERSION} — pure-Ruby WMF/EMF/EMF+ parser
+
+        Usage:
+          emf version                 Print the version
+          emf info FILE               Print metafile header summary (TODO 19)
+          emf dump FILE               Print a record-by-record dump (TODO 19)
+          emf validate FILE           Parse and report errors (TODO 19)
+          emf stats FILE              Print record-type histogram (TODO 19)
+          emf round-trip FILE         Parse then serialize (TODO 19)
+          emf help                    Show this message
+      HELP
+    end
+  end
+end
+
+Emf::CLI.run(ARGV)

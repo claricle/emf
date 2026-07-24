@@ -1,0 +1,102 @@
+---
+inherit_from: .rubocop_todo.yml
+
+plugins:
+  - rubocop-performance
+
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.1
+  SuggestExtensions: false
+  Exclude:
+    - "pkg/**/*"
+    - "vendor/**/*"
+    - "spec/fixtures/**/*"
+    - "reference-docs/**/*"
+    - "TODO.impl/**/*"
+
+Layout/LineLength:
+  Max: 140
+
+Metrics/MethodLength:
+  Max: 25
+  Exclude:
+    - "lib/emf/model/geometry/**/*.rb"
+    - "spec/scripts/convert_docs_spec.rb"
+
+Metrics/ModuleLength:
+  Max: 200
+
+Metrics/ClassLength:
+  Exclude:
+    - "scripts/convert_docs.rb"
+
+Metrics/AbcSize:
+  Max: 30
+  Exclude:
+    - "lib/emf/model/geometry/**/*.rb"
+
+Metrics/CyclomaticComplexity:
+  Max: 10
+
+Metrics/PerceivedComplexity:
+  Max: 12
+  Exclude:
+    - "scripts/convert_docs.rb"
+
+Metrics/BlockLength:
+  Exclude:
+    - "emf.gemspec"
+    - "spec/**/*"
+
+Metrics/ParameterLists:
+  Max: 25
+  Exclude:
+    - "lib/emf/model/geometry/matrix.rb"
+    - "lib/emf/model/emr/header.rb"
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/Documentation:
+  Enabled: false
+
+Style/FrozenStringLiteralComment:
+  Enabled: true
+
+# Coordinate-named keyword args (x:, y:, cx:, cy:) are domain-correct.
+Naming/MethodParameterName:
+  AllowedNames:
+    - x
+    - y
+    - cx
+    - cy
+    - dx
+    - dy
+    - m11
+    - m12
+    - m21
+    - m22
+    - id
+    - io
+    - v
+
+# Float equality on identity values (e.g. matrix identity check) is acceptable
+# when the floats come from a known source. We use this deliberately.
+Lint/FloatComparison:
+  Exclude:
+    - "lib/emf/model/geometry/matrix.rb"
+
+# Hex format strings don't benefit from annotated tokens.
+Style/FormatStringToken:
+  Exclude:
+    - "lib/emf/model/geometry/color.rb"
+    - "scripts/convert_docs.rb"
+
+# Visitor subclasses intentionally don't call super (the base Visitor has no
+# initializer). The @visit_methods registry is set up at class-load time.
+Lint/MissingSuper:
+  Exclude:
+    - "lib/emf/visitors/**/*"
+    - "lib/emf/model/emr/records.rb"
+    - "spec/emf/model/visitor_spec.rb"
