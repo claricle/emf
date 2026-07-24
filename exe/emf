@@ -1,6 +1,8 @@
 #! /usr/bin/env ruby
 # frozen_string_literal: true
 
+require "optparse"
+
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 require "emf"
 
@@ -12,11 +14,82 @@ module Emf
       command = argv.shift
       case command
       when "version", "-v", "--version" then puts "emf #{Emf::VERSION}"
+      when "info" then info(argv)
+      when "dump" then dump(argv)
+      when "validate" then validate(argv)
+      when "stats" then stats(argv)
+      when "round-trip" then round_trip(argv)
       when "help", "-h", "--help", nil then print_help
       else
-        warn "emf: '#{command}' is not yet implemented (TODO.impl/19-cli.md)."
-        warn "Run `emf help` for the list of planned subcommands."
+        warn "emf: unknown command '#{command}' (see `emf help`)"
         exit 1
+      end
+    end
+
+    def parse_path(argv)
+      path = argv.shift
+      return path if path && !path.empty?
+
+      warn "emf: missing FILE argument"
+      exit 2
+    end
+
+    def info(argv)
+      path = parse_path(argv)
+      mf = Emf.parse_file(path)
+      puts "Format:    #{mf.format}"
+      puts "Records:   #{mf.records.size}"
+      puts "Errors:    #{mf.errors.size}"
+      puts "EMF+:      #{mf.emf_plus ? "present (#{mf.emf_plus.bytesize} bytes)" : 'absent'}"
+      puts "Trailing:  #{mf.trailing.bytesize} bytes"
+      return unless mf.header
+
+      h = mf.header
+      puts "Bounds:    left=#{h.bounds.left} top=#{h.bounds.top} right=#{h.bounds.right} bottom=#{h.bounds.bottom}"
+      puts "Frame:     left=#{h.frame.left} top=#{h.frame.top} right=#{h.frame.right} bottom=#{h.frame.bottom}"
+      puts "Device:    #{h.device_pixels.cx}x#{h.device_pixels.cy} px (#{h.device_mm.cx / 100.0}x#{h.device_mm.cy / 100.0} mm)"
+      puts "nRecords:  #{h.n_records}  nHandles: #{h.n_handles}  nBytes: #{h.n_bytes}"
+    end
+
+    def dump(argv)
+      path = parse_path(argv)
+      mf = Emf.parse_file(path)
+      d = Emf::Visitors::Dump.new
+      d.visit_all(mf)
+      puts d
+    end
+
+    def validate(argv)
+      path = parse_path(argv)
+      mf = Emf.parse_file(path)
+      if mf.errors.empty?
+        puts "OK: #{mf.records.size} records, 0 errors"
+        exit 0
+      else
+        puts "INVALID: #{mf.records.size} records, #{mf.errors.size} errors"
+        mf.errors.first(10).each { |e| puts "  #{e.message}" }
+        exit 1
+      end
+    end
+
+    def stats(argv)
+      path = parse_path(argv)
+      mf = Emf.parse_file(path)
+      s = Emf::Visitors::Stats.new
+      s.visit_all(mf)
+      puts s
+    end
+
+    def round_trip(argv)
+      path = parse_path(argv)
+      original = File.binread(path)
+      reborn = Emf.serialize(Emf.parse(original))
+      out = argv.shift
+      if out
+        File.binwrite(out, reborn)
+        puts "Wrote #{out} (#{reborn.bytesize} bytes)"
+      else
+        puts original == reborn ? "OK: byte-identical round-trip" : "DRIFT: original=#{original.bytesize} reborn=#{reborn.bytesize}"
       end
     end
 
@@ -25,13 +98,13 @@ module Emf
         emf #{Emf::VERSION} — pure-Ruby WMF/EMF/EMF+ parser
 
         Usage:
-          emf version                 Print the version
-          emf info FILE               Print metafile header summary (TODO 19)
-          emf dump FILE               Print a record-by-record dump (TODO 19)
-          emf validate FILE           Parse and report errors (TODO 19)
-          emf stats FILE              Print record-type histogram (TODO 19)
-          emf round-trip FILE         Parse then serialize (TODO 19)
-          emf help                    Show this message
+          emf version                  Print the version
+          emf info FILE                Print metafile header and record counts
+          emf dump FILE                Print a record-by-record dump
+          emf validate FILE            Parse and report errors (exit 0 ok, 1 invalid)
+          emf stats FILE               Print record-type histogram
+          emf round-trip FILE [--out]  Serialize after parse, compare or write
+          emf help                     Show this message
       HELP
     end
   end
