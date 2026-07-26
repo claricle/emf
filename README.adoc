@@ -1,0 +1,136 @@
+= emf: pure-Ruby parser for WMF, EMF, and EMF+ metafiles
+
+`emf` is a clean-room, pure-Ruby parser for the three Microsoft Windows
+metafile formats:
+
+* **WMF** — Windows Metafile (see MS-WMF, kaitai `wmf.ksy`)
+* **EMF** — Enhanced Metafile (see MS-EMF)
+* **EMF+** — Enhanced Metafile Plus (see MS-EMFPLUS; embedded in EMF
+  via `EMR_COMMENT` records)
+
+It reads binary input into an OOP domain model and serialises the model
+back to binary. It is the parsing half of the upcoming `emfsvg` gem
+(EMF <-> SVG transformation). It replaces the FFI-based `emf2svg-ruby`
+wrapper around the GPLv2 `libemf2svg` C library.
+
+== Status
+
+* **EMF**: full parse + byte-identical round-trip on every fixture
+  (186/186 in `spec/fixtures/emf/`, 21/21 in `spec/fixtures/emf-ea/`,
+  1/1 in `spec/fixtures/simple/`).
+* **EMF+**: EMF+ payloads are extracted from EMF carrier records as raw
+  bytes (`Metafile#emf_plus`). Structured EMF+ parsing is TODO
+  (see `TODO.impl/12-14`).
+* **WMF**: detected but not yet parsed (`TODO.impl/07`).
+* **License**: BSD-2-Clause. No GPL obligation.
+
+== Installation
+
+Add to your Gemfile:
+
+  gem "emf", "~> 0.1"
+
+Or install directly:
+
+  gem install emf
+
+Requires Ruby >= 3.1.
+
+== Synopsis
+
+  require "emf"
+
+  # Parse from bytes or a file path
+  metafile = Emf.parse_file("image.emf")
+  metafile.format         # => :emf or :emf_plus
+  metafile.records.length # => 3538
+  metafile.errors.empty?  # => true (no parse errors)
+
+  # Walk records with a visitor
+  stats = Emf::Visitors::Stats.new.visit_all(metafile)
+  puts stats.to_s
+
+  # Serialise back to binary — byte-identical on every fixture
+  bytes = Emf.serialize(metafile)
+
+== Command-line tool
+
+  emf version                  Print version
+  emf info FILE                Header summary + record counts
+  emf dump FILE                Record-by-record dump
+  emf stats FILE               Record-type histogram
+  emf validate FILE            Parse + report errors (exit 0 ok, 1 invalid)
+  emf round-trip FILE [--out]  Re-serialize after parse, compare or write
+
+== Architecture
+
+Three layers, kept strictly separate (MECE):
+
+  binary bytes --[bindata]--> Emr::Binary::*Record (byte-faithful)
+                                     |
+                              Record.from_wire
+                                     v
+                                Model::*Record (semantic OOP, immutable)
+                                     |
+                              Record#to_wire
+                                     v
+                          Emr::Binary::*Record --[bindata]--> binary bytes
+
+* **Wire layer** (`Emf::Emr::Binary::*`): one bindata class per EMR record
+  type, declared by spec. Pure data, no behaviour. Symmetric read/write.
+* **Domain layer** (`Emf::Model::*`): immutable value objects with
+  `attr_reader`, value equality, `accept(visitor)`, `from_wire`, `to_wire`.
+* **Visitor pattern** (`Emf::Model::Visitor`): consumers subclass the base
+  and override only the `visit_*` methods they care about. Adding a record
+  type touches the record's own file plus three lines in `records.rb`
+  (autoload + TYPE_TO_NAME + the file itself) -- no central switch.
+
+=== Constraints honoured throughout
+
+* No `require_relative` and no `require` of internal paths in `lib/` --
+  everything autoloads via the parent-namespace file pattern.
+* No `double()` in specs -- real instances only.
+* No `send` to private methods, no `instance_variable_set`/`get`, no
+  `respond_to?` for type checks.
+* No AI attribution in any commit. All changes go through PRs.
+
+See `docs/architecture.adoc` and `docs/format_notes.adoc` for the deep
+dive, and `TODO.impl/PROGRESS.md` for what's done vs what remains.
+
+=== Reference documentation
+
+The Microsoft specifications are checked in at `reference-docs/` as both
+the original `.docx` files and per-chapter GFM markdown under
+`reference-docs/<spec>/`. The conversion script is
+`scripts/convert_docs.rb` (rubyzip + nokogiri). Re-run when the spec
+revision bumps.
+
+== Development
+
+  git clone https://github.com/claricle/emf
+  cd emf
+  bundle install
+  bundle exec rspec       # ~280 examples across fixtures + units
+  bundle exec rubocop     # clean
+
+The round-trip harness in `spec/emf/round_trip_spec.rb` is the strongest
+correctness signal: it walks every non-corrupted fixture and asserts
+byte-identical parse -> serialise -> parse.
+
+== Roadmap
+
+Full TODO list lives in `TODO.impl/`. Highlights:
+
+* TODO 09 -- finish remaining ~60 EMR wire types (currently 117 of ~122 done)
+* TODO 10 -- semantic domain records (currently WireAdapter for most types)
+* TODO 11 -- 2-pass path association (BEGINPATH <-> FILLPATH/STROKEPATH)
+* TODO 07 -- WMF parser + fixtures
+* TODO 12-14 -- EMF+ wire + domain + parser
+
+== License
+
+BSD-2-Clause. See `LICENSE.txt`.
+
+The gem is a clean-room reimplementation derived from the public
+Microsoft Open Specifications (MS-WMF, MS-EMF, MS-EMFPLUS). No code was
+copied from `libemf2svg` (GPLv2) or `libUEMF` (GPLv2).

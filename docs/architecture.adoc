@@ -1,0 +1,106 @@
+= Architecture
+
+== Layers (MECE)
+
+```
+binary bytes ──[bindata]──▶ Emr::Binary::*Record (byte-faithful wire)
+                                   │
+                            Record.from_wire
+                                   ▼
+                              Model::*Record (semantic OOP, immutable)
+                                   │
+                            Record#to_wire
+                                   ▼
+                          Emr::Binary::*Record ──[bindata]──▶ binary bytes
+```
+
+== Module map
+
+|===
+| Concern | Lives in | Notes
+
+| Binary read/write primitives
+| `Emf::Binary::Types`
+| 11 shared bindata primitives (`PointL`, `PointS`, `RectL`, `ColorRef`,
+  `XForm`, …) registered for reuse across formats.
+
+| Per-record wire layouts
+| `Emf::Emr::Binary::Records::*`
+| One file per EMR_* type. ~117 of ~122 record types implemented; the
+  rest fall through to `Raw` which preserves bytes verbatim.
+
+| Geometric value objects
+| `Emf::Model::Geometry`
+| `Point`, `PointF`, `PointS`, `Size`, `Rect`, `RectS`, `Color`, `Matrix`.
+  Immutable, value-equal, hashable, `from_wire`/`to_wire` translators.
+
+| Per-record semantic classes
+| `Emf::Model::Emr::*`
+| Currently `Header` and `Records::WireAdapter`. TODO 10 adds a typed
+  domain class per record.
+
+| Metafile container + base record + base visitor
+| `Emf::Model::{Metafile,Record,Visitor}`
+| Format-agnostic. Metafile is Enumerable.
+
+| Per-format parser
+| `Emf::Emr::Parser`
+| Reads header, walks records, dispatches via the registry, traps per-
+  record errors, extracts EMF+ payload bytes, captures post-EOF
+  trailing bytes.
+
+| Public entrypoints
+| `Emf.parse`, `Emf.parse_file`, `Emf.serialize`, `Emf.serialize_file`,
+  `Emf.detect_format`
+| Auto-detects WMF vs EMF.
+|===
+
+== Open/closed principle
+
+Each format owns a `Binary::Records` module that declares:
+
+1. `autoload` one entry per record file.
+2. A `TYPE_TO_NAME` frozen hash mapping the integer code to the constant.
+3. A `lookup(code)` class method that does `const_get(name)` (which
+  triggers autoload) or falls back to `Raw`.
+
+Adding a record = one new file under `records/` + three lines added to
+the format's `records.rb`. `emf` itself is closed: no central switch
+statement to edit.
+
+== Visitor pattern
+
+Each domain record's `accept(visitor)` calls a specific `visit_*` method
+on the visitor. The base `Visitor` class auto-registers a no-op default
+via `register_visit(name, record_class)`. Subclasses override only what
+they need.
+
+`Emf::Visitors::Stats` and `Emf::Visitors::Dump` are shipped with the
+gem; `emfsvg` will provide its own visitor for SVG emission.
+
+== Resilience policy
+
+Per-record errors are caught and stored on `Metafile#errors` (an array
+of `Emf::ParseError` with `offset`, `record_code`, `message`). Parsing
+continues to the next record wherever possible. Truly invalid inputs
+(bad magic, truncated header) raise `Emf::FormatError` immediately.
+
+For records with variable-length arrays, the parser sanity-checks the
+declared count against `nSize` before letting bindata allocate. This
+prevents pathological inputs (e.g., the `emf-corrupted/` corpus) from
+hanging the parser on giant allocations.
+
+== Trailing data
+
+After the EMR_EOF record, some EMF writers append extra bytes (signing,
+padding, embedded metadata). The parser captures these as
+`Metafile#trailing` and the serializer re-emits them, preserving
+byte-for-byte fidelity.
+
+== Y-coordinate repair (out of scope)
+
+Sparx Enterprise Architect under Wine produces EMFs whose complex
+sub-objects have only the Y anchor negated. The detection heuristic
+(`rclBounds.top * rclBounds.bottom < 0`) and the per-coordinate repair
+are emfsvg's concern (they affect rendering, not parsing). The parser
+exposes `header.bounds` faithfully.

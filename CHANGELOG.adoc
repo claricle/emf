@@ -1,0 +1,47 @@
+= Changelog
+
+All notable changes to `emf` will be documented in this file.
+
+The format is based on http://keepachangelog.com/en/1.1.0/[Keep a Changelog],
+and this project adheres to http://semver.org/spec/v2.0.0.html[Semantic Versioning].
+
+== [Unreleased]
+
+=== Added
+
+* WMF parser (TODO 07).
+* EMF+ structured parser (TODO 12–14).
+* Semantic domain records to replace `WireAdapter` (TODO 10).
+* 2-pass path association for BEGINPATH ↔ FILLPATH/STROKEPATH (TODO 11).
+
+== [0.1.0] — 2026-07-24
+
+=== Added
+
+* Initial release of `emf`, a pure-Ruby parser for WMF / EMF / EMF+.
+* Foundation: gem scaffold, error hierarchy, bindata primitives, geometry
+  value types, `Metafile` container, abstract `Record` base, `Visitor`
+  pattern with OCP-clean `register_visit`.
+* EMF wire layer with 117 of ~122 EMR_* record types declared.
+* `Emf::Emr::Parser` with variable-length header support, per-record
+  error trapping, EMF+ payload extraction, and post-EOF trailing byte
+  capture.
+* `Emf::Emr::Serializer` for round-trip.
+* `Emf.parse` / `parse_file` / `serialize` / `serialize_file` /
+  `detect_format` public API.
+* `Emf::Visitors::Stats` and `Emf::Visitors::Dump`.
+* `emf` CLI: `info`, `dump`, `validate`, `stats`, `round-trip`,
+  `version`, `help`.
+* `scripts/convert_docs.rb`: rubyzip + nokogiri converter that turns
+  MS-WMF / MS-EMF / MS-EMFPLUS `.docx` files into per-Heading1 GFM
+  markdown.
+* 21 self-contained TODOs in `TODO.impl/` with progress tracker.
+* CI workflows for GitHub Actions.
+
+=== Verified
+
+* Byte-identical round-trip on 100% of EMF fixtures (186 in `emf/`, 21
+  in `emf-ea/`, 1 in `simple/`).
+* No crashes or hangs on the 21-file corrupted corpus.
+* 290+ specs, all green.
+* Rubocop clean.
