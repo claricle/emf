@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
   spec.description = "Pure-Ruby parser for Windows Metafile (WMF), Enhanced Metafile (EMF), " \
                      "and EMF+ binary formats. Produces an OOP domain model that downstream " \
                      "gems (such as emfsvg) consume."
-  spec.homepage = "https://github.com/fontist/emf"
+  spec.homepage = "https://github.com/claricle/emf"
   spec.license = "BSD-2-Clause"
   spec.required_ruby_version = ">= 3.1.0"
 
