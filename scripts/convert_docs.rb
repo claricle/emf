@@ -76,8 +76,8 @@ module Emf
       def h1?(node)
         return false unless node.name == "p"
 
-        style = node.at_xpath("./w:pPr/w:pStyle", "w" => WORD_NS)&.attribute_ns(WORD_NS, "val")
-        style&.match?(/Heading1$/i)
+        style = node.at_xpath("./w:pPr/w:pStyle/@w:val", "w" => WORD_NS)
+        style&.value&.match?(/Heading1$/i)
       end
 
       def new_chapter(paragraph)
@@ -144,7 +144,7 @@ module Emf
         text = inline_text(paragraph)
         return nil if text.strip.empty?
 
-        style = paragraph.at_xpath("./w:pPr/w:pStyle", "w" => WORD_NS)&.attribute_ns(WORD_NS, "val")
+        style = paragraph.at_xpath("./w:pPr/w:pStyle/@w:val", "w" => WORD_NS)&.value
         case style&.downcase
         when /heading2$/ then "## #{text}"
         when /heading3$/ then "### #{text}"
@@ -178,7 +178,7 @@ module Emf
         text = run.xpath(".//w:t", "w" => WORD_NS).map(&:content).join
         return "" if text.empty?
 
-        style_ref = run.at_xpath("./w:rStyle", "w" => WORD_NS)&.attribute_ns(WORD_NS, "val")
+        style_ref = run.at_xpath("./w:rStyle/@w:val", "w" => WORD_NS)&.value
         if style_ref&.downcase&.include?("code") || monospace_font?(run)
           "`#{text}`"
         else
@@ -191,7 +191,7 @@ module Emf
       end
 
       def monospace_font?(run)
-        font = run.at_xpath("./w:rPr/w:rFonts", "w" => WORD_NS)&.attribute_ns(WORD_NS, "ascii")
+        font = run.at_xpath("./w:rPr/w:rFonts/@w:ascii", "w" => WORD_NS)&.value
         font&.match?(/courier|consolas|monospace/i)
       end
 
