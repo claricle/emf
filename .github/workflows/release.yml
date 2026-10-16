@@ -1,42 +1,32 @@
-name: Release
+# Trusted publishing (OIDC) release — matches lutaml-model/.github/workflows/release.yml.
+# metanorma/ci switches to OIDC when the rubygems-api-key secret is omitted;
+# each gem must be registered for trusted publishing on rubygems.org
+# (owner=claricle, workflow=release.yml).
+name: release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      next_version:
+        description: |
+          Next release version. Possible values: x.y.z, major, minor, patch or pre|rc|etc
+        required: true
+        default: 'skip'
+  repository_dispatch:
+    types: [ do-release ]
 
+# Least-privilege ceiling for the called rubygems-release.yml: its release job
+# needs contents:write (git tag push) and id-token:write (OIDC Trusted Publishing).
 permissions:
   contents: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
-    name: Build and publish
-    runs-on: ubuntu-latest
-    environment: release
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.3"
-          bundler-cache: true
-
-      - name: Build gem
-        run: bundle exec rake build
-
-      - name: Publish to rubygems.org
-        env:
-          EMF_RUBYGEMS_API_KEY: ${{ secrets.EMF_RUBYGEMS_API_KEY }}
-        run: |
-          mkdir -p ~/.gem
-          printf -- '---\n:rubygems_api_key: %s\n' "$EMF_RUBYGEMS_API_KEY" > ~/.gem/credentials
-          chmod 0600 ~/.gem/credentials
-          gem push pkg/emf-*.gem
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: pkg/emf-*.gem
+    uses: metanorma/ci/.github/workflows/rubygems-release.yml@main
+    with:
+      next_version: ${{ github.event.inputs.next_version }}
