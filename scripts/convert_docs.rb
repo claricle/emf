@@ -15,6 +15,7 @@ require "fileutils"
 require "zip"
 require "leptris"
 require "cgi"
+require "time"
 
 module Emf
   module Scripts
