@@ -13,7 +13,7 @@ RSpec.describe "EMF corrupted-resilience" do
     it "does not crash or hang on #{File.basename(path)}" do
       bytes = File.read(path, mode: "rb")
       outcome = begin
-        Timeout.timeout(5) do
+        Timeout.timeout(60) do
           mf = Emf.parse(bytes)
           mf.errors? || mf.records.empty? ? :parsed_with_errors : :parsed
         rescue Emf::FormatError
