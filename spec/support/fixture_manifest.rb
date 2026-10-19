@@ -8,14 +8,19 @@ require "rbconfig"
 
 module FixtureManifest
   SCHEMA_VERSION = 1
-  EXPECTED_COUNTS = { "emf" => 186, "emf-ea" => 21, "simple" => 1, "emf-corrupted" => 21 }.freeze
+  EXPECTED_COUNTS = { "emf" => 186, "emf-ea" => 21, "simple" => 1, "emf-corrupted" => 21, "wmf" => 2 }.freeze
 
   module_function
 
   def fixtures(root)
-    Dir.glob(File.join(root, "spec/fixtures/**/*.emf"), sort: false).sort.map do |path|
-      { "path" => path.delete_prefix("#{root}/"), "sha256" => Digest::SHA256.file(path).hexdigest,
-        "size_bytes" => File.size(path), "expected_format" => "emf" }
+    paths = Dir.glob(File.join(root, "spec/fixtures/**/*.{emf,wmf}"), sort: false).sort
+    paths.map do |path|
+      relative_path = path.delete_prefix("#{root}/")
+      format = File.extname(path).delete_prefix(".")
+      entry = { "path" => relative_path, "sha256" => Digest::SHA256.file(path).hexdigest,
+                "size_bytes" => File.size(path), "expected_format" => format }
+      entry["provenance"] = "synthetic" if format == "wmf"
+      entry
     end
   end
 
@@ -143,7 +148,7 @@ module FixtureManifest
       return false unless manifest["counts"] == FixtureManifest.counts(entries)
 
       saved = manifest.fetch("fixtures")
-      metadata = saved.map { |entry| entry.slice("path", "sha256", "size_bytes", "expected_format") }
+      metadata = saved.map { |entry| entry.slice("path", "sha256", "size_bytes", "expected_format", "provenance") }
       metadata == entries && saved.all? { |entry| valid_observation?(entry) }
     end
 

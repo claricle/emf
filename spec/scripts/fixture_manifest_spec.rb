@@ -11,8 +11,21 @@ RSpec.describe FixtureManifest do
 
   it "inventories every existing fixture in deterministic path order without parsing" do
     entries = described_class.fixtures(root)
-    expect(entries.size).to eq(229)
-    expect(described_class.counts(entries)).to eq(described_class::EXPECTED_COUNTS)
+    expect(entries.size).to eq(231)
+    expect(described_class.counts(entries)).to eq(
+      "emf" => 186, "emf-ea" => 21, "simple" => 1, "emf-corrupted" => 21, "wmf" => 2
+    )
+    expect(entries.count { |entry| entry.fetch("expected_format") == "emf" }).to eq(229)
+    wmf_entries = entries.select { |entry| entry.fetch("expected_format") == "wmf" }
+    expect(wmf_entries.map { |entry| entry.fetch("path") }).to eq(
+      %w[spec/fixtures/wmf/placeable-line.wmf spec/fixtures/wmf/standard-line.wmf]
+    )
+    expect(wmf_entries).to all(include("provenance" => "synthetic"))
+    wmf_entries.each do |entry|
+      fixture_path = File.join(root, entry.fetch("path"))
+      expect(entry.fetch("sha256")).to eq(Digest::SHA256.file(fixture_path).hexdigest)
+      expect(entry.fetch("size_bytes")).to eq(File.size(fixture_path))
+    end
     expect(entries.map { |entry| entry.fetch("path") }).to eq(entries.map { |entry| entry.fetch("path") }.sort)
     expect(entries.first.fetch("sha256")).to eq(Digest::SHA256.file(File.join(root, entries.first.fetch("path"))).hexdigest)
   end

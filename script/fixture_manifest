@@ -26,7 +26,7 @@ if options[:check]
     abort "Manifest is stale or unsafe; run ruby script/fixture_manifest and review the changes."
   end
 
-  puts "Fixture manifest matches all 229 fixtures and parser sources (saved observations; no parses run)."
+  puts "Fixture manifest matches all 231 fixtures and parser sources (saved observations; no parses run)."
 else
   manifest = inventory.generate
   File.write(path, "#{JSON.pretty_generate(manifest)}\n")
