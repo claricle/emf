@@ -92,8 +92,8 @@ and corpus parity. Group names are proposed Rust modules.
 | `FillPath` | `FILLPATH` | [`fill_path.rb`](../lib/emf/emr/binary/records/fill_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `StrokePath` | `STROKEPATH` | [`stroke_path.rb`](../lib/emf/emr/binary/records/stroke_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `StrokeAndFillPath` | `STROKEANDFILLPATH` | [`stroke_and_fill_path.rb`](../lib/emf/emr/binary/records/stroke_and_fill_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
-| `FlattenPath` | `FLATTENPATH` | [`flatten_path.rb`](../lib/emf/emr/binary/records/flatten_path.rb) | `emf::path_clip_region` | Not started |
-| `WidenPath` | `WIDENPATH` | [`widen_path.rb`](../lib/emf/emr/binary/records/widen_path.rb) | `emf::path_clip_region` | Not started |
+| `FlattenPath` | `FLATTENPATH` | [`flatten_path.rb`](../lib/emf/emr/binary/records/flatten_path.rb) | `emf::path_clip_region` | In progress: core `e0fa139`, native `8598911`; remaining corpus/variant checks |
+| `WidenPath` | `WIDENPATH` | [`widen_path.rb`](../lib/emf/emr/binary/records/widen_path.rb) | `emf::path_clip_region` | In progress: core `e0fa139`, native `8598911`; remaining corpus/variant checks |
 | `SelectClipPath` | `SELECTCLIPPATH` | [`select_clip_path.rb`](../lib/emf/emr/binary/records/select_clip_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `AbortPath` | `ABORTPATH` | [`abort_path.rb`](../lib/emf/emr/binary/records/abort_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `SetMiterLimit` | `SETMITERLIMIT` | [`set_miter_limit.rb`](../lib/emf/emr/binary/records/set_miter_limit.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
@@ -103,20 +103,20 @@ and corpus parity. Group names are proposed Rust modules.
 | `ExtCreatePen` | `EXTCREATEPEN` | [`ext_create_pen.rb`](../lib/emf/emr/binary/records/ext_create_pen.rb) | `emf::state_objects` | Not started |
 | `StretchDIBits` | `STRETCHDIBITS` | [`stretch_dibits.rb`](../lib/emf/emr/binary/records/stretch_dibits.rb) | `emf::bitmap` | Not started |
 | `SetPixelV` | `SETPIXELV` | [`set_pixel_v.rb`](../lib/emf/emr/binary/records/set_pixel_v.rb) | `emf::state_objects` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
-| `SetMetArgn` | `SETMETARGN` | [`set_metargn.rb`](../lib/emf/emr/binary/records/set_metargn.rb) | `emf::state_objects` | Not started |
+| `SetMetArgn` | `SETMETARGN` | [`set_metargn.rb`](../lib/emf/emr/binary/records/set_metargn.rb) | `emf::state_objects` | In progress: core `e0fa139`, native `8598911`; remaining corpus/variant checks |
 | `OffsetClipRgn` | `OFFSETCLIPRGN` | [`offset_clip_rgn.rb`](../lib/emf/emr/binary/records/offset_clip_rgn.rb) | `emf::path_clip_region` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `ExcludeClipRect` | `EXCLUDECLIPRECT` | [`exclude_clip_rect.rb`](../lib/emf/emr/binary/records/exclude_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `IntersectClipRect` | `INTERSECTCLIPRECT` | [`intersect_clip_rect.rb`](../lib/emf/emr/binary/records/intersect_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `ExtSelectClipRgn` | `EXTSELECTCLIPRGN` | [`ext_select_clip_rgn.rb`](../lib/emf/emr/binary/records/ext_select_clip_rgn.rb) | `emf::path_clip_region` | Not started |
 | `ScaleViewportExtEx` | `SCALEVIEWPORTEXTEX` | [`scale_viewport_ext_ex.rb`](../lib/emf/emr/binary/records/scale_viewport_ext_ex.rb) | `emf::transform` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
 | `ScaleWindowExtEx` | `SCALEWINDOWEXTEX` | [`scale_window_ext_ex.rb`](../lib/emf/emr/binary/records/scale_window_ext_ex.rb) | `emf::transform` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
-| `SetMapperFlags` | `SETMAPPERFLAGS` | [`set_mapper_flags.rb`](../lib/emf/emr/binary/records/set_mapper_flags.rb) | `emf::state_objects` | Not started |
+| `SetMapperFlags` | `SETMAPPERFLAGS` | [`set_mapper_flags.rb`](../lib/emf/emr/binary/records/set_mapper_flags.rb) | `emf::state_objects` | In progress: core `e0fa139`, native `8598911`; remaining corpus/variant checks |
 | `RealizePalette` | `REALIZEPALETTE` | [`realize_palette.rb`](../lib/emf/emr/binary/records/realize_palette.rb) | `emf::color_palette` | Not started |
 | `SelectPalette` | `SELECTPALETTE` | [`select_palette.rb`](../lib/emf/emr/binary/records/select_palette.rb) | `emf::color_palette` | Not started |
 | `CreatePalette` | `CREATEPALETTE` | [`create_palette.rb`](../lib/emf/emr/binary/records/create_palette.rb) | `emf::color_palette` | Not started |
 | `ResizePalette` | `RESIZEPALETTE` | [`resize_palette.rb`](../lib/emf/emr/binary/records/resize_palette.rb) | `emf::color_palette` | Not started |
 | `SetPaletteEntries` | `SETPALETTEENTRIES` | [`set_palette_entries.rb`](../lib/emf/emr/binary/records/set_palette_entries.rb) | `emf::color_palette` | Not started |
-| `ExtFloodFill` | `EXTFLOODFILL` | [`ext_flood_fill.rb`](../lib/emf/emr/binary/records/ext_flood_fill.rb) | `emf::state_objects` | Not started |
+| `ExtFloodFill` | `EXTFLOODFILL` | [`ext_flood_fill.rb`](../lib/emf/emr/binary/records/ext_flood_fill.rb) | `emf::state_objects` | In progress: opaque compatibility body through core/native (`8598911`); semantic fields remain open |
 | `FillRgn` | `FILLRGN` | [`fill_rgn.rb`](../lib/emf/emr/binary/records/fill_rgn.rb) | `emf::path_clip_region` | Not started |
 | `FrameRgn` | `FRAMERGN` | [`frame_rgn.rb`](../lib/emf/emr/binary/records/frame_rgn.rb) | `emf::path_clip_region` | Not started |
 | `InvertRgn` | `INVERTRGN` | [`invert_rgn.rb`](../lib/emf/emr/binary/records/invert_rgn.rb) | `emf::path_clip_region` | Not started |
@@ -128,8 +128,8 @@ and corpus parity. Group names are proposed Rust modules.
 | `SetDIBitsToDevice` | `SETDIBITSTODEVICE` | [`set_dibits_to_device.rb`](../lib/emf/emr/binary/records/set_dibits_to_device.rb) | `emf::bitmap` | Not started |
 | `AlphaBlend` | `ALPHABLEND` | [`alpha_blend.rb`](../lib/emf/emr/binary/records/alpha_blend.rb) | `emf::bitmap` | Not started |
 | `TransparentBlt` | `TRANSPARENTBLT` | [`transparent_blt.rb`](../lib/emf/emr/binary/records/transparent_blt.rb) | `emf::bitmap` | Not started |
-| `SetLayout` | `SETLAYOUT` | [`set_layout.rb`](../lib/emf/emr/binary/records/set_layout.rb) | `emf::state_objects` | Not started |
-| `SetIcmMode` | `SETICMMODE` | [`set_icm_mode.rb`](../lib/emf/emr/binary/records/set_icm_mode.rb) | `emf::color_palette` | Not started |
+| `SetLayout` | `SETLAYOUT` | [`set_layout.rb`](../lib/emf/emr/binary/records/set_layout.rb) | `emf::state_objects` | In progress: core `e0fa139`, native `8598911`; remaining corpus/variant checks |
+| `SetIcmMode` | `SETICMMODE` | [`set_icm_mode.rb`](../lib/emf/emr/binary/records/set_icm_mode.rb) | `emf::color_palette` | In progress: core `e0fa139`, native `8598911`; remaining corpus/variant checks |
 | `CreateMonoBrush` | `CREATEMONOBRUSH` | [`create_mono_brush.rb`](../lib/emf/emr/binary/records/create_mono_brush.rb) | `emf::bitmap` | Not started |
 | `CreateDibPatternBrushPt` | `CREATEDIBPATTERNBRUSHPT` | [`create_dib_pattern_brush_pt.rb`](../lib/emf/emr/binary/records/create_dib_pattern_brush_pt.rb) | `emf::bitmap` | Not started |
 | `GradientFill` | `GRADIENTFILL` | [`gradient_fill.rb`](../lib/emf/emr/binary/records/gradient_fill.rb) | `emf::bitmap` | Not started |
@@ -152,7 +152,7 @@ and corpus parity. Group names are proposed Rust modules.
 | `PolyTextOutA` | `POLYTEXTOUTA` | [`poly_textout_a.rb`](../lib/emf/emr/binary/records/poly_textout_a.rb) | `emf::text` | Not started |
 | `PolyTextOutW` | `POLYTEXTOUTW` | [`poly_textout_w.rb`](../lib/emf/emr/binary/records/poly_textout_w.rb) | `emf::text` | Not started |
 | `PixelFormat` | `PIXELFORMAT` | [`pixel_format.rb`](../lib/emf/emr/binary/records/pixel_format.rb) | `emf::opaque_extensions` | Not started |
-| `SetTextJustification` | `SETTEXTJUSTIFICATION` | [`set_text_justification.rb`](../lib/emf/emr/binary/records/set_text_justification.rb) | `emf::text` | Not started |
+| `SetTextJustification` | `SETTEXTJUSTIFICATION` | [`set_text_justification.rb`](../lib/emf/emr/binary/records/set_text_justification.rb) | `emf::text` | In progress: opaque compatibility body through core/native (`8598911`); semantic fields remain open |
 
 ## Completion conditions
 

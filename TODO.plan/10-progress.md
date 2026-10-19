@@ -8,13 +8,13 @@ Status: execution plan merged; baseline, Rust core and Ruby integration work in 
 | --- | --- | --- |
 | 01 Requirements | Baseline documented | Validate contracts through executable oracle in 02 |
 | 02 Baseline/parity | In progress | Fixture inventory, API/mutation controls, canonical observation/comparison harness and parser/consumer timing drivers added; reported slow workload and native comparisons pending |
-| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed header/EOF, scalar state, signed coordinates, color, rectangle, simple/multi point arrays, PolyDraw, scale/world transforms and comment cohorts added; remaining record families and corpus parity pending |
+| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed header/EOF, scalar state, signed coordinates, color, rectangle, simple/multi point arrays, PolyDraw, scale/world transforms, fixed state/path completion and comment cohorts added; remaining record families and corpus parity pending |
 | 04 C ABI | In progress | Versioned interface, owned typed snapshots, boundary tests and linked C client verified locally; full model/edit and platform checks pending |
 | 05 Ruby binding | In progress | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
 | 06 Resilience | In progress | Ruby subprocess supervisor and Rust budget regressions underway; forced-native corpus and fuzz budgets pending |
 | 07 Performance | In progress | Ruby/native parser and consumer measurement drivers verified; comparable end-to-end results, issue target and regression budget remain open |
 | 08 Platform delivery | In progress | Feasibility probe underway; artifacts, clean installs and complete CI/release integration pending |
-| 09 Format extensions | In progress | Bounded Ruby standard/placeable WMF headers, mapping, fixed geometry, point arrays and raw unknown preservation verified; full WMF and structured EMF+ pending |
+| 09 Format extensions | In progress | Bounded Ruby standard/placeable WMF headers, mapping, fixed geometry, point arrays, arcs, origin offsets and raw unknown preservation verified; full WMF and structured EMF+ pending |
 | 11 Record coverage | In progress | Header and bounded scalar/coordinate/variable cohorts cross core, ABI and Ruby; color/rectangle, fixed state/path, simple/multi point arrays, PolyDraw and transform parity verified; remaining registry entries and variants pending |
 
 Documentation of a requirement is not implementation completion. Keep package
@@ -327,3 +327,25 @@ current-schema manifests for inventory and consumer validation tests. Legacy
 schema rejection remains explicit. The 16 focused examples pass and changed-file
 lint passes. This test repair does not recapture or approve the tracked corpus
 inventory; production baseline acceptance remains open.
+
+### Remaining fixed state and compatibility records
+
+Core commit `e0fa139` and native commit `8598911` add SetMapperFlags,
+SetMetaRgn (Ruby `SetMetArgn`), ExtFloodFill, FlattenPath, WidenPath,
+SetIcmMode, SetLayout and SetTextJustification. Snapshot schema 2 gains tags
+66–73; ABI version 1 is unchanged. ExtFloodFill and SetTextJustification
+retain the current Ruby opaque-body contract; semantic fields remain open.
+
+`cargo test --workspace` passed 128 tests. Strict workspace Clippy, formatting
+and the linked C smoke client passed. The compiled native library passed
+65 examples with `bundle exec rspec spec/emf/native`; changed Ruby lint passed.
+Checks cover direct hydration, edits, malformed Raw recovery, owned snapshot
+lifetimes and opaque-body length validation. Full corpus parity remains open.
+
+### Ruby WMF arcs and offsets
+
+Commit `1735620` adds typed Arc/Pie/Chord/RoundRect and window/viewport offsets,
+including checked signed coordinates and edited serialization. The bounded WMF
+suite passed 36 examples. The integrated WMF, fixture-manifest and consumer
+benchmark checks passed 52 examples at that commit. These results do not
+establish complete WMF, native WMF or performance acceptance.
