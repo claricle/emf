@@ -3,7 +3,6 @@
 require "spec_helper"
 require "rbconfig"
 require "open3"
-require "base64"
 
 RSpec.describe Emf::Native do
   let(:library) do
@@ -73,15 +72,14 @@ RSpec.describe Emf::Native do
   it "loads and parses through the public API in a fresh native process" do
     script = <<~SCRIPT
       require "emf"
-      require "base64"
-      bytes = Base64.strict_decode64(ARGV.fetch(0))
+      bytes = ARGV.fetch(0).unpack1("m0")
       parsed = Emf.parse(bytes)
       abort "wrong native result" unless parsed.records.size == 5 && Emf.serialize(parsed) == bytes
       puts parsed.format
     SCRIPT
     stdout, stderr, status = Open3.capture3(
       { "EMF_BACKEND" => "native", "EMF_NATIVE_LIBRARY" => library },
-      RbConfig.ruby, "-Ilib", "-e", script, Base64.strict_encode64(bytes)
+      RbConfig.ruby, "-Ilib", "-e", script, [bytes].pack("m0")
     )
     expect(status.success?).to be(true), stderr
     expect(stdout.strip).to eq("emf_plus")
