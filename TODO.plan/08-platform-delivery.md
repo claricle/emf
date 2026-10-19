@@ -36,6 +36,20 @@ Every row requires an actual build, execution test, and clean gem-install smoke 
 
 The final row is a feasibility gate: verify Rust target maturity/toolchain, runtime libraries, available Ruby distribution, RubyGems platform resolution, Fiddle loading and executable runner access before promising support. The other RubyGems names also require resolution tests at the declared RubyGems floor. If Windows ARM64 cannot satisfy these checks, record the blocker, owner and follow-up; do not silently delete the row or call the complete proposed matrix delivered. No MSVC-only substitute establishes mingw support.
 
+## Feasibility probe
+
+`.github/workflows/native-platform-probe.yml` (triggers: pull requests touching `script/platform_probe/**` or the workflow, plus manual dispatch) runs all eight matrix rows on native runners of each architecture, each under Ruby 3.1 and 3.4. It uses a throwaway crate (`script/platform_probe/hello`), not `emf-rs/`, and publishes nothing. Per row and Ruby version it records:
+
+- Rust target and pinned toolchain build (`cargo build --locked --release --target`);
+- runtime libraries the built library links (`ldd`, `otool -L` or `objdump -p`), in `linkage.txt`;
+- whether a compatible Ruby could be installed (`ruby/setup-ruby`, or `apk` in Alpine for the musl rows);
+- RubyGems platform resolution: a throwaway `emf-platform-probe` 0.0.0 platform gem is built in a temp dir, installed with `gem install --local` into an isolated `GEM_HOME`, and checked for selection over a `ruby`-platform decoy;
+- Fiddle loading of the installed library: ABI version call and a pointer+length round trip, plus `Gem::Platform.local` against the intended name;
+- packaging: the probe library is wrapped by `script/build_native_gem` into an emf platform gem (plus the source gem), both pass `script/check_native_package`, and `script/native_install_smoke --require-native --forbid-compiler --resolve-dependencies` installs them with a fetched `bindata` from a PATH holding only `ruby`, proving a no-compiler install per row (`package-*.log`, `package_*=ok` lines in `summary.txt`);
+- runner access: a job that never starts on the expected architecture shows as a missing artifact.
+
+Failed elements are written as `BLOCKER` lines in each artifact's `summary.txt`. The Windows ARM64 row (`windows-11-arm`) is `continue-on-error` so it reports without blocking. Results come from CI runs and are not recorded here yet; no row is delivered by this probe.
+
 ## Execution order and dependencies
 
 1. Depend on [04-c-abi.md](04-c-abi.md), [05-ruby-binding.md](05-ruby-binding.md) and [06-resilience.md](06-resilience.md). Pin Rust/toolchain/build images and define the minimum glibc/macOS/Windows runtime baselines in the manifest. Inventory dynamically linked libraries and licenses. Choose runners or emulated environments for every row; record emulation and its limits.

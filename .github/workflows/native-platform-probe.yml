@@ -1,0 +1,103 @@
+name: native-platform-probe
+
+# Feasibility probe for TODO.plan/08-platform-delivery.md. Builds a throwaway
+# Rust cdylib (script/platform_probe/hello, not emf) for each proposed target
+# row, records its linked runtime libraries, builds and installs a throwaway
+# platform gem, and loads the installed library with Fiddle. It then builds and
+# checks the emf platform and source gems around that library and installs them
+# with no compiler on PATH. Nothing here is published and no emf code is
+# exercised.
+on:
+  pull_request:
+    paths:
+      - "script/platform_probe/**"
+      - "script/build_native_gem"
+      - "script/check_native_package"
+      - "script/native_install_smoke"
+      - "emf.gemspec"
+      - ".github/workflows/native-platform-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: ${{ matrix.row.target }} / ruby ${{ matrix.ruby }}
+    runs-on: ${{ matrix.row.runner }}
+    # Windows ARM64 is a feasibility gate: it reports instead of blocking.
+    continue-on-error: ${{ matrix.row.experimental }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.1", "3.4"]
+        row:
+          - { target: x86_64-unknown-linux-gnu, platform: x86_64-linux-gnu, runner: ubuntu-24.04, kind: setup-ruby, experimental: false }
+          - { target: aarch64-unknown-linux-gnu, platform: aarch64-linux-gnu, runner: ubuntu-24.04-arm, kind: setup-ruby, experimental: false }
+          # musl rows run in an Alpine container driven by `docker run` rather
+          # than `container:`, because JS actions (checkout, upload-artifact)
+          # execute the runner's glibc Node, which Alpine cannot run.
+          - { target: x86_64-unknown-linux-musl, platform: x86_64-linux-musl, runner: ubuntu-24.04, kind: alpine, experimental: false }
+          - { target: aarch64-unknown-linux-musl, platform: aarch64-linux-musl, runner: ubuntu-24.04-arm, kind: alpine, experimental: false }
+          # macos-15-intel is the x86_64 label GitHub still offers; macos-13 is retired.
+          - { target: x86_64-apple-darwin, platform: x86_64-darwin, runner: macos-15-intel, kind: setup-ruby, experimental: false }
+          - { target: aarch64-apple-darwin, platform: arm64-darwin, runner: macos-latest, kind: setup-ruby, experimental: false }
+          - { target: x86_64-pc-windows-gnu, platform: x64-mingw-ucrt, runner: windows-2025, kind: setup-ruby, experimental: false }
+          # The intended platform name is a candidate; the probe reports what
+          # Gem::Platform.local says on this runner.
+          - { target: aarch64-pc-windows-gnullvm, platform: aarch64-mingw-ucrt, runner: windows-11-arm, kind: setup-ruby, experimental: true }
+    env:
+      OUT_DIR: probe-out/${{ matrix.row.target }}-ruby${{ matrix.ruby }}
+      EXPECTED_RUBY: ${{ matrix.ruby }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby ${{ matrix.ruby }}
+        id: ruby
+        if: matrix.row.kind == 'setup-ruby'
+        continue-on-error: true
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+
+      - name: Set up the llvm-mingw linker (Windows ARM64)
+        id: llvm_mingw
+        if: matrix.row.target == 'aarch64-pc-windows-gnullvm'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          # Update the checksum with the version: it is the release asset's published sha256.
+          $version = "20261006"
+          $sha256 = "9a835d5179c9f3a5a783c11a7f14062a249b4765dd11add64a66786864e82ab2"
+          $zip = "$env:RUNNER_TEMP\llvm-mingw.zip"
+          Invoke-WebRequest "https://github.com/mstorsjo/llvm-mingw/releases/download/$version/llvm-mingw-$version-ucrt-aarch64.zip" -OutFile $zip
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $sha256) { throw "llvm-mingw checksum mismatch: $actual" }
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\llvm-mingw"
+          $bin = (Get-ChildItem "$env:RUNNER_TEMP\llvm-mingw" -Directory | Select-Object -First 1).FullName + "\bin"
+          Add-Content $env:GITHUB_PATH $bin
+          Add-Content $env:GITHUB_ENV "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER=$bin\aarch64-w64-mingw32-clang.exe"
+
+      - name: Probe (Rust runner)
+        if: matrix.row.kind == 'setup-ruby'
+        shell: bash
+        env:
+          RUBY_SETUP_OUTCOME: ${{ steps.ruby.outcome }}
+          LINKER_SETUP_OUTCOME: ${{ steps.llvm_mingw.outcome }}
+        run: script/platform_probe/run_row.sh "${{ matrix.row.target }}" "${{ matrix.row.platform }}" "$OUT_DIR"
+
+      - name: Probe (Alpine container)
+        if: matrix.row.kind == 'alpine'
+        run: |
+          image="alpine:${{ matrix.ruby == '3.1' && '3.17' || '3.22' }}"
+          docker run --rm -v "$PWD:/work" -w /work -e RUNNER_OS -e RUNNER_ARCH -e EXPECTED_RUBY "$image" \
+            sh script/platform_probe/alpine.sh "${{ matrix.row.target }}" "${{ matrix.row.platform }}" "$OUT_DIR"
+
+      - name: Upload probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-${{ matrix.row.target }}-ruby${{ matrix.ruby }}
+          path: probe-out/
+          if-no-files-found: warn
