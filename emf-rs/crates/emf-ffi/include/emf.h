@@ -55,6 +55,16 @@ extern "C" {
 #define EMF_FAMILY_STROKEPATH 32u
 #define EMF_FAMILY_SELECTCLIPPATH 33u
 #define EMF_FAMILY_ABORTPATH 34u
+#define EMF_FAMILY_SETPIXELV 35u
+#define EMF_FAMILY_EXCLUDECLIPRECT 36u
+#define EMF_FAMILY_INTERSECTCLIPRECT 37u
+#define EMF_FAMILY_CREATEPEN 38u
+#define EMF_FAMILY_CREATEBRUSHINDIRECT 39u
+#define EMF_FAMILY_ARC 40u
+#define EMF_FAMILY_CHORD 41u
+#define EMF_FAMILY_PIE 42u
+#define EMF_FAMILY_LINETO 43u
+#define EMF_FAMILY_ARCTO 44u
 
 typedef struct emf_document emf_document;
 typedef struct emf_buffer emf_buffer;
@@ -139,7 +149,8 @@ typedef struct emf_error_info {
  * SETVIEWPORTEXTEX, SETVIEWPORTORGEX, SETBRUSHORGEX, OFFSETCLIPRGN and MOVETOEX.
  * Color records SETTEXTCOLOR and SETBKCOLOR and shapes ELLIPSE, RECTANGLE and
  * ROUNDRECT, fixed state/selection records and path lifecycle/consume records
- * are also typed. Other records remain raw. Snapshot bytes use the
+ * are also typed, along with fixed geometry and pen/brush creation records.
+ * Other records remain raw. Snapshot bytes use the
  * encoding documented in snapshot-v2.md.
  * Snapshot versions are independent of ABI versions.
  * Documents are immutable through this ABI.

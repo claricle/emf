@@ -2,8 +2,7 @@
 
 The emitted snapshot schema is 2; the C ABI remains version 1. Snapshot schema
 versions are independent of ABI versions and do not change C layouts or functions.
-Schema 2 is unreleased; its family table includes coordinate, color, rectangle
-and fixed-state/path cohorts below.
+Schema 2 is unreleased; its family table includes the typed cohorts below.
 The historical [snapshot v1 contract](snapshot-v1.md) remains unchanged.
 
 `emf_document_snapshot(document, &buffer, &error)` returns one independently owned
@@ -87,6 +86,16 @@ length u64, type ID u32, family u32, typed payload length u64. Payloads:
 | STROKEPATH | 32 | bounds left/top/right/bottom: 4 i32 |
 | SELECTCLIPPATH | 33 | region_mode: u32 |
 | ABORTPATH | 34 | empty |
+| SETPIXELV | 35 | i32 pixel x,y; color red/green/blue/reserved: 4 u8 |
+| EXCLUDECLIPRECT | 36 | i32 clip left,top,right,bottom |
+| INTERSECTCLIPRECT | 37 | i32 clip left,top,right,bottom |
+| CREATEPEN | 38 | u32 ih_pen,pen_style; i32 width x,y; color red/green/blue/reserved: 4 u8 |
+| CREATEBRUSHINDIRECT | 39 | u32 ih_brush,brush_style; color red/green/blue/reserved: 4 u8; u32 brush_hatch |
+| ARC | 40 | i32 bounds left,top,right,bottom; i32 start x,y; i32 end x,y |
+| CHORD | 41 | i32 bounds left,top,right,bottom; i32 start x,y; i32 end x,y |
+| PIE | 42 | i32 bounds left,top,right,bottom; i32 start x,y; i32 end x,y |
+| LINETO | 43 | i32 origin x,y |
+| ARCTO | 44 | i32 bounds left,top,right,bottom; i32 start x,y; i32 end x,y |
 
 Families match descriptor batches. Malformed supported payloads remain RAW and
 produce diagnostics. COMMENT contains counted data, including the EMF+ identifier

@@ -6,8 +6,8 @@ module Emf
   module Native
     class Hydrator
       SUPPORTED_TYPES = [
-        4, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 33, 34, 37, 40,
-        42, 43, 44, 57, 59, 60, 61, 62, 63, 64, 67, 68, 70
+        4, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 29, 30, 33, 34,
+        37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 54, 55, 57, 59, 60, 61, 62, 63, 64, 67, 68, 70
       ].freeze
 
       def initialize(snapshot, input)
@@ -57,7 +57,7 @@ module Emf
         when 33
           klass, fields = Fields.call(payload, 33)
           [klass, fields.merge(trailing: raw.byteslice(12..))]
-        when 5..34 then Fields.call(payload, record.fetch(:family))
+        when 5..44 then Fields.call(payload, record.fetch(:family))
         else raise FormatError, "unsupported native snapshot record family #{record.fetch(:family)}"
         end
       end

@@ -34,7 +34,23 @@ module Emf
         31 => [Emr::Binary::Records::StrokeAndFillPath, [:rcl_bounds, %i[left top right bottom], "l<4", 16]],
         32 => [Emr::Binary::Records::StrokePath, [:rcl_bounds, %i[left top right bottom], "l<4", 16]],
         33 => [Emr::Binary::Records::SelectClipPath, [:region_mode, nil, "V", 4]],
-        34 => [Emr::Binary::Records::AbortPath]
+        34 => [Emr::Binary::Records::AbortPath],
+        35 => [Emr::Binary::Records::SetPixelV, [:ptl_pixel, %i[x y], "l<2", 8], [:cr_color, %i[red green blue reserved], "C4", 4]],
+        36 => [Emr::Binary::Records::ExcludeClipRect, [:rcl_clip, %i[left top right bottom], "l<4", 16]],
+        37 => [Emr::Binary::Records::IntersectClipRect, [:rcl_clip, %i[left top right bottom], "l<4", 16]],
+        38 => [Emr::Binary::Records::CreatePen, [:ih_pen, nil, "V", 4], [:pen_style, nil, "V", 4],
+               [:width, %i[x y], "l<2", 8], [:color, %i[red green blue reserved], "C4", 4]],
+        39 => [Emr::Binary::Records::CreateBrushIndirect, [:ih_brush, nil, "V", 4], [:brush_style, nil, "V", 4],
+               [:color, %i[red green blue reserved], "C4", 4], [:brush_hatch, nil, "V", 4]],
+        40 => [Emr::Binary::Records::Arc, [:rcl_box, %i[left top right bottom], "l<4", 16],
+               [:ptl_start, %i[x y], "l<2", 8], [:ptl_end, %i[x y], "l<2", 8]],
+        41 => [Emr::Binary::Records::Chord, [:rcl_box, %i[left top right bottom], "l<4", 16],
+               [:ptl_start, %i[x y], "l<2", 8], [:ptl_end, %i[x y], "l<2", 8]],
+        42 => [Emr::Binary::Records::Pie, [:rcl_box, %i[left top right bottom], "l<4", 16],
+               [:ptl_start, %i[x y], "l<2", 8], [:ptl_end, %i[x y], "l<2", 8]],
+        43 => [Emr::Binary::Records::LineTo, [:origin, %i[x y], "l<2", 8]],
+        44 => [Emr::Binary::Records::ArcTo, [:rcl_box, %i[left top right bottom], "l<4", 16],
+               [:ptl_start, %i[x y], "l<2", 8], [:ptl_end, %i[x y], "l<2", 8]]
       }.freeze
 
       def self.call(payload, family)

@@ -45,6 +45,16 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::StrokePath { .. } => 32,
         RecordData::SelectClipPath { .. } => 33,
         RecordData::AbortPath => 34,
+        RecordData::SetPixelV { .. } => 35,
+        RecordData::ExcludeClipRect { .. } => 36,
+        RecordData::IntersectClipRect { .. } => 37,
+        RecordData::CreatePen { .. } => 38,
+        RecordData::CreateBrushIndirect { .. } => 39,
+        RecordData::Arc { .. } => 40,
+        RecordData::Chord { .. } => 41,
+        RecordData::Pie { .. } => 42,
+        RecordData::LineTo { .. } => 43,
+        RecordData::ArcTo { .. } => 44,
     }
 }
 
@@ -84,6 +94,16 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         RecordData::StrokePath { .. } => Ok(16),
         RecordData::SelectClipPath { .. } => Ok(4),
         RecordData::AbortPath => Ok(0),
+        RecordData::SetPixelV { .. } => Ok(12),
+        RecordData::ExcludeClipRect { .. } => Ok(16),
+        RecordData::IntersectClipRect { .. } => Ok(16),
+        RecordData::CreatePen { .. } => Ok(20),
+        RecordData::CreateBrushIndirect { .. } => Ok(16),
+        RecordData::Arc { .. } => Ok(32),
+        RecordData::Chord { .. } => Ok(32),
+        RecordData::Pie { .. } => Ok(32),
+        RecordData::LineTo { .. } => Ok(8),
+        RecordData::ArcTo { .. } => Ok(32),
         RecordData::SetWindowExtEx { .. }
         | RecordData::SetWindowOrgEx { .. }
         | RecordData::SetViewportExtEx { .. }
@@ -190,6 +210,45 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
             RecordData::StrokePath { bounds } => rect(&mut out, *bounds),
             RecordData::SelectClipPath { region_mode } => u32_field(&mut out, *region_mode),
             RecordData::AbortPath => {}
+            RecordData::SetPixelV { pixel, color } => {
+                point(&mut out, *pixel);
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+            }
+            RecordData::ExcludeClipRect { clip } | RecordData::IntersectClipRect { clip } => {
+                rect(&mut out, *clip)
+            }
+            RecordData::CreatePen {
+                ih_pen,
+                pen_style,
+                width,
+                color,
+            } => {
+                u32_field(&mut out, *ih_pen);
+                u32_field(&mut out, *pen_style);
+                point(&mut out, *width);
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+            }
+            RecordData::CreateBrushIndirect {
+                ih_brush,
+                brush_style,
+                color,
+                brush_hatch,
+            } => {
+                u32_field(&mut out, *ih_brush);
+                u32_field(&mut out, *brush_style);
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+                u32_field(&mut out, *brush_hatch);
+            }
+            RecordData::Arc { bounds, start, end }
+            | RecordData::Chord { bounds, start, end }
+            | RecordData::Pie { bounds, start, end }
+            | RecordData::ArcTo { bounds, start, end } => {
+                rect(&mut out, *bounds);
+                point(&mut out, *start);
+                point(&mut out, *end);
+            }
+            RecordData::LineTo { origin } => point(&mut out, *origin),
+
             RecordData::Polyline { bounds, points } => {
                 rect(&mut out, *bounds);
                 u64_field(&mut out, wire_len(points.len())?);
@@ -466,6 +525,55 @@ mod tests {
             assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
             assert_eq!(cursor.u32(), kind);
             assert_eq!(cursor.u32(), 21 + index as u32);
+            assert_eq!(cursor.u64(), (count * 4) as u64);
+            cursor.words(words);
+            assert_eq!(cursor.position, encoded.len());
+        }
+    }
+
+    #[test]
+    fn fixed_geometry_snapshots_preserve_signed_unsigned_color_fields_without_suffixes() {
+        for (index, (kind, count)) in [
+            (15, 3),
+            (29, 4),
+            (30, 4),
+            (38, 5),
+            (39, 4),
+            (45, 8),
+            (46, 8),
+            (47, 8),
+            (54, 2),
+            (55, 8),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let words = &[
+                0x80000000u32,
+                0x7fffffff,
+                0xffffffff,
+                0,
+                0xdbff8000,
+                1,
+                2,
+                3,
+            ][..count];
+            let mut payload = words
+                .iter()
+                .flat_map(|value| value.to_le_bytes())
+                .collect::<Vec<_>>();
+            payload.extend_from_slice(b"opaque");
+            let mut input = fixture_header(88);
+            record(&mut input, kind, &payload);
+            let document = parse(&input, &ParseLimits::default()).unwrap();
+            let encoded = encode(&document).unwrap();
+            let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+            cursor.take(112 + 88);
+            assert_eq!(cursor.u64(), 0);
+            assert_eq!(cursor.u64(), 88);
+            assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
+            assert_eq!(cursor.u32(), kind);
+            assert_eq!(cursor.u32(), 35 + index as u32);
             assert_eq!(cursor.u64(), (count * 4) as u64);
             cursor.words(words);
             assert_eq!(cursor.position, encoded.len());

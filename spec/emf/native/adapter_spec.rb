@@ -310,6 +310,95 @@ RSpec.describe Emf::Native do
     end
   end
 
+  let(:fixed_geometry_records) do
+    point = { x: -0x80000000, y: 0x7FFFFFFF }
+    bounds = { left: -0x80000000, top: 0x7FFFFFFF, right: -1, bottom: 0 }
+    color = { red: 0, green: 128, blue: 255, reserved: 219 }
+    arc = { rcl_box: bounds, ptl_start: point, ptl_end: { x: -1, y: 0 } }
+    [
+      [15, Emf::Emr::Binary::Records::SetPixelV, 12, { ptl_pixel: point, cr_color: color }],
+      [29, Emf::Emr::Binary::Records::ExcludeClipRect, 16, { rcl_clip: bounds }],
+      [30, Emf::Emr::Binary::Records::IntersectClipRect, 16, { rcl_clip: bounds }],
+      [38, Emf::Emr::Binary::Records::CreatePen, 20, { ih_pen: 0xFFFFFFFF, pen_style: 0x80000000, width: point, color: color }],
+      [39, Emf::Emr::Binary::Records::CreateBrushIndirect, 16,
+       { ih_brush: 0x80000000, brush_style: 0xFFFFFFFF, color: color, brush_hatch: 0 }],
+      [45, Emf::Emr::Binary::Records::Arc, 32, arc],
+      [46, Emf::Emr::Binary::Records::Chord, 32, arc],
+      [47, Emf::Emr::Binary::Records::Pie, 32, arc],
+      [54, Emf::Emr::Binary::Records::LineTo, 8, { origin: point }],
+      [55, Emf::Emr::Binary::Records::ArcTo, 32, arc]
+    ]
+  end
+
+  it "hydrates fixed geometry fields directly and preserves signed and color edits" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    fixed_geometry_records.each do |type, klass, length, fields|
+      expect(klass).not_to receive(:read)
+      original = klass.new(i_type: type, n_size: length + 8, **fields).to_binary_s
+      parsed = Emf.parse(header + original + eof)
+      wire = parsed.records.first.wire
+      expect(wire.class).to eq(klass)
+      fields.each { |field, value| expect(wire.public_send(field).snapshot).to eq(value) }
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(header + original + eof)
+      edited = fields.transform_values do |value|
+        if value.is_a?(Hash)
+          value.transform_values { |number| value.key?(:reserved) ? 255 - number : -number - 1 }
+        else
+          value ^ 0xFFFFFFFF
+        end
+      end
+      edited.each { |field, value| wire.public_send("#{field}=", value) }
+      expected = header + klass.new(i_type: type, n_size: length + 8, **edited).to_binary_s + eof
+      expect(Emf.serialize(parsed)).to eq(expected)
+      reparsed = Emf.parse(expected).records.first.wire
+      edited.each { |field, value| expect(reparsed.public_send(field).snapshot).to eq(value) }
+    end
+  end
+
+  it "matches Ruby fixed geometry canonical models with opaque suffixes and unknown siblings" do
+    unknown = [0x12345678, 12, 0xFFFFFFFF].pack("V3")
+    fixed_geometry_records.each do |type, klass, length, fields|
+      original = klass.new(i_type: type, n_size: length + 8, **fields).to_binary_s
+      ["".b, "tail".b, ("opaque" * 3).b].each do |suffix|
+        input = header + [type, length + suffix.bytesize + 8].pack("V2") + original.byteslice(8..) + suffix + unknown + eof
+        ENV["EMF_BACKEND"] = "native"
+        native = Emf.parse(input)
+        ENV["EMF_BACKEND"] = "ruby"
+        ruby = Emf.parse(input)
+        expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
+        expect(native.records).to eq(ruby.records)
+        expect(native.errors).to be_empty
+        expect(native.records[1].wire.class).to eq(Emf::Emr::Binary::Records::Raw)
+        expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+      end
+    end
+  end
+
+  it "preserves every short fixed geometry payload as Raw and continues framing" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    fixed_geometry_records.each do |type, _, required, _|
+      (0...required).each do |length|
+        input = header + [type, length + 8].pack("V2") + ("x" * length) + map_mode + eof
+        parsed = Emf.parse(input)
+        expect(parsed.records.map { |record| record.wire.class }).to eq(
+          [Emf::Emr::Binary::Records::Raw, Emf::Emr::Binary::Records::SetMapMode, Emf::Emr::Binary::Records::Eof]
+        )
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(input)
+      end
+    end
+  end
+
+  it "rejects short and excess fixed geometry typed snapshot payloads" do
+    fixed_geometry_records.each_with_index do |(_, _, required, _), index|
+      [required - 1, required + 1].each do |length|
+        expect { Emf::Native::Fields.call("x" * length, 35 + index) }
+          .to raise_error(Emf::FormatError, "invalid native typed payload length")
+      end
+    end
+  end
+
   it "matches Ruby canonical models after every wire is traversed" do
     native = Emf.parse(bytes)
     ENV["EMF_BACKEND"] = "ruby"
@@ -438,8 +527,8 @@ RSpec.describe Emf::Native do
     allow(loader).to receive(:invoke).and_call_original
     expect(loader).to receive(:invoke).with(:emf_document_free, anything).and_call_original
     expect(Emf::Emr::Parser).not_to receive(:call)
-    expect { backend.parse(header + [15, 12, 1].pack("V3") + eof) }
-      .to raise_error(Emf::FormatError, /does not support typed EMR record 15/)
+    expect { backend.parse(header + [41, 12, 1].pack("V3") + eof) }
+      .to raise_error(Emf::FormatError, /does not support typed EMR record 41/)
   end
 
   it "preserves malformed supported records as Raw with native diagnostics and unframed bytes" do
