@@ -108,7 +108,7 @@ fn typed_round_trip_and_checked_edits_preserve_opaque_bytes() {
     assert!(shrunk.windows(4).any(|b| b == b"poly"));
     assert_eq!(
         &reparsed.record_bytes(&reparsed.records()[2]).unwrap()[12..],
-        &[0xcc]
+        &[]
     );
     assert_eq!(reparsed.trailing_bytes(), b"tail");
 }
@@ -185,41 +185,96 @@ fn invalid_header_edit_is_atomic() {
 }
 
 #[test]
-fn eof_edits_preserve_palette_tail_and_original_source_view() {
+fn eof_edits_preserve_palette_and_validate_final_size() {
     let mut input = fixture()[..112].to_vec();
     input.extend(record(
         14,
-        &[1, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0x11, 0x22, 0x33, 0x44],
+        &[1, 0, 0, 0, 16, 0, 0, 0, 0x11, 0x22, 0x33, 0x44, 24, 0, 0, 0],
     ));
     let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+    assert_eq!(serialize(&doc).unwrap(), input);
     let original = doc.record_bytes(&doc.records()[0]).unwrap().to_vec();
-    let data = RecordData::Eof(EofRecord {
+    let mut eof = EofRecord {
         n_pal_entries: 1,
-        off_pal_entries: 20,
+        off_pal_entries: 16,
         n_size_last: 24,
-    });
-    assert_eq!(doc.records()[0].data(), &data);
-    doc.edit_record(
-        0,
-        RecordData::Eof(EofRecord {
-            n_pal_entries: 1,
-            off_pal_entries: 20,
-            n_size_last: 99,
-        }),
-    )
-    .unwrap();
+    };
+    assert_eq!(doc.records()[0].data(), &RecordData::Eof(eof));
+    eof.n_size_last = 99;
+    assert!(doc.edit_record(0, RecordData::Eof(eof)).is_err());
+    assert!(!doc.is_edited());
+    eof.n_size_last = 24;
+    eof.n_pal_entries = 0;
+    doc.edit_record(0, RecordData::Eof(eof)).unwrap();
     assert_eq!(doc.record_bytes(&doc.records()[0]).unwrap(), original);
     let out = serialize(&doc).unwrap();
-    assert_eq!(&out[132..], &[0x11, 0x22, 0x33, 0x44]);
+    assert_eq!(&out[128..132], &[0x11, 0x22, 0x33, 0x44]);
+    assert_eq!(&out[132..], &24u32.to_le_bytes());
     let parsed = parse(&out, &ParseLimits::default()).unwrap();
-    assert_eq!(
-        parsed.records()[0].data(),
-        &RecordData::Eof(EofRecord {
-            n_pal_entries: 1,
-            off_pal_entries: 20,
-            n_size_last: 99
-        })
-    );
+    assert_eq!(parsed.records()[0].data(), &RecordData::Eof(eof));
+}
+
+#[test]
+fn comment_growth_and_shrink_rebuild_only_alignment_padding() {
+    for original_len in 1usize..=8 {
+        let mut input = fixture()[..112].to_vec();
+        let mut payload = (original_len as u32).to_le_bytes().to_vec();
+        payload.extend(vec![b'x'; original_len]);
+        let old_padding = (4 - original_len % 4) % 4;
+        payload.extend(vec![0xcc; old_padding]);
+        input.extend(record(70, &payload));
+        input.extend(record(999, b"unknown!"));
+        input.extend(record(14, &[0, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0]));
+        input.extend_from_slice(b"tail");
+        for new_len in 0usize..=12 {
+            let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(serialize(&doc).unwrap(), input);
+            let data = vec![b'y'; new_len];
+            doc.edit_record(0, RecordData::Comment { data: data.clone() })
+                .unwrap();
+            let out = serialize(&doc).unwrap();
+            let parsed = parse(&out, &ParseLimits::default()).unwrap();
+            let comment = &parsed.records()[0];
+            let padding = (4 - new_len % 4) % 4;
+            assert_eq!(comment.size() as usize, 12 + new_len + padding);
+            assert_eq!(comment.size() % 4, 0);
+            assert_eq!(comment.data(), &RecordData::Comment { data });
+            let bytes = parsed.record_bytes(comment).unwrap();
+            assert_eq!(&bytes[8..12], &(new_len as u32).to_le_bytes());
+            let preserved = old_padding.min(padding);
+            assert_eq!(
+                &bytes[12 + new_len..12 + new_len + preserved],
+                vec![0xcc; preserved]
+            );
+            assert_eq!(
+                &bytes[12 + new_len + preserved..],
+                vec![0; padding - preserved]
+            );
+            for index in 1..=2 {
+                assert_eq!(
+                    parsed.record_bytes(&parsed.records()[index]),
+                    doc.record_bytes(&doc.records()[index])
+                );
+            }
+            assert_eq!(parsed.trailing_bytes(), b"tail");
+            assert_eq!(parsed.header().n_bytes as usize, out.len());
+            assert_eq!(serialize(&parsed).unwrap(), out);
+        }
+    }
+}
+
+#[test]
+fn noncanonical_comment_suffix_rejects_edit_atomically_and_preserves_source() {
+    for payload in [vec![1, 0, 0, 0, b'x'], vec![0; 8]] {
+        let mut input = fixture()[..112].to_vec();
+        input.extend(record(70, &payload));
+        let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+        assert!(doc
+            .edit_record(0, RecordData::Comment { data: vec![] })
+            .is_err());
+        assert!(!doc.is_edited());
+        assert_eq!(serialize(&doc).unwrap(), input);
+    }
 }
 
 #[test]

@@ -116,6 +116,7 @@ pub enum EditFailure {
     HeaderLayout,
     RecordIndex { index: usize },
     RecordFamily { index: usize },
+    RecordLayout { index: usize },
     SizeOverflow,
 }
 impl fmt::Display for EditFailure {

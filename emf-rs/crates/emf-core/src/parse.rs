@@ -227,7 +227,7 @@ fn decode_record(
             RecordData::Eof(EofRecord {
                 n_pal_entries: r.u32()?,
                 off_pal_entries: r.u32()?,
-                n_size_last: r.u32()?,
+                n_size_last: Reader::new(&payload[payload.len() - 4..]).u32()?,
             }),
             12,
         )),

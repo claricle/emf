@@ -73,6 +73,7 @@ pub struct Point {
 pub struct EofRecord {
     pub n_pal_entries: u32,
     pub off_pal_entries: u32,
+    /// EOF record size, including its header and optional palette buffer.
     pub n_size_last: u32,
 }
 
@@ -118,6 +119,15 @@ pub struct RecordSpan {
 }
 
 impl RecordSpan {
+    pub(crate) fn edited_size(&self, data: &RecordData) -> Option<usize> {
+        let size = data.payload_len()?.checked_add(8)?;
+        if matches!(data, RecordData::Comment { .. }) {
+            size.checked_add((4 - size % 4) % 4)
+        } else {
+            size.checked_add(self.size as usize - 8 - self.decoded_len)
+        }
+    }
+
     pub fn data(&self) -> &RecordData {
         &self.data
     }
@@ -203,6 +213,8 @@ impl Document {
     }
 
     /// Replace a supported payload; raw records and record families cannot change.
+    /// Comments require a canonical source padding layout; edited padding is resized
+    /// to at most three bytes. EOF size must still equal its unchanged record size.
     pub fn edit_record(&mut self, index: usize, data: RecordData) -> Result<(), EditFailure> {
         let record = self
             .records
@@ -211,11 +223,19 @@ impl Document {
         if record.data == RecordData::Raw || data.record_type() != Some(record.record_type) {
             return Err(EditFailure::RecordFamily { index });
         }
-        let len = data
-            .payload_len()
-            .and_then(|n| n.checked_add(8))
-            .and_then(|n| n.checked_add(record.size as usize - 8 - record.decoded_len))
-            .ok_or(EditFailure::SizeOverflow)?;
+        if matches!(data, RecordData::Comment { .. }) {
+            let suffix_len = record.size as usize - 8 - record.decoded_len;
+            let padding = (4 - record.decoded_len % 4) % 4;
+            if suffix_len != padding {
+                return Err(EditFailure::RecordLayout { index });
+            }
+        }
+        if let RecordData::Eof(eof) = &data {
+            if eof.n_size_last != record.size {
+                return Err(EditFailure::RecordLayout { index });
+            }
+        }
+        let len = record.edited_size(&data).ok_or(EditFailure::SizeOverflow)?;
         u32::try_from(len).map_err(|_| EditFailure::SizeOverflow)?;
         record.data = data;
         record.edited = true;

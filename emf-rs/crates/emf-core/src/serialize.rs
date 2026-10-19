@@ -4,6 +4,7 @@ use crate::error::SerializeFailure;
 use crate::model::{Document, EmfHeader, RecordData, Rect};
 
 /// Write unchanged bytes exactly; encode edited fields and preserve opaque suffixes.
+/// Comment padding is resized; EOF palette bytes stay before the final SizeLast.
 /// On any edit, refresh the header's total byte and record counts.
 pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
     let mut total = document.source.len();
@@ -20,8 +21,8 @@ pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
             .ok_or(SerializeFailure::SizeOverflow)?;
         if record.edited {
             total = total
-                .checked_sub(record.decoded_len)
-                .and_then(|n| n.checked_add(record.data.payload_len()?))
+                .checked_sub(record.size as usize)
+                .and_then(|n| n.checked_add(record.edited_size(&record.data)?))
                 .ok_or(SerializeFailure::SizeOverflow)?;
         }
     }
@@ -69,6 +70,7 @@ pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
             RecordData::Eof(eof) => {
                 append(&mut out, eof.n_pal_entries);
                 append(&mut out, eof.off_pal_entries);
+                out.extend_from_slice(&bytes[16..bytes.len() - 4]);
                 append(&mut out, eof.n_size_last);
             }
             RecordData::SetMapMode { map_mode } => append(&mut out, *map_mode),
@@ -91,7 +93,17 @@ pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
                 out.extend_from_slice(data);
             }
         }
-        out.extend_from_slice(&bytes[8 + record.decoded_len..]);
+        match &record.data {
+            RecordData::Comment { data } => {
+                let padding = (4 - data.len() % 4) % 4;
+                let original_padding = &bytes[8 + record.decoded_len..];
+                let preserved = original_padding.len().min(padding);
+                out.extend_from_slice(&original_padding[..preserved]);
+                out.resize(out.len() + padding - preserved, 0);
+            }
+            RecordData::Eof(_) => {}
+            _ => out.extend_from_slice(&bytes[8 + record.decoded_len..]),
+        }
         let size = u32::try_from(out.len() - start).map_err(|_| SerializeFailure::SizeOverflow)?;
         put(&mut out, start + 4, size);
     }
