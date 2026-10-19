@@ -106,6 +106,10 @@ pub fn serialize_with_limits(
                 append(&mut out, eof.n_size_last);
             }
             RecordData::SetMapMode { map_mode } => append(&mut out, *map_mode),
+            RecordData::SetBkMode { bk_mode } => append(&mut out, *bk_mode),
+            RecordData::SetPolyFillMode { poly_fill_mode } => append(&mut out, *poly_fill_mode),
+            RecordData::SetRop2 { rop2 } => append(&mut out, *rop2),
+            RecordData::SetStretchBltMode { stretch_mode } => append(&mut out, *stretch_mode),
             RecordData::Polyline { bounds, points } => {
                 append_rect(&mut out, *bounds);
                 append(

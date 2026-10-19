@@ -80,7 +80,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             &input[offset + 8..offset + size as usize],
             &mut budget,
         )?;
-        if data == RecordData::Raw && matches!(record_type, 4 | 14 | 17 | 70) {
+        if data == RecordData::Raw && matches!(record_type, 4 | 14 | 17..=21 | 70) {
             budget.reserve_one(&mut diagnostics)?;
             diagnostics.push(Diagnostic {
                 offset,
@@ -233,6 +233,20 @@ fn decode_record(
             12,
         )),
         17 if payload.len() >= 4 => Ok((RecordData::SetMapMode { map_mode: r.u32()? }, 4)),
+        18 if payload.len() >= 4 => Ok((RecordData::SetBkMode { bk_mode: r.u32()? }, 4)),
+        19 if payload.len() >= 4 => Ok((
+            RecordData::SetPolyFillMode {
+                poly_fill_mode: r.u32()?,
+            },
+            4,
+        )),
+        20 if payload.len() >= 4 => Ok((RecordData::SetRop2 { rop2: r.u32()? }, 4)),
+        21 if payload.len() >= 4 => Ok((
+            RecordData::SetStretchBltMode {
+                stretch_mode: r.u32()?,
+            },
+            4,
+        )),
         4 if payload.len() >= 20 => {
             let bounds = Rect {
                 left: r.i32()?,

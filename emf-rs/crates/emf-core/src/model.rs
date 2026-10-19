@@ -83,6 +83,10 @@ pub enum RecordData {
     Raw,
     Eof(EofRecord),
     SetMapMode { map_mode: u32 },
+    SetBkMode { bk_mode: u32 },
+    SetPolyFillMode { poly_fill_mode: u32 },
+    SetRop2 { rop2: u32 },
+    SetStretchBltMode { stretch_mode: u32 },
     Polyline { bounds: Rect, points: Vec<Point> },
     Comment { data: Vec<u8> },
 }
@@ -92,6 +96,10 @@ impl RecordData {
             Self::Raw => None,
             Self::Eof(_) => Some(14),
             Self::SetMapMode { .. } => Some(17),
+            Self::SetBkMode { .. } => Some(18),
+            Self::SetPolyFillMode { .. } => Some(19),
+            Self::SetRop2 { .. } => Some(20),
+            Self::SetStretchBltMode { .. } => Some(21),
             Self::Polyline { .. } => Some(4),
             Self::Comment { .. } => Some(70),
         }
@@ -100,7 +108,11 @@ impl RecordData {
         match self {
             Self::Raw => None,
             Self::Eof(_) => Some(12),
-            Self::SetMapMode { .. } => Some(4),
+            Self::SetMapMode { .. }
+            | Self::SetBkMode { .. }
+            | Self::SetPolyFillMode { .. }
+            | Self::SetRop2 { .. }
+            | Self::SetStretchBltMode { .. } => Some(4),
             Self::Polyline { points, .. } => points.len().checked_mul(8)?.checked_add(20),
             Self::Comment { data } => data.len().checked_add(4),
         }

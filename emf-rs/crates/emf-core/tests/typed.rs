@@ -297,3 +297,119 @@ fn emf_plus_extraction_filters_identifiers_and_keeps_chunk_order() {
     );
     assert_eq!(serialize(&doc).unwrap(), input);
 }
+
+#[test]
+fn scalar_state_records_decode_as_supported_and_round_trip_unsigned_values() {
+    for kind in 18..=21 {
+        for value in [0u32, 0x8000_0000, u32::MAX] {
+            let mut input = fixture()[..112].to_vec();
+            input.extend(record(kind, &value.to_le_bytes()));
+            let doc = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(doc.records()[0].data(), &scalar_state(kind, value));
+            assert!(!doc.is_edited());
+            assert!(doc.diagnostics().is_empty());
+            assert_eq!(serialize(&doc).unwrap(), input);
+        }
+    }
+}
+
+#[test]
+fn short_scalar_state_records_diagnose_and_continue_through_eof() {
+    for kind in 18..=21 {
+        for len in 0..4 {
+            let mut input = fixture()[..112].to_vec();
+            input.extend(record(kind, &vec![0xaa; len]));
+            input.extend(record(999, b"unknown!"));
+            input.extend(record(17, &1u32.to_le_bytes()));
+            input.extend(record(14, &[0, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0]));
+            input.extend_from_slice(b"tail");
+            let doc = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(doc.records().len(), 4);
+            assert_eq!(doc.records()[0].data(), &RecordData::Raw);
+            assert_eq!(doc.records()[1].data(), &RecordData::Raw);
+            assert_eq!(
+                doc.records()[2].data(),
+                &RecordData::SetMapMode { map_mode: 1 }
+            );
+            assert!(doc.records()[3].is_eof());
+            assert_eq!(doc.diagnostics().len(), 1, "type {kind}, length {len}");
+            assert_eq!(doc.diagnostics()[0].offset, 112);
+            assert_eq!(doc.diagnostics()[0].record_type, Some(kind));
+            assert_eq!(
+                doc.diagnostics()[0].kind,
+                DiagnosticKind::InvalidRecordPayload
+            );
+            assert_eq!(doc.trailing_bytes(), b"tail");
+            assert_eq!(serialize(&doc).unwrap(), input);
+        }
+    }
+}
+
+fn scalar_state(kind: u32, value: u32) -> RecordData {
+    match kind {
+        18 => RecordData::SetBkMode { bk_mode: value },
+        19 => RecordData::SetPolyFillMode {
+            poly_fill_mode: value,
+        },
+        20 => RecordData::SetRop2 { rop2: value },
+        21 => RecordData::SetStretchBltMode {
+            stretch_mode: value,
+        },
+        _ => panic!("unexpected scalar state type {kind}"),
+    }
+}
+
+#[test]
+fn scalar_state_edits_preserve_suffix_siblings_header_and_tail() {
+    for kind in 18..=21 {
+        for value in [0u32, 0x8000_0000, u32::MAX] {
+            let mut input = fixture()[..112].to_vec();
+            let mut payload = 7u32.to_le_bytes().to_vec();
+            payload.extend_from_slice(b"suffix!!");
+            input.extend(record(kind, &payload));
+            input.extend(record(17, &9u32.to_le_bytes()));
+            input.extend(record(999, b"unknown!"));
+            input.extend(record(14, &[0, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0]));
+            input.extend_from_slice(b"tail");
+            let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(serialize(&doc).unwrap(), input);
+            doc.edit_record(0, scalar_state(kind, value)).unwrap();
+            assert_eq!(doc.records()[0].data(), &scalar_state(kind, value));
+            assert!(doc.records()[0].is_edited());
+            let out = serialize(&doc).unwrap();
+            let mut expected = input.clone();
+            expected[48..52].copy_from_slice(&(input.len() as u32).to_le_bytes());
+            expected[52..56].copy_from_slice(&5u32.to_le_bytes());
+            expected[120..124].copy_from_slice(&value.to_le_bytes());
+            assert_eq!(out, expected, "type {kind}, value {value}");
+            assert_eq!(&out[124..132], b"suffix!!");
+            assert_eq!(&out[132..], &input[132..]);
+            let reparsed = parse(&out, &ParseLimits::default()).unwrap();
+            assert_eq!(reparsed.records()[0].data(), &scalar_state(kind, value));
+            assert!(reparsed.diagnostics().is_empty());
+            assert_eq!(reparsed.trailing_bytes(), b"tail");
+            assert_eq!(serialize(&reparsed).unwrap(), out);
+        }
+    }
+}
+
+#[test]
+fn scalar_state_wrong_family_edits_reject_atomically() {
+    for kind in 18..=21 {
+        let mut input = fixture()[..112].to_vec();
+        input.extend(record(kind, &7u32.to_le_bytes()));
+        let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+        for wrong_kind in 18..=21 {
+            if wrong_kind == kind {
+                continue;
+            }
+            let before = doc.clone();
+            assert_eq!(
+                doc.edit_record(0, scalar_state(wrong_kind, u32::MAX)),
+                Err(emf_core::EditFailure::RecordFamily { index: 0 })
+            );
+            assert_eq!(doc, before);
+            assert_eq!(serialize(&doc).unwrap(), input);
+        }
+    }
+}
