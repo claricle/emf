@@ -79,6 +79,7 @@ impl From<SerializeFailure> for Failure {
     fn from(error: SerializeFailure) -> Self {
         let (status, offset) = match &error {
             SerializeFailure::AllocationFailed { .. } => (EMF_ALLOCATION_FAILED, None),
+            SerializeFailure::SizeOverflow => (EMF_SERIALIZE_ERROR, None),
             SerializeFailure::Inconsistent { offset } => {
                 (EMF_SERIALIZE_ERROR, Some(*offset as u64))
             }

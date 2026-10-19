@@ -1,6 +1,6 @@
-# Rust framing foundation
+# Rust EMF core
 
-`emf-core` is a standalone, dependency-free EMF header and record framing crate.
+`emf-core` is a standalone, dependency-free EMF header and record parsing crate.
 It detects EMF, Aldus placeable WMF and standard WMF signatures; parsing WMF
 returns `UnsupportedFormat`.
 
@@ -25,9 +25,15 @@ this accounting. Work charges one unit per framed record, one per 16 record byte
 rounded up, and one per 16 source-copy bytes rounded up. Source-copy work includes
 trailing and malformed bytes. Limits apply separately to each parse.
 
-This implements only step 1 of `TODO.plan/03-rust-core.md`. Record payloads are
-raw; typed record decoding, edits, EMF+ extraction, Ruby binding and
-full fixture parity remain future work. An initial owned C ABI is provided by `emf-ffi`; see
-its README and public header for the raw-framing scope and pointer contracts.
-One existing fixture is exercised here;
-the complete valid corpus is not an acceptance claim for this foundation.
+Typed decoding and checked edits cover the header, EOF, SETMAPMODE, POLYLINE and
+COMMENT records. Comment payloads expose EMF+ identification and bytes; inner
+EMF+ records remain opaque. Edits refresh header byte and record counts, rebuild
+comment alignment and retain unknown records and opaque suffixes. Invalid edit
+layouts fail without mutating the document. Unchanged malformed payloads retain
+their original bytes.
+
+The remaining record families, structured EMF+, Ruby binding and full fixture
+parity remain open in `TODO.plan/03-rust-core.md`. An initial owned C ABI is
+provided by `emf-ffi`; see its README and public header for the raw-framing scope
+and pointer contracts. One existing fixture and synthetic typed cases are
+exercised here; the complete valid corpus is not an acceptance claim.

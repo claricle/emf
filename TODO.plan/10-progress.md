@@ -143,13 +143,16 @@ consumer requirement of 1.9.365.1, so it does not verify that dependency bundle.
 source spans, EMF header decoding, bounded record framing, recoverable tail
 diagnostics and exact unchanged serialization. Detection recognizes WMF containers;
 WMF parsing remains unsupported. Formatting, Clippy and 28 focused integration
-tests passed locally on stable Rust. The declared Rust 1.73 minimum and Linux/macOS
-checks are included in the Rust CI matrix; their results remain pending.
+tests passed locally on stable Rust. The initial foundation passed the Rust CI
+matrix on Linux stable, Linux Rust 1.73 and macOS stable at commit `274a257`.
+Later integrations require their own matrix results.
 
-This foundation does not complete typed record decoding, edited serialization,
-corpus parity, the C ABI or Ruby native model hydration. The next core slice adds
-header/EOF, fixed and variable record models with checked edits while preserving
-unknown bytes.
+The typed slice adds header, EOF, SETMAPMODE, POLYLINE and COMMENT models with
+checked edits and ordered EMF+ payload extraction. Unchanged unknown bytes are
+preserved. Comment growth and shrink rebuild DWORD alignment; EOF edits retain
+palette bytes and address the final SizeLast field. The integrated core and raw
+C ABI passed 42 Rust tests locally. This does not complete all record families,
+structured EMF+, corpus parity or Ruby native model hydration.
 
 ### Ruby backend selection
 
