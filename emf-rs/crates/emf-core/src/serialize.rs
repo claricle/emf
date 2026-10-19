@@ -161,6 +161,51 @@ pub fn serialize_with_limits(
             RecordData::FillPath { bounds }
             | RecordData::StrokeAndFillPath { bounds }
             | RecordData::StrokePath { bounds } => append_rect(&mut out, *bounds),
+            RecordData::LineTo { origin } => {
+                append(&mut out, origin.x as u32);
+                append(&mut out, origin.y as u32);
+            }
+            RecordData::Arc { bounds, start, end }
+            | RecordData::ArcTo { bounds, start, end }
+            | RecordData::Chord { bounds, start, end }
+            | RecordData::Pie { bounds, start, end } => {
+                append_rect(&mut out, *bounds);
+                append(&mut out, start.x as u32);
+                append(&mut out, start.y as u32);
+                append(&mut out, end.x as u32);
+                append(&mut out, end.y as u32);
+            }
+            RecordData::ExcludeClipRect { clip } | RecordData::IntersectClipRect { clip } => {
+                append_rect(&mut out, *clip)
+            }
+            RecordData::CreatePen {
+                ih_pen,
+                pen_style,
+                width,
+                color,
+            } => {
+                append(&mut out, *ih_pen);
+                append(&mut out, *pen_style);
+                append(&mut out, width.x as u32);
+                append(&mut out, width.y as u32);
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+            }
+            RecordData::CreateBrushIndirect {
+                ih_brush,
+                brush_style,
+                color,
+                brush_hatch,
+            } => {
+                append(&mut out, *ih_brush);
+                append(&mut out, *brush_style);
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+                append(&mut out, *brush_hatch);
+            }
+            RecordData::SetPixelV { pixel, color } => {
+                append(&mut out, pixel.x as u32);
+                append(&mut out, pixel.y as u32);
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+            }
             RecordData::Comment { data } => {
                 append(
                     &mut out,

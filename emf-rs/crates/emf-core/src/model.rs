@@ -91,39 +91,142 @@ pub struct EofRecord {
 pub enum RecordData {
     Raw,
     Eof(EofRecord),
-    SetWindowExtEx { extent: Size },
-    SetWindowOrgEx { origin: Point },
-    SetViewportExtEx { extent: Size },
-    SetViewportOrgEx { origin: Point },
-    SetBrushOrgEx { origin: Point },
-    OffsetClipRgn { offset: Point },
-    MoveToEx { origin: Point },
-    SetMapMode { map_mode: u32 },
-    SetBkMode { bk_mode: u32 },
-    SetPolyFillMode { poly_fill_mode: u32 },
-    SetRop2 { rop2: u32 },
-    SetStretchBltMode { stretch_mode: u32 },
-    SetTextColor { color: ColorRef },
-    SetBkColor { color: ColorRef },
-    Polyline { bounds: Rect, points: Vec<Point> },
-    Comment { data: Vec<u8> },
-    Ellipse { bounds: Rect },
-    Rectangle { bounds: Rect },
-    RoundRect { bounds: Rect, corner: Size },
-    SetTextAlign { text_align_mode: u32 },
-    RestoreDc { saved_dc: i32 },
-    SelectObject { ih_object: u32 },
-    DeleteObject { ih_object: u32 },
-    SetArcDirection { arc_direction: u32 },
-    SelectClipPath { region_mode: u32 },
+    SetWindowExtEx {
+        extent: Size,
+    },
+    SetWindowOrgEx {
+        origin: Point,
+    },
+    SetViewportExtEx {
+        extent: Size,
+    },
+    SetViewportOrgEx {
+        origin: Point,
+    },
+    SetBrushOrgEx {
+        origin: Point,
+    },
+    OffsetClipRgn {
+        offset: Point,
+    },
+    MoveToEx {
+        origin: Point,
+    },
+    SetMapMode {
+        map_mode: u32,
+    },
+    SetBkMode {
+        bk_mode: u32,
+    },
+    SetPolyFillMode {
+        poly_fill_mode: u32,
+    },
+    SetRop2 {
+        rop2: u32,
+    },
+    SetStretchBltMode {
+        stretch_mode: u32,
+    },
+    SetTextColor {
+        color: ColorRef,
+    },
+    SetBkColor {
+        color: ColorRef,
+    },
+    Polyline {
+        bounds: Rect,
+        points: Vec<Point>,
+    },
+    Comment {
+        data: Vec<u8>,
+    },
+    Ellipse {
+        bounds: Rect,
+    },
+    Rectangle {
+        bounds: Rect,
+    },
+    RoundRect {
+        bounds: Rect,
+        corner: Size,
+    },
+    SetTextAlign {
+        text_align_mode: u32,
+    },
+    RestoreDc {
+        saved_dc: i32,
+    },
+    SelectObject {
+        ih_object: u32,
+    },
+    DeleteObject {
+        ih_object: u32,
+    },
+    SetArcDirection {
+        arc_direction: u32,
+    },
+    SelectClipPath {
+        region_mode: u32,
+    },
     SaveDc,
     BeginPath,
     EndPath,
     CloseFigure,
     AbortPath,
-    FillPath { bounds: Rect },
-    StrokeAndFillPath { bounds: Rect },
-    StrokePath { bounds: Rect },
+    FillPath {
+        bounds: Rect,
+    },
+    StrokeAndFillPath {
+        bounds: Rect,
+    },
+    StrokePath {
+        bounds: Rect,
+    },
+    LineTo {
+        origin: Point,
+    },
+    Arc {
+        bounds: Rect,
+        start: Point,
+        end: Point,
+    },
+    ArcTo {
+        bounds: Rect,
+        start: Point,
+        end: Point,
+    },
+    Chord {
+        bounds: Rect,
+        start: Point,
+        end: Point,
+    },
+    Pie {
+        bounds: Rect,
+        start: Point,
+        end: Point,
+    },
+    ExcludeClipRect {
+        clip: Rect,
+    },
+    IntersectClipRect {
+        clip: Rect,
+    },
+    CreatePen {
+        ih_pen: u32,
+        pen_style: u32,
+        width: Point,
+        color: ColorRef,
+    },
+    CreateBrushIndirect {
+        ih_brush: u32,
+        brush_style: u32,
+        color: ColorRef,
+        brush_hatch: u32,
+    },
+    SetPixelV {
+        pixel: Point,
+        color: ColorRef,
+    },
 }
 impl RecordData {
     pub(crate) fn record_type(&self) -> Option<u32> {
@@ -163,10 +266,30 @@ impl RecordData {
             Self::FillPath { .. } => Some(62),
             Self::StrokeAndFillPath { .. } => Some(63),
             Self::StrokePath { .. } => Some(64),
+            Self::LineTo { .. } => Some(54),
+            Self::Arc { .. } => Some(45),
+            Self::ArcTo { .. } => Some(55),
+            Self::Chord { .. } => Some(46),
+            Self::Pie { .. } => Some(47),
+            Self::ExcludeClipRect { .. } => Some(29),
+            Self::IntersectClipRect { .. } => Some(30),
+            Self::CreatePen { .. } => Some(38),
+            Self::CreateBrushIndirect { .. } => Some(39),
+            Self::SetPixelV { .. } => Some(15),
         }
     }
     pub(crate) fn payload_len(&self) -> Option<usize> {
         match self {
+            Self::LineTo { .. } => Some(8),
+            Self::Arc { .. } => Some(32),
+            Self::ArcTo { .. } => Some(32),
+            Self::Chord { .. } => Some(32),
+            Self::Pie { .. } => Some(32),
+            Self::ExcludeClipRect { .. } => Some(16),
+            Self::IntersectClipRect { .. } => Some(16),
+            Self::CreatePen { .. } => Some(20),
+            Self::CreateBrushIndirect { .. } => Some(16),
+            Self::SetPixelV { .. } => Some(12),
             Self::Raw => None,
             Self::Eof(_) => Some(12),
             Self::SetWindowExtEx { .. }

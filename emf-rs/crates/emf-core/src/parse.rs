@@ -83,7 +83,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                4 | 9..=14 | 17..=22 | 24..=27 | 33 | 34 | 37 | 40 | 42..=44 | 57 | 59..=64 | 67 | 68 | 70
+                4 | 9..=15 | 17..=22 | 24..=27 | 29 | 30 | 33 | 34 | 37..=40 | 42..=47 | 54 | 55 | 57 | 59..=64 | 67 | 68 | 70
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -471,6 +471,159 @@ fn decode_record(
             data.extend_from_slice(r.take(count)?);
             Ok((RecordData::Comment { data }, 4 + count))
         }
+        54 if payload.len() >= 8 => Ok((
+            RecordData::LineTo {
+                origin: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            8,
+        )),
+        45 if payload.len() >= 32 => Ok((
+            RecordData::Arc {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+                start: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+                end: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            32,
+        )),
+        55 if payload.len() >= 32 => Ok((
+            RecordData::ArcTo {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+                start: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+                end: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            32,
+        )),
+        46 if payload.len() >= 32 => Ok((
+            RecordData::Chord {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+                start: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+                end: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            32,
+        )),
+        47 if payload.len() >= 32 => Ok((
+            RecordData::Pie {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+                start: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+                end: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            32,
+        )),
+        29 if payload.len() >= 16 => Ok((
+            RecordData::ExcludeClipRect {
+                clip: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+            },
+            16,
+        )),
+        30 if payload.len() >= 16 => Ok((
+            RecordData::IntersectClipRect {
+                clip: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+            },
+            16,
+        )),
+        38 if payload.len() >= 20 => Ok((
+            RecordData::CreatePen {
+                ih_pen: r.u32()?,
+                pen_style: r.u32()?,
+                width: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+                color: ColorRef {
+                    red: r.take(1)?[0],
+                    green: r.take(1)?[0],
+                    blue: r.take(1)?[0],
+                    reserved: r.take(1)?[0],
+                },
+            },
+            20,
+        )),
+        39 if payload.len() >= 16 => Ok((
+            RecordData::CreateBrushIndirect {
+                ih_brush: r.u32()?,
+                brush_style: r.u32()?,
+                color: ColorRef {
+                    red: r.take(1)?[0],
+                    green: r.take(1)?[0],
+                    blue: r.take(1)?[0],
+                    reserved: r.take(1)?[0],
+                },
+                brush_hatch: r.u32()?,
+            },
+            16,
+        )),
+        15 if payload.len() >= 12 => Ok((
+            RecordData::SetPixelV {
+                pixel: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+                color: ColorRef {
+                    red: r.take(1)?[0],
+                    green: r.take(1)?[0],
+                    blue: r.take(1)?[0],
+                    reserved: r.take(1)?[0],
+                },
+            },
+            12,
+        )),
         _ => malformed(),
     }
 }
