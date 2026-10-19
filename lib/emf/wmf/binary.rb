@@ -9,6 +9,18 @@ module Emf
       MAX_INPUT_BYTES = 200 * 1024 * 1024
       MAX_RECORDS = 1_000_000
 
+      FIXED_RECORDS = {
+        0x14 => Model::Wmf::Records::MoveTo,
+        0x13 => Model::Wmf::Records::LineTo,
+        0x0B => Model::Wmf::Records::SetWindowOrg,
+        0x0C => Model::Wmf::Records::SetWindowExt,
+        0x0D => Model::Wmf::Records::SetViewportOrg,
+        0x0E => Model::Wmf::Records::SetViewportExt,
+        0x18 => Model::Wmf::Records::Ellipse,
+        0x1B => Model::Wmf::Records::Rectangle
+      }.freeze
+      FIXED_FUNCTIONS = FIXED_RECORDS.invert.freeze
+
       module_function
 
       def checksum(bytes)

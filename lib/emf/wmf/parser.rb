@@ -69,18 +69,19 @@ module Emf
           parse_error(offset, function, "invalid EOF length") unless raw.bytesize == 6
           return Model::Wmf::Records::Eof.new(offset: offset)
         end
-        record_class = { 0x14 => Model::Wmf::Records::MoveTo, 0x13 => Model::Wmf::Records::LineTo }[function & 0xFF]
+        record_class = Binary::FIXED_RECORDS[function & 0xFF]
         return Model::Wmf::Records::UnknownRecord.new(type_id: function, raw_bytes: raw, offset: offset) unless record_class
 
-        parse_error(offset, function, "invalid point record length") unless raw.bytesize == 10
-        y, x = raw.byteslice(6, 4).unpack("s<2")
-        record_class.new(x: x, y: y, type_id: function, offset: offset)
+        fields = record_class::WIRE_FIELDS
+        parse_error(offset, function, "invalid fixed record length") unless raw.bytesize == 6 + (fields.length * 2)
+        values = raw.byteslice(6..).unpack("s<*")
+        record_class.new(**fields.zip(values).to_h, type_id: function, offset: offset)
       end
 
       def record_size(record)
         return record.raw_bytes.bytesize / 2 if record.is_a?(Model::Wmf::Records::UnknownRecord)
 
-        record.is_a?(Model::Wmf::Records::Eof) ? 3 : 5
+        record.is_a?(Model::Wmf::Records::Eof) ? 3 : 3 + record.class::WIRE_FIELDS.length
       end
 
       def parse_error(offset, function, message)

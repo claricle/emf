@@ -27,6 +27,8 @@ module Emf
         end
 
         class PointRecord < Record
+          WIRE_FIELDS = %i[y x].freeze
+
           def initialize(type_id:, x:, y:, offset: nil)
             super(type_id: type_id, offset: offset)
             @x = x
@@ -44,6 +46,56 @@ module Emf
 
         class LineTo < PointRecord
           def initialize(x:, y:, offset: nil, type_id: 0x0213)
+            super
+          end
+        end
+
+        class SetWindowOrg < PointRecord
+          def initialize(x:, y:, offset: nil, type_id: 0x020B)
+            super
+          end
+        end
+
+        class SetWindowExt < PointRecord
+          def initialize(x:, y:, offset: nil, type_id: 0x020C)
+            super
+          end
+        end
+
+        class SetViewportOrg < PointRecord
+          def initialize(x:, y:, offset: nil, type_id: 0x020D)
+            super
+          end
+        end
+
+        class SetViewportExt < PointRecord
+          def initialize(x:, y:, offset: nil, type_id: 0x020E)
+            super
+          end
+        end
+
+        class RectangleRecord < Record
+          WIRE_FIELDS = %i[bottom right top left].freeze
+
+          def initialize(type_id:, left:, top:, right:, bottom:, offset: nil)
+            super(type_id: type_id, offset: offset)
+            @left = left
+            @top = top
+            @right = right
+            @bottom = bottom
+          end
+
+          attr_accessor :left, :top, :right, :bottom
+        end
+
+        class Rectangle < RectangleRecord
+          def initialize(left:, top:, right:, bottom:, offset: nil, type_id: 0x041B)
+            super
+          end
+        end
+
+        class Ellipse < RectangleRecord
+          def initialize(left:, top:, right:, bottom:, offset: nil, type_id: 0x0418)
             super
           end
         end

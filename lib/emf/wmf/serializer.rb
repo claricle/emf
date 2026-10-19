@@ -51,26 +51,27 @@ module Emf
       def serialize_record(record)
         case record
         when Model::Wmf::Records::Eof then [3, 0].pack("Vv")
-        when Model::Wmf::Records::MoveTo, Model::Wmf::Records::LineTo
-          serialize_point(record)
+        when Model::Wmf::Records::PointRecord, Model::Wmf::Records::RectangleRecord
+          serialize_fixed(record)
         when Model::Wmf::Records::UnknownRecord then serialize_unknown(record)
         else raise SerializeError, "unsupported WMF record #{record.class}"
         end
       end
 
-      def serialize_point(record)
+      def serialize_fixed(record)
         function = Binary.uint16(record.type_id, "RecordFunction")
-        expected = record.is_a?(Model::Wmf::Records::MoveTo) ? 0x14 : 0x13
-        raise SerializeError, "WMF point RecordFunction mismatch" unless function & 0xFF == expected
+        expected = Binary::FIXED_FUNCTIONS[record.class]
+        raise SerializeError, "WMF fixed RecordFunction mismatch" unless function & 0xFF == expected
 
-        [5, function, Binary.int16(record.y, "y"), Binary.int16(record.x, "x")].pack("Vvs<2")
+        values = record.class::WIRE_FIELDS.map { |field| Binary.int16(record.public_send(field), field) }
+        [3 + values.length, function, *values].pack("Vvs<*")
       end
 
       def serialize_unknown(record)
         raw = record.raw_bytes
         words, function = raw.unpack("Vv")
         unless raw.bytesize >= 6 && raw.bytesize.even? && words == raw.bytesize / 2 && function == record.type_id &&
-               !function.zero? && ![0x13, 0x14].include?(function & 0xFF)
+               !function.zero? && !Binary::FIXED_RECORDS.key?(function & 0xFF)
           raise SerializeError, "invalid raw WMF record"
         end
 
