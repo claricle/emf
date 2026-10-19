@@ -10,6 +10,14 @@ pub(crate) enum Error {
 
 pub(crate) fn family(data: &RecordData) -> u32 {
     match data {
+        RecordData::SetMapperFlags { .. } => 66,
+        RecordData::SetMetaRgn => 67,
+        RecordData::ExtFloodFill { .. } => 68,
+        RecordData::FlattenPath => 69,
+        RecordData::WidenPath => 70,
+        RecordData::SetIcmMode { .. } => 71,
+        RecordData::SetLayout { .. } => 72,
+        RecordData::SetTextJustification { .. } => 73,
         RecordData::Raw => 0,
         RecordData::Eof(_) => 1,
         RecordData::SetMapMode { .. } => 2,
@@ -102,6 +110,13 @@ fn multi_array_len(poly_count: usize, point_count: usize, width: usize) -> Resul
 
 fn payload_len(data: &RecordData) -> Result<usize, Error> {
     match data {
+        RecordData::SetMapperFlags { .. }
+        | RecordData::SetIcmMode { .. }
+        | RecordData::SetLayout { .. } => Ok(4),
+        RecordData::SetMetaRgn | RecordData::FlattenPath | RecordData::WidenPath => Ok(0),
+        RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
+            body.len().checked_add(8).ok_or(Error::SizeOverflow)
+        }
         RecordData::Raw => Ok(0),
         RecordData::ScaleViewportExtEx { .. } | RecordData::ScaleWindowExtEx { .. } => Ok(16),
         RecordData::SetWorldTransform { .. } => Ok(24),
@@ -248,6 +263,15 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
         u32_field(&mut out, family(record.data()));
         u64_field(&mut out, wire_len(payload_len(record.data())?)?);
         match record.data() {
+            RecordData::SetMapperFlags { flags } => u32_field(&mut out, *flags),
+            RecordData::SetIcmMode { mode } | RecordData::SetLayout { mode } => {
+                u32_field(&mut out, *mode)
+            }
+            RecordData::SetMetaRgn | RecordData::FlattenPath | RecordData::WidenPath => {}
+            RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
+                u64_field(&mut out, wire_len(body.len())?);
+                out.extend_from_slice(body);
+            }
             RecordData::Raw => {}
             RecordData::ScaleViewportExtEx { scale } | RecordData::ScaleWindowExtEx { scale } => {
                 for value in [scale.x_num, scale.x_denom, scale.y_num, scale.y_denom] {
@@ -877,6 +901,47 @@ mod tests {
                 assert_eq!(cursor.u64(), u64::from(point_count));
                 assert_eq!(cursor.take(counts.len()), counts);
                 assert_eq!(cursor.take(points.len()), points);
+                assert_eq!(cursor.position, encoded.len());
+            }
+        }
+    }
+
+    #[test]
+    fn completion_snapshots_preserve_opaque_bodies_and_fixed_fields() {
+        for (index, kind) in [16, 28, 53, 65, 66, 98, 115, 120].into_iter().enumerate() {
+            for body in [b"".as_slice(), b"\0\xffopaque".as_slice()] {
+                let opaque = kind == 53 || kind == 120;
+                let scalar = kind == 16 || kind == 98 || kind == 115;
+                let mut payload = if scalar {
+                    u32::MAX.to_le_bytes().to_vec()
+                } else {
+                    vec![]
+                };
+                payload.extend_from_slice(body);
+                let mut input = fixture_header(88);
+                record(&mut input, kind, &payload);
+                let document = parse(&input, &ParseLimits::default()).unwrap();
+                let encoded = encode(&document).unwrap();
+                let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+                cursor.take(112 + 88);
+                assert_eq!(cursor.u64(), 0);
+                assert_eq!(cursor.u64(), 88);
+                assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
+                cursor.words(&[kind, 66 + index as u32]);
+                let length = if opaque {
+                    8 + body.len()
+                } else if scalar {
+                    4
+                } else {
+                    0
+                };
+                assert_eq!(cursor.u64(), length as u64);
+                if opaque {
+                    assert_eq!(cursor.u64(), body.len() as u64);
+                    assert_eq!(cursor.take(body.len()), body);
+                } else if scalar {
+                    assert_eq!(cursor.u32(), u32::MAX);
+                }
                 assert_eq!(cursor.position, encoded.len());
             }
         }

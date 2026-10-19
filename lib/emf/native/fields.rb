@@ -59,7 +59,13 @@ module Emf
         63 => [Emr::Binary::Records::ModifyWorldTransform, [:xform, %i[m11 m12 m21 m22 dx dy], "e6", 24], [:modify_mode, nil, "V", 4]],
         64 => [Emr::Binary::Records::AngleArc, [:ptl_center, %i[x y], "l<2", 8], [:n_radius, nil, "V", 4],
                [:start_angle, nil, "e", 4], [:sweep_angle, nil, "e", 4]],
-        65 => [Emr::Binary::Records::SetMiterLimit, [:miter_limit, nil, "e", 4]]
+        65 => [Emr::Binary::Records::SetMiterLimit, [:miter_limit, nil, "e", 4]],
+        66 => [Emr::Binary::Records::SetMapperFlags, [:flags, nil, "V", 4]],
+        67 => [Emr::Binary::Records::SetMetArgn],
+        69 => [Emr::Binary::Records::FlattenPath],
+        70 => [Emr::Binary::Records::WidenPath],
+        71 => [Emr::Binary::Records::SetIcmMode, [:mode, nil, "V", 4]],
+        72 => [Emr::Binary::Records::SetLayout, [:mode, nil, "V", 4]]
       }.freeze
 
       POINT_ARRAYS = {
@@ -133,7 +139,23 @@ module Emf
         [klass, { rcl_bounds: bounds, count_field => count, points_field => points, ab_types: types }]
       end
 
+      OPAQUE = {
+        68 => Emr::Binary::Records::ExtFloodFill,
+        73 => Emr::Binary::Records::SetTextJustification
+      }.freeze
+
+      def self.opaque(payload, family)
+        raise FormatError, "invalid native opaque payload length" if payload.bytesize < 8
+
+        count = payload.unpack1("Q<")
+        raise FormatError, "invalid native opaque payload length" unless payload.bytesize == 8 + count
+
+        [OPAQUE.fetch(family), { body: payload.byteslice(8..) }]
+      end
+
       def self.call(payload, family)
+        return opaque(payload, family) if OPAQUE.key?(family)
+
         klass, *layouts = LAYOUTS.fetch(family)
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == layouts.sum { |_, _, _, length| length }
 

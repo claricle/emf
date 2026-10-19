@@ -603,6 +603,88 @@ RSpec.describe Emf::Native do
     end
   end
 
+  let(:completion_records) do
+    [
+      [16, Emf::Emr::Binary::Records::SetMapperFlags, { flags: 0xFFFFFFFF }],
+      [28, Emf::Emr::Binary::Records::SetMetArgn, {}],
+      [53, Emf::Emr::Binary::Records::ExtFloodFill, { body: "\x00\xFFopaque".b }],
+      [65, Emf::Emr::Binary::Records::FlattenPath, {}],
+      [66, Emf::Emr::Binary::Records::WidenPath, {}],
+      [98, Emf::Emr::Binary::Records::SetIcmMode, { mode: 0x80000000 }],
+      [115, Emf::Emr::Binary::Records::SetLayout, { mode: 0xFFFFFFFF }],
+      [120, Emf::Emr::Binary::Records::SetTextJustification, { body: "opaque\xFF\x00".b }]
+    ]
+  end
+
+  it "hydrates remaining state compatibility records directly with editable models" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    completion_records.each do |type, klass, fields|
+      expect(klass).not_to receive(:read)
+      size = 8 + fields.values.sum { |value| value.is_a?(String) ? value.bytesize : 4 }
+      original = klass.new(i_type: type, n_size: size, **fields).to_binary_s
+      parsed = Emf.parse(header + original + unknown + eof)
+      wire = parsed.records.first.wire
+      expect(wire.class).to eq(klass)
+      fields.each { |field, value| expect(wire.public_send(field).snapshot).to eq(value) }
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(header + original + unknown + eof)
+      next if fields.empty?
+
+      field, value = fields.first
+      edited = value.is_a?(String) ? "edited\x00\xFFlonger".b : 0
+      wire.public_send("#{field}=", edited)
+      wire.n_size = 8 + edited.bytesize if edited.is_a?(String)
+      reparsed = Emf.parse(Emf.serialize(parsed))
+      expect(reparsed.records.first.wire.public_send(field).snapshot).to eq(edited)
+      expect(reparsed.records[1].wire.payload.to_s).to eq("raw!")
+      next unless value.is_a?(String)
+
+      wire.body = "".b
+      wire.n_size = 8
+      expect(Emf.parse(Emf.serialize(parsed)).records.first.wire.body.to_s).to eq("")
+    end
+  end
+
+  it "matches Ruby completion suffix handling and preserves short scalar records" do
+    scalar_types = [16, 98, 115]
+    completion_records.each do |type, klass, fields|
+      wire = klass.new(i_type: type, **fields).to_binary_s
+      payload = wire.byteslice(8..) + "suffix\xFF".b
+      input = header + [type, 8 + payload.bytesize].pack("V2") + payload + unknown + eof
+      ENV["EMF_BACKEND"] = "native"
+      native = Emf.parse(input)
+      ENV["EMF_BACKEND"] = "ruby"
+      ruby = Emf.parse(input)
+      expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
+      expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+      next unless scalar_types.include?(type)
+
+      ENV["EMF_BACKEND"] = "native"
+      (0...4).each do |length|
+        short = header + [type, length + 8].pack("V2") + ("x" * length) + map_mode + eof
+        parsed = Emf.parse(short)
+        expect(parsed.records.first.wire.class).to eq(Emf::Emr::Binary::Records::Raw)
+        expect(parsed.records[1].wire.map_mode.to_i).to eq(8)
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(short)
+      end
+    end
+  end
+
+  it "rejects mismatched completion snapshot lengths before constructing wires" do
+    { 66 => 4, 67 => 0, 69 => 0, 70 => 0, 71 => 4, 72 => 4 }.each do |family, length|
+      [length - 1, length + 1].select { |size| size >= 0 }.each do |size|
+        expect { Emf::Native::Fields.call("x" * size, family) }.to raise_error(Emf::FormatError, "invalid native typed payload length")
+      end
+    end
+    payloads = ["".b, "#{[2].pack('Q<')}x", "#{[0].pack('Q<')}x", [0xFFFFFFFFFFFFFFFF].pack("Q<")]
+    [68, 73].each do |family|
+      payloads.each do |payload|
+        expect { Emf::Native::Fields.call(payload, family) }.to raise_error(Emf::FormatError, "invalid native opaque payload length")
+      end
+    end
+  end
+
   let(:transform_lengths) { [16, 16, 24, 28, 20, 4] }
 
   let(:transform_records) do

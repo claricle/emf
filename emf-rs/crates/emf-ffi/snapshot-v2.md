@@ -117,6 +117,14 @@ length u64, type ID u32, family u32, typed payload length u64. Payloads:
 | MODIFYWORLDTRANSFORM | 63 | 6 float32 transform bit patterns; opaque modify_mode u32 |
 | ANGLEARC | 64 | center x/y: 2 i32; radius u32; start/sweep angle: 2 float32 bit patterns |
 | SETMITERLIMIT | 65 | miter_limit: float32 bit pattern |
+| SETMAPPERFLAGS | 66 | flags u32 |
+| SETMETARGN | 67 | empty (Ruby SetMetArgn; core SetMetaRgn) |
+| EXTFLOODFILL | 68 | body length u64; opaque body bytes |
+| FLATTENPATH | 69 | empty |
+| WIDENPATH | 70 | empty |
+| SETICMMODE | 71 | mode u32 |
+| SETLAYOUT | 72 | mode u32 |
+| SETTEXTJUSTIFICATION | 73 | body length u64; opaque body bytes |
 
 Multi-array bounds are left/top/right/bottom. Polygon counts and points have
 independent lengths: the sum of polygon-count values need not equal the point
@@ -159,3 +167,5 @@ bytes and decoded snapshot values describe the same parse result.
 SELECTCLIPPATH snapshots contain only region_mode; adapters retain its optional opaque suffix from the checked original record span. Unit record payloads are empty. Other fixed-record suffixes remain outside typed snapshots.
 
 Float32 fields encode their IEEE 754 bits as little-endian u32 without conversion, preserving NaN payloads, signed zero, infinities and subnormals. Transform order is m11, m12, m21, m22, dx, dy. ABI version remains 1; snapshot schema remains 2.
+
+EXTFLOODFILL and SETTEXTJUSTIFICATION transport the entire compatibility body, including arbitrary bytes. They expose no semantic fields. Consumers must validate the exact body length before allocation or model construction. These tags extend schema 2 without changing ABI 1.
