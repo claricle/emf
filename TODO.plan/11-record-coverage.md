@@ -11,7 +11,10 @@ remain open.
 
 The `In progress` rows have bounded typed or raw support in
 [`model.rs`](../emf-rs/crates/emf-core/src/model.rs),
-[`typed.rs`](../emf-rs/crates/emf-core/tests/typed.rs) and
+[`typed.rs`](../emf-rs/crates/emf-core/tests/typed.rs),
+[`point_arrays.rs`](../emf-rs/crates/emf-core/tests/point_arrays.rs),
+[`multi_point_arrays.rs`](../emf-rs/crates/emf-core/tests/multi_point_arrays.rs),
+[`poly_draw.rs`](../emf-rs/crates/emf-core/tests/poly_draw.rs) and
 [`adapter_spec.rb`](../spec/emf/native/adapter_spec.rb), delivered in
 [PR #17](https://github.com/claricle/emf/pull/17). This evidence does not complete
 every variant, malformed-input classification or corpus parity check.
@@ -62,27 +65,27 @@ and corpus parity. Group names are proposed Rust modules.
 | `ArcTo` | `ARCTO` | [`arc_to.rb`](../lib/emf/emr/binary/records/arc_to.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `Chord` | `CHORD` | [`chord.rb`](../lib/emf/emr/binary/records/chord.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `Pie` | `PIE` | [`pie.rb`](../lib/emf/emr/binary/records/pie.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
-| `AngleArc` | `ANGLEARC` | [`angle_arc.rb`](../lib/emf/emr/binary/records/angle_arc.rb) | `emf::geometry` | Not started |
+| `AngleArc` | `ANGLEARC` | [`angle_arc.rb`](../lib/emf/emr/binary/records/angle_arc.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
 | `SetArcDirection` | `SETARCDIRECTION` | [`set_arc_direction.rb`](../lib/emf/emr/binary/records/set_arc_direction.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
-| `Polygon` | `POLYGON` | [`polygon.rb`](../lib/emf/emr/binary/records/polygon.rb) | `emf::geometry` | Not started |
-| `Polyline` | `POLYLINE` | [`polyline.rb`](../lib/emf/emr/binary/records/polyline.rb) | `emf::geometry` | In progress |
-| `PolyBezier` | `POLYBEZIER` | [`poly_bezier.rb`](../lib/emf/emr/binary/records/poly_bezier.rb) | `emf::geometry` | Not started |
-| `Polygon16` | `POLYGON16` | [`polygon16.rb`](../lib/emf/emr/binary/records/polygon16.rb) | `emf::geometry` | Not started |
-| `Polyline16` | `POLYLINE16` | [`polyline16.rb`](../lib/emf/emr/binary/records/polyline16.rb) | `emf::geometry` | Not started |
-| `PolyBezier16` | `POLYBEZIER16` | [`poly_bezier16.rb`](../lib/emf/emr/binary/records/poly_bezier16.rb) | `emf::geometry` | Not started |
-| `PolyBezierTo` | `POLYBEZIERTO` | [`poly_bezier_to.rb`](../lib/emf/emr/binary/records/poly_bezier_to.rb) | `emf::geometry` | Not started |
-| `PolyBezierTo16` | `POLYBEZIERTO16` | [`poly_bezier_to16.rb`](../lib/emf/emr/binary/records/poly_bezier_to16.rb) | `emf::geometry` | Not started |
-| `PolylineTo` | `POLYLINETO` | [`polyline_to.rb`](../lib/emf/emr/binary/records/polyline_to.rb) | `emf::geometry` | Not started |
-| `PolylineTo16` | `POLYLINETO16` | [`polyline_to16.rb`](../lib/emf/emr/binary/records/polyline_to16.rb) | `emf::geometry` | Not started |
-| `PolyDraw` | `POLYDRAW` | [`poly_draw.rb`](../lib/emf/emr/binary/records/poly_draw.rb) | `emf::geometry` | Not started |
-| `PolyDraw16` | `POLYDRAW16` | [`poly_draw16.rb`](../lib/emf/emr/binary/records/poly_draw16.rb) | `emf::geometry` | Not started |
-| `PolyPolyline` | `POLYPOLYLINE` | [`poly_polyline.rb`](../lib/emf/emr/binary/records/poly_polyline.rb) | `emf::geometry` | Not started |
-| `PolyPolygon` | `POLYPOLYGON` | [`poly_polygon.rb`](../lib/emf/emr/binary/records/poly_polygon.rb) | `emf::geometry` | Not started |
-| `PolyPolyline16` | `POLYPOLYLINE16` | [`poly_polyline16.rb`](../lib/emf/emr/binary/records/poly_polyline16.rb) | `emf::geometry` | Not started |
-| `PolyPolygon16` | `POLYPOLYGON16` | [`poly_polygon16.rb`](../lib/emf/emr/binary/records/poly_polygon16.rb) | `emf::geometry` | Not started |
+| `Polygon` | `POLYGON` | [`polygon.rb`](../lib/emf/emr/binary/records/polygon.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `Polyline` | `POLYLINE` | [`polyline.rb`](../lib/emf/emr/binary/records/polyline.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `PolyBezier` | `POLYBEZIER` | [`poly_bezier.rb`](../lib/emf/emr/binary/records/poly_bezier.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `Polygon16` | `POLYGON16` | [`polygon16.rb`](../lib/emf/emr/binary/records/polygon16.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `Polyline16` | `POLYLINE16` | [`polyline16.rb`](../lib/emf/emr/binary/records/polyline16.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `PolyBezier16` | `POLYBEZIER16` | [`poly_bezier16.rb`](../lib/emf/emr/binary/records/poly_bezier16.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `PolyBezierTo` | `POLYBEZIERTO` | [`poly_bezier_to.rb`](../lib/emf/emr/binary/records/poly_bezier_to.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `PolyBezierTo16` | `POLYBEZIERTO16` | [`poly_bezier_to16.rb`](../lib/emf/emr/binary/records/poly_bezier_to16.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `PolylineTo` | `POLYLINETO` | [`polyline_to.rb`](../lib/emf/emr/binary/records/polyline_to.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `PolylineTo16` | `POLYLINETO16` | [`polyline_to16.rb`](../lib/emf/emr/binary/records/polyline_to16.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `8c25f5d` |
+| `PolyDraw` | `POLYDRAW` | [`poly_draw.rb`](../lib/emf/emr/binary/records/poly_draw.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `2ea1d9f` |
+| `PolyDraw16` | `POLYDRAW16` | [`poly_draw16.rb`](../lib/emf/emr/binary/records/poly_draw16.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `2ea1d9f` |
+| `PolyPolyline` | `POLYPOLYLINE` | [`poly_polyline.rb`](../lib/emf/emr/binary/records/poly_polyline.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `38722dd` |
+| `PolyPolygon` | `POLYPOLYGON` | [`poly_polygon.rb`](../lib/emf/emr/binary/records/poly_polygon.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `38722dd` |
+| `PolyPolyline16` | `POLYPOLYLINE16` | [`poly_polyline16.rb`](../lib/emf/emr/binary/records/poly_polyline16.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `38722dd` |
+| `PolyPolygon16` | `POLYPOLYGON16` | [`poly_polygon16.rb`](../lib/emf/emr/binary/records/poly_polygon16.rb) | `emf::geometry` | In progress: core and snapshot-2 Ruby parity; `38722dd` |
 | `Comment` | `COMMENT` | [`comment.rb`](../lib/emf/emr/binary/records/comment.rb) | `emf::opaque_extensions` | In progress |
-| `SetWorldTransform` | `SETWORLDTRANSFORM` | [`set_world_transform.rb`](../lib/emf/emr/binary/records/set_world_transform.rb) | `emf::transform` | Not started |
-| `ModifyWorldTransform` | `MODIFYWORLDTRANSFORM` | [`modify_world_transform.rb`](../lib/emf/emr/binary/records/modify_world_transform.rb) | `emf::transform` | Not started |
+| `SetWorldTransform` | `SETWORLDTRANSFORM` | [`set_world_transform.rb`](../lib/emf/emr/binary/records/set_world_transform.rb) | `emf::transform` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
+| `ModifyWorldTransform` | `MODIFYWORLDTRANSFORM` | [`modify_world_transform.rb`](../lib/emf/emr/binary/records/modify_world_transform.rb) | `emf::transform` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
 | `BeginPath` | `BEGINPATH` | [`begin_path.rb`](../lib/emf/emr/binary/records/begin_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `EndPath` | `ENDPATH` | [`end_path.rb`](../lib/emf/emr/binary/records/end_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `CloseFigure` | `CLOSEFIGURE` | [`close_figure.rb`](../lib/emf/emr/binary/records/close_figure.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
@@ -93,7 +96,7 @@ and corpus parity. Group names are proposed Rust modules.
 | `WidenPath` | `WIDENPATH` | [`widen_path.rb`](../lib/emf/emr/binary/records/widen_path.rb) | `emf::path_clip_region` | Not started |
 | `SelectClipPath` | `SELECTCLIPPATH` | [`select_clip_path.rb`](../lib/emf/emr/binary/records/select_clip_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `AbortPath` | `ABORTPATH` | [`abort_path.rb`](../lib/emf/emr/binary/records/abort_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
-| `SetMiterLimit` | `SETMITERLIMIT` | [`set_miter_limit.rb`](../lib/emf/emr/binary/records/set_miter_limit.rb) | `emf::path_clip_region` | Not started |
+| `SetMiterLimit` | `SETMITERLIMIT` | [`set_miter_limit.rb`](../lib/emf/emr/binary/records/set_miter_limit.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
 | `ExtTextOutW` | `EXTTEXTOUTW` | [`ext_text_out_w.rb`](../lib/emf/emr/binary/records/ext_text_out_w.rb) | `emf::text` | Not started |
 | `ExtTextOutA` | `EXTTEXTOUTA` | [`ext_text_out_a.rb`](../lib/emf/emr/binary/records/ext_text_out_a.rb) | `emf::text` | Not started |
 | `CreateFontIndirectW` | `EXTCREATEFONTINDIRECTW` | [`create_font_indirect_w.rb`](../lib/emf/emr/binary/records/create_font_indirect_w.rb) | `emf::text` | Not started |
@@ -105,8 +108,8 @@ and corpus parity. Group names are proposed Rust modules.
 | `ExcludeClipRect` | `EXCLUDECLIPRECT` | [`exclude_clip_rect.rb`](../lib/emf/emr/binary/records/exclude_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `IntersectClipRect` | `INTERSECTCLIPRECT` | [`intersect_clip_rect.rb`](../lib/emf/emr/binary/records/intersect_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `ExtSelectClipRgn` | `EXTSELECTCLIPRGN` | [`ext_select_clip_rgn.rb`](../lib/emf/emr/binary/records/ext_select_clip_rgn.rb) | `emf::path_clip_region` | Not started |
-| `ScaleViewportExtEx` | `SCALEVIEWPORTEXTEX` | [`scale_viewport_ext_ex.rb`](../lib/emf/emr/binary/records/scale_viewport_ext_ex.rb) | `emf::transform` | Not started |
-| `ScaleWindowExtEx` | `SCALEWINDOWEXTEX` | [`scale_window_ext_ex.rb`](../lib/emf/emr/binary/records/scale_window_ext_ex.rb) | `emf::transform` | Not started |
+| `ScaleViewportExtEx` | `SCALEVIEWPORTEXTEX` | [`scale_viewport_ext_ex.rb`](../lib/emf/emr/binary/records/scale_viewport_ext_ex.rb) | `emf::transform` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
+| `ScaleWindowExtEx` | `SCALEWINDOWEXTEX` | [`scale_window_ext_ex.rb`](../lib/emf/emr/binary/records/scale_window_ext_ex.rb) | `emf::transform` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
 | `SetMapperFlags` | `SETMAPPERFLAGS` | [`set_mapper_flags.rb`](../lib/emf/emr/binary/records/set_mapper_flags.rb) | `emf::state_objects` | Not started |
 | `RealizePalette` | `REALIZEPALETTE` | [`realize_palette.rb`](../lib/emf/emr/binary/records/realize_palette.rb) | `emf::color_palette` | Not started |
 | `SelectPalette` | `SELECTPALETTE` | [`select_palette.rb`](../lib/emf/emr/binary/records/select_palette.rb) | `emf::color_palette` | Not started |

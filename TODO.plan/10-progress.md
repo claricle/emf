@@ -8,14 +8,14 @@ Status: execution plan merged; baseline, Rust core and Ruby integration work in 
 | --- | --- | --- |
 | 01 Requirements | Baseline documented | Validate contracts through executable oracle in 02 |
 | 02 Baseline/parity | In progress | Fixture inventory, API/mutation controls, canonical observation/comparison harness and parser/consumer timing drivers added; reported slow workload and native comparisons pending |
-| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed header/EOF, scalar state, signed coordinates, color, rectangle, polyline and comment cohorts added; remaining record families and corpus parity pending |
+| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed header/EOF, scalar state, signed coordinates, color, rectangle, simple/multi point arrays, PolyDraw, scale/world transforms and comment cohorts added; remaining record families and corpus parity pending |
 | 04 C ABI | In progress | Versioned interface, owned typed snapshots, boundary tests and linked C client verified locally; full model/edit and platform checks pending |
 | 05 Ruby binding | In progress | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
 | 06 Resilience | In progress | Ruby subprocess supervisor and Rust budget regressions underway; forced-native corpus and fuzz budgets pending |
-| 07 Performance | Not started | Comparable measured end-to-end target and regression budget |
+| 07 Performance | In progress | Ruby/native parser and consumer measurement drivers verified; comparable end-to-end results, issue target and regression budget remain open |
 | 08 Platform delivery | In progress | Feasibility probe underway; artifacts, clean installs and complete CI/release integration pending |
-| 09 Format extensions | In progress | Bounded Ruby standard/placeable WMF headers, EOF/move/line and raw unknown preservation verified; full WMF and structured EMF+ pending |
-| 11 Record coverage | In progress | Header and bounded scalar/coordinate/variable cohorts cross core, ABI and Ruby; color/rectangle and fixed state/path parity verified; remaining registry entries and variants pending |
+| 09 Format extensions | In progress | Bounded Ruby standard/placeable WMF headers, mapping, fixed geometry, point arrays and raw unknown preservation verified; full WMF and structured EMF+ pending |
+| 11 Record coverage | In progress | Header and bounded scalar/coordinate/variable cohorts cross core, ABI and Ruby; color/rectangle, fixed state/path, simple/multi point arrays, PolyDraw and transform parity verified; remaining registry entries and variants pending |
 
 Documentation of a requirement is not implementation completion. Keep package
 states as `Not started`, `In progress`, `Blocked` or `Complete`; a blocked entry
@@ -280,3 +280,50 @@ children, library identity metadata and honest public-stage descriptions.
 Fourteen focused examples pass. Synthetic supported and unsupported native
 inputs verify success and failure reporting; these checks establish no speedup.
 The corpus inventory remains unsafe until its timeout outcomes are resolved.
+
+### Point arrays and PolyDraw
+
+Commit `8c25f5d` extends the bounded native slice to the simple point-array
+families, including signed 16-bit and 32-bit points. The integrated workspace
+passed 99 Rust tests and 51 native Ruby examples. Commit `38722dd` extends this
+to PolyPolyline/PolyPolygon and their 16-bit counterparts: independent array
+counts, signed fields, direct Ruby hydration and editable serialization. The
+workspace passed 106 Rust tests and 55 native Ruby examples.
+
+Commit `252b4b7` adds core PolyDraw/PolyDraw16 models and serialization; native
+snapshot and Ruby mapping landed in `2ea1d9f`. Shared point/type counts, opaque
+u8 type values, signed extrema, empty arrays, edits, unknown siblings and
+malformed Raw recovery are covered. `cargo test --workspace --locked` passed
+113 tests and `bundle exec rspec spec/emf/native` passed 59 examples with the
+compiled debug library. Strict Clippy, formatting, the linked C smoke client
+and changed-file Ruby lint passed. These results do not establish full registry,
+fixture-corpus, performance or platform acceptance.
+
+### Ruby WMF geometry and point arrays
+
+Commit `7219f6e` adds Rectangle/Ellipse and window/viewport origins and extents.
+Commit `d72ead5` adds Polygon/Polyline/PolyPolygon with signed points, checked
+counts, edited record framing and byte preservation. The bounded WMF suite
+passed 30 examples; changed-file lint passed. Other WMF families, native mapping
+and structured EMF+ acceptance remain open.
+
+### Scale and world transforms
+
+Commit `920174a` adds typed ScaleViewportExtEx, ScaleWindowExtEx,
+SetWorldTransform, ModifyWorldTransform, AngleArc and SetMiterLimit.
+Float fields retain their IEEE 754 bits, including NaNs and signed zero.
+The core worker passed 101 tests, strict Clippy and formatting checks.
+Commit `e548c23` adds snapshot-2 transport and direct Ruby hydration for all
+six families. The workspace passed 121 Rust tests and the compiled debug library
+passed 62 native Ruby examples. Strict Clippy, formatting, the linked C smoke
+client and changed-file Ruby lint passed. C/Rust retain exact float transport
+bits; Ruby serialization matches the existing BinData behavior, including NaN
+normalization. Full registry and corpus parity remain open.
+
+### CI manifest schema controls
+
+Commit `6dad910` repairs six reproduced CI failures by generating temporary
+current-schema manifests for inventory and consumer validation tests. Legacy
+schema rejection remains explicit. The 16 focused examples pass and changed-file
+lint passes. This test repair does not recapture or approve the tracked corpus
+inventory; production baseline acceptance remains open.

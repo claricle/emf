@@ -1,12 +1,12 @@
 # 09 — Complete typed WMF and structured EMF+
 
-Status: **Not started**. Estimate: **15–25 additional engineering days**, provisional after specification/fixture discovery. This is additional to the estimated 20–30 days for the initial EMF/native delivery; it is not an implied promise that all new-format scope fits that initial estimate.
+Status: **In progress**. Estimate: **15–25 additional engineering days**, provisional after specification/fixture discovery. This is additional to the estimated 20–30 days for the initial EMF/native delivery; it is not an implied promise that all new-format scope fits that initial estimate.
 
 ## Problem and scope
 
 [Issue #15](https://github.com/claricle/emf/issues/15) includes typed EMF, EMF+ and WMF. Staging EMF parity first does not remove the other formats from issue completion.
 
-`lib/emf/detector.rb` recognizes standard and Aldus placeable WMF, but `lib/emf/wmf/parser.rb` and `serializer.rb` raise unimplemented errors; `binary.rb` is a placeholder. There are no existing WMF fixtures. `lib/emf/emf_plus/parser.rb` and `serializer.rb` are also stubs. The current EMF parser concatenates EMF+ comment payloads into raw bytes and exposes them through `Model::Metafile#emf_plus`; this is not structured EMF+ decoding.
+The Ruby WMF implementation recognizes standard and Aldus placeable headers and provides bounded record framing, EOF, MoveTo/LineTo, window/viewport origins and extents, Rectangle/Ellipse, and Polygon/Polyline/PolyPolygon. Two synthetic fixtures cover both header containers. Native WMF, remaining record families and full specification/fixture coverage remain open. `lib/emf/emf_plus/parser.rb` and `serializer.rb` are also stubs. The current EMF parser concatenates EMF+ comment payloads into raw bytes and exposes them through `Model::Metafile#emf_plus`; this is not structured EMF+ decoding.
 
 Use `reference-docs/ms-wmf/`, `reference-docs/ms-emfplus/`, `reference-docs/ms-emf/` and their source specifications to build the coverage inventory. `kaitai-struct-wmf.ksy` can inform investigation but does not establish specification coverage or a new dependency. Parsanol remains an architectural reference only.
 
@@ -34,7 +34,13 @@ Use `reference-docs/ms-wmf/`, `reference-docs/ms-emfplus/`, `reference-docs/ms-e
 
 ## Planned commands
 
-Future commands after fixtures, modules and tests exist; no new-format tests have been executed for this plan:
+The bounded Ruby WMF suite passed 30 examples at `d72ead5` with
+`bundle exec rspec spec/emf/wmf`. These cover typed edits,
+count and size validation, placeable checksums and unknown-byte preservation.
+They do not establish full WMF or native coverage.
+
+The following commands remain planned full-format checks after the required
+fixtures, modules and tests exist:
 
 ```sh
 ruby script/fixture_manifest --check

@@ -1,8 +1,12 @@
 # 03 — Ruby-independent Rust core
 
-Status: **Not started**. Estimate: **6–8 engineering days** for current EMF
-compatibility after [baseline gates](02-baseline-and-parity.md). Re-estimate if
-the record inventory or wire-heavy vertical slice reveals missing work. Full
+Status: **In progress**. Checked framing, owned models, editable serialization
+and bounded typed record cohorts are implemented; see
+[record coverage](11-record-coverage.md) and [verified checkpoints](10-progress.md).
+Complete registry coverage, corpus parity and measured consumer acceptance remain
+open. The original estimate was **6–8 engineering days** for current EMF
+compatibility after [baseline gates](02-baseline-and-parity.md); this is not a
+remaining-work forecast. Re-estimate from the uncovered registry and acceptance gaps. Full
 WMF and structured EMF+ implementation belongs to [format extension](09-format-extension.md)
 and is not included in this estimate.
 
@@ -99,7 +103,10 @@ cargo test --manifest-path emf-rs/Cargo.toml -p emf-core
 cargo test --manifest-path emf-rs/Cargo.toml -p emf-core --test fixture_parity
 ```
 
-These commands are planned and require the workspace and tests to be created.
+Formatting, Clippy and standalone core tests run against the implemented workspace.
+The `fixture_parity` integration target remains to be added; its command is a
+planned acceptance check, not a passing result. Current bounded test results
+are recorded in [progress](10-progress.md).
 Acceptance requires all 208 valid fixtures to retain exact bytes, complete typed
 coverage against the inventory, reviewed malformed-input differences, passing
 standalone core tests, and a measured vertical slice that includes compatibility
