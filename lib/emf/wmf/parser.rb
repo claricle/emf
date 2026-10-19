@@ -69,6 +69,8 @@ module Emf
           parse_error(offset, function, "invalid EOF length") unless raw.bytesize == 6
           return Model::Wmf::Records::Eof.new(offset: offset)
         end
+        return decode_point_array(raw, function, offset) if Binary::POINT_ARRAY_RECORDS.key?(function & 0xFF)
+
         record_class = Binary::FIXED_RECORDS[function & 0xFF]
         return Model::Wmf::Records::UnknownRecord.new(type_id: function, raw_bytes: raw, offset: offset) unless record_class
 
@@ -78,9 +80,38 @@ module Emf
         record_class.new(**fields.zip(values).to_h, type_id: function, offset: offset)
       end
 
+      def decode_point_array(raw, function, offset)
+        parse_error(offset, function, "missing point array count") if raw.bytesize < 8
+        record_class = Binary::POINT_ARRAY_RECORDS.fetch(function & 0xFF)
+        if record_class == Model::Wmf::Records::PolyPolygon
+          polygon_count = raw.byteslice(6, 2).unpack1("v")
+          points_start = 8 + (polygon_count * 2)
+          parse_error(offset, function, "truncated polygon counts") if raw.bytesize < points_start
+          counts = raw.byteslice(8, polygon_count * 2).unpack("v*")
+          point_count = counts.sum
+        else
+          point_count = raw.byteslice(6, 2).unpack1("s<")
+          minimum = record_class == Model::Wmf::Records::Polygon ? 2 : 0
+          parse_error(offset, function, "invalid point count") if point_count < minimum
+          points_start = 8
+        end
+        parse_error(offset, function, "point array length mismatch") unless raw.bytesize == points_start + (point_count * 4)
+
+        points = raw.byteslice(points_start..).unpack("s<*").each_slice(2).map do |x, y|
+          Model::Wmf::Records::PointS.new(x: x, y: y)
+        end
+        fields = { points: points, type_id: function, offset: offset }
+        fields[:points_per_polygon] = counts if counts
+        record_class.new(**fields)
+      end
+
       def record_size(record)
         return record.raw_bytes.bytesize / 2 if record.is_a?(Model::Wmf::Records::UnknownRecord)
 
+        if record.is_a?(Model::Wmf::Records::PointArrayRecord)
+          counts = record.is_a?(Model::Wmf::Records::PolyPolygon) ? record.points_per_polygon.length : 0
+          return 4 + counts + (record.points.length * 2)
+        end
         record.is_a?(Model::Wmf::Records::Eof) ? 3 : 3 + record.class::WIRE_FIELDS.length
       end
 

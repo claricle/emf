@@ -21,6 +21,13 @@ module Emf
       }.freeze
       FIXED_FUNCTIONS = FIXED_RECORDS.invert.freeze
 
+      POINT_ARRAY_RECORDS = {
+        0x24 => Model::Wmf::Records::Polygon,
+        0x25 => Model::Wmf::Records::Polyline,
+        0x38 => Model::Wmf::Records::PolyPolygon
+      }.freeze
+      POINT_ARRAY_FUNCTIONS = POINT_ARRAY_RECORDS.invert.freeze
+
       module_function
 
       def checksum(bytes)

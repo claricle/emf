@@ -100,6 +100,38 @@ module Emf
           end
         end
 
+        PointS = Struct.new(:x, :y, keyword_init: true)
+
+        class PointArrayRecord < Record
+          def initialize(type_id:, points:, offset: nil)
+            super(type_id: type_id, offset: offset)
+            @points = points
+          end
+
+          attr_accessor :points
+        end
+
+        class Polygon < PointArrayRecord
+          def initialize(points:, offset: nil, type_id: 0x0324)
+            super
+          end
+        end
+
+        class Polyline < PointArrayRecord
+          def initialize(points:, offset: nil, type_id: 0x0325)
+            super
+          end
+        end
+
+        class PolyPolygon < PointArrayRecord
+          def initialize(points:, points_per_polygon:, offset: nil, type_id: 0x0538)
+            super(points: points, offset: offset, type_id: type_id)
+            @points_per_polygon = points_per_polygon
+          end
+
+          attr_accessor :points_per_polygon
+        end
+
         class UnknownRecord < Record
           def initialize(type_id:, raw_bytes:, offset: nil)
             super(type_id: type_id, offset: offset)

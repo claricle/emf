@@ -53,6 +53,7 @@ module Emf
         when Model::Wmf::Records::Eof then [3, 0].pack("Vv")
         when Model::Wmf::Records::PointRecord, Model::Wmf::Records::RectangleRecord
           serialize_fixed(record)
+        when Model::Wmf::Records::PointArrayRecord then serialize_point_array(record)
         when Model::Wmf::Records::UnknownRecord then serialize_unknown(record)
         else raise SerializeError, "unsupported WMF record #{record.class}"
         end
@@ -67,11 +68,44 @@ module Emf
         [3 + values.length, function, *values].pack("Vvs<*")
       end
 
+      def serialize_point_array(record)
+        function = Binary.uint16(record.type_id, "RecordFunction")
+        expected = Binary::POINT_ARRAY_FUNCTIONS[record.class]
+        raise SerializeError, "WMF point array RecordFunction mismatch" unless function & 0xFF == expected
+        raise SerializeError, "WMF points must be an array" unless record.points.is_a?(Array)
+
+        counts = serialize_point_counts(record)
+        coordinates = record.points.flat_map do |point|
+          raise SerializeError, "WMF point must be a PointS" unless point.is_a?(Model::Wmf::Records::PointS)
+
+          [Binary.int16(point.x, "x"), Binary.int16(point.y, "y")]
+        end
+        payload = counts + coordinates.pack("s<*")
+        [3 + (payload.bytesize / 2), function].pack("Vv") + payload
+      end
+
+      def serialize_point_counts(record)
+        unless record.is_a?(Model::Wmf::Records::PolyPolygon)
+          count = Binary.int16(record.points.length, "NumberOfPoints")
+          raise SerializeError, "WMF Polygon requires at least two points" if record.is_a?(Model::Wmf::Records::Polygon) && count < 2
+
+          return [count].pack("s<")
+        end
+        counts = record.points_per_polygon
+        raise SerializeError, "WMF polygon counts must be an array" unless counts.is_a?(Array)
+
+        polygon_count = Binary.uint16(counts.length, "NumberOfPolygons")
+        counts.each { |count| Binary.uint16(count, "PointsPerPolygon") }
+        raise SerializeError, "WMF polygon point count mismatch" unless counts.sum == record.points.length
+
+        [polygon_count, *counts].pack("v*")
+      end
+
       def serialize_unknown(record)
         raw = record.raw_bytes
         words, function = raw.unpack("Vv")
         unless raw.bytesize >= 6 && raw.bytesize.even? && words == raw.bytesize / 2 && function == record.type_id &&
-               !function.zero? && !Binary::FIXED_RECORDS.key?(function & 0xFF)
+               !function.zero? && !Binary::FIXED_RECORDS.key?(function & 0xFF) && !Binary::POINT_ARRAY_RECORDS.key?(function & 0xFF)
           raise SerializeError, "invalid raw WMF record"
         end
 
