@@ -4,7 +4,7 @@
     "name": "ruby",
     "ruby_version": "3.4.8",
     "bindata_version": "2.5.1",
-    "parser_source_sha256": "22c9789240fce2f3a511dde9bd336b3fca921202d6985b3fca6aa3d2d41c6ddc"
+    "parser_source_sha256": "6f0650d1c96bc9c226a55f6ab3451a4e40d2cc542bd68dfec63d4d567018824f"
   },
   "counts": {
     "emf": 186,

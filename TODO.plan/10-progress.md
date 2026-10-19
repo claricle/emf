@@ -1,13 +1,13 @@
 # Delivery progress and handoff
 
-Status: execution plan merged; Ruby baseline work in progress.
+Status: execution plan merged; baseline, Rust core and Ruby integration work in progress.
 
 ## Work record
 
 | Package | State | Evidence / remaining work |
 | --- | --- | --- |
 | 01 Requirements | Baseline documented | Validate contracts through executable oracle in 02 |
-| 02 Baseline/parity | In progress | Fixture inventory, API/mutation controls, canonical observation/comparison harness and parser/consumer timing drivers added; downstream full-suite classification and reported slow workload pending |
+| 02 Baseline/parity | In progress | Fixture inventory, API/mutation controls, canonical observation/comparison harness and parser/consumer timing drivers added; reported slow workload and native comparisons pending |
 | 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed vertical slice and record families pending |
 | 04 C ABI | In progress | Initial interface and C client implementation underway; ownership/lifecycle and full model checks pending |
 | 05 Ruby binding | In progress | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
@@ -62,8 +62,8 @@ on the new implementation before the evidence describes that version.
 
 ## Next action
 
-Continue [02](02-baseline-and-parity.md): classify the pinned downstream golden
-and round-trip baseline and identify the reported slow workload. Use the canonical
+Continue [02](02-baseline-and-parity.md): identify the reported slow workload and
+retain the pinned downstream baseline as the native compatibility oracle. Use the canonical
 oracle and timing drivers for the bounded native slice in [03](03-rust-core.md),
 then connect it through [04](04-c-abi.md) and [05](05-ruby-binding.md).
 The initial estimates in [00](00-overview.md) should be revised after this milestone
@@ -100,8 +100,10 @@ describe Ruby outcomes, not a classification of valid versus corrupt input.
 `bundle exec ruby script/fixture_manifest --check` validates fixture metadata and
 the parser source fingerprint against the saved capture without parsing again.
 Regenerate and review the capture after intentional fixture or parser changes.
-The inventory is the first baseline artifact; downstream full-suite classification
-and the reported performance workload remain pending.
+After Ruby backend dispatch was added, a fresh capture preserved all 229 outcomes.
+One fixture exceeded the same five-second limit during the full run and parsed
+successfully on a bounded retry; the refreshed manifest passed its metadata and
+source-fingerprint check. The reported performance workload remains unidentified.
 
 ### Canonical observations and timing drivers
 
@@ -123,11 +125,17 @@ checking exact SVG bytes outside timed regions. See `bench/README.md` and
 `bench/emfsvg.md` for reproduction and measurement limits. Both drivers propagate
 cold-child failures into the command result.
 
-The combined canonical/parser/consumer focused checks passed 34 examples before
-the final duplicate-cold-failure correction; its affected consumer checks passed
-five examples afterward. These checks use installed runtime gems with explicit
-load paths because the local consumer dependency bundle is unresolved. The full
-pinned consumer suite, required CI and native comparisons remain separate gates.
+The combined canonical/parser/consumer focused checks passed 34 examples on
+commit `14fb505`. Consumer checks use installed runtime gems with explicit load
+paths because the local consumer dependency bundle is unresolved. Required CI
+and native comparisons remain separate gates.
+
+The pinned consumer baseline completed 424 examples with zero failures and 199
+pending: 208 golden examples, seven round-trip examples and ten round-trip golden
+checks passed. The pending cases explicitly retain existing non-byte-equal
+round trips. The consumer checkout was unchanged. This local classification used
+installed runtime gems outside Bundler; installed leptris 1.9.355.0 is below the
+consumer requirement of 1.9.365.1, so it does not verify that dependency bundle.
 
 ### Rust framing foundation
 
@@ -142,3 +150,15 @@ This foundation does not complete typed record decoding, edited serialization,
 corpus parity, the C ABI or Ruby native model hydration. The next core slice adds
 header/EOF, fixed and variable record models with checked edits while preserving
 unknown bytes.
+
+### Ruby backend selection
+
+`EMF_BACKEND` selects `auto`, `ruby` or `native` for each parse and serialization
+operation. Automatic fallback applies only when native setup is unavailable;
+operation errors propagate. Forced Ruby execution avoids loading native support.
+Invalid selection raises `ArgumentError`, and forced unavailable native execution
+raises `Emf::Native::Unavailable`.
+
+Commit `14fb505` integrates this dispatch with 45 focused policy, API, detector,
+CLI and mutable-model examples passing. The native backend currently reports
+unavailability; the actual loader, ABI ownership and model hydration remain open.
