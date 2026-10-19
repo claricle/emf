@@ -16,7 +16,7 @@ The roughly 12-second fixture mentioned in [issue #15](https://github.com/claric
 - `bench/baseline.json`: measured workload identities, fixture hashes, environment, units and distributions; do not populate it with guessed numbers.
 - `bench/performance-policy.json`: proposed selected-runner comparison policy, sample counts and explicit thresholds calibrated from repeated baseline runs.
 - `.github/workflows/native-benchmark.yml`: stable benchmark job and retained JSON/report artifacts.
-- Existing parity specs from [02-baseline-and-parity.md](../TODO.plan/02-baseline-and-parity.md) and binding work from [05-ruby-binding.md](../TODO.ruby/05-ruby-binding.md): preservation gates for every optimization.
+- Existing parity specs from [02-baseline-and-parity.md](02-baseline-and-parity.md) and binding work from [05-ruby-binding.md](05-ruby-binding.md): preservation gates for every optimization.
 
 ## Execution order and dependencies
 

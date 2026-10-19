@@ -20,8 +20,8 @@ wrapper around the GPLv2 `libemf2svg` C library.
   1/1 in `spec/fixtures/simple/`).
 * **EMF+**: EMF+ payloads are extracted from EMF carrier records as raw
   bytes (`Metafile#emf_plus`). Structured EMF+ parsing is TODO
-  (see link:TODO.formats/09-format-extension.md[format extension plan]).
-* **WMF**: detected but not yet parsed (see link:TODO.formats/09-format-extension.md[format extension plan]).
+  (see link:TODO.plan/09-format-extension.md[format extension plan]).
+* **WMF**: detected but not yet parsed (see link:TODO.plan/09-format-extension.md[format extension plan]).
 * **License**: BSD-2-Clause. No GPL obligation.
 
 == Installation
@@ -122,14 +122,14 @@ byte-identical parse -> serialise -> parse.
 The execution plan for issue #15 starts at
 link:TODO.plan/00-overview.md[the shared roadmap]. Implementation has not started.
 
-* link:TODO.ruby/00-execution.md[Ruby implementation]: existing API dispatch,
+* link:TODO.plan/05-ruby-execution.md[Ruby implementation]: existing API dispatch,
   model compatibility, mutable wire serialization, fallback and CLI behavior.
-* link:TODO.rust/03-rust-core.md[Rust core] and
-  link:TODO.rust/04-c-abi.md[C ABI]: typed decoding, serialization and native ownership.
-* link:TODO.formats/09-format-extension.md[Format extensions]: WMF and structured EMF+.
-* link:TODO.delivery/06-resilience.md[Resilience],
-  link:TODO.delivery/07-performance.md[performance] and
-  link:TODO.delivery/08-platform-delivery.md[platform delivery].
+* link:TODO.plan/03-rust-core.md[Rust core] and
+  link:TODO.plan/04-c-abi.md[C ABI]: typed decoding, serialization and native ownership.
+* link:TODO.plan/09-format-extension.md[Format extensions]: WMF and structured EMF+.
+* link:TODO.plan/06-resilience.md[Resilience],
+  link:TODO.plan/07-performance.md[performance] and
+  link:TODO.plan/08-platform-delivery.md[platform delivery].
 
 Other roadmap items include semantic domain records beyond `WireAdapter` and
 two-pass path association (`BEGINPATH` with `FILLPATH`/`STROKEPATH`). These remain

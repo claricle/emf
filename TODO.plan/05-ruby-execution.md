@@ -2,8 +2,8 @@
 
 Status: **Not started**. This expands package 05 into executable Ruby tasks; its
 effort is included in the existing **3–4 engineering days**, not added to the
-[overall estimate](../TODO.plan/00-overview.md). Baseline harness work belongs to
-[package 02](../TODO.plan/02-baseline-and-parity.md); packaging and new-format
+[overall estimate](00-overview.md). Baseline harness work belongs to
+[package 02](02-baseline-and-parity.md); packaging and new-format
 implementation retain their separate estimates.
 
 The existing Ruby parser is the initial behavioral oracle and remains the
@@ -98,13 +98,13 @@ Run existing CLI, visitor and round-trip checks in each forced backend, then the
 pinned `emfsvg` golden suites from package 02. Extend `README.adoc` with backend
 selection, fallback behavior and supported platform/capability information only
 after those behaviors exist. Coordinate the gemspec and clean-install checks with
-[platform delivery](../TODO.delivery/08-platform-delivery.md). New WMF/EMF+
-fallback models/parsers remain tracked in [format extension](../TODO.formats/09-format-extension.md),
+[platform delivery](08-platform-delivery.md). New WMF/EMF+
+fallback models/parsers remain tracked in [format extension](09-format-extension.md),
 not implied complete by the EMF integration.
 
 Exit: public documentation matches tested behavior, existing consumers retain
 their results, and required platform/backend evidence is linked in
-[progress](../TODO.plan/10-progress.md).
+[progress](10-progress.md).
 
 ## Planned verification
 

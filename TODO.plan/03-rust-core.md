@@ -1,15 +1,15 @@
 # 03 — Ruby-independent Rust core
 
 Status: **Not started**. Estimate: **6–8 engineering days** for current EMF
-compatibility after [baseline gates](../TODO.plan/02-baseline-and-parity.md). Re-estimate if
+compatibility after [baseline gates](02-baseline-and-parity.md). Re-estimate if
 the record inventory or wire-heavy vertical slice reveals missing work. Full
-WMF and structured EMF+ implementation belongs to [format extension](../TODO.formats/09-format-extension.md)
+WMF and structured EMF+ implementation belongs to [format extension](09-format-extension.md)
 and is not included in this estimate.
 
-Depends on [requirements](../TODO.plan/01-requirements.md) and baseline observations. Delivers
-input to [the C ABI](04-c-abi.md) and [Ruby binding](../TODO.ruby/05-ruby-binding.md), with
-cross-cutting [resilience](../TODO.delivery/06-resilience.md), [performance](../TODO.delivery/07-performance.md),
-and [record coverage](11-record-coverage.md) gates. See [progress](../TODO.plan/10-progress.md).
+Depends on [requirements](01-requirements.md) and baseline observations. Delivers
+input to [the C ABI](04-c-abi.md) and [Ruby binding](05-ruby-binding.md), with
+cross-cutting [resilience](06-resilience.md), [performance](07-performance.md),
+and [record coverage](11-record-coverage.md) gates. See [progress](10-progress.md).
 
 ## Planned workspace and contracts
 
@@ -41,7 +41,7 @@ edited typed records rebuild checked fields while retaining unrelated opaque
 bytes. Do not normalize NaNs, signed zero, reserved fields, unknown payloads or
 header metadata during an unchanged round trip. This representation must support
 standalone Rust use; Ruby's mutable BinData edits are reconciled at the binding
-boundary described in [05](../TODO.ruby/05-ruby-binding.md).
+boundary described in [05](05-ruby-binding.md).
 
 ## Planned implementation sequence
 
@@ -81,7 +81,7 @@ or iterating. A malformed record must consume bytes, return a bounded raw recove
 or stop; no branch may retry the same offset indefinitely. Preserve the current
 variable-array recovery behavior and distinguish a recoverable record diagnostic
 from a fatal header error. Establish explicit input, record, array, recursion (if
-introduced), total allocation and work limits under [06](../TODO.delivery/06-resilience.md).
+introduced), total allocation and work limits under [06](06-resilience.md).
 
 The Ruby parser currently has a 200 MiB input cap and a 1,000,000-entry sanity
 limit for selected arrays. These are compatibility evidence, not proof that all
@@ -104,4 +104,4 @@ Acceptance requires all 208 valid fixtures to retain exact bytes, complete typed
 coverage against the inventory, reviewed malformed-input differences, passing
 standalone core tests, and a measured vertical slice that includes compatibility
 costs. A fast raw scanner alone cannot close this phase. Release/platform checks
-are defined in [delivery](../TODO.delivery/08-platform-delivery.md).
+are defined in [delivery](08-platform-delivery.md).

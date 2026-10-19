@@ -23,7 +23,7 @@ speed improvement through the Ruby API and downstream consumers as well as Rust
 microbenchmarks.
 
 The first delivery migrates the existing EMF behavior. Full issue completion also
-requires the WMF and structured EMF+ work in [09](../TODO.formats/09-format-extension.md). Their
+requires the WMF and structured EMF+ work in [09](09-format-extension.md). Their
 current implementations are stubs; this is additional format development rather
 than an existing implementation that can simply be translated.
 
@@ -52,11 +52,7 @@ spec/
   support/                  # parity and subprocess helpers
   emf/                      # backend, model, round-trip, safety regression checks
 bench/                      # Ruby API and consumer benchmark drivers
-TODO.plan/                  # issue contract, baseline, roadmap and progress
-TODO.ruby/                  # existing Ruby changes and native integration
-TODO.rust/                  # typed core, C ABI and EMF record inventory
-TODO.formats/               # new WMF and structured EMF+ implementation
-TODO.delivery/              # resilience, benchmarks and platform gems
+TODO.plan/                  # requirements, execution tasks, acceptance and progress
 ```
 
 These are proposed paths. Detailed work items define their contents; reconcile
@@ -69,14 +65,14 @@ The parsanol Rust/Ruby pair and leptris provide architecture and shipping exampl
 This work does not require integrating a parsing-combinator engine or adding
 `parsanol-rs` as a dependency. A future repository extraction is outside this plan.
 
-## Plan directories
+## Plan navigation
 
 Start with this overview and [requirements](01-requirements.md). The
-[Ruby execution plan](../TODO.ruby/00-execution.md) maps the existing Ruby files to
-ordered implementation tasks. Its [binding contract](../TODO.ruby/05-ruby-binding.md)
+[Ruby execution plan](05-ruby-execution.md) maps the existing Ruby files to
+ordered implementation tasks. Its [binding contract](05-ruby-binding.md)
 is the detailed interface specification. The Rust, format and delivery documents
 in the table below own their respective contracts; each requirement has one
-canonical description. Package IDs remain stable across directories so progress
+canonical description. Package IDs remain stable so progress
 and acceptance references continue to identify the same work.
 
 ## Work packages and dependencies
@@ -85,13 +81,13 @@ and acceptance references continue to identify the same work.
 | --- | --- | --- | --- |
 | [01](01-requirements.md) | Compatibility contract and completion matrix | Source/issue baseline | Included in 02 |
 | [02](02-baseline-and-parity.md) | Fixture manifest, canonical comparison, downstream and timing baseline | 01 | 2–3 days |
-| [03](../TODO.rust/03-rust-core.md) | Bounded typed EMF parser and exact serializer | 02; [11](../TODO.rust/11-record-coverage.md) inventory | 6–8 days |
-| [04](../TODO.rust/04-c-abi.md) | Versioned ABI, ownership, errors and lifecycle checks | 02; small 03 slice | 2–3 days |
-| [05](../TODO.ruby/05-ruby-binding.md) | Native selection, compatible models and Ruby fallback | 03 slice + 04 | 3–4 days |
-| [06](../TODO.delivery/06-resilience.md) | Corrupt-input bounds, subprocess checks and fuzzing | 02; starts with 03/04 | 2–3 days |
-| [07](../TODO.delivery/07-performance.md) | Measured Ruby and downstream speedup | 02 baseline + 05 | 1–2 days |
-| [08](../TODO.delivery/08-platform-delivery.md) | Platform gems, install smoke checks, CI and release integration | 04/05; platform probe starts after 02 | 3–4 days |
-| [09](../TODO.formats/09-format-extension.md) | Standard/placeable WMF and structured EMF+ | 02 contract + 03–06 foundations | Additional 15–25 days, provisional |
+| [03](03-rust-core.md) | Bounded typed EMF parser and exact serializer | 02; [11](11-record-coverage.md) inventory | 6–8 days |
+| [04](04-c-abi.md) | Versioned ABI, ownership, errors and lifecycle checks | 02; small 03 slice | 2–3 days |
+| [05](05-ruby-binding.md) | Native selection, compatible models and Ruby fallback | 03 slice + 04 | 3–4 days |
+| [06](06-resilience.md) | Corrupt-input bounds, subprocess checks and fuzzing | 02; starts with 03/04 | 2–3 days |
+| [07](07-performance.md) | Measured Ruby and downstream speedup | 02 baseline + 05 | 1–2 days |
+| [08](08-platform-delivery.md) | Platform gems, install smoke checks, CI and release integration | 04/05; platform probe starts after 02 | 3–4 days |
+| [09](09-format-extension.md) | Standard/placeable WMF and structured EMF+ | 02 contract + 03–06 foundations | Additional 15–25 days, provisional |
 | [10](10-progress.md) | Acceptance evidence and implementation handoff | Updated with each work package | Included above |
 
 The EMF/native subtotal is **19–27 engineering days**. Allow **20–30 days

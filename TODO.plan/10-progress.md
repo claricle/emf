@@ -10,7 +10,7 @@ Status: execution plan proposed; all implementation work pending.
 | 02 Baseline/parity | Not started | Manifest, field snapshots, mutation controls, downstream revision and timings |
 | 03 Rust core | Not started | Vertical slice, every inventory group, serializer |
 | 04 C ABI | Not started | Binding contract, ownership/lifecycle and failure checks |
-| 05 Ruby binding | Not started | [R1–R5](../TODO.ruby/00-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
+| 05 Ruby binding | Not started | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
 | 06 Resilience | Not started | Outcome manifest, subprocess limits, fuzz regressions |
 | 07 Performance | Not started | Comparable measured end-to-end target and regression budget |
 | 08 Platform delivery | Not started | Target probes, artifacts, clean installs, CI/release integration |

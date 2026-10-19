@@ -2,10 +2,10 @@
 
 Status: **Not started**. Estimate: **2–3 engineering days**, after the
 [core vertical slice](03-rust-core.md). Complete the slice with
-[the Ruby binding](../TODO.ruby/05-ruby-binding.md) before extending all record families.
-Depends on [baseline parity](../TODO.plan/02-baseline-and-parity.md). Safety gates are in
-[resilience](../TODO.delivery/06-resilience.md), packaging in [delivery](../TODO.delivery/08-platform-delivery.md),
-and completion in [progress](../TODO.plan/10-progress.md).
+[the Ruby binding](05-ruby-binding.md) before extending all record families.
+Depends on [baseline parity](02-baseline-and-parity.md). Safety gates are in
+[resilience](06-resilience.md), packaging in [delivery](08-platform-delivery.md),
+and completion in [progress](10-progress.md).
 
 ## Planned files and versioned surface
 
@@ -83,7 +83,7 @@ Functions return an `int32_t` status: `0 OK`, `1 INVALID_ARGUMENT`,
 `6 ALLOCATION_FAILED`. These numbers are proposed ABI constants, not Rust enum
 casts. Recoverable record errors are document diagnostics on a successful parse,
 not a failing function status. Map fatal statuses to existing public Ruby error
-classes in [05](../TODO.ruby/05-ruby-binding.md); do not add new top-level API aliases.
+classes in [05](05-ruby-binding.md); do not add new top-level API aliases.
 
 Initialize output handles to null and counts to zero on entry. On success the
 caller owns returned handles; on failure no document/buffer escapes, and an
@@ -110,7 +110,7 @@ results. No panic or Rust unwind may cross a C frame. This does not catch
 allocator aborts, aborting panics, invalid pointers or process termination. Validate
 lengths and budgets before allocation, apply `try_reserve` to large allocations,
 and return `ALLOCATION_FAILED` when a fallible reservation fails. Bound aggregate
-allocations and work under [06](../TODO.delivery/06-resilience.md); never claim guaranteed OOM
+allocations and work under [06](06-resilience.md); never claim guaranteed OOM
 recovery from `catch_unwind`.
 
 ABI v1 documents are immutable for FFI access. Independent documents may be used
@@ -130,7 +130,7 @@ cc -std=c11 -Wall -Wextra -Werror -I emf-rs/crates/emf-ffi/include emf-rs/crates
 ```
 
 The smoke executable must be run with the built library discoverable using the
-platform's loader settings; [08](../TODO.delivery/08-platform-delivery.md) owns exact Linux/macOS
+platform's loader settings; [08](08-platform-delivery.md) owns exact Linux/macOS
 invocations. Create `tmp/` before compiling. These commands are planned, not run.
 Tests must independently verify ABI version rejection, structure sizes, status
 mapping, null/zero-length arguments, truncated input, batches, exact bytes,
