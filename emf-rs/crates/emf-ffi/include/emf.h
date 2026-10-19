@@ -25,6 +25,10 @@ extern "C" {
 #define EMF_FAMILY_SETMAPMODE 2u
 #define EMF_FAMILY_POLYLINE 3u
 #define EMF_FAMILY_COMMENT 4u
+#define EMF_FAMILY_SETBKMODE 5u
+#define EMF_FAMILY_SETPOLYFILLMODE 6u
+#define EMF_FAMILY_SETROP2 7u
+#define EMF_FAMILY_SETSTRETCHBLTMODE 8u
 
 typedef struct emf_document emf_document;
 typedef struct emf_buffer emf_buffer;
@@ -104,8 +108,10 @@ typedef struct emf_error_info {
  * handle, and never free a handle while it is in use. The caller owns returned
  * handles and frees them exactly once. Allocation aborts cannot be recovered.
  *
- * Typed snapshots cover EOF, SETMAPMODE, POLYLINE and COMMENT; other records
- * remain raw. Snapshot bytes use the encoding documented in snapshot-v1.md.
+ * Typed snapshots cover EOF, SETMAPMODE, POLYLINE, COMMENT and scalar state
+ * records SETBKMODE, SETPOLYFILLMODE, SETROP2 and SETSTRETCHBLTMODE; other records
+ * remain raw. Snapshot bytes use the encoding documented in snapshot-v2.md.
+ * Snapshot versions are independent of ABI versions.
  * Documents are immutable through this ABI.
  * Detection recognizes WMF signatures; parsing supports EMF only.
  */

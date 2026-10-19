@@ -9,7 +9,7 @@ module Emf
       def initialize(bytes)
         @bytes = bytes
         @position = 0
-        raise FormatError, "invalid native snapshot schema" unless take(4) == "EMFS" && u32 == 1
+        raise FormatError, "invalid native snapshot schema" unless take(4) == "EMFS" && u32 == 2
         raise FormatError, "invalid native snapshot length" unless u64 == bytes.bytesize
 
         header_length, record_count, diagnostic_count, trailing_length, unframed_length = Array.new(5) { u64 }

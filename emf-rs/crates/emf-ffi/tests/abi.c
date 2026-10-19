@@ -265,7 +265,7 @@ static int check_snapshot(void) {
     CHECK(take(&c, 4, &p) && memcmp(p, "EMFS", 4) == 0);
     uint32_t u32;
     uint64_t total, raw_header, record_count, diagnostic_count, trailing, unframed;
-    CHECK(get_u32(&c, &u32) && u32 == 1);
+    CHECK(get_u32(&c, &u32) && u32 == 2);
     CHECK(get_u64(&c, &total) && total == byte_length);
     CHECK(get_u64(&c, &raw_header) && raw_header == HEADER_SIZE);
     CHECK(get_u64(&c, &record_count) && record_count == 5);
@@ -349,7 +349,7 @@ static int check_snapshot(void) {
     CHECK(emf_buffer_view(snapshot, &bytes, &byte_length) == EMF_OK);
     c = (cursor){bytes, (size_t)byte_length, 0};
     CHECK(take(&c, 4, &p) && memcmp(p, "EMFS", 4) == 0);
-    CHECK(get_u32(&c, &u32) && u32 == 1);
+    CHECK(get_u32(&c, &u32) && u32 == 2);
     CHECK(get_u64(&c, &total) && total == byte_length);
     CHECK(get_u64(&c, &raw_header) && raw_header == 88);
     CHECK(get_u64(&c, &record_count) && record_count == 0);
@@ -368,6 +368,40 @@ static int check_snapshot(void) {
     CHECK(c.offset == c.length);
     emf_document_free(document);
     emf_buffer_free(snapshot);
+    return 0;
+}
+
+static int check_scalar_state_snapshots(void) {
+    const uint32_t families[] = {EMF_FAMILY_SETBKMODE, EMF_FAMILY_SETPOLYFILLMODE,
+        EMF_FAMILY_SETROP2, EMF_FAMILY_SETSTRETCHBLTMODE};
+    const uint32_t values[] = {0, UINT32_C(0x80000000), UINT32_MAX};
+    for (unsigned kind = 0; kind < 4; ++kind) {
+        for (unsigned value = 0; value < 3; ++value) {
+            make_fixture();
+            put_u32(88, 18 + kind);
+            put_u32(92, 12);
+            put_u32(96, values[value]);
+            input_length = 100;
+            emf_document *document = NULL;
+            emf_buffer *snapshot = NULL;
+            emf_error *error = NULL;
+            CHECK(emf_parse(input, input_length, NULL, &document, &error) == EMF_OK);
+            CHECK(emf_document_snapshot(document, &snapshot, &error) == EMF_OK);
+            const uint8_t *bytes = NULL;
+            uint64_t length = 0;
+            CHECK(emf_buffer_view(snapshot, &bytes, &length) == EMF_OK);
+            emf_document_free(document);
+            CHECK(error == NULL && length <= SIZE_MAX);
+            cursor c = {bytes, (size_t)length, 4};
+            uint32_t word;
+            CHECK(get_u32(&c, &word) && word == 2);
+            CHECK(skip(&c, 48 + 112 + HEADER_SIZE));
+            CHECK(check_snapshot_record(&c, 0, 88, 12, 18 + kind, families[kind], 4) == 0);
+            CHECK(get_u32(&c, &word) && word == values[value]);
+            CHECK(c.offset == c.length);
+            emf_buffer_free(snapshot);
+        }
+    }
     return 0;
 }
 
@@ -405,7 +439,7 @@ static int check_snapshot_after_malformed_eof(void) {
         uint32_t word;
         uint64_t value;
         CHECK(take(&c, 4, &magic) && memcmp(magic, "EMFS", 4) == 0);
-        CHECK(get_u32(&c, &word) && word == 1);
+        CHECK(get_u32(&c, &word) && word == 2);
         CHECK(get_u64(&c, &value) && value == length);
         CHECK(get_u64(&c, &value) && value == HEADER_SIZE);
         CHECK(get_u64(&c, &value) && value == 3);
@@ -463,6 +497,7 @@ static void init_limits(emf_limits *limits) {
 int main(void) {
     CHECK(check_layout() == 0);
     CHECK(check_snapshot() == 0);
+    CHECK(check_scalar_state_snapshots() == 0);
     CHECK(check_snapshot_after_malformed_eof() == 0);
     CHECK(emf_abi_version() == EMF_ABI_VERSION);
     make_fixture();

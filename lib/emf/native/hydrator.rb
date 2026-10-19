@@ -3,7 +3,7 @@
 module Emf
   module Native
     class Hydrator
-      SUPPORTED_TYPES = [4, 14, 17, 70].freeze
+      SUPPORTED_TYPES = [4, 14, 17, 18, 19, 20, 21, 70].freeze
 
       def initialize(snapshot, input)
         @snapshot = snapshot
@@ -46,17 +46,24 @@ module Emf
         case record.fetch(:family)
         when 0 then raw_fields(record, raw)
         when 1 then eof_fields(payload, raw)
-        when 2
-          require_length(payload, 4)
-          [Emr::Binary::Records::SetMapMode, { map_mode: payload.unpack1("V") }]
+        when 2 then scalar_fields(payload, Emr::Binary::Records::SetMapMode, :map_mode)
         when 3 then polyline_fields(payload)
         when 4 then comment_fields(payload, raw)
+        when 5 then scalar_fields(payload, Emr::Binary::Records::SetBkMode, :bk_mode)
+        when 6 then scalar_fields(payload, Emr::Binary::Records::SetPolyFillMode, :poly_fill_mode)
+        when 7 then scalar_fields(payload, Emr::Binary::Records::SetRop2, :rop2)
+        when 8 then scalar_fields(payload, Emr::Binary::Records::SetStretchBltMode, :stretch_mode)
         else raise FormatError, "unsupported native snapshot record family #{record.fetch(:family)}"
         end
       end
 
       def require_length(payload, length)
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == length
+      end
+
+      def scalar_fields(payload, klass, field)
+        require_length(payload, 4)
+        [klass, { field => payload.unpack1("V") }]
       end
 
       def raw_fields(record, raw)

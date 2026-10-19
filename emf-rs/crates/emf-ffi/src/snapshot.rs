@@ -1,4 +1,4 @@
-//! Version 1 owned snapshot encoding. All fields are explicitly little-endian.
+//! Version 2 owned snapshot encoding. All fields are explicitly little-endian.
 
 use emf_core::{DiagnosticKind, Document, EmfHeader, RecordData, Rect, Size};
 
@@ -15,6 +15,10 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::SetMapMode { .. } => 2,
         RecordData::Polyline { .. } => 3,
         RecordData::Comment { .. } => 4,
+        RecordData::SetBkMode { .. } => 5,
+        RecordData::SetPolyFillMode { .. } => 6,
+        RecordData::SetRop2 { .. } => 7,
+        RecordData::SetStretchBltMode { .. } => 8,
     }
 }
 
@@ -31,7 +35,11 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
     match data {
         RecordData::Raw => Ok(0),
         RecordData::Eof(_) => Ok(12),
-        RecordData::SetMapMode { .. } => Ok(4),
+        RecordData::SetMapMode { .. }
+        | RecordData::SetBkMode { .. }
+        | RecordData::SetPolyFillMode { .. }
+        | RecordData::SetRop2 { .. }
+        | RecordData::SetStretchBltMode { .. } => Ok(4),
         RecordData::Polyline { points, .. } => points
             .len()
             .checked_mul(8)
@@ -67,7 +75,7 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
     out.try_reserve_exact(len)
         .map_err(|_| Error::AllocationFailed)?;
     out.extend_from_slice(b"EMFS");
-    u32_field(&mut out, 1);
+    u32_field(&mut out, 2);
     for value in [
         total,
         wire_len(document.header_bytes().len())?,
@@ -95,6 +103,10 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                 u32_field(&mut out, eof.n_size_last);
             }
             RecordData::SetMapMode { map_mode } => u32_field(&mut out, *map_mode),
+            RecordData::SetBkMode { bk_mode } => u32_field(&mut out, *bk_mode),
+            RecordData::SetPolyFillMode { poly_fill_mode } => u32_field(&mut out, *poly_fill_mode),
+            RecordData::SetRop2 { rop2 } => u32_field(&mut out, *rop2),
+            RecordData::SetStretchBltMode { stretch_mode } => u32_field(&mut out, *stretch_mode),
             RecordData::Polyline { bounds, points } => {
                 rect(&mut out, *bounds);
                 u64_field(&mut out, wire_len(points.len())?);
@@ -258,12 +270,37 @@ mod tests {
     fn prefix(bytes: &[u8], counts: [u64; 5]) -> Cursor<'_> {
         let mut cursor = Cursor { bytes, position: 0 };
         assert_eq!(cursor.take(4), b"EMFS");
-        assert_eq!(cursor.u32(), 1);
+        assert_eq!(cursor.u32(), 2);
         assert_eq!(cursor.u64(), bytes.len() as u64);
         for count in counts {
             assert_eq!(cursor.u64(), count);
         }
         cursor
+    }
+
+    #[test]
+    fn scalar_state_families_encode_unsigned_values_without_opaque_suffixes() {
+        for (kind, expected_family) in [(18, 5), (19, 6), (20, 7), (21, 8)] {
+            for value in [0u32, 0x80000000, u32::MAX] {
+                let mut input = fixture_header(88);
+                let mut payload = value.to_le_bytes().to_vec();
+                payload.extend_from_slice(b"tail");
+                record(&mut input, kind, &payload);
+                let document = parse(&input, &ParseLimits::default()).unwrap();
+                assert_eq!(family(document.records()[0].data()), expected_family);
+                let encoded = encode(&document).unwrap();
+                let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+                cursor.take(112 + 88);
+                assert_eq!(cursor.u64(), 0);
+                assert_eq!(cursor.u64(), 88);
+                assert_eq!(cursor.u64(), 16);
+                assert_eq!(cursor.u32(), kind);
+                assert_eq!(cursor.u32(), expected_family);
+                assert_eq!(cursor.u64(), 4);
+                assert_eq!(cursor.u32(), value);
+                assert_eq!(cursor.position, encoded.len());
+            }
+        }
     }
 
     #[test]

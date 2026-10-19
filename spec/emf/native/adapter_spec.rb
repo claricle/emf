@@ -58,6 +58,33 @@ RSpec.describe Emf::Native do
     expect(Emf.serialize(parsed).byteslice(116, 4).unpack1("V")).to eq(7)
   end
 
+  it "hydrates unsigned scalar state records directly and preserves editable serialization" do
+    values = [0, 0x80000000, 0xFFFFFFFF]
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    [
+      [18, Emf::Emr::Binary::Records::SetBkMode, :bk_mode],
+      [19, Emf::Emr::Binary::Records::SetPolyFillMode, :poly_fill_mode],
+      [20, Emf::Emr::Binary::Records::SetRop2, :rop2],
+      [21, Emf::Emr::Binary::Records::SetStretchBltMode, :stretch_mode]
+    ].each do |type, klass, field|
+      expect(klass).not_to receive(:read)
+      values.each do |value|
+        input = header + [type, 12, value].pack("V3") + eof
+        parsed = Emf.parse(input)
+        wire = parsed.records.first.wire
+        expect(wire).to be_a(klass)
+        expect(wire.public_send(field).to_i).to eq(value)
+        expect(parsed.errors).to be_empty
+        expect(Emf.serialize(parsed)).to eq(input)
+        edited = value ^ 0xFFFFFFFF
+        wire.public_send("#{field}=", edited)
+        expected = header + [type, 12, edited].pack("V3") + eof
+        expect(Emf.serialize(parsed)).to eq(expected)
+        expect(Emf.parse(expected).records.first.wire.public_send(field).to_i).to eq(edited)
+      end
+    end
+  end
+
   it "matches Ruby canonical models after every wire is traversed" do
     native = Emf.parse(bytes)
     ENV["EMF_BACKEND"] = "ruby"
@@ -67,6 +94,17 @@ RSpec.describe Emf::Native do
     expect(native.records).to eq(ruby.records)
     expect(native.emf_plus).to eq(ruby.emf_plus)
     expect(native.trailing).to eq(ruby.trailing)
+  end
+
+  it "matches Ruby canonical scalar state models after wire traversal" do
+    values = [0, 0x80000000, 0xFFFFFFFF]
+    input = header + (18..21).flat_map { |type| values.map { |value| [type, 12, value].pack("V3") } }.join + eof
+    native = Emf.parse(input)
+    ENV["EMF_BACKEND"] = "ruby"
+    ruby = Emf.parse(input)
+    expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
+    expect(native.records).to eq(ruby.records)
+    expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
   end
 
   it "loads and parses through the public API in a fresh native process" do
@@ -94,6 +132,22 @@ RSpec.describe Emf::Native do
     expect(parsed.errors.first.record_code).to eq(14)
   end
 
+  it "preserves malformed scalar state payloads as Raw with diagnostics and continued framing" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    (18..21).each do |type|
+      (0..3).each do |length|
+        short = [type, 8 + length].pack("V2") + ("x" * length)
+        input = header + short + map_mode + eof
+        parsed = Emf.parse(input)
+        expect(parsed.records.map { |record| record.wire.class }).to eq(
+          [Emf::Emr::Binary::Records::Raw, Emf::Emr::Binary::Records::SetMapMode, Emf::Emr::Binary::Records::Eof]
+        )
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(input)
+      end
+    end
+  end
+
   it "rejects an ABI mismatch during setup" do
     described_class.backend
     allow_any_instance_of(Emf::Native::Loader).to receive(:invoke).with(:emf_abi_version).and_return(9)
@@ -113,8 +167,11 @@ RSpec.describe Emf::Native do
     loader = backend.instance_variable_get(:@loader)
     snapshot = loader.document(header + eof) { |document| loader.snapshot(document) }
     expect { Emf::Native::Snapshot.new(snapshot.byteslice(0, 20)) }.to raise_error(Emf::FormatError)
-    snapshot[4, 4] = [9].pack("V")
-    expect { Emf::Native::Snapshot.new(snapshot) }.to raise_error(Emf::FormatError, /schema/)
+    expect(snapshot.byteslice(4, 4).unpack1("V")).to eq(2)
+    [1, 9].each do |schema|
+      snapshot[4, 4] = [schema].pack("V")
+      expect { Emf::Native::Snapshot.new(snapshot) }.to raise_error(Emf::FormatError, /schema/)
+    end
   end
 
   it "copies input spans without per-record C buffers and frees the native document before returning the model" do
@@ -156,8 +213,8 @@ RSpec.describe Emf::Native do
     allow(loader).to receive(:invoke).and_call_original
     expect(loader).to receive(:invoke).with(:emf_document_free, anything).and_call_original
     expect(Emf::Emr::Parser).not_to receive(:call)
-    expect { backend.parse(header + [18, 12, 1].pack("V3") + eof) }
-      .to raise_error(Emf::FormatError, /does not support typed EMR record 18/)
+    expect { backend.parse(header + [22, 12, 1].pack("V3") + eof) }
+      .to raise_error(Emf::FormatError, /does not support typed EMR record 22/)
   end
 
   it "preserves malformed supported records as Raw with native diagnostics and unframed bytes" do
