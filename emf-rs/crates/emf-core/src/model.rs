@@ -69,6 +69,15 @@ pub struct Point {
     pub y: i32,
 }
 
+/// COLORREF bytes as stored, including the unmodified reserved byte.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ColorRef {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub reserved: u8,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EofRecord {
     pub n_pal_entries: u32,
@@ -94,6 +103,8 @@ pub enum RecordData {
     SetPolyFillMode { poly_fill_mode: u32 },
     SetRop2 { rop2: u32 },
     SetStretchBltMode { stretch_mode: u32 },
+    SetTextColor { color: ColorRef },
+    SetBkColor { color: ColorRef },
     Polyline { bounds: Rect, points: Vec<Point> },
     Comment { data: Vec<u8> },
     Ellipse { bounds: Rect },
@@ -117,6 +128,8 @@ impl RecordData {
             Self::SetPolyFillMode { .. } => Some(19),
             Self::SetRop2 { .. } => Some(20),
             Self::SetStretchBltMode { .. } => Some(21),
+            Self::SetTextColor { .. } => Some(24),
+            Self::SetBkColor { .. } => Some(25),
             Self::Polyline { .. } => Some(4),
             Self::Comment { .. } => Some(70),
             Self::Ellipse { .. } => Some(42),
@@ -139,7 +152,9 @@ impl RecordData {
             | Self::SetBkMode { .. }
             | Self::SetPolyFillMode { .. }
             | Self::SetRop2 { .. }
-            | Self::SetStretchBltMode { .. } => Some(4),
+            | Self::SetStretchBltMode { .. }
+            | Self::SetTextColor { .. }
+            | Self::SetBkColor { .. } => Some(4),
             Self::Polyline { points, .. } => points.len().checked_mul(8)?.checked_add(20),
             Self::Comment { data } => data.len().checked_add(4),
             Self::Ellipse { .. } | Self::Rectangle { .. } => Some(16),

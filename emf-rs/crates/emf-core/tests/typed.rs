@@ -1,6 +1,6 @@
 use emf_core::{
-    parse, serialize, DiagnosticKind, EofRecord, LimitKind, ParseFailure, ParseLimits, Point,
-    RecordData,
+    parse, serialize, ColorRef, DiagnosticKind, EofRecord, LimitKind, ParseFailure, ParseLimits,
+    Point, RecordData,
 };
 
 fn record(kind: u32, payload: &[u8]) -> Vec<u8> {
@@ -410,6 +410,130 @@ fn scalar_state_wrong_family_edits_reject_atomically() {
             );
             assert_eq!(doc, before);
             assert_eq!(serialize(&doc).unwrap(), input);
+        }
+    }
+}
+
+fn color_state(kind: u32, bytes: [u8; 4]) -> RecordData {
+    let color = ColorRef {
+        red: bytes[0],
+        green: bytes[1],
+        blue: bytes[2],
+        reserved: bytes[3],
+    };
+    match kind {
+        24 => RecordData::SetTextColor { color },
+        25 => RecordData::SetBkColor { color },
+        _ => panic!("unexpected color state type {kind}"),
+    }
+}
+
+#[test]
+fn color_state_decodes_unsigned_channels_and_reserved_without_normalizing() {
+    for kind in [24, 25] {
+        for color in [[0, 128, 255, 0], [128, 255, 0, 128], [255, 0, 128, 255]] {
+            let mut input = fixture()[..112].to_vec();
+            input.extend(record(kind, &color));
+            let doc = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(doc.records()[0].data(), &color_state(kind, color));
+            assert!(!doc.is_edited());
+            assert!(doc.diagnostics().is_empty());
+            assert_eq!(serialize(&doc).unwrap(), input);
+        }
+    }
+}
+
+#[test]
+fn color_state_edits_preserve_suffix_siblings_header_and_tail() {
+    for (kind, other_kind) in [(24, 25), (25, 24)] {
+        for color in [[0, 128, 255, 0], [128, 255, 0, 128], [255, 0, 128, 255]] {
+            let mut input = fixture()[..112].to_vec();
+            input.extend(record(kind, &[7, 8, 9, 10, 0xab, 0xcd, 0xef, 0x99]));
+            input.extend(record(other_kind, &[255, 128, 0, 255]));
+            input.extend(record(17, &9u32.to_le_bytes()));
+            input.extend(record(999, b"unknown!"));
+            input.extend(record(14, &[0, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0]));
+            input.extend_from_slice(b"tail");
+            let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(serialize(&doc).unwrap(), input);
+            doc.edit_record(0, color_state(kind, color)).unwrap();
+            assert_eq!(doc.records()[0].data(), &color_state(kind, color));
+            assert!(doc.records()[0].is_edited());
+            assert_eq!(doc.record_bytes(&doc.records()[0]), Some(&input[112..128]));
+            let out = serialize(&doc).unwrap();
+            let mut expected = input.clone();
+            expected[48..52].copy_from_slice(&(input.len() as u32).to_le_bytes());
+            expected[52..56].copy_from_slice(&6u32.to_le_bytes());
+            expected[120..124].copy_from_slice(&color);
+            assert_eq!(out, expected, "type {kind}, color {color:?}");
+            assert_eq!(&out[124..128], &[0xab, 0xcd, 0xef, 0x99]);
+            assert_eq!(&out[128..], &input[128..]);
+            let reparsed = parse(&out, &ParseLimits::default()).unwrap();
+            assert_eq!(reparsed.records()[0].data(), &color_state(kind, color));
+            assert!(reparsed.diagnostics().is_empty());
+            assert_eq!(reparsed.trailing_bytes(), b"tail");
+            assert_eq!(serialize(&reparsed).unwrap(), out);
+        }
+    }
+}
+
+#[test]
+fn short_color_state_records_diagnose_and_continue_through_eof() {
+    for (kind, other_kind) in [(24, 25), (25, 24)] {
+        for len in 0..4 {
+            let mut input = fixture()[..112].to_vec();
+            input.extend(record(kind, &vec![0xaa; len]));
+            input.extend(record(other_kind, &[0, 128, 255, 128]));
+            input.extend(record(999, b"unknown!"));
+            input.extend(record(14, &[0, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0]));
+            input.extend_from_slice(b"tail");
+            let doc = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(doc.records().len(), 4);
+            assert_eq!(doc.records()[0].data(), &RecordData::Raw);
+            assert_eq!(
+                doc.records()[1].data(),
+                &color_state(other_kind, [0, 128, 255, 128])
+            );
+            assert_eq!(doc.records()[2].data(), &RecordData::Raw);
+            assert!(doc.records()[3].is_eof());
+            assert_eq!(doc.diagnostics().len(), 1, "type {kind}, length {len}");
+            assert_eq!(doc.diagnostics()[0].offset, 112);
+            assert_eq!(doc.diagnostics()[0].record_type, Some(kind));
+            assert_eq!(
+                doc.diagnostics()[0].kind,
+                DiagnosticKind::InvalidRecordPayload
+            );
+            assert_eq!(doc.trailing_bytes(), b"tail");
+            assert_eq!(serialize(&doc).unwrap(), input);
+        }
+    }
+}
+
+#[test]
+fn color_state_wrong_family_edits_reject_atomically() {
+    for (kind, other_kind) in [(24, 25), (25, 24)] {
+        let mut input = fixture()[..112].to_vec();
+        input.extend(record(kind, &[0, 128, 255, 0]));
+        let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+        for edited in [false, true] {
+            if edited {
+                doc.edit_record(0, color_state(kind, [255, 0, 128, 255]))
+                    .unwrap();
+            }
+            let before = doc.clone();
+            let wire_before = serialize(&doc).unwrap();
+            for wrong in [
+                color_state(other_kind, [0, 0, 0, 0]),
+                RecordData::SetMapMode { map_mode: 1 },
+                RecordData::Raw,
+            ] {
+                assert_eq!(
+                    doc.edit_record(0, wrong),
+                    Err(emf_core::EditFailure::RecordFamily { index: 0 })
+                );
+                assert_eq!(doc, before);
+                assert_eq!(serialize(&doc).unwrap(), wire_before);
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ use crate::detect::{detect_format, Format, EMF_MAGIC};
 use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
-    Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, PixelFormatFields, Point,
+    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, PixelFormatFields, Point,
     RecordData, RecordSpan, Rect, Size, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 use crate::reader::{u32_at, Reader};
@@ -81,7 +81,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             &mut budget,
         )?;
         if data == RecordData::Raw
-            && matches!(record_type, 4 | 9..=14 | 17..=21 | 26 | 27 | 42..=44 | 70)
+            && matches!(record_type, 4 | 9..=14 | 17..=21 | 24..=27 | 42..=44 | 70)
         {
             budget.reserve_one(&mut diagnostics)?;
             diagnostics.push(Diagnostic {
@@ -312,6 +312,20 @@ fn decode_record(
             },
             4,
         )),
+        24 | 25 if payload.len() >= 4 => {
+            let color = ColorRef {
+                red: payload[0],
+                green: payload[1],
+                blue: payload[2],
+                reserved: payload[3],
+            };
+            let data = if kind == 24 {
+                RecordData::SetTextColor { color }
+            } else {
+                RecordData::SetBkColor { color }
+            };
+            Ok((data, 4))
+        }
         4 if payload.len() >= 20 => {
             let bounds = Rect {
                 left: r.i32()?,

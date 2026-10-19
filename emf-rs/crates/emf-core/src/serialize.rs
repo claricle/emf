@@ -125,6 +125,9 @@ pub fn serialize_with_limits(
             RecordData::SetPolyFillMode { poly_fill_mode } => append(&mut out, *poly_fill_mode),
             RecordData::SetRop2 { rop2 } => append(&mut out, *rop2),
             RecordData::SetStretchBltMode { stretch_mode } => append(&mut out, *stretch_mode),
+            RecordData::SetTextColor { color } | RecordData::SetBkColor { color } => {
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+            }
             RecordData::Polyline { bounds, points } => {
                 append_rect(&mut out, *bounds);
                 append(
