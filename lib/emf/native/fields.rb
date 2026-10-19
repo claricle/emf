@@ -153,6 +153,100 @@ module Emf
         [OPAQUE.fetch(family), { body: payload.byteslice(8..) }]
       end
 
+      def self.ext_text(payload, family, raw)
+        raise FormatError, "invalid native text payload length" if payload.bytesize < 104
+
+        count, dx_present, dx_count, dx_first, string_present, string_length, dx_length = payload.byteslice(60, 44).unpack("Q<VQ<V2Q<2")
+        width = family == 74 ? 1 : 2
+        expected = 104 + (count * width) + (dx_count * 4) + string_length + dx_length
+        raise FormatError, "invalid native text payload length" unless payload.bytesize == expected
+
+        options, rectangle_present = payload.byteslice(36, 8).unpack("V2")
+        text_layout!(options, rectangle_present, count, dx_present, dx_count, dx_first, string_present, string_length, dx_length)
+
+        buffers = text_parts(payload, count, width, dx_count, string_length, dx_length, string_present, dx_present)
+        buffers.reverse! if dx_first == 1
+        offsets, trailing = text_buffers(buffers, rectangle_present == 1 ? 76 : 60, raw)
+        fields = text_scalars(payload)
+        fields.merge!(n_chars: count, off_string: offsets.fetch(false, 0), f_options: options,
+                      off_dx: offsets.fetch(true, 0), trailing: trailing)
+        fields[:rcl] = %i[left top right bottom].zip(payload.byteslice(44, 16).unpack("l<4")).to_h if rectangle_present == 1
+        klass = family == 74 ? Emr::Binary::Records::ExtTextOutA : Emr::Binary::Records::ExtTextOutW
+        [klass, fields]
+      end
+
+      def self.text_scalars(payload)
+        {
+          rcl_bounds: %i[left top right bottom].zip(payload.unpack("l<4")).to_h,
+          i_graphics_mode: payload.byteslice(16, 4).unpack1("V"),
+          ex_scale: payload.byteslice(20, 4).unpack1("e"), ey_scale: payload.byteslice(24, 4).unpack1("e"),
+          ptl_reference: %i[x y].zip(payload.byteslice(28, 8).unpack("l<2")).to_h
+        }
+      end
+
+      def self.text_layout!(options, rectangle, count, dx_present, dx_count, dx_first, string_present, string_length, dx_length)
+        flags = [rectangle, dx_present, dx_first, string_present]
+        valid = flags.all? { |flag| (0..1).cover?(flag) } && rectangle == (options.nobits?(0x100) ? 1 : 0)
+        expected_dx = count * (options.nobits?(0x2000) ? 1 : 2)
+        valid &&= text_dx_valid?(dx_present, dx_count, expected_dx, dx_length, dx_first)
+        valid &&= string_present == 1 || (count.zero? && string_length.zero?)
+        raise FormatError, "invalid native text layout" unless valid
+      end
+
+      def self.text_dx_valid?(present, count, expected, padding, first)
+        present == 1 ? count == expected : [count, padding, first].all?(&:zero?)
+      end
+
+      def self.text_parts(payload, count, width, dx_count, string_length, dx_length, string_present, dx_present)
+        text_end = 104 + (count * width)
+        dx_end = text_end + (dx_count * 4)
+        [[false, string_present, payload.byteslice(104...text_end), payload.byteslice(dx_end, string_length), width],
+         [true, dx_present, payload.byteslice(text_end...dx_end), payload.byteslice(dx_end + string_length, dx_length), 4]]
+      end
+
+      # Ruby canonicalizes NaN payloads when converting to Float. Keep the transport
+      # bytes until the caller assigns a new value to that existing BinData field.
+      module TextScaleBits
+        attr_writer :native_bits
+
+        def assign(value)
+          @native_bits = nil
+          super
+        end
+
+        private
+
+        def value_to_binary_string(value)
+          @native_bits || super
+        end
+      end
+
+      def self.preserve_text_scales(wire, payload)
+        [wire.ex_scale, wire.ey_scale].each_with_index do |scale, index|
+          scale.extend(TextScaleBits)
+          scale.native_bits = payload.byteslice(20 + (index * 4), 4)
+        end
+      end
+
+      def self.text_buffers(buffers, fixed, raw)
+        offsets = {}
+        trailing = "".b
+        buffers.each do |is_dx, present, bytes, padding, alignment|
+          next if present.zero?
+
+          trailing << padding
+          offset = fixed + trailing.bytesize
+          raise FormatError, "invalid native text buffer alignment" unless (offset % alignment).zero?
+
+          offsets[is_dx] = offset
+          trailing << bytes
+        end
+        consumed = fixed + trailing.bytesize
+        raise FormatError, "invalid native text record span" if consumed > raw.bytesize
+
+        [offsets, trailing + raw.byteslice(consumed..)]
+      end
+
       def self.call(payload, family)
         return opaque(payload, family) if OPAQUE.key?(family)
 

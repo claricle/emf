@@ -17,7 +17,7 @@ module Emf
           uint32 :n_chars
           uint32 :off_string
           uint32 :f_options
-          rectl :rcl
+          rectl :rcl, onlyif: -> { f_options.nobits?(0x100) }
           uint32 :off_dx
           rest :trailing
         end

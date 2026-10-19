@@ -38,6 +38,142 @@ RSpec.describe Emf::Native do
     skip "build emf-ffi or set EMF_TEST_NATIVE_LIBRARY" unless File.file?(library)
   end
 
+  let(:extended_text_records) do
+    bounds = [-0x80000000, 2, 40, 60].pack("l<4")
+    scales = [2, 0x7FC01234, 0x80000000].pack("V3")
+    reference = [-19, 0x7FFFFFFF].pack("l<2")
+    rectangle = [-5, 6, 7, -8].pack("l<4")
+    zero = [0].pack("V")
+    ansi = [0x80, 0xFF].pack("C*")
+    wide = [0xD800, 0xFFFF].pack("v*")
+    advances = [0xFFFFFFFF, 0x80000000, 17, 29]
+    [83, 84].product([false, true], [false, true], [false, true], [false, true]).map do |type, no_rect, pdy, dx_first, with_dx|
+      fixed = no_rect ? 60 : 76
+      record = [type, 0].pack("V2") + bounds + scales + reference +
+               [2, 0, (no_rect ? 0x100 : 0) | (pdy ? 0x2000 : 0) | 0x10].pack("V3")
+      record << rectangle unless no_rect
+      record << zero
+      text = type == 83 ? ansi : wide
+      dx = advances.first(pdy ? 4 : 2).pack("V*")
+      record << "GAP!"
+      if dx_first && with_dx
+        record[fixed - 4, 4] = [record.bytesize].pack("V")
+        record << dx << "gap!"
+      end
+      record[48, 4] = [record.bytesize].pack("V")
+      record << text
+      if !dx_first && with_dx
+        record << "\xA5".b until (record.bytesize % 4).zero?
+        record << "gap!"
+        record[fixed - 4, 4] = [record.bytesize].pack("V")
+        record << dx
+      end
+      record << "SUFFIX!!"
+      record << "Z" until (record.bytesize % 4).zero?
+      record[4, 4] = [record.bytesize].pack("V")
+      [type, no_rect, record]
+    end
+  end
+
+  it "hydrates extended text directly with raw code units, optional rectangles and buffer gaps" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    [Emf::Emr::Binary::Records::ExtTextOutA, Emf::Emr::Binary::Records::ExtTextOutW].each do |klass|
+      expect(klass).not_to receive(:read)
+    end
+    edited_reference = [-123].pack("l<")
+    edited_scales = [2.5, 3.5].pack("e2")
+    extended_text_records.each do |type, no_rect, record|
+      input = "#{header}#{record}#{unknown}#{eof}tail"
+      parsed = Emf.parse(input)
+      wire = parsed.records.first.wire
+      klass = type == 83 ? Emf::Emr::Binary::Records::ExtTextOutA : Emf::Emr::Binary::Records::ExtTextOutW
+      expect(wire).to be_a(klass)
+      expect(wire.rcl_bounds.left.to_i).to eq(-0x80000000)
+      expect(wire.ptl_reference.snapshot).to eq(x: -19, y: 0x7FFFFFFF)
+      expect(wire.n_chars.to_i).to eq(2)
+      expect(wire.f_options.to_i & 0x100).to eq(no_rect ? 0x100 : 0)
+      expect(wire.to_binary_s.byteslice(28, 8).unpack("V2")).to eq([0x7FC01234, 0x80000000])
+      expect(wire.to_binary_s).to eq(record)
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(input)
+      wire.ptl_reference.x = -123
+      expected_record = record.dup
+      expected_record[36, 4] = edited_reference
+      expected = "#{header}#{expected_record}#{unknown}#{eof}tail"
+      expect(Emf.serialize(parsed)).to eq(expected)
+      expect(Emf.parse(expected).records.first.wire.ptl_reference.x.to_i).to eq(-123)
+      wire.ex_scale = 2.5
+      wire.ey_scale = 3.5
+      expected_record[28, 8] = edited_scales
+      expect(wire.to_binary_s).to eq(expected_record)
+    end
+  end
+
+  it "matches Ruby extended text wire models and retains malformed text as Raw" do
+    finite_scales = [1.5, -0.0].pack("e2")
+    invalid_offset = [0xFFFFFFFF].pack("V")
+    extended_text_records.each do |_type, _no_rect, record|
+      record = record.dup
+      record[28, 8] = finite_scales
+      input = header + record + unknown + eof
+      ENV["EMF_BACKEND"] = "native"
+      native = Emf.parse(input)
+      ENV["EMF_BACKEND"] = "ruby"
+      ruby = Emf.parse(input)
+      expect(native.records).to eq(ruby.records)
+      expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+      ENV["EMF_BACKEND"] = "native"
+      malformed = record.dup
+      malformed[48, 4] = invalid_offset
+      parsed = Emf.parse(header + malformed + map_mode + eof)
+      expect(parsed.records.map { |entry| entry.wire.class }).to eq(
+        [Emf::Emr::Binary::Records::Raw, Emf::Emr::Binary::Records::SetMapMode, Emf::Emr::Binary::Records::Eof]
+      )
+      expect(parsed.errors.map(&:record_code)).to eq([record.unpack1("V")])
+      expect(Emf.serialize(parsed)).to eq(header + malformed + map_mode + eof)
+    end
+  end
+
+  it "hydrates empty extended text buffers with absent and explicit offsets" do
+    prefix = [-5, 2, 40, 60, 2].pack("l<5") + [1.0, -0.0].pack("e2") + [-1, 4, 0].pack("l<3")
+    rectangle = [-5, 2, 40, 60].pack("l<4")
+    [83, 84].product([false, true], [false, true]).each do |type, no_rect, present|
+      fixed = no_rect ? 60 : 76
+      record = [type, fixed].pack("V2") + prefix + [present ? fixed : 0, no_rect ? 0x100 : 0].pack("V2")
+      record << rectangle unless no_rect
+      record << [present ? fixed : 0].pack("V")
+      parsed = Emf.parse(header + record + eof)
+      expect(parsed.errors).to be_empty
+      expect(parsed.records.first.wire.n_chars.to_i).to eq(0)
+      expect(parsed.records.first.wire.to_binary_s).to eq(record)
+      expect(Emf.serialize(parsed)).to eq(header + record + eof)
+    end
+  end
+
+  it "rejects truncated extended text snapshot fields" do
+    require "emf/native/fields"
+    [74, 75].each do |family|
+      ["".b, "x" * 103, "\0" * 105].each do |payload|
+        expect { Emf::Native::Fields.ext_text(payload, family, "".b) }.to raise_error(Emf::FormatError)
+      end
+    end
+  end
+
+  it "rejects inconsistent extended text snapshot flags and counts" do
+    require "emf/native/fields"
+    payload = "\0".b * 104
+    payload[36, 4] = [0x100].pack("V")
+    bad_flag = [2].pack("V")
+    huge_count = [0xFFFFFFFFFFFFFFFF].pack("Q<")
+    [40, 68, 80, 84].each do |position|
+      malformed = payload.dup
+      malformed[position, 4] = bad_flag
+      expect { Emf::Native::Fields.ext_text(malformed, 74, "\0".b * 60) }.to raise_error(Emf::FormatError)
+    end
+    payload[60, 8] = huge_count
+    expect { Emf::Native::Fields.ext_text(payload, 75, "\0".b * 60) }.to raise_error(Emf::FormatError)
+  end
+
   it "hydrates native fields without invoking Ruby wire readers and preserves editable models" do
     expect(Emf::Emr::Parser).not_to receive(:call)
     [Emf::Emr::Binary::Header, Emf::Emr::Binary::Records::SetMapMode,

@@ -1,6 +1,8 @@
 //! Version 2 owned snapshot encoding. All fields are explicitly little-endian.
 
-use emf_core::{DiagnosticKind, Document, EmfHeader, Point, RecordData, Rect, Size, XForm};
+use emf_core::{
+    DiagnosticKind, Document, EmfHeader, ExtTextOut, Point, RecordData, Rect, Size, XForm,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Error {
@@ -10,6 +12,8 @@ pub(crate) enum Error {
 
 pub(crate) fn family(data: &RecordData) -> u32 {
     match data {
+        RecordData::ExtTextOutA(_) => 74,
+        RecordData::ExtTextOutW(_) => 75,
         RecordData::SetMapperFlags { .. } => 66,
         RecordData::SetMetaRgn => 67,
         RecordData::ExtFloodFill { .. } => 68,
@@ -18,7 +22,12 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::SetIcmMode { .. } => 71,
         RecordData::SetLayout { .. } => 72,
         RecordData::SetTextJustification { .. } => 73,
-        RecordData::Raw => 0,
+        RecordData::Raw
+        | RecordData::FillRgn { .. }
+        | RecordData::FrameRgn { .. }
+        | RecordData::InvertRgn { .. }
+        | RecordData::PaintRgn { .. }
+        | RecordData::ExtSelectClipRgn { .. } => 0,
         RecordData::Eof(_) => 1,
         RecordData::SetMapMode { .. } => 2,
         RecordData::Polyline { .. } => 3,
@@ -108,8 +117,73 @@ fn multi_array_len(poly_count: usize, point_count: usize, width: usize) -> Resul
         .ok_or(Error::SizeOverflow)
 }
 
+fn text_len<T>(text: &ExtTextOut<T>) -> Result<usize, Error> {
+    let mut len = 104;
+    add_len(
+        &mut len,
+        text.text
+            .len()
+            .checked_mul(std::mem::size_of::<T>())
+            .ok_or(Error::SizeOverflow)?,
+    )?;
+    add_len(
+        &mut len,
+        text.dx
+            .as_ref()
+            .map_or(0, Vec::len)
+            .checked_mul(4)
+            .ok_or(Error::SizeOverflow)?,
+    )?;
+    add_len(&mut len, text.string_padding.len())?;
+    add_len(&mut len, text.dx_padding.len())?;
+    Ok(len)
+}
+
+fn text_payload<T>(
+    out: &mut Vec<u8>,
+    text: &ExtTextOut<T>,
+    write: fn(&mut Vec<u8>, &T),
+) -> Result<(), Error> {
+    rect(out, text.bounds);
+    u32_field(out, text.graphics_mode);
+    u32_field(out, text.ex_scale.to_bits());
+    u32_field(out, text.ey_scale.to_bits());
+    point(out, text.reference);
+    u32_field(out, text.options);
+    u32_field(out, u32::from(text.rectangle.is_some()));
+    rect(
+        out,
+        text.rectangle.unwrap_or(Rect {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        }),
+    );
+    u64_field(out, wire_len(text.text.len())?);
+    u32_field(out, u32::from(text.dx.is_some()));
+    u64_field(out, wire_len(text.dx.as_ref().map_or(0, Vec::len))?);
+    u32_field(out, u32::from(text.dx_first));
+    u32_field(out, u32::from(text.string_present));
+    u64_field(out, wire_len(text.string_padding.len())?);
+    u64_field(out, wire_len(text.dx_padding.len())?);
+    for value in &text.text {
+        write(out, value);
+    }
+    if let Some(dx) = &text.dx {
+        for value in dx {
+            u32_field(out, *value);
+        }
+    }
+    out.extend_from_slice(&text.string_padding);
+    out.extend_from_slice(&text.dx_padding);
+    Ok(())
+}
+
 fn payload_len(data: &RecordData) -> Result<usize, Error> {
     match data {
+        RecordData::ExtTextOutA(text) => text_len(text),
+        RecordData::ExtTextOutW(text) => text_len(text),
         RecordData::SetMapperFlags { .. }
         | RecordData::SetIcmMode { .. }
         | RecordData::SetLayout { .. } => Ok(4),
@@ -117,7 +191,12 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
             body.len().checked_add(8).ok_or(Error::SizeOverflow)
         }
-        RecordData::Raw => Ok(0),
+        RecordData::Raw
+        | RecordData::FillRgn { .. }
+        | RecordData::FrameRgn { .. }
+        | RecordData::InvertRgn { .. }
+        | RecordData::PaintRgn { .. }
+        | RecordData::ExtSelectClipRgn { .. } => Ok(0),
         RecordData::ScaleViewportExtEx { .. } | RecordData::ScaleWindowExtEx { .. } => Ok(16),
         RecordData::SetWorldTransform { .. } => Ok(24),
         RecordData::ModifyWorldTransform { .. } => Ok(28),
@@ -263,6 +342,12 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
         u32_field(&mut out, family(record.data()));
         u64_field(&mut out, wire_len(payload_len(record.data())?)?);
         match record.data() {
+            RecordData::ExtTextOutA(text) => {
+                text_payload(&mut out, text, |out, value| out.push(*value))?
+            }
+            RecordData::ExtTextOutW(text) => text_payload(&mut out, text, |out, value| {
+                out.extend_from_slice(&value.to_le_bytes())
+            })?,
             RecordData::SetMapperFlags { flags } => u32_field(&mut out, *flags),
             RecordData::SetIcmMode { mode } | RecordData::SetLayout { mode } => {
                 u32_field(&mut out, *mode)
@@ -272,7 +357,12 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                 u64_field(&mut out, wire_len(body.len())?);
                 out.extend_from_slice(body);
             }
-            RecordData::Raw => {}
+            RecordData::Raw
+            | RecordData::FillRgn { .. }
+            | RecordData::FrameRgn { .. }
+            | RecordData::InvertRgn { .. }
+            | RecordData::PaintRgn { .. }
+            | RecordData::ExtSelectClipRgn { .. } => {}
             RecordData::ScaleViewportExtEx { scale } | RecordData::ScaleWindowExtEx { scale } => {
                 for value in [scale.x_num, scale.x_denom, scale.y_num, scale.y_denom] {
                     i32_field(&mut out, value);
