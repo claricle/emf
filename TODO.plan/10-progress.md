@@ -87,11 +87,13 @@ the issue performance target.
 
 ### Fixture inventory
 
-`bundle exec ruby script/fixture_manifest` captures every `.emf` fixture in
+`bundle exec ruby script/fixture_manifest` captures every EMF/WMF fixture in
 `spec/fixtures/manifest.json`, including source fingerprints, input hashes,
-detected format and Ruby parse outcome. Each parse runs in a child with a
-five-second deadline and a 16 KiB output limit. Timeout, process failure and
-unexpected backend exceptions are recorded separately from format rejection.
+detected format and forced Ruby parse outcome. Each parse runs in a child with a
+15-second observation deadline and a 16 KiB output limit. These are capture
+limits for recording a baseline, not performance or resource-budget acceptance.
+Timeout, process failure and unexpected backend exceptions remain distinct from
+format rejection and make the capture unsafe.
 
 The initial capture contains 229 fixtures: 220 parsed without diagnostics, seven
 recovered with diagnostics and two rejected with `Emf::FormatError`. No child
@@ -101,10 +103,11 @@ describe Ruby outcomes, not a classification of valid versus corrupt input.
 `bundle exec ruby script/fixture_manifest --check` validates fixture metadata and
 the parser source fingerprint against the saved capture without parsing again.
 Regenerate and review the capture after intentional fixture or parser changes.
-After Ruby backend dispatch was added, a fresh capture preserved all 229 outcomes.
-One fixture exceeded the same five-second limit during the full run and parsed
-successfully on a bounded retry; the refreshed manifest passed its metadata and
-source-fingerprint check. The reported performance workload remains unidentified.
+The capture forces the Ruby backend regardless of the ambient `EMF_BACKEND`
+setting and records its observation limits in schema metadata. Prior five-second
+captures recorded timeouts; those remain evidence about that capture bound and
+are not converted into successful outcomes. The reported performance workload
+remains unidentified.
 
 ### Canonical observations and timing drivers
 

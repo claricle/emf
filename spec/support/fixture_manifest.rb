@@ -7,7 +7,11 @@ require "io/wait"
 require "rbconfig"
 
 module FixtureManifest
-  SCHEMA_VERSION = 1
+  SCHEMA_VERSION = 2
+  CAPTURE_METADATA = {
+    "backend" => "ruby",
+    "limits" => { "timeout_seconds" => 15, "output_limit_bytes" => 16_384 }
+  }.freeze
   EXPECTED_COUNTS = { "emf" => 186, "emf-ea" => 21, "simple" => 1, "emf-corrupted" => 21, "wmf" => 2 }.freeze
 
   module_function
@@ -37,7 +41,9 @@ module FixtureManifest
   end
 
   def observe(path)
+    previous_backend = ENV.fetch("EMF_BACKEND", nil)
     require "emf"
+    ENV["EMF_BACKEND"] = "ruby"
     bytes = File.binread(path)
     detected = Emf.detect_format(bytes).to_s
     metafile = Emf.parse(bytes)
@@ -46,6 +52,10 @@ module FixtureManifest
     { "detected_format" => detected, "outcome" => "format_error", "format_error" => exception(e) }
   rescue StandardError => e
     { "detected_format" => detected, "outcome" => nil, "backend_exception" => exception(e) }
+  ensure
+    if defined?(previous_backend)
+      previous_backend.nil? ? ENV.delete("EMF_BACKEND") : ENV["EMF_BACKEND"] = previous_backend
+    end
   end
 
   def exception(error)
@@ -128,9 +138,10 @@ module FixtureManifest
     def generate
       entries = FixtureManifest.fixtures(@root)
       verify_counts(entries)
-      runner = Runner.new
+      runner = Runner.new(timeout: 15, output_limit: 16_384)
       {
         "schema_version" => SCHEMA_VERSION,
+        "capture" => CAPTURE_METADATA,
         "backend" => { "name" => "ruby", "ruby_version" => RUBY_VERSION,
                        "bindata_version" => Gem.loaded_specs.fetch("bindata").version.to_s,
                        "parser_source_sha256" => FixtureManifest.source_sha256(@root) },
@@ -141,6 +152,7 @@ module FixtureManifest
 
     def check(manifest)
       return false unless valid_structure?(manifest)
+      return false unless manifest["capture"] == CAPTURE_METADATA
 
       entries = FixtureManifest.fixtures(@root)
       verify_counts(entries)
@@ -156,7 +168,7 @@ module FixtureManifest
 
     def valid_structure?(manifest)
       manifest.is_a?(Hash) && manifest["backend"].is_a?(Hash) &&
-        manifest["fixtures"].is_a?(Array) && manifest["fixtures"].all?(Hash)
+        manifest["capture"].is_a?(Hash) && manifest["fixtures"].is_a?(Array) && manifest["fixtures"].all?(Hash)
     end
 
     def current_backend?(manifest)

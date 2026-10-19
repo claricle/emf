@@ -40,6 +40,8 @@ RSpec.describe FixtureManifest do
       ->(data) { data["fixtures"].first["sha256"] = "changed" },
       ->(data) { data["backend"]["parser_source_sha256"] = "changed" },
       ->(data) { data["schema_version"] = 99 },
+      ->(data) { data["capture"]["limits"]["timeout_seconds"] = 5 },
+      ->(data) { data["capture"].delete("limits") },
       ->(data) { data["fixtures"].first["outcome"] = "unknown" },
       ->(data) { data["fixtures"].first["safety_failure"] = { "kind" => "timeout" } },
       ->(data) { data["fixtures"].pop },
@@ -51,9 +53,22 @@ RSpec.describe FixtureManifest do
     ]
     mutations.each do |mutate|
       altered = Marshal.load(Marshal.dump(manifest))
+      altered["schema_version"] = 2
+      altered["capture"] = Marshal.load(Marshal.dump(described_class::CAPTURE_METADATA))
       mutate.call(altered)
       expect(inventory.check(altered)).to be(false)
     end
+  end
+
+  it "checks capture limits exactly" do
+    saved = manifest.merge("schema_version" => 2, "capture" => described_class::CAPTURE_METADATA)
+    allow(inventory).to receive(:current_backend?).and_return(true)
+    allow(inventory).to receive(:valid_observation?).and_return(true)
+    expect(inventory.check(saved)).to be(true)
+
+    altered = Marshal.load(Marshal.dump(saved))
+    altered.fetch("capture").fetch("limits")["timeout_seconds"] = 5
+    expect(inventory.check(altered)).to be(false)
   end
 
   it "observes successful parsing, recovery and format rejection through the public parser" do
@@ -70,6 +85,28 @@ RSpec.describe FixtureManifest do
       expect(rejected).to include("detected_format" => nil, "outcome" => "format_error")
       expect(rejected.fetch("format_error")).to include("class" => "Emf::FormatError", "message" => "input too short (3 bytes)")
     end
+  end
+
+  it "forces Ruby observation regardless of the ambient backend setting" do
+    previous_backend = ENV.fetch("EMF_BACKEND", nil)
+    ENV["EMF_BACKEND"] = "invalid-backend"
+    result = described_class.observe(File.join(root, "spec/fixtures/simple/image1.emf"))
+    expect(result).to eq("detected_format" => "emf", "outcome" => "parsed")
+    expect(ENV.fetch("EMF_BACKEND")).to eq("invalid-backend")
+  ensure
+    previous_backend.nil? ? ENV.delete("EMF_BACKEND") : ENV["EMF_BACKEND"] = previous_backend
+  end
+
+  it "generates schema metadata with the explicit baseline observation limits" do
+    observation = { "detected_format" => "emf", "outcome" => "parsed" }
+    runner = instance_double(described_class::Runner, call: observation)
+    expect(described_class::Runner).to receive(:new).with(timeout: 15, output_limit: 16_384).and_return(runner)
+
+    generated = inventory.generate
+    expect(generated.fetch("schema_version")).to eq(2)
+    expect(generated.fetch("capture")).to eq(
+      "backend" => "ruby", "limits" => { "timeout_seconds" => 15, "output_limit_bytes" => 16_384 }
+    )
   end
 
   it "records incidental backend exceptions separately from format errors" do

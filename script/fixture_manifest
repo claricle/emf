@@ -7,7 +7,8 @@ require_relative "../spec/support/fixture_manifest"
 options = {}
 parser = OptionParser.new do |opts|
   opts.banner = "Usage: ruby script/fixture_manifest [--check]"
-  opts.separator "Generate spec/fixtures/manifest.json with isolated Ruby observations (5s/16KiB per fixture)."
+  opts.separator "Generate baseline Ruby observations (15s/16KiB per fixture; not performance/resource-budget acceptance)."
+  opts.separator "Observations force the Ruby backend, regardless of EMF_BACKEND."
   opts.separator "--check verifies fixture bytes, counts, schema and parser-source fingerprint without parsing."
   opts.separator "Regenerate after intentional fixture or parser changes; review exceptions and safety failures."
   opts.on("--check", "Check the saved inventory; fail on stale data or safety failures") { options[:check] = true }
