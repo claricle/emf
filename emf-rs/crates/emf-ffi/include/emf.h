@@ -80,6 +80,12 @@ extern "C" {
 #define EMF_FAMILY_POLYPOLYGON16 57u
 #define EMF_FAMILY_POLYDRAW 58u
 #define EMF_FAMILY_POLYDRAW16 59u
+#define EMF_FAMILY_SCALEVIEWPORTEXTEX 60u
+#define EMF_FAMILY_SCALEWINDOWEXTEX 61u
+#define EMF_FAMILY_SETWORLDTRANSFORM 62u
+#define EMF_FAMILY_MODIFYWORLDTRANSFORM 63u
+#define EMF_FAMILY_ANGLEARC 64u
+#define EMF_FAMILY_SETMITERLIMIT 65u
 
 typedef struct emf_document emf_document;
 typedef struct emf_buffer emf_buffer;

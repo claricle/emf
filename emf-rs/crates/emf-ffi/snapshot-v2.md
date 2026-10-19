@@ -111,6 +111,12 @@ length u64, type ID u32, family u32, typed payload length u64. Payloads:
 | POLYPOLYGON16 | 57 | bounds: 4 i32; polygon-array count u64; point count u64; polygon counts: count u32 values; points: count pairs of i16 x/y |
 | POLYDRAW | 58 | bounds left/top/right/bottom: 4 i32; shared count u64; count pairs of i32 x/y; then count opaque u8 type bytes |
 | POLYDRAW16 | 59 | bounds left/top/right/bottom: 4 i32; shared count u64; count pairs of i16 x/y; then count opaque u8 type bytes |
+| SCALEVIEWPORTEXTEX | 60 | x_num/x_denom/y_num/y_denom: 4 i32 |
+| SCALEWINDOWEXTEX | 61 | x_num/x_denom/y_num/y_denom: 4 i32 |
+| SETWORLDTRANSFORM | 62 | m11/m12/m21/m22/dx/dy: 6 float32 bit patterns |
+| MODIFYWORLDTRANSFORM | 63 | 6 float32 transform bit patterns; opaque modify_mode u32 |
+| ANGLEARC | 64 | center x/y: 2 i32; radius u32; start/sweep angle: 2 float32 bit patterns |
+| SETMITERLIMIT | 65 | miter_limit: float32 bit pattern |
 
 Multi-array bounds are left/top/right/bottom. Polygon counts and points have
 independent lengths: the sum of polygon-count values need not equal the point
@@ -151,3 +157,5 @@ the addressable range returns `EMF_LIMIT_EXCEEDED`; reservation failure returns
 bytes and decoded snapshot values describe the same parse result.
 
 SELECTCLIPPATH snapshots contain only region_mode; adapters retain its optional opaque suffix from the checked original record span. Unit record payloads are empty. Other fixed-record suffixes remain outside typed snapshots.
+
+Float32 fields encode their IEEE 754 bits as little-endian u32 without conversion, preserving NaN payloads, signed zero, infinities and subnormals. Transform order is m11, m12, m21, m22, dx, dy. ABI version remains 1; snapshot schema remains 2.

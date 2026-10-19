@@ -1,6 +1,6 @@
 //! Version 2 owned snapshot encoding. All fields are explicitly little-endian.
 
-use emf_core::{DiagnosticKind, Document, EmfHeader, Point, RecordData, Rect, Size};
+use emf_core::{DiagnosticKind, Document, EmfHeader, Point, RecordData, Rect, Size, XForm};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Error {
@@ -70,6 +70,12 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::PolyPolygon16 { .. } => 57,
         RecordData::PolyDraw { .. } => 58,
         RecordData::PolyDraw16 { .. } => 59,
+        RecordData::ScaleViewportExtEx { .. } => 60,
+        RecordData::ScaleWindowExtEx { .. } => 61,
+        RecordData::SetWorldTransform { .. } => 62,
+        RecordData::ModifyWorldTransform { .. } => 63,
+        RecordData::AngleArc { .. } => 64,
+        RecordData::SetMiterLimit { .. } => 65,
     }
 }
 
@@ -97,6 +103,11 @@ fn multi_array_len(poly_count: usize, point_count: usize, width: usize) -> Resul
 fn payload_len(data: &RecordData) -> Result<usize, Error> {
     match data {
         RecordData::Raw => Ok(0),
+        RecordData::ScaleViewportExtEx { .. } | RecordData::ScaleWindowExtEx { .. } => Ok(16),
+        RecordData::SetWorldTransform { .. } => Ok(24),
+        RecordData::ModifyWorldTransform { .. } => Ok(28),
+        RecordData::AngleArc { .. } => Ok(20),
+        RecordData::SetMiterLimit { .. } => Ok(4),
         RecordData::Eof(_) => Ok(12),
         RecordData::SetMapMode { .. }
         | RecordData::SetBkMode { .. }
@@ -238,6 +249,31 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
         u64_field(&mut out, wire_len(payload_len(record.data())?)?);
         match record.data() {
             RecordData::Raw => {}
+            RecordData::ScaleViewportExtEx { scale } | RecordData::ScaleWindowExtEx { scale } => {
+                for value in [scale.x_num, scale.x_denom, scale.y_num, scale.y_denom] {
+                    i32_field(&mut out, value);
+                }
+            }
+            RecordData::SetWorldTransform { xform: value } => xform(&mut out, *value),
+            RecordData::ModifyWorldTransform {
+                xform: value,
+                modify_mode,
+            } => {
+                xform(&mut out, *value);
+                u32_field(&mut out, *modify_mode);
+            }
+            RecordData::AngleArc {
+                center,
+                radius,
+                start_angle,
+                sweep_angle,
+            } => {
+                point(&mut out, *center);
+                u32_field(&mut out, *radius);
+                u32_field(&mut out, start_angle.to_bits());
+                u32_field(&mut out, sweep_angle.to_bits());
+            }
+            RecordData::SetMiterLimit { miter_limit } => u32_field(&mut out, miter_limit.to_bits()),
             RecordData::Eof(eof) => {
                 u32_field(&mut out, eof.n_pal_entries);
                 u32_field(&mut out, eof.off_pal_entries);
@@ -454,6 +490,14 @@ fn rect(out: &mut Vec<u8>, value: Rect) {
         i32_field(out, coordinate);
     }
 }
+fn xform(out: &mut Vec<u8>, value: XForm) {
+    for field in [
+        value.m11, value.m12, value.m21, value.m22, value.dx, value.dy,
+    ] {
+        u32_field(out, field.to_bits());
+    }
+}
+
 fn point(out: &mut Vec<u8>, value: Point) {
     i32_field(out, value.x);
     i32_field(out, value.y);
@@ -835,6 +879,44 @@ mod tests {
                 assert_eq!(cursor.take(points.len()), points);
                 assert_eq!(cursor.position, encoded.len());
             }
+        }
+    }
+
+    #[test]
+    fn transform_snapshots_preserve_float_bits_and_signed_fields_without_suffixes() {
+        for (index, (kind, count)) in [(31, 4), (32, 4), (35, 6), (36, 7), (41, 5), (58, 1)]
+            .into_iter()
+            .enumerate()
+        {
+            let words = &[
+                0x80000000u32,
+                0x7f812345,
+                0x7fc12345,
+                0,
+                0x7f800000,
+                1,
+                2,
+                3,
+            ][..count];
+            let mut payload = words
+                .iter()
+                .flat_map(|value| value.to_le_bytes())
+                .collect::<Vec<_>>();
+            payload.extend_from_slice(b"opaque");
+            let mut input = fixture_header(88);
+            record(&mut input, kind, &payload);
+            let document = parse(&input, &ParseLimits::default()).unwrap();
+            let encoded = encode(&document).unwrap();
+            let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+            cursor.take(112 + 88);
+            assert_eq!(cursor.u64(), 0);
+            assert_eq!(cursor.u64(), 88);
+            assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
+            assert_eq!(cursor.u32(), kind);
+            assert_eq!(cursor.u32(), 60 + index as u32);
+            assert_eq!(cursor.u64(), (count * 4) as u64);
+            cursor.words(words);
+            assert_eq!(cursor.position, encoded.len());
         }
     }
 

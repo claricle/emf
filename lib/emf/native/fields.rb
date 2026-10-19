@@ -50,7 +50,16 @@ module Emf
                [:ptl_start, %i[x y], "l<2", 8], [:ptl_end, %i[x y], "l<2", 8]],
         43 => [Emr::Binary::Records::LineTo, [:origin, %i[x y], "l<2", 8]],
         44 => [Emr::Binary::Records::ArcTo, [:rcl_box, %i[left top right bottom], "l<4", 16],
-               [:ptl_start, %i[x y], "l<2", 8], [:ptl_end, %i[x y], "l<2", 8]]
+               [:ptl_start, %i[x y], "l<2", 8], [:ptl_end, %i[x y], "l<2", 8]],
+        60 => [Emr::Binary::Records::ScaleViewportExtEx, [:x_num, nil, "l<", 4], [:x_denom, nil, "l<", 4],
+               [:y_num, nil, "l<", 4], [:y_denom, nil, "l<", 4]],
+        61 => [Emr::Binary::Records::ScaleWindowExtEx, [:x_num, nil, "l<", 4], [:x_denom, nil, "l<", 4],
+               [:y_num, nil, "l<", 4], [:y_denom, nil, "l<", 4]],
+        62 => [Emr::Binary::Records::SetWorldTransform, [:xform, %i[m11 m12 m21 m22 dx dy], "e6", 24]],
+        63 => [Emr::Binary::Records::ModifyWorldTransform, [:xform, %i[m11 m12 m21 m22 dx dy], "e6", 24], [:modify_mode, nil, "V", 4]],
+        64 => [Emr::Binary::Records::AngleArc, [:ptl_center, %i[x y], "l<2", 8], [:n_radius, nil, "V", 4],
+               [:start_angle, nil, "e", 4], [:sweep_angle, nil, "e", 4]],
+        65 => [Emr::Binary::Records::SetMiterLimit, [:miter_limit, nil, "e", 4]]
       }.freeze
 
       POINT_ARRAYS = {

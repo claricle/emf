@@ -603,6 +603,96 @@ RSpec.describe Emf::Native do
     end
   end
 
+  let(:transform_lengths) { [16, 16, 24, 28, 20, 4] }
+
+  let(:transform_records) do
+    xform = { m11: 1.5, m12: -2.0, m21: 0.0, m22: -0.0, dx: 123.25, dy: -4.5 }
+    scale = { x_num: -0x80000000, x_denom: 0x7FFFFFFF, y_num: -1, y_denom: 0 }
+    [
+      [31, Emf::Emr::Binary::Records::ScaleViewportExtEx, scale],
+      [32, Emf::Emr::Binary::Records::ScaleWindowExtEx, scale],
+      [35, Emf::Emr::Binary::Records::SetWorldTransform, { xform: xform }],
+      [36, Emf::Emr::Binary::Records::ModifyWorldTransform, { xform: xform, modify_mode: 0xFFFFFFFF }],
+      [41, Emf::Emr::Binary::Records::AngleArc,
+       { ptl_center: { x: -0x80000000, y: 0x7FFFFFFF }, n_radius: 0xFFFFFFFF, start_angle: -0.0, sweep_angle: 1.5 }],
+      [58, Emf::Emr::Binary::Records::SetMiterLimit, { miter_limit: -3.5 }]
+    ]
+  end
+
+  it "hydrates transform and floating fields directly with editable native models" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    transform_records.each_with_index do |(type, klass, fields), index|
+      expect(klass).not_to receive(:read)
+      size = 8 + transform_lengths[index]
+      original = klass.new(i_type: type, n_size: size, **fields).to_binary_s
+      parsed = Emf.parse(header + original + eof)
+      wire = parsed.records.first.wire
+      expect(wire.class).to eq(klass)
+      fields.each { |field, value| expect(wire.public_send(field).snapshot).to eq(value) }
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(header + original + eof)
+      field = fields.keys.first
+      value = fields.fetch(field)
+      edited = if value.is_a?(Hash)
+                 value.transform_values { |number| -number - 1 }
+               elsif value.is_a?(Integer)
+                 -value - 1
+               else
+                 2.5
+               end
+      wire.public_send("#{field}=", edited)
+      expected = header + klass.new(i_type: type, n_size: size, **fields.merge(field => edited)).to_binary_s + eof
+      expect(Emf.serialize(parsed)).to eq(expected)
+      expect(Emf.parse(expected).records.first.wire.public_send(field).snapshot).to eq(edited)
+    end
+  end
+
+  it "matches Ruby transform suffix normalization and preserves truncated records as Raw" do
+    transform_records.each_with_index do |(type, klass, fields), index|
+      length = transform_lengths[index]
+      payload = klass.new(i_type: type, n_size: 8 + length, **fields).to_binary_s.byteslice(8..)
+      ["".b, "opaque".b].each do |suffix|
+        input = header + [type, 8 + length + suffix.bytesize].pack("V2") + payload + suffix + unknown + eof
+        ENV["EMF_BACKEND"] = "native"
+        native = Emf.parse(input)
+        ENV["EMF_BACKEND"] = "ruby"
+        ruby = Emf.parse(input)
+        expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
+        expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+      end
+      ENV["EMF_BACKEND"] = "native"
+      (0...length).each do |short|
+        input = header + [type, short + 8].pack("V2") + payload.byteslice(0, short) + map_mode + eof
+        parsed = Emf.parse(input)
+        expect(parsed.records.first.wire.class).to eq(Emf::Emr::Binary::Records::Raw)
+        expect(parsed.records[1].wire.map_mode.to_i).to eq(8)
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(input)
+      end
+      [length - 1, length + 1].each do |wrong|
+        expect { Emf::Native::Fields.call("x" * wrong, 60 + index) }.to raise_error(Emf::FormatError, "invalid native typed payload length")
+      end
+    end
+  end
+
+  it "matches Ruby float32 special values and serialization" do
+    [0x80000000, 0x7F800000, 0xFF800000, 1, 0x7FC12345, 0x7F812345].each do |bits|
+      input = header + [58, 12, bits].pack("V3") + eof
+      ENV["EMF_BACKEND"] = "native"
+      native = Emf.parse(input)
+      ENV["EMF_BACKEND"] = "ruby"
+      ruby = Emf.parse(input)
+      actual = native.records.first.wire.miter_limit.to_f
+      expected = ruby.records.first.wire.miter_limit.to_f
+      if expected.nan?
+        expect(actual).to be_nan
+      else
+        expect([actual].pack("e")).to eq([expected].pack("e"))
+      end
+      expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+    end
+  end
+
   let(:poly_draw_records) do
     [[56, Emf::Emr::Binary::Records::PolyDraw, 58, 8],
      [92, Emf::Emr::Binary::Records::PolyDraw16, 59, 4]]
@@ -827,8 +917,8 @@ RSpec.describe Emf::Native do
     allow(loader).to receive(:invoke).and_call_original
     expect(loader).to receive(:invoke).with(:emf_document_free, anything).and_call_original
     expect(Emf::Emr::Parser).not_to receive(:call)
-    expect { backend.parse(header + [41, 12, 1].pack("V3") + eof) }
-      .to raise_error(Emf::FormatError, /does not support typed EMR record 41/)
+    expect { backend.parse(header + [49, 12, 1].pack("V3") + eof) }
+      .to raise_error(Emf::FormatError, /does not support typed EMR record 49/)
   end
 
   it "preserves malformed supported records as Raw with native diagnostics and unframed bytes" do
