@@ -5,20 +5,15 @@ require "base64"
 require "open3"
 require "tmpdir"
 require_relative "../support/backend_parity"
+require_relative "../support/canonical_observations_helpers"
 
 RSpec.describe BackendParity do
+  include CanonicalObservationsHelpers
+
   let(:bytes) { Emf::SpecSupport::FixturePath.read_fixture("simple", "image1.emf").b }
   let(:observation) { described_class::Observation.call(bytes) }
   let(:parse) { observation.dig("parse", "value") }
   let(:records) { parse.fetch("records") }
-
-  def unpack_hex(hex)
-    [hex].pack("H*")
-  end
-
-  def decode(node)
-    Base64.strict_decode64(node.dig("binary", "base64"))
-  end
 
   describe "a parsed fixture" do
     it "is deterministic across runs and survives a JSON round trip" do
@@ -95,8 +90,8 @@ RSpec.describe BackendParity do
 
     it "records a parser exception as data and carries it into dependent stages" do
       cut = described_class::Observation.call(bytes.byteslice(0, 292))
-      expect(cut.dig("parse", "status")).to eq(cut.dig("serialize", "status"))
-      expect(cut.dig("parse", "error", "class")).to be_a(String) if cut.dig("parse", "status") == "raised"
+      stages = cut.values_at("parse", "visitor", "serialize", "reparse", "file_api")
+      expect(stages).to all(include("status" => "raised", "error" => include("class" => "EOFError")))
     end
 
     it "turns a failing stage into an explicit raised observation" do
@@ -112,14 +107,6 @@ RSpec.describe BackendParity do
   end
 
   describe "binary and floating-point fidelity" do
-    def xform(*words)
-      Emf::Binary::Types::XForm.read(words.pack("V*"))
-    end
-
-    def floats(xform)
-      described_class::WireWalker.new.call(xform).fetch("fields").transform_values { |f| f.dig("float", "wire_hex") }
-    end
-
     it "keeps signed zero and infinity as wire bytes through JSON" do
       words = [0x80000000, 0x00000000, 0x7F800000, 0xFF800000, 0x3F800000, 0x00000001]
       walked = described_class::WireWalker.new.call(xform(*words))
@@ -158,6 +145,12 @@ RSpec.describe BackendParity do
   end
 
   describe ".differences" do
+    it "distinguishes missing fields from explicit nil in either direction" do
+      expect(described_class.differences({ "missing" => nil }, {})).to eq(["$.missing"])
+      expect(described_class.differences({}, { "missing" => nil })).to eq(["$.missing"])
+      expect(described_class.differences({ "same" => nil }, { "same" => nil })).to eq([])
+    end
+
     it "reports changed leaves, missing keys and length changes by path" do
       left = { "a" => [1, 2], "b" => { "c" => 1 }, "d" => 1 }
       right = { "a" => [1, 3], "b" => { "c" => 1 }, "e" => 1 }

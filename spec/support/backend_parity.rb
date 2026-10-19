@@ -196,7 +196,8 @@ module BackendParity
     return found if found.size >= 50
 
     if left.is_a?(Hash) && right.is_a?(Hash)
-      (left.keys | right.keys).each { |key| differences(left[key], right[key], "#{path}.#{key}", found) }
+      missing = Object.new
+      (left.keys | right.keys).each { |key| differences(left.fetch(key, missing), right.fetch(key, missing), "#{path}.#{key}", found) }
     elsif left.is_a?(Array) && right.is_a?(Array) && left.size == right.size
       left.each_index { |i| differences(left[i], right[i], "#{path}[#{i}]", found) }
     elsif left != right

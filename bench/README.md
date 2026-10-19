@@ -16,7 +16,7 @@ bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backen
 | `--timeout SECONDS` | 120 | Deadline for each fixture child |
 
 Only `--backend ruby` exists; any other value exits with status 2 and writes nothing.
-The exit status is 1 when any fixture child failed, timed out or produced an invalid
+The exit status is 1 when any warm or cold fixture child failed, timed out or produced an invalid
 result (the JSON is still written with a `failures` list).
 
 ## What is measured

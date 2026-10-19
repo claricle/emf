@@ -18,10 +18,6 @@ RSpec.describe ParserBenchmark::CLI do
 
   after { FileUtils.remove_entry(tmpdir) }
 
-  def run_cli(args)
-    described_class.new(args).run
-  end
-
   context "with a parsed fixture" do
     # One real run (with child processes) is shared by the examples below.
     before(:context) do
@@ -77,12 +73,18 @@ RSpec.describe ParserBenchmark::CLI do
 
   it "rejects an unsupported backend without writing a result" do
     args = fast_args.dup.tap { |a| a[a.index("--backend") + 1] = "native" }
-    expect { expect(run_cli(args)).to eq(2) }.to output(/unsupported backend "native"/).to_stderr
+    expect { expect(described_class.new(args).run).to eq(2) }.to output(/unsupported backend "native"/).to_stderr
     expect(File).not_to exist(result_path)
   end
 
   it "requires the manifest and output options" do
-    expect { expect(run_cli(["--backend", "ruby"])).to eq(2) }.to output(/--manifest is required/).to_stderr
+    expect { expect(described_class.new(["--backend", "ruby"]).run).to eq(2) }.to output(/--manifest is required/).to_stderr
+  end
+
+  it "keeps fixture selections independent between CLI invocations" do
+    expect(described_class.new(fast_args).run).to eq(0)
+    args = fast_args.dup.tap { |a| a[a.index("--fixture") + 1] = "no-such-fixture/*" }
+    expect { expect(described_class.new(args).run).to eq(2) }.to output(/no fixtures selected/).to_stderr
   end
 
   it "records a failure for a fixture that is not a valid EMF instead of crashing" do
@@ -94,8 +96,41 @@ RSpec.describe ParserBenchmark::CLI do
     args = fast_args.dup.tap { |a| a[a.index("--manifest") + 1] = custom }
     args.slice!(args.index("--fixture"), 2)
 
-    expect(run_cli(args)).to eq(1)
-    expect(report.fetch("failures")).to contain_exactly(include("path" => garbage, "status" => "error"))
+    expect(described_class.new(args).run).to eq(1)
+    expect(report.fetch("failures")).to contain_exactly(
+      include("path" => garbage, "status" => "error"),
+      include("path" => garbage, "status" => "failed", "stage" => "cold_load", "run" => 0)
+    )
     expect(report.fetch("slowest_measured_case")).to be_nil
+  end
+end
+
+RSpec.describe ParserBenchmark::Run do
+  let(:tmpdir) { Dir.mktmpdir("parser-benchmark-cold") }
+  let(:result_path) { File.join(tmpdir, "result.json") }
+  let(:options) do
+    ParserBenchmark::Options.new(**ParserBenchmark::CLI::DEFAULTS,
+                                 manifest: File.join(ParserBenchmark::ROOT, "spec/fixtures/manifest.json"),
+                                 output: result_path, fixtures: ["spec/fixtures/simple/*"],
+                                 iterations: 1, warmups: 0, cold_runs: 2)
+  end
+  let(:runner) { described_class.new(options, []) }
+
+  after { FileUtils.remove_entry(tmpdir) }
+
+  it "includes cold child failures in the report and exit status" do
+    failure = { "safety_failure" => { "kind" => "timeout" } }
+    error = { "status" => "error", "error" => { "class" => "Emf::FormatError", "message" => "invalid input" } }
+    allow(runner).to receive(:child).and_call_original
+    allow(runner).to receive(:child).with(%w[--worker cold], anything).and_return(failure, error)
+
+    expect(runner.run).to eq(1)
+    report = JSON.parse(File.read(result_path))
+    expect(report.fetch("fixtures").fetch(0)).to include("status" => "ok")
+    expect(report.dig("cold_load", "runs")).to eq([failure, error])
+    expect(report.fetch("failures")).to contain_exactly(
+      include("stage" => "cold_load", "run" => 0, "failure" => { "kind" => "timeout" }),
+      include("stage" => "cold_load", "run" => 1, "failure" => error.fetch("error"))
+    )
   end
 end

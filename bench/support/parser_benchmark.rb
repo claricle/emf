@@ -225,7 +225,7 @@ module ParserBenchmark
     private
 
     def parse(argv)
-      options = Options.new(**DEFAULTS)
+      options = Options.new(**DEFAULTS, fixtures: [])
       rest = parser(options).parse(argv)
       options.worker ? options.tap { options.path = rest.fetch(0) { raise UsageError, "worker needs a path" } } : validate(options, rest)
     end
@@ -335,6 +335,15 @@ module ParserBenchmark
     end
   end
 
+  def self.cold_failures(cold)
+    cold.fetch("runs").each_with_index.filter_map do |result, index|
+      next if result["status"] == "ok"
+
+      { "stage" => "cold_load", "path" => cold.fetch("fixture"), "run" => index,
+        "status" => "failed", "failure" => result["safety_failure"] || result["error"] }
+    end
+  end
+
   # Parent: selects fixtures, launches bounded children, assembles the report.
   class Run
     OUTPUT_LIMIT = 4 * 1024 * 1024
@@ -375,12 +384,14 @@ module ParserBenchmark
     def build_report(selected)
       fixtures = selected.map { |entry| measure_fixture(entry) }
       slowest = slowest_case(fixtures)
+      cold = cold_load(selected)
+      failures = fixtures.reject { |f| f["status"] == "ok" }.map { |f| f.slice("path", "status", "failure") }
       { "schema_version" => SCHEMA_VERSION, "kind" => "emf-parser-stage-baseline", "backend" => @options.backend,
         "generated_at" => Time.now.utc.iso8601, "command" => ["ruby", "bench/parser.rb", *@argv],
         **Provenance.new(@manifest).to_h, "inputs" => inputs(selected),
-        "method" => method_description, "cold_load" => cold_load(selected), "fixtures" => fixtures,
+        "method" => method_description, "cold_load" => cold, "fixtures" => fixtures,
         "slowest_measured_case" => slowest,
-        "failures" => fixtures.reject { |f| f["status"] == "ok" }.map { |f| f.slice("path", "status", "failure") } }
+        "failures" => failures + ParserBenchmark.cold_failures(cold) }
     end
 
     def measure_fixture(entry)
