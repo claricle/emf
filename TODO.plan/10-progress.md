@@ -15,7 +15,7 @@ Status: execution plan merged; baseline, Rust core and Ruby integration work in 
 | 07 Performance | Not started | Comparable measured end-to-end target and regression budget |
 | 08 Platform delivery | In progress | Feasibility probe underway; artifacts, clean installs and complete CI/release integration pending |
 | 09 Format extensions | In progress | Bounded Ruby standard/placeable WMF headers, EOF/move/line and raw unknown preservation verified; full WMF and structured EMF+ pending |
-| 11 Record coverage | Baseline inventory | Per-record implementation and field-level evidence pending |
+| 11 Record coverage | In progress | Header and four typed records cross core, ABI and Ruby; remaining registry entries and variants pending |
 
 Documentation of a requirement is not implementation completion. Keep package
 states as `Not started`, `In progress`, `Blocked` or `Complete`; a blocked entry
@@ -65,7 +65,8 @@ on the new implementation before the evidence describes that version.
 Continue [02](02-baseline-and-parity.md): identify the reported slow workload and
 retain the pinned downstream baseline as the native compatibility oracle. Use the canonical
 oracle and timing drivers for the bounded native slice in [03](03-rust-core.md),
-then connect it through [04](04-c-abi.md) and [05](05-ruby-binding.md).
+and extend the working [04](04-c-abi.md) / [05](05-ruby-binding.md) slice across
+remaining record families. Preserve full-wire parity and mutation checks for each cohort.
 The initial estimates in [00](00-overview.md) should be revised after this milestone
 and after the integrated native slice.
 
@@ -152,7 +153,7 @@ checked edits and ordered EMF+ payload extraction. Unchanged unknown bytes are
 preserved. Comment growth and shrink rebuild DWORD alignment; EOF edits retain
 palette bytes and address the final SizeLast field. The integrated core and typed-snapshot
 C ABI passed 49 Rust tests locally at `b34c69b`; strict Clippy also passed. This does not complete all record families,
-structured EMF+, corpus parity or Ruby native model hydration.
+structured EMF+, corpus parity or full Ruby native model hydration.
 
 ### Ruby backend selection
 
@@ -163,8 +164,24 @@ Invalid selection raises `ArgumentError`, and forced unavailable native executio
 raises `Emf::Native::Unavailable`.
 
 Commit `14fb505` integrates this dispatch with 45 focused policy, API, detector,
-CLI and mutable-model examples passing. The native backend currently reports
-unavailability; the actual loader, ABI ownership and model hydration remain open.
+CLI and mutable-model examples passing. The initial native adapter is available
+when `EMF_NATIVE_LIBRARY` names the compiled
+ABI v1 shared library. It hydrates header, EOF, SETMAPMODE, POLYLINE, COMMENT and
+unknown raw records from native snapshots without invoking the Ruby parser or
+wire readers. Unsupported typed families raise a format error rather than silently
+changing the model. Ruby serialization preserves mutable model edits.
+
+`bundle exec rspec spec/emf/native` passed 29 examples under Ruby 3.4 Bundler
+at `a077952`, including full-wire canonical equality, forced-native fresh-process use, edits, malformed
+record recovery, invalid span rejection and disposal on failures. Four existing
+parser examples also passed. Hydration uses checked input spans, removing per-record
+C buffer calls. This remains a bounded subset: remaining records, header variants,
+full corpus parity and native edited serialization are open.
+
+The local debug measurement consumed every wire for 20 iterations of 1,001 records
+(12,128 bytes). Span hydration took 1.303 seconds versus 1.396 seconds before the
+change; Ruby controls varied from 0.796 to 0.960 seconds. These noisy debug results
+do not establish a Ruby speed advantage or the issue performance target.
 
 ### Initial C ABI
 
@@ -178,8 +195,8 @@ Snapshot v1 now exposes decoded header, EOF, SETMAPMODE, POLYLINE, COMMENT and
 ordered diagnostics in an owned buffer. A malformed short EOF remains a raw record
 and framing continues to later records. The independently compiled C11 smoke
 client passed against the integrated shared library at `b34c69b`. Full record
-coverage, C-side edits, and Ruby hydration remain open. Ruby must consume decoded
-fields rather than repeat the wire parser.
+coverage and C-side edits remain open. The bounded Ruby adapter now consumes these
+decoded fields; it does not repeat the wire parser.
 
 ### Initial Ruby WMF slice
 
@@ -193,3 +210,12 @@ EMF+ and downstream format coverage remain open.
 The isolated consumer benchmark subprocess now preserves installed gem paths
 when leaving Bundler. Its six focused examples passed at `b34c69b`, including a
 fresh-process regression for isolated bundle installs. Current-head CI is pending.
+
+### Serialization resource budgets
+
+`SerializeLimits` bounds output bytes and work before allocation, including edited
+point payloads. Checked cumulative parser accounting rejects overflow. The
+integrated workspace passed 58 Rust tests, strict Clippy, formatting and the
+compiled C smoke client at `c513178`. FFI coverage exercises real output
+and work limit failures through owned error views and preserves `EMF_LIMIT_EXCEEDED`.
+These checks do not complete corrupted-corpus, fuzz or platform acceptance.

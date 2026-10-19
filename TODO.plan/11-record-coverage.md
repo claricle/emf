@@ -1,11 +1,20 @@
 # EMF record coverage inventory
 
-Status: baseline inventory at `a549346`; all native implementation pending.
+Status: bounded native slice implemented; complete registry and variant parity pending.
 
 Source of truth: `lib/emf/emr/binary/records.rb` and its referenced wire files.
 This table lists each autoloaded record class, including `Raw`; it does not claim
 that every variant is implemented semantically or exercised by the fixture corpus.
-Header parsing is separate in `lib/emf/emr/binary/header.rb`.
+Header parsing is separate in `lib/emf/emr/binary/header.rb`. The initial header
+slice crosses the core, snapshot ABI and Ruby adapter; extended header variants
+remain open.
+
+The `In progress` rows have bounded typed or raw support in
+[`model.rs`](../emf-rs/crates/emf-core/src/model.rs),
+[`typed.rs`](../emf-rs/crates/emf-core/tests/typed.rs) and
+[`adapter_spec.rb`](../spec/emf/native/adapter_spec.rb), delivered in
+[PR #17](https://github.com/claricle/emf/pull/17). This evidence does not complete
+every variant, malformed-input classification or corpus parity check.
 
 ## Execution rule
 
@@ -23,12 +32,12 @@ are proposed Rust modules, not a claim about existing semantic support.
 
 | Wire class | Type-code constant | Existing source | Proposed core module | State / evidence |
 | --- | --- | --- | --- | --- |
-| `Raw` | `unknown types` | [`raw.rb`](../lib/emf/emr/binary/records/raw.rb) | `emf::raw` | Not started |
-| `Eof` | `EOF` | [`eof.rb`](../lib/emf/emr/binary/records/eof.rb) | `emf::eof` | Not started |
+| `Raw` | `unknown types` | [`raw.rb`](../lib/emf/emr/binary/records/raw.rb) | `emf::raw` | In progress |
+| `Eof` | `EOF` | [`eof.rb`](../lib/emf/emr/binary/records/eof.rb) | `emf::eof` | In progress |
 | `SetTextColor` | `SETTEXTCOLOR` | [`set_text_color.rb`](../lib/emf/emr/binary/records/set_text_color.rb) | `emf::text` | Not started |
 | `SetBkColor` | `SETBKCOLOR` | [`set_bk_color.rb`](../lib/emf/emr/binary/records/set_bk_color.rb) | `emf::color_palette` | Not started |
 | `SetBkMode` | `SETBKMODE` | [`set_bk_mode.rb`](../lib/emf/emr/binary/records/set_bk_mode.rb) | `emf::state_objects` | Not started |
-| `SetMapMode` | `SETMAPMODE` | [`set_map_mode.rb`](../lib/emf/emr/binary/records/set_map_mode.rb) | `emf::state_objects` | Not started |
+| `SetMapMode` | `SETMAPMODE` | [`set_map_mode.rb`](../lib/emf/emr/binary/records/set_map_mode.rb) | `emf::state_objects` | In progress |
 | `SetRop2` | `SETROP2` | [`set_rop2.rb`](../lib/emf/emr/binary/records/set_rop2.rb) | `emf::state_objects` | Not started |
 | `SetPolyFillMode` | `SETPOLYFILLMODE` | [`set_poly_fill_mode.rb`](../lib/emf/emr/binary/records/set_poly_fill_mode.rb) | `emf::state_objects` | Not started |
 | `SetTextAlign` | `SETTEXTALIGN` | [`set_text_align.rb`](../lib/emf/emr/binary/records/set_text_align.rb) | `emf::text` | Not started |
@@ -56,7 +65,7 @@ are proposed Rust modules, not a claim about existing semantic support.
 | `AngleArc` | `ANGLEARC` | [`angle_arc.rb`](../lib/emf/emr/binary/records/angle_arc.rb) | `emf::geometry` | Not started |
 | `SetArcDirection` | `SETARCDIRECTION` | [`set_arc_direction.rb`](../lib/emf/emr/binary/records/set_arc_direction.rb) | `emf::geometry` | Not started |
 | `Polygon` | `POLYGON` | [`polygon.rb`](../lib/emf/emr/binary/records/polygon.rb) | `emf::geometry` | Not started |
-| `Polyline` | `POLYLINE` | [`polyline.rb`](../lib/emf/emr/binary/records/polyline.rb) | `emf::geometry` | Not started |
+| `Polyline` | `POLYLINE` | [`polyline.rb`](../lib/emf/emr/binary/records/polyline.rb) | `emf::geometry` | In progress |
 | `PolyBezier` | `POLYBEZIER` | [`poly_bezier.rb`](../lib/emf/emr/binary/records/poly_bezier.rb) | `emf::geometry` | Not started |
 | `Polygon16` | `POLYGON16` | [`polygon16.rb`](../lib/emf/emr/binary/records/polygon16.rb) | `emf::geometry` | Not started |
 | `Polyline16` | `POLYLINE16` | [`polyline16.rb`](../lib/emf/emr/binary/records/polyline16.rb) | `emf::geometry` | Not started |
@@ -71,7 +80,7 @@ are proposed Rust modules, not a claim about existing semantic support.
 | `PolyPolygon` | `POLYPOLYGON` | [`poly_polygon.rb`](../lib/emf/emr/binary/records/poly_polygon.rb) | `emf::geometry` | Not started |
 | `PolyPolyline16` | `POLYPOLYLINE16` | [`poly_polyline16.rb`](../lib/emf/emr/binary/records/poly_polyline16.rb) | `emf::geometry` | Not started |
 | `PolyPolygon16` | `POLYPOLYGON16` | [`poly_polygon16.rb`](../lib/emf/emr/binary/records/poly_polygon16.rb) | `emf::geometry` | Not started |
-| `Comment` | `COMMENT` | [`comment.rb`](../lib/emf/emr/binary/records/comment.rb) | `emf::opaque_extensions` | Not started |
+| `Comment` | `COMMENT` | [`comment.rb`](../lib/emf/emr/binary/records/comment.rb) | `emf::opaque_extensions` | In progress |
 | `SetWorldTransform` | `SETWORLDTRANSFORM` | [`set_world_transform.rb`](../lib/emf/emr/binary/records/set_world_transform.rb) | `emf::transform` | Not started |
 | `ModifyWorldTransform` | `MODIFYWORLDTRANSFORM` | [`modify_world_transform.rb`](../lib/emf/emr/binary/records/modify_world_transform.rb) | `emf::transform` | Not started |
 | `BeginPath` | `BEGINPATH` | [`begin_path.rb`](../lib/emf/emr/binary/records/begin_path.rb) | `emf::path_clip_region` | Not started |
