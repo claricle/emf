@@ -79,6 +79,7 @@ impl From<ParseFailure> for Failure {
 impl From<SerializeFailure> for Failure {
     fn from(error: SerializeFailure) -> Self {
         let (status, offset) = match &error {
+            SerializeFailure::LimitExceeded { .. } => (EMF_LIMIT_EXCEEDED, None),
             SerializeFailure::AllocationFailed { .. } => (EMF_ALLOCATION_FAILED, None),
             SerializeFailure::SizeOverflow => (EMF_SERIALIZE_ERROR, None),
             SerializeFailure::Inconsistent { offset } => {
@@ -506,6 +507,70 @@ pub unsafe extern "C" fn emf_error_free(error: *mut EmfError) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn serialization_limits_keep_their_status_and_detail_in_owned_errors() {
+        let mut bytes = vec![0; 88];
+        bytes[..4].copy_from_slice(&1u32.to_le_bytes());
+        bytes[4..8].copy_from_slice(&88u32.to_le_bytes());
+        bytes[40..44].copy_from_slice(&0x464d4520u32.to_le_bytes());
+        let document = emf_core::parse(&bytes, &ParseLimits::default()).unwrap();
+        assert_eq!(emf_core::serialize(&document).unwrap(), bytes);
+        for (kind, requested, limits) in [
+            (
+                emf_core::LimitKind::OutputBytes,
+                88,
+                emf_core::SerializeLimits {
+                    max_output_bytes: 0,
+                    ..Default::default()
+                },
+            ),
+            (
+                emf_core::LimitKind::WorkUnits,
+                2,
+                emf_core::SerializeLimits {
+                    max_work_units: 0,
+                    ..Default::default()
+                },
+            ),
+        ] {
+            let failure = emf_core::serialize_with_limits(&document, &limits).unwrap_err();
+            assert_eq!(
+                failure,
+                SerializeFailure::LimitExceeded {
+                    kind,
+                    limit: 0,
+                    requested
+                }
+            );
+            let expected = failure.to_string();
+            let mut error = ptr::null_mut();
+            unsafe {
+                let status = run(&mut error, || Err(failure.into()));
+                assert_eq!(status, EMF_LIMIT_EXCEEDED);
+                assert!(!error.is_null());
+                let mut info = EmfErrorInfo {
+                    struct_size: size_of::<EmfErrorInfo>() as u32,
+                    version: EMF_ABI_VERSION,
+                    status: 0,
+                    category: 0,
+                    has_offset: 0,
+                    reserved: 0,
+                    offset: 0,
+                    message: ptr::null(),
+                    message_length: 0,
+                };
+                assert_eq!(emf_error_view(error, &mut info), EMF_OK);
+                assert_eq!(info.status, EMF_LIMIT_EXCEEDED);
+                assert_eq!(info.category, EMF_LIMIT_EXCEEDED as u32);
+                assert_eq!(info.has_offset, 0);
+                let message =
+                    std::slice::from_raw_parts(info.message, info.message_length as usize);
+                assert_eq!(message, expected.as_bytes());
+                emf_error_free(error);
+            }
+        }
+    }
 
     #[test]
     fn limit_ceilings_accept_full_usize_range_without_forming_memory_ranges() {
