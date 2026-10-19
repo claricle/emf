@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "spec_helper"
-require "base64"
 require "open3"
 require "tmpdir"
 require_relative "../support/backend_parity"

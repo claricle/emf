@@ -6,7 +6,7 @@ module CanonicalObservationsHelpers
   end
 
   def decode(node)
-    Base64.strict_decode64(node.dig("binary", "base64"))
+    node.dig("binary", "base64").unpack1("m0")
   end
 
   def xform(*words)

@@ -26,6 +26,8 @@ rounded up, and one per 16 source-copy bytes rounded up. Source-copy work includ
 trailing and malformed bytes. Limits apply separately to each parse.
 
 This implements only step 1 of `TODO.plan/03-rust-core.md`. Record payloads are
-raw; typed record decoding, edits, EMF+ extraction, the C ABI, Ruby binding and
-full fixture parity remain future work. One existing fixture is exercised here;
+raw; typed record decoding, edits, EMF+ extraction, Ruby binding and
+full fixture parity remain future work. An initial owned C ABI is provided by `emf-ffi`; see
+its README and public header for the raw-framing scope and pointer contracts.
+One existing fixture is exercised here;
 the complete valid corpus is not an acceptance claim for this foundation.

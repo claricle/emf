@@ -37,3 +37,6 @@ jobs:
 
       - name: Run tests
         run: cargo +${{ matrix.toolchain }} test --workspace --locked
+
+      - name: Run linked C client
+        run: sh crates/emf-ffi/tests/run-c-smoke.sh

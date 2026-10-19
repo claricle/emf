@@ -162,3 +162,15 @@ raises `Emf::Native::Unavailable`.
 Commit `14fb505` integrates this dispatch with 45 focused policy, API, detector,
 CLI and mutable-model examples passing. The native backend currently reports
 unavailability; the actual loader, ABI ownership and model hydration remain open.
+
+### Initial C ABI
+
+The `emf-ffi` crate provides versioned C layouts, owned document, buffer and error
+handles, detection, raw record batches and unchanged serialization. Output-reset,
+limits, lifecycle and panic-boundary tests accompany a separately compiled C11
+client linked to the actual library. Six ABI tests and the C client passed locally
+on macOS with stable Rust before integration. The C client is included in CI.
+
+This is a raw-framing subset. Typed snapshots, edits, diagnostic enumeration and
+Ruby hydration remain acceptance gaps; header and payload decoding must not be
+repeated in Ruby to substitute for a native model adapter.
