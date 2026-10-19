@@ -371,6 +371,72 @@ static int check_snapshot(void) {
     return 0;
 }
 
+static int check_snapshot_after_malformed_eof(void) {
+    for (uint32_t short_size = 8; short_size <= 16; short_size += 4) {
+        make_fixture();
+        memset(input + HEADER_SIZE, 0, sizeof(input) - HEADER_SIZE);
+        input_length = HEADER_SIZE;
+        put_u32(input_length, 14);
+        put_u32(input_length + 4, short_size);
+        input_length += short_size;
+        append_record_u32(17, 12, 7);
+        const size_t eof_offset = input_length;
+        put_u32(eof_offset, 14);
+        put_u32(eof_offset + 4, 20);
+        put_u32(eof_offset + 12, 16);
+        put_u32(eof_offset + 16, 20);
+        input_length += 20;
+        put_u32(48, (uint32_t)input_length);
+        put_u32(52, 4);
+
+        emf_document *document = NULL;
+        emf_buffer *snapshot = NULL;
+        emf_error *error = NULL;
+        CHECK(emf_parse(input, input_length, NULL, &document, &error) == EMF_OK);
+        CHECK(document != NULL && error == NULL);
+        CHECK(emf_document_snapshot(document, &snapshot, &error) == EMF_OK);
+        CHECK(snapshot != NULL && error == NULL);
+        const uint8_t *bytes = NULL;
+        uint64_t length;
+        CHECK(emf_buffer_view(snapshot, &bytes, &length) == EMF_OK);
+        CHECK(length <= SIZE_MAX);
+        cursor c = {bytes, (size_t)length, 0};
+        const uint8_t *magic;
+        uint32_t word;
+        uint64_t value;
+        CHECK(take(&c, 4, &magic) && memcmp(magic, "EMFS", 4) == 0);
+        CHECK(get_u32(&c, &word) && word == 1);
+        CHECK(get_u64(&c, &value) && value == length);
+        CHECK(get_u64(&c, &value) && value == HEADER_SIZE);
+        CHECK(get_u64(&c, &value) && value == 3);
+        CHECK(get_u64(&c, &value) && value == 1);
+        CHECK(get_u64(&c, &value) && value == 0); /* no trailing records */
+        CHECK(get_u64(&c, &value) && value == 0); /* no unframed tail */
+        CHECK(skip(&c, 112 + HEADER_SIZE));
+        CHECK(check_snapshot_record(&c, 0, HEADER_SIZE, short_size, 14,
+                                    EMF_FAMILY_RAW, 0) == 0);
+        CHECK(check_snapshot_record(&c, 1, HEADER_SIZE + short_size, 12, 17,
+                                    EMF_FAMILY_SETMAPMODE, 4) == 0);
+        CHECK(get_u32(&c, &word) && word == 7);
+        CHECK(check_snapshot_record(&c, 2, eof_offset, 20, 14,
+                                    EMF_FAMILY_EOF, 12) == 0);
+        CHECK(get_u32(&c, &word) && word == 0);
+        CHECK(get_u32(&c, &word) && word == 16);
+        CHECK(get_u32(&c, &word) && word == 20);
+        CHECK(get_u32(&c, &word) && word == 4); /* invalid typed payload */
+        CHECK(get_u32(&c, &word) && word == 1); /* record type present */
+        CHECK(get_u32(&c, &word) && word == 14);
+        CHECK(get_u32(&c, &word) && word == 0); /* reserved */
+        CHECK(get_u64(&c, &value) && value == HEADER_SIZE);
+        CHECK(get_u64(&c, &value) && value == 0);
+        CHECK(get_u64(&c, &value) && value == 0);
+        CHECK(c.offset == c.length);
+        emf_buffer_free(snapshot);
+        emf_document_free(document);
+    }
+    return 0;
+}
+
 static void init_info(emf_info *info) {
     memset(info, 0, sizeof(*info));
     info->struct_size = (uint32_t)sizeof(*info);
@@ -397,6 +463,7 @@ static void init_limits(emf_limits *limits) {
 int main(void) {
     CHECK(check_layout() == 0);
     CHECK(check_snapshot() == 0);
+    CHECK(check_snapshot_after_malformed_eof() == 0);
     CHECK(emf_abi_version() == EMF_ABI_VERSION);
     make_fixture();
     uint8_t original_input[INPUT_CAPACITY];
