@@ -46,22 +46,22 @@ and corpus parity. Group names are proposed Rust modules.
 | `RestoreDc` | `RESTOREDC` | [`restore_dc.rb`](../lib/emf/emr/binary/records/restore_dc.rb) | `emf::state_objects` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `SelectObject` | `SELECTOBJECT` | [`select_object.rb`](../lib/emf/emr/binary/records/select_object.rb) | `emf::state_objects` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `DeleteObject` | `DELETEOBJECT` | [`delete_object.rb`](../lib/emf/emr/binary/records/delete_object.rb) | `emf::state_objects` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
-| `CreatePen` | `CREATEPEN` | [`create_pen.rb`](../lib/emf/emr/binary/records/create_pen.rb) | `emf::state_objects` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
-| `CreateBrushIndirect` | `CREATEBRUSHINDIRECT` | [`create_brush_indirect.rb`](../lib/emf/emr/binary/records/create_brush_indirect.rb) | `emf::state_objects` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
+| `CreatePen` | `CREATEPEN` | [`create_pen.rb`](../lib/emf/emr/binary/records/create_pen.rb) | `emf::state_objects` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
+| `CreateBrushIndirect` | `CREATEBRUSHINDIRECT` | [`create_brush_indirect.rb`](../lib/emf/emr/binary/records/create_brush_indirect.rb) | `emf::state_objects` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `SetWindowOrgEx` | `SETWINDOWORGEX` | [`set_window_org_ex.rb`](../lib/emf/emr/binary/records/set_window_org_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `SetWindowExtEx` | `SETWINDOWEXTEX` | [`set_window_ext_ex.rb`](../lib/emf/emr/binary/records/set_window_ext_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `SetViewportOrgEx` | `SETVIEWPORTORGEX` | [`set_viewport_org_ex.rb`](../lib/emf/emr/binary/records/set_viewport_org_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `SetViewportExtEx` | `SETVIEWPORTEXTEX` | [`set_viewport_ext_ex.rb`](../lib/emf/emr/binary/records/set_viewport_ext_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `SetBrushOrgEx` | `SETBRUSHORGEX` | [`set_brush_org_ex.rb`](../lib/emf/emr/binary/records/set_brush_org_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `MoveToEx` | `MOVETOEX` | [`move_to_ex.rb`](../lib/emf/emr/binary/records/move_to_ex.rb) | `emf::geometry` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
-| `LineTo` | `LINETO` | [`line_to.rb`](../lib/emf/emr/binary/records/line_to.rb) | `emf::geometry` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
+| `LineTo` | `LINETO` | [`line_to.rb`](../lib/emf/emr/binary/records/line_to.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `Rectangle` | `RECTANGLE` | [`rectangle.rb`](../lib/emf/emr/binary/records/rectangle.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `fd55d22` |
 | `Ellipse` | `ELLIPSE` | [`ellipse.rb`](../lib/emf/emr/binary/records/ellipse.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `fd55d22` |
 | `RoundRect` | `ROUNDRECT` | [`round_rect.rb`](../lib/emf/emr/binary/records/round_rect.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `fd55d22` |
-| `Arc` | `ARC` | [`arc.rb`](../lib/emf/emr/binary/records/arc.rb) | `emf::geometry` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
-| `ArcTo` | `ARCTO` | [`arc_to.rb`](../lib/emf/emr/binary/records/arc_to.rb) | `emf::geometry` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
-| `Chord` | `CHORD` | [`chord.rb`](../lib/emf/emr/binary/records/chord.rb) | `emf::geometry` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
-| `Pie` | `PIE` | [`pie.rb`](../lib/emf/emr/binary/records/pie.rb) | `emf::geometry` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
+| `Arc` | `ARC` | [`arc.rb`](../lib/emf/emr/binary/records/arc.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
+| `ArcTo` | `ARCTO` | [`arc_to.rb`](../lib/emf/emr/binary/records/arc_to.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
+| `Chord` | `CHORD` | [`chord.rb`](../lib/emf/emr/binary/records/chord.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
+| `Pie` | `PIE` | [`pie.rb`](../lib/emf/emr/binary/records/pie.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `AngleArc` | `ANGLEARC` | [`angle_arc.rb`](../lib/emf/emr/binary/records/angle_arc.rb) | `emf::geometry` | Not started |
 | `SetArcDirection` | `SETARCDIRECTION` | [`set_arc_direction.rb`](../lib/emf/emr/binary/records/set_arc_direction.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `Polygon` | `POLYGON` | [`polygon.rb`](../lib/emf/emr/binary/records/polygon.rb) | `emf::geometry` | Not started |
@@ -99,11 +99,11 @@ and corpus parity. Group names are proposed Rust modules.
 | `CreateFontIndirectW` | `EXTCREATEFONTINDIRECTW` | [`create_font_indirect_w.rb`](../lib/emf/emr/binary/records/create_font_indirect_w.rb) | `emf::text` | Not started |
 | `ExtCreatePen` | `EXTCREATEPEN` | [`ext_create_pen.rb`](../lib/emf/emr/binary/records/ext_create_pen.rb) | `emf::state_objects` | Not started |
 | `StretchDIBits` | `STRETCHDIBITS` | [`stretch_dibits.rb`](../lib/emf/emr/binary/records/stretch_dibits.rb) | `emf::bitmap` | Not started |
-| `SetPixelV` | `SETPIXELV` | [`set_pixel_v.rb`](../lib/emf/emr/binary/records/set_pixel_v.rb) | `emf::state_objects` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
+| `SetPixelV` | `SETPIXELV` | [`set_pixel_v.rb`](../lib/emf/emr/binary/records/set_pixel_v.rb) | `emf::state_objects` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `SetMetArgn` | `SETMETARGN` | [`set_metargn.rb`](../lib/emf/emr/binary/records/set_metargn.rb) | `emf::state_objects` | Not started |
 | `OffsetClipRgn` | `OFFSETCLIPRGN` | [`offset_clip_rgn.rb`](../lib/emf/emr/binary/records/offset_clip_rgn.rb) | `emf::path_clip_region` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
-| `ExcludeClipRect` | `EXCLUDECLIPRECT` | [`exclude_clip_rect.rb`](../lib/emf/emr/binary/records/exclude_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
-| `IntersectClipRect` | `INTERSECTCLIPRECT` | [`intersect_clip_rect.rb`](../lib/emf/emr/binary/records/intersect_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core and checked edits; `05d5b3b`; native adapter pending |
+| `ExcludeClipRect` | `EXCLUDECLIPRECT` | [`exclude_clip_rect.rb`](../lib/emf/emr/binary/records/exclude_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
+| `IntersectClipRect` | `INTERSECTCLIPRECT` | [`intersect_clip_rect.rb`](../lib/emf/emr/binary/records/intersect_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `ExtSelectClipRgn` | `EXTSELECTCLIPRGN` | [`ext_select_clip_rgn.rb`](../lib/emf/emr/binary/records/ext_select_clip_rgn.rb) | `emf::path_clip_region` | Not started |
 | `ScaleViewportExtEx` | `SCALEVIEWPORTEXTEX` | [`scale_viewport_ext_ex.rb`](../lib/emf/emr/binary/records/scale_viewport_ext_ex.rb) | `emf::transform` | Not started |
 | `ScaleWindowExtEx` | `SCALEWINDOWEXTEX` | [`scale_window_ext_ex.rb`](../lib/emf/emr/binary/records/scale_window_ext_ex.rb) | `emf::transform` | Not started |

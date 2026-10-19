@@ -95,12 +95,14 @@ limits for recording a baseline, not performance or resource-budget acceptance.
 Timeout, process failure and unexpected backend exceptions remain distinct from
 format rejection and make the capture unsafe.
 
-The latest 231-fixture capture is **not an accepted baseline**: 214 parsed,
-six recovered, two raised format errors and nine hit the 15-second child deadline.
-The saved source fingerprint is also stale after native Ruby adapter edits during
-capture. Preserve the failures as observations; investigate a bounded sample and
-recapture after source stabilization before claiming the inventory check passes.
-The timeout cause remains undetermined.
+The latest 231-fixture capture is **not an accepted baseline**: 221 parsed,
+six recovered, two raised format errors and two hit the 15-second child deadline.
+Source files were held stable throughout this capture. Both timeouts are 1.5 MB
+inputs: `emf/test-031.emf` and `emf-corrupted/bad_corrupted_2014-12-09-002112.emf`.
+Preserve these outcomes and investigate their parse cost before accepting the
+inventory. Further parser edits require a new source fingerprint and capture.
+The timeout cause remains undetermined. An earlier capture also timed out on
+seven additional inputs; those failures remain historical observations.
 
 The initial capture contains 229 fixtures: 220 parsed without diagnostics, seven
 recovered with diagnostics and two rejected with `Emf::FormatError`. No child
@@ -265,5 +267,16 @@ focused native Ruby suite passed 43 examples.
 Commit `05d5b3b` adds ten fixed geometry/object families in the core: LineTo,
 Arc/ArcTo/Chord/Pie, clip rectangles, CreatePen, CreateBrushIndirect and SetPixelV.
 All 75 core tests, strict core Clippy and formatting passed before integration.
-ABI and Ruby adaptation is pending. Full registry, corpus and platform acceptance
-remain open.
+ABI and Ruby adaptation landed in `0fb8deb`: snapshot tags 35–44 and direct
+hydration of signed geometry, unsigned object fields and all COLORREF bytes.
+The workspace passed 91 Rust tests, strict Clippy, formatting and the linked C
+smoke client; the focused native Ruby suite passed 47 examples. Full registry,
+corpus and platform acceptance remain open.
+
+### Forced-native measurement support
+
+Commit `87f1fde` adds explicit native selection to warm and cold benchmark
+children, library identity metadata and honest public-stage descriptions.
+Fourteen focused examples pass. Synthetic supported and unsupported native
+inputs verify success and failure reporting; these checks establish no speedup.
+The corpus inventory remains unsafe until its timeout outcomes are resolved.
