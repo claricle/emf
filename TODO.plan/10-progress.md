@@ -15,7 +15,7 @@ Status: execution plan merged; baseline, Rust core and Ruby integration work in 
 | 07 Performance | Not started | Comparable measured end-to-end target and regression budget |
 | 08 Platform delivery | In progress | Feasibility probe underway; artifacts, clean installs and complete CI/release integration pending |
 | 09 Format extensions | In progress | Bounded Ruby standard/placeable WMF headers, EOF/move/line and raw unknown preservation verified; full WMF and structured EMF+ pending |
-| 11 Record coverage | In progress | Header and bounded scalar/coordinate/variable cohorts cross core, ABI and Ruby; color/rectangle adaptation, remaining registry entries and variants pending |
+| 11 Record coverage | In progress | Header and bounded scalar/coordinate/variable cohorts cross core, ABI and Ruby; color/rectangle and fixed state/path parity verified; remaining registry entries and variants pending |
 
 Documentation of a requirement is not implementation completion. Keep package
 states as `Not started`, `In progress`, `Blocked` or `Complete`; a blocked entry
@@ -257,5 +257,13 @@ Commit `0b6c21b` adds 14 fixed state/path families in the Rust core, including
 signed RestoreDc, unsigned object/state fields, zero-payload path operations,
 signed path bounds and SelectClipPath with an opaque optional suffix. All 70
 core tests, core Clippy and formatting passed before integration. ABI and Ruby
-adaptation is in progress; this core-only evidence does not establish native
-parity for those families. Full registry, corpus and platform acceptance remain open.
+adaptation landed in `b4ec24d`: snapshot tags 21–34, direct Ruby hydration,
+owned C snapshots and malformed-record controls. The combined workspace passed
+85 Rust tests, strict Clippy, formatting and the compiled C smoke client; the
+focused native Ruby suite passed 43 examples.
+
+Commit `05d5b3b` adds ten fixed geometry/object families in the core: LineTo,
+Arc/ArcTo/Chord/Pie, clip rectangles, CreatePen, CreateBrushIndirect and SetPixelV.
+All 75 core tests, strict core Clippy and formatting passed before integration.
+ABI and Ruby adaptation is pending. Full registry, corpus and platform acceptance
+remain open.
