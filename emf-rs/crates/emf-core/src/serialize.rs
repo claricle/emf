@@ -36,9 +36,22 @@ pub fn serialize_with_limits(
             .ok_or(SerializeFailure::SizeOverflow)?;
         if record.edited {
             edited = true;
-            if let RecordData::Polyline { points, .. } = &record.data {
+            let point_count = match &record.data {
+                RecordData::PolyBezier { points, .. }
+                | RecordData::Polygon { points, .. }
+                | RecordData::Polyline { points, .. }
+                | RecordData::PolyBezierTo { points, .. }
+                | RecordData::PolylineTo { points, .. } => points.len(),
+                RecordData::PolyBezier16 { points, .. }
+                | RecordData::Polygon16 { points, .. }
+                | RecordData::Polyline16 { points, .. }
+                | RecordData::PolyBezierTo16 { points, .. }
+                | RecordData::PolylineTo16 { points, .. } => points.len(),
+                _ => 0,
+            };
+            if point_count != 0 {
                 work = work
-                    .checked_add(points.len() as u64)
+                    .checked_add(point_count as u64)
                     .ok_or(SerializeFailure::SizeOverflow)?;
                 check_limit(LimitKind::WorkUnits, limits.max_work_units, work)?;
             }
@@ -128,7 +141,11 @@ pub fn serialize_with_limits(
             RecordData::SetTextColor { color } | RecordData::SetBkColor { color } => {
                 out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
             }
-            RecordData::Polyline { bounds, points } => {
+            RecordData::PolyBezier { bounds, points }
+            | RecordData::Polygon { bounds, points }
+            | RecordData::Polyline { bounds, points }
+            | RecordData::PolyBezierTo { bounds, points }
+            | RecordData::PolylineTo { bounds, points } => {
                 append_rect(&mut out, *bounds);
                 append(
                     &mut out,
@@ -137,6 +154,21 @@ pub fn serialize_with_limits(
                 for point in points {
                     append(&mut out, point.x as u32);
                     append(&mut out, point.y as u32);
+                }
+            }
+            RecordData::PolyBezier16 { bounds, points }
+            | RecordData::Polygon16 { bounds, points }
+            | RecordData::Polyline16 { bounds, points }
+            | RecordData::PolyBezierTo16 { bounds, points }
+            | RecordData::PolylineTo16 { bounds, points } => {
+                append_rect(&mut out, *bounds);
+                append(
+                    &mut out,
+                    u32::try_from(points.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                for point in points {
+                    out.extend_from_slice(&point.x.to_le_bytes());
+                    out.extend_from_slice(&point.y.to_le_bytes());
                 }
             }
             RecordData::Ellipse { bounds } | RecordData::Rectangle { bounds } => {

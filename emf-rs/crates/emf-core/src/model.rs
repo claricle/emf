@@ -69,6 +69,12 @@ pub struct Point {
     pub y: i32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Point16 {
+    pub x: i16,
+    pub y: i16,
+}
+
 /// COLORREF bytes as stored, including the unmodified reserved byte.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ColorRef {
@@ -132,6 +138,42 @@ pub enum RecordData {
     },
     SetBkColor {
         color: ColorRef,
+    },
+    PolyBezier {
+        bounds: Rect,
+        points: Vec<Point>,
+    },
+    Polygon {
+        bounds: Rect,
+        points: Vec<Point>,
+    },
+    PolyBezierTo {
+        bounds: Rect,
+        points: Vec<Point>,
+    },
+    PolylineTo {
+        bounds: Rect,
+        points: Vec<Point>,
+    },
+    PolyBezier16 {
+        bounds: Rect,
+        points: Vec<Point16>,
+    },
+    Polygon16 {
+        bounds: Rect,
+        points: Vec<Point16>,
+    },
+    Polyline16 {
+        bounds: Rect,
+        points: Vec<Point16>,
+    },
+    PolyBezierTo16 {
+        bounds: Rect,
+        points: Vec<Point16>,
+    },
+    PolylineTo16 {
+        bounds: Rect,
+        points: Vec<Point16>,
     },
     Polyline {
         bounds: Rect,
@@ -247,7 +289,16 @@ impl RecordData {
             Self::SetStretchBltMode { .. } => Some(21),
             Self::SetTextColor { .. } => Some(24),
             Self::SetBkColor { .. } => Some(25),
+            Self::PolyBezier { .. } => Some(2),
+            Self::Polygon { .. } => Some(3),
             Self::Polyline { .. } => Some(4),
+            Self::PolyBezierTo { .. } => Some(5),
+            Self::PolylineTo { .. } => Some(6),
+            Self::PolyBezier16 { .. } => Some(85),
+            Self::Polygon16 { .. } => Some(86),
+            Self::Polyline16 { .. } => Some(87),
+            Self::PolyBezierTo16 { .. } => Some(88),
+            Self::PolylineTo16 { .. } => Some(89),
             Self::Comment { .. } => Some(70),
             Self::Ellipse { .. } => Some(42),
             Self::Rectangle { .. } => Some(43),
@@ -306,7 +357,16 @@ impl RecordData {
             | Self::SetStretchBltMode { .. }
             | Self::SetTextColor { .. }
             | Self::SetBkColor { .. } => Some(4),
-            Self::Polyline { points, .. } => points.len().checked_mul(8)?.checked_add(20),
+            Self::PolyBezier { points, .. }
+            | Self::Polygon { points, .. }
+            | Self::Polyline { points, .. }
+            | Self::PolyBezierTo { points, .. }
+            | Self::PolylineTo { points, .. } => points.len().checked_mul(8)?.checked_add(20),
+            Self::PolyBezier16 { points, .. }
+            | Self::Polygon16 { points, .. }
+            | Self::Polyline16 { points, .. }
+            | Self::PolyBezierTo16 { points, .. }
+            | Self::PolylineTo16 { points, .. } => points.len().checked_mul(4)?.checked_add(20),
             Self::Comment { data } => data.len().checked_add(4),
             Self::Ellipse { .. } | Self::Rectangle { .. } => Some(16),
             Self::RoundRect { .. } => Some(24),

@@ -5,7 +5,7 @@ use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
     ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, PixelFormatFields, Point,
-    RecordData, RecordSpan, Rect, Size, EMR_HEADER, HEADER_FIXED_BYTES,
+    Point16, RecordData, RecordSpan, Rect, Size, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 use crate::reader::{u32_at, Reader};
 
@@ -83,7 +83,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                4 | 9..=15 | 17..=22 | 24..=27 | 29 | 30 | 33 | 34 | 37..=40 | 42..=47 | 54 | 55 | 57 | 59..=64 | 67 | 68 | 70
+                2..=6 | 9..=15 | 17..=22 | 24..=27 | 29 | 30 | 33 | 34 | 37..=40 | 42..=47 | 54 | 55 | 57 | 59..=64 | 67 | 68 | 70 | 85..=89
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -329,7 +329,7 @@ fn decode_record(
             };
             Ok((data, 4))
         }
-        4 if payload.len() >= 20 => {
+        2..=6 if payload.len() >= 20 => {
             let bounds = Rect {
                 left: r.i32()?,
                 top: r.i32()?,
@@ -352,7 +352,46 @@ fn decode_record(
                     y: r.i32()?,
                 });
             }
-            Ok((RecordData::Polyline { bounds, points }, 20 + bytes))
+            let data = match kind {
+                2 => RecordData::PolyBezier { bounds, points },
+                3 => RecordData::Polygon { bounds, points },
+                4 => RecordData::Polyline { bounds, points },
+                5 => RecordData::PolyBezierTo { bounds, points },
+                _ => RecordData::PolylineTo { bounds, points },
+            };
+            Ok((data, 20 + bytes))
+        }
+        85..=89 if payload.len() >= 20 => {
+            let bounds = Rect {
+                left: r.i32()?,
+                top: r.i32()?,
+                right: r.i32()?,
+                bottom: r.i32()?,
+            };
+            let count = r.u32()? as usize;
+            let Some(bytes) = count.checked_mul(4) else {
+                return malformed();
+            };
+            if bytes > r.remaining() {
+                return malformed();
+            }
+            budget.charge_alloc(bytes)?;
+            budget.charge_work(count as u64)?;
+            let mut points = try_vec_with_capacity(count)?;
+            for _ in 0..count {
+                points.push(Point16 {
+                    x: r.u16()? as i16,
+                    y: r.u16()? as i16,
+                });
+            }
+            let data = match kind {
+                85 => RecordData::PolyBezier16 { bounds, points },
+                86 => RecordData::Polygon16 { bounds, points },
+                87 => RecordData::Polyline16 { bounds, points },
+                88 => RecordData::PolyBezierTo16 { bounds, points },
+                _ => RecordData::PolylineTo16 { bounds, points },
+            };
+            Ok((data, 20 + bytes))
         }
         42 if payload.len() >= 16 => Ok((
             RecordData::Ellipse {
