@@ -199,6 +199,16 @@ pub enum RecordData {
         poly_counts: Vec<u32>,
         points: Vec<Point16>,
     },
+    PolyDraw {
+        bounds: Rect,
+        points: Vec<Point>,
+        ab_types: Vec<u8>,
+    },
+    PolyDraw16 {
+        bounds: Rect,
+        points: Vec<Point16>,
+        ab_types: Vec<u8>,
+    },
     Comment {
         data: Vec<u8>,
     },
@@ -323,6 +333,8 @@ impl RecordData {
             Self::Polyline16 { .. } => Some(87),
             Self::PolyBezierTo16 { .. } => Some(88),
             Self::PolylineTo16 { .. } => Some(89),
+            Self::PolyDraw { .. } => Some(56),
+            Self::PolyDraw16 { .. } => Some(92),
             Self::Comment { .. } => Some(70),
             Self::Ellipse { .. } => Some(42),
             Self::Rectangle { .. } => Some(43),
@@ -419,6 +431,20 @@ impl RecordData {
                 .checked_mul(4)?
                 .checked_add(points.len().checked_mul(4)?)?
                 .checked_add(24),
+            Self::PolyDraw {
+                points, ab_types, ..
+            } => points
+                .len()
+                .checked_mul(8)?
+                .checked_add(ab_types.len())?
+                .checked_add(20),
+            Self::PolyDraw16 {
+                points, ab_types, ..
+            } => points
+                .len()
+                .checked_mul(4)?
+                .checked_add(ab_types.len())?
+                .checked_add(20),
             Self::Comment { data } => data.len().checked_add(4),
             Self::Ellipse { .. } | Self::Rectangle { .. } => Some(16),
             Self::RoundRect { .. } => Some(24),
@@ -549,6 +575,7 @@ impl Document {
     /// Replace a supported payload; raw records and record families cannot change.
     /// Comments require a canonical source padding layout; edited padding is resized
     /// to at most three bytes. EOF size must still equal its unchanged record size.
+    /// PolyDraw point and type arrays must have equal lengths.
     pub fn edit_record(&mut self, index: usize, data: RecordData) -> Result<(), EditFailure> {
         let record = self
             .records
@@ -556,6 +583,18 @@ impl Document {
             .ok_or(EditFailure::RecordIndex { index })?;
         if record.data == RecordData::Raw || data.record_type() != Some(record.record_type) {
             return Err(EditFailure::RecordFamily { index });
+        }
+        let mismatched_arrays = match &data {
+            RecordData::PolyDraw {
+                points, ab_types, ..
+            } => points.len() != ab_types.len(),
+            RecordData::PolyDraw16 {
+                points, ab_types, ..
+            } => points.len() != ab_types.len(),
+            _ => false,
+        };
+        if mismatched_arrays {
+            return Err(EditFailure::RecordLayout { index });
         }
         if matches!(data, RecordData::Comment { .. }) {
             let suffix_len = record.size as usize - 8 - record.decoded_len;

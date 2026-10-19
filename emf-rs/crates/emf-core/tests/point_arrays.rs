@@ -193,7 +193,7 @@ fn wrong_family_edits_are_atomic_and_adjacent_unknowns_stay_unknown() {
     for kind in TYPES {
         let mut input = header();
         input.extend(record(kind, &payload(kind, 2)));
-        for unknown in [84, 92, 999] {
+        for unknown in [84, 93, 999] {
             input.extend(record(unknown, &payload(kind, 2)));
         }
         let mut doc = parse(&input, &ParseLimits::default()).unwrap();

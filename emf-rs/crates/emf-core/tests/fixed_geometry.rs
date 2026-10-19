@@ -256,7 +256,7 @@ fn wrong_fixed_geometry_family_edits_reject_atomically_before_and_after_valid_ed
 
 #[test]
 fn neighboring_unknown_types_remain_raw_without_diagnostics() {
-    for kind in [16, 28, 31, 41, 48, 53, 56] {
+    for kind in [16, 28, 31, 41, 48, 53, 58] {
         let mut input = header();
         input.extend(record(kind, &payload(45, VALUES[1])));
         let doc = parse(&input, &ParseLimits::default()).unwrap();

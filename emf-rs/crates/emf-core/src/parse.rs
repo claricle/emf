@@ -83,7 +83,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=15 | 17..=22 | 24..=27 | 29 | 30 | 33 | 34 | 37..=40 | 42..=47 | 54 | 55 | 57 | 59..=64 | 67 | 68 | 70 | 85..=91
+                2..=15 | 17..=22 | 24..=27 | 29 | 30 | 33 | 34 | 37..=40 | 42..=47 | 54..=57 | 59..=64 | 67 | 68 | 70 | 85..=92
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -462,6 +462,56 @@ fn decode_record(
                 }
             };
             Ok((data, 24 + bytes))
+        }
+        56 | 92 if payload.len() >= 20 => {
+            let bounds = Rect {
+                left: r.i32()?,
+                top: r.i32()?,
+                right: r.i32()?,
+                bottom: r.i32()?,
+            };
+            let count = r.u32()? as usize;
+            let point_width = if kind == 56 { 8usize } else { 4 };
+            let Some(bytes) = count.checked_mul(point_width + 1) else {
+                return malformed();
+            };
+            if bytes > r.remaining() {
+                return malformed();
+            }
+            budget.charge_alloc(bytes)?;
+            budget.charge_work(count as u64 * 2)?;
+            let data = if kind == 56 {
+                let mut points = try_vec_with_capacity(count)?;
+                for _ in 0..count {
+                    points.push(Point {
+                        x: r.i32()?,
+                        y: r.i32()?,
+                    });
+                }
+                let mut ab_types = try_vec_with_capacity(count)?;
+                ab_types.extend_from_slice(r.take(count)?);
+                RecordData::PolyDraw {
+                    bounds,
+                    points,
+                    ab_types,
+                }
+            } else {
+                let mut points = try_vec_with_capacity(count)?;
+                for _ in 0..count {
+                    points.push(Point16 {
+                        x: r.u16()? as i16,
+                        y: r.u16()? as i16,
+                    });
+                }
+                let mut ab_types = try_vec_with_capacity(count)?;
+                ab_types.extend_from_slice(r.take(count)?);
+                RecordData::PolyDraw16 {
+                    bounds,
+                    points,
+                    ab_types,
+                }
+            };
+            Ok((data, 20 + bytes))
         }
         42 if payload.len() >= 16 => Ok((
             RecordData::Ellipse {

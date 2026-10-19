@@ -73,6 +73,18 @@ pub fn serialize_with_limits(
                     .len()
                     .checked_add(points.len())
                     .ok_or(SerializeFailure::SizeOverflow)?,
+                RecordData::PolyDraw {
+                    points, ab_types, ..
+                } => points
+                    .len()
+                    .checked_add(ab_types.len())
+                    .ok_or(SerializeFailure::SizeOverflow)?,
+                RecordData::PolyDraw16 {
+                    points, ab_types, ..
+                } => points
+                    .len()
+                    .checked_add(ab_types.len())
+                    .ok_or(SerializeFailure::SizeOverflow)?,
                 _ => 0,
             };
             if element_count != 0 {
@@ -250,6 +262,38 @@ pub fn serialize_with_limits(
                     out.extend_from_slice(&point.x.to_le_bytes());
                     out.extend_from_slice(&point.y.to_le_bytes());
                 }
+            }
+            RecordData::PolyDraw {
+                bounds,
+                points,
+                ab_types,
+            } => {
+                append_rect(&mut out, *bounds);
+                append(
+                    &mut out,
+                    u32::try_from(points.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                for point in points {
+                    append(&mut out, point.x as u32);
+                    append(&mut out, point.y as u32);
+                }
+                out.extend_from_slice(ab_types);
+            }
+            RecordData::PolyDraw16 {
+                bounds,
+                points,
+                ab_types,
+            } => {
+                append_rect(&mut out, *bounds);
+                append(
+                    &mut out,
+                    u32::try_from(points.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                for point in points {
+                    out.extend_from_slice(&point.x.to_le_bytes());
+                    out.extend_from_slice(&point.y.to_le_bytes());
+                }
+                out.extend_from_slice(ab_types);
             }
             RecordData::Ellipse { bounds } | RecordData::Rectangle { bounds } => {
                 append_rect(&mut out, *bounds);
