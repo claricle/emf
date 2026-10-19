@@ -65,6 +65,15 @@ extern "C" {
 #define EMF_FAMILY_PIE 42u
 #define EMF_FAMILY_LINETO 43u
 #define EMF_FAMILY_ARCTO 44u
+#define EMF_FAMILY_POLYBEZIER 45u
+#define EMF_FAMILY_POLYGON 46u
+#define EMF_FAMILY_POLYBEZIERTO 47u
+#define EMF_FAMILY_POLYLINETO 48u
+#define EMF_FAMILY_POLYBEZIER16 49u
+#define EMF_FAMILY_POLYGON16 50u
+#define EMF_FAMILY_POLYLINE16 51u
+#define EMF_FAMILY_POLYBEZIERTO16 52u
+#define EMF_FAMILY_POLYLINETO16 53u
 
 typedef struct emf_document emf_document;
 typedef struct emf_buffer emf_buffer;
@@ -149,7 +158,8 @@ typedef struct emf_error_info {
  * SETVIEWPORTEXTEX, SETVIEWPORTORGEX, SETBRUSHORGEX, OFFSETCLIPRGN and MOVETOEX.
  * Color records SETTEXTCOLOR and SETBKCOLOR and shapes ELLIPSE, RECTANGLE and
  * ROUNDRECT, fixed state/selection records and path lifecycle/consume records
- * are also typed, along with fixed geometry and pen/brush creation records.
+ * are also typed, along with fixed geometry, pen/brush creation, and signed
+ * 16-bit and 32-bit point-array records.
  * Other records remain raw. Snapshot bytes use the
  * encoding documented in snapshot-v2.md.
  * Snapshot versions are independent of ABI versions.

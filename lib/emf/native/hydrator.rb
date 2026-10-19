@@ -6,8 +6,8 @@ module Emf
   module Native
     class Hydrator
       SUPPORTED_TYPES = [
-        4, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 29, 30, 33, 34,
-        37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 54, 55, 57, 59, 60, 61, 62, 63, 64, 67, 68, 70
+        2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 29, 30, 33, 34,
+        37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 54, 55, 57, 59, 60, 61, 62, 63, 64, 67, 68, 70, 85, 86, 87, 88, 89
       ].freeze
 
       def initialize(snapshot, input)
@@ -52,7 +52,7 @@ module Emf
         when 0 then raw_fields(record, raw)
         when 1 then eof_fields(payload, raw)
         when 2 then Fields.call(payload, 2)
-        when 3 then polyline_fields(payload)
+        when 3, 45..53 then Fields.point_array(payload, record.fetch(:family))
         when 4 then comment_fields(payload, raw)
         when 33
           klass, fields = Fields.call(payload, 33)
@@ -82,18 +82,6 @@ module Emf
         raise FormatError, "native backend does not support extended or paletted EOF records" unless entries.zero? && raw.bytesize == 20
 
         [Emr::Binary::Records::Eof, { n_pal_entries: entries, off_pal_entries: offset, n_size_last: last, body: "".b }]
-      end
-
-      def polyline_fields(payload)
-        raise FormatError, "invalid native POLYLINE payload" if payload.bytesize < 24
-
-        count = payload.byteslice(16, 8).unpack1("Q<")
-        require_length(payload, 24 + (count * 8))
-        raise FormatError, "native POLYLINE exceeds Ruby model array limit" if count > 1_000_000
-
-        bounds = %i[left top right bottom].zip(payload.unpack("l<4")).to_h
-        points = payload.byteslice(24..).unpack("l<*").each_slice(2).map { |x, y| { x: x, y: y } }
-        [Emr::Binary::Records::Polyline, { rcl_bounds: bounds, cptl: count, aptl: points }]
       end
 
       def comment_fields(payload, raw)

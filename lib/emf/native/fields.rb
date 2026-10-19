@@ -53,6 +53,33 @@ module Emf
                [:ptl_start, %i[x y], "l<2", 8], [:ptl_end, %i[x y], "l<2", 8]]
       }.freeze
 
+      POINT_ARRAYS = {
+        3 => [Emr::Binary::Records::Polyline, 8, :cptl, :aptl],
+        45 => [Emr::Binary::Records::PolyBezier, 8, :cptl, :aptl],
+        46 => [Emr::Binary::Records::Polygon, 8, :cptl, :aptl],
+        47 => [Emr::Binary::Records::PolyBezierTo, 8, :cptl, :aptl],
+        48 => [Emr::Binary::Records::PolylineTo, 8, :cptl, :aptl],
+        49 => [Emr::Binary::Records::PolyBezier16, 4, :cpts, :apts],
+        50 => [Emr::Binary::Records::Polygon16, 4, :cpts, :apts],
+        51 => [Emr::Binary::Records::Polyline16, 4, :cpts, :apts],
+        52 => [Emr::Binary::Records::PolyBezierTo16, 4, :cpts, :apts],
+        53 => [Emr::Binary::Records::PolylineTo16, 4, :cpts, :apts]
+      }.freeze
+
+      def self.point_array(payload, family)
+        klass, width, count_field, points_field = POINT_ARRAYS.fetch(family)
+        raise FormatError, "invalid native point array payload" if payload.bytesize < 24
+
+        count = payload.byteslice(16, 8).unpack1("Q<")
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 24 + (count * width)
+        raise FormatError, "native point array exceeds Ruby model array limit" if count > 1_000_000
+
+        bounds = %i[left top right bottom].zip(payload.unpack("l<4")).to_h
+        format = width == 8 ? "l<*" : "s<*"
+        points = payload.byteslice(24..).unpack(format).each_slice(2).map { |x, y| { x: x, y: y } }
+        [klass, { rcl_bounds: bounds, count_field => count, points_field => points }]
+      end
+
       def self.call(payload, family)
         klass, *layouts = LAYOUTS.fetch(family)
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == layouts.sum { |_, _, _, length| length }

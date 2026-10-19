@@ -55,6 +55,15 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::Pie { .. } => 42,
         RecordData::LineTo { .. } => 43,
         RecordData::ArcTo { .. } => 44,
+        RecordData::PolyBezier { .. } => 45,
+        RecordData::Polygon { .. } => 46,
+        RecordData::PolyBezierTo { .. } => 47,
+        RecordData::PolylineTo { .. } => 48,
+        RecordData::PolyBezier16 { .. } => 49,
+        RecordData::Polygon16 { .. } => 50,
+        RecordData::Polyline16 { .. } => 51,
+        RecordData::PolyBezierTo16 { .. } => 52,
+        RecordData::PolylineTo16 { .. } => 53,
     }
 }
 
@@ -111,9 +120,22 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         | RecordData::SetBrushOrgEx { .. }
         | RecordData::OffsetClipRgn { .. }
         | RecordData::MoveToEx { .. } => Ok(8),
-        RecordData::Polyline { points, .. } => points
+        RecordData::Polyline { points, .. }
+        | RecordData::PolyBezier { points, .. }
+        | RecordData::Polygon { points, .. }
+        | RecordData::PolyBezierTo { points, .. }
+        | RecordData::PolylineTo { points, .. } => points
             .len()
             .checked_mul(8)
+            .and_then(|len| len.checked_add(24))
+            .ok_or(Error::SizeOverflow),
+        RecordData::PolyBezier16 { points, .. }
+        | RecordData::Polygon16 { points, .. }
+        | RecordData::Polyline16 { points, .. }
+        | RecordData::PolyBezierTo16 { points, .. }
+        | RecordData::PolylineTo16 { points, .. } => points
+            .len()
+            .checked_mul(4)
             .and_then(|len| len.checked_add(24))
             .ok_or(Error::SizeOverflow),
         RecordData::Comment { data } => data.len().checked_add(8).ok_or(Error::SizeOverflow),
@@ -249,12 +271,28 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
             }
             RecordData::LineTo { origin } => point(&mut out, *origin),
 
-            RecordData::Polyline { bounds, points } => {
+            RecordData::Polyline { bounds, points }
+            | RecordData::PolyBezier { bounds, points }
+            | RecordData::Polygon { bounds, points }
+            | RecordData::PolyBezierTo { bounds, points }
+            | RecordData::PolylineTo { bounds, points } => {
                 rect(&mut out, *bounds);
                 u64_field(&mut out, wire_len(points.len())?);
                 for point in points {
                     i32_field(&mut out, point.x);
                     i32_field(&mut out, point.y);
+                }
+            }
+            RecordData::PolyBezier16 { bounds, points }
+            | RecordData::Polygon16 { bounds, points }
+            | RecordData::Polyline16 { bounds, points }
+            | RecordData::PolyBezierTo16 { bounds, points }
+            | RecordData::PolylineTo16 { bounds, points } => {
+                rect(&mut out, *bounds);
+                u64_field(&mut out, wire_len(points.len())?);
+                for point in points {
+                    out.extend_from_slice(&point.x.to_le_bytes());
+                    out.extend_from_slice(&point.y.to_le_bytes());
                 }
             }
             RecordData::Comment { data } => {
@@ -528,6 +566,53 @@ mod tests {
             assert_eq!(cursor.u64(), (count * 4) as u64);
             cursor.words(words);
             assert_eq!(cursor.position, encoded.len());
+        }
+    }
+
+    #[test]
+    fn point_array_snapshots_preserve_signed_widths_and_counts_without_suffixes() {
+        for (index, kind) in [2, 3, 5, 6, 85, 86, 87, 88, 89].into_iter().enumerate() {
+            for count in [0u32, 2] {
+                let mut payload = [i32::MIN, i32::MAX, -1, 0]
+                    .into_iter()
+                    .flat_map(i32::to_le_bytes)
+                    .collect::<Vec<_>>();
+                payload.extend_from_slice(&count.to_le_bytes());
+                let points = if index < 4 {
+                    [i32::MIN, i32::MAX, -1, 0]
+                        .into_iter()
+                        .flat_map(i32::to_le_bytes)
+                        .collect::<Vec<_>>()
+                } else {
+                    [i16::MIN, i16::MAX, -1, 0]
+                        .into_iter()
+                        .flat_map(i16::to_le_bytes)
+                        .collect::<Vec<_>>()
+                };
+                let points = if count == 0 {
+                    &[][..]
+                } else {
+                    points.as_slice()
+                };
+                payload.extend_from_slice(points);
+                payload.extend_from_slice(b"opaque");
+                let mut input = fixture_header(88);
+                record(&mut input, kind, &payload);
+                let document = parse(&input, &ParseLimits::default()).unwrap();
+                let encoded = encode(&document).unwrap();
+                let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+                cursor.take(112 + 88);
+                assert_eq!(cursor.u64(), 0);
+                assert_eq!(cursor.u64(), 88);
+                assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
+                assert_eq!(cursor.u32(), kind);
+                assert_eq!(cursor.u32(), 45 + index as u32);
+                assert_eq!(cursor.u64(), 24 + points.len() as u64);
+                assert_eq!(cursor.take(16), &payload[..16]);
+                assert_eq!(cursor.u64(), u64::from(count));
+                assert_eq!(cursor.take(points.len()), points);
+                assert_eq!(cursor.position, encoded.len());
+            }
         }
     }
 

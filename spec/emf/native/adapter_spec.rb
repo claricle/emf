@@ -399,6 +399,105 @@ RSpec.describe Emf::Native do
     end
   end
 
+  let(:point_array_records) do
+    [
+      [2, Emf::Emr::Binary::Records::PolyBezier, 45, 8],
+      [3, Emf::Emr::Binary::Records::Polygon, 46, 8],
+      [5, Emf::Emr::Binary::Records::PolyBezierTo, 47, 8],
+      [6, Emf::Emr::Binary::Records::PolylineTo, 48, 8],
+      [85, Emf::Emr::Binary::Records::PolyBezier16, 49, 4],
+      [86, Emf::Emr::Binary::Records::Polygon16, 50, 4],
+      [87, Emf::Emr::Binary::Records::Polyline16, 51, 4],
+      [88, Emf::Emr::Binary::Records::PolyBezierTo16, 52, 4],
+      [89, Emf::Emr::Binary::Records::PolylineTo16, 53, 4]
+    ]
+  end
+
+  it "hydrates point arrays directly with signed extrema and serializable edits" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    point_array_records.each do |type, klass, _, width|
+      expect(klass).not_to receive(:read)
+      maximum = width == 8 ? 0x7FFFFFFF : 0x7FFF
+      points = [{ x: -maximum - 1, y: maximum }, { x: -1, y: 0 }]
+      count_field, points_field = width == 8 ? %i[cptl aptl] : %i[cpts apts]
+      fields = { rcl_bounds: { left: -0x80000000, top: 0x7FFFFFFF, right: -1, bottom: 0 },
+                 count_field => 2, points_field => points }
+      length = 28 + (2 * width)
+      original = klass.new(i_type: type, n_size: length, **fields).to_binary_s
+      parsed = Emf.parse(header + original + eof)
+      wire = parsed.records.first.wire
+      expect(wire.class).to eq(klass)
+      fields.each { |field, value| expect(wire.public_send(field).snapshot).to eq(value) }
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(header + original + eof)
+      edited = points.map { |point| point.transform_values { |value| -value - 1 } }
+      wire.public_send("#{points_field}=", edited)
+      expected = header + klass.new(i_type: type, n_size: length, **fields.merge(points_field => edited)).to_binary_s + eof
+      expect(Emf.serialize(parsed)).to eq(expected)
+      expect(Emf.parse(expected).records.first.wire.public_send(points_field).snapshot).to eq(edited)
+    end
+  end
+
+  it "matches Ruby point array models for zero counts and suffixes with unknown siblings" do
+    counts = [0, 2]
+    bounds = [-5, 2, 40, 60].pack("l<4")
+    coordinates = [-1, 0, 1, -2]
+    point_array_records.each do |type, _, _, width|
+      counts.each do |count|
+        ["".b, "opaque".b].each do |suffix|
+          format = width == 8 ? "l<4" : "s<4"
+          payload = bounds + [count].pack("V")
+          payload += coordinates.pack(format) unless count.zero?
+          input = header + [type, payload.bytesize + suffix.bytesize + 8].pack("V2") + payload + suffix + unknown + eof
+          ENV["EMF_BACKEND"] = "native"
+          native = Emf.parse(input)
+          ENV["EMF_BACKEND"] = "ruby"
+          ruby = Emf.parse(input)
+          expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
+          expect(native.records).to eq(ruby.records)
+          expect(native.errors).to be_empty
+          expect(native.records[1].wire.class).to eq(Emf::Emr::Binary::Records::Raw)
+          expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+        end
+      end
+    end
+  end
+
+  it "preserves truncated and oversized-count point arrays as Raw with continued framing" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    prefix = [-5, 2, 40, 60, 2].pack("l<4V")
+    oversized_count = [0xFFFFFFFF].pack("V")
+    point_array_records.each do |type, _, _, width|
+      payload = prefix + ("x" * (2 * width))
+      payloads = (0...payload.bytesize).map { |length| payload.byteslice(0, length) }
+      payloads << (payload.byteslice(0, 16) + oversized_count)
+      payloads.each do |short|
+        input = header + [type, short.bytesize + 8].pack("V2") + short + map_mode + eof
+        parsed = Emf.parse(input)
+        expect(parsed.records.map { |record| record.wire.class }).to eq(
+          [Emf::Emr::Binary::Records::Raw, Emf::Emr::Binary::Records::SetMapMode, Emf::Emr::Binary::Records::Eof]
+        )
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(input)
+      end
+    end
+  end
+
+  it "rejects point array snapshot length and count mismatches before hydration" do
+    hydrator = Emf::Native::Hydrator.new(nil, "".b)
+    prefix = [0, 0, 0, 0, 2].pack("l<4Q<")
+    oversized_count = [0xFFFFFFFFFFFFFFFF].pack("Q<")
+    point_array_records.each do |_, _, family, width|
+      payload = prefix + ("x" * (2 * width))
+      invalid = [payload.byteslice(0, 23), payload.byteslice(0...-1), "#{payload}x",
+                 payload.byteslice(0, 16) + oversized_count]
+      invalid.each do |bytes|
+        record = { family: family, payload: bytes }
+        expect { hydrator.send(:wire_fields, record, "".b) }.to raise_error(Emf::FormatError)
+      end
+    end
+  end
+
   it "matches Ruby canonical models after every wire is traversed" do
     native = Emf.parse(bytes)
     ENV["EMF_BACKEND"] = "ruby"

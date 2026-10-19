@@ -96,6 +96,15 @@ length u64, type ID u32, family u32, typed payload length u64. Payloads:
 | PIE | 42 | i32 bounds left,top,right,bottom; i32 start x,y; i32 end x,y |
 | LINETO | 43 | i32 origin x,y |
 | ARCTO | 44 | i32 bounds left,top,right,bottom; i32 start x,y; i32 end x,y |
+| POLYBEZIER | 45 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i32 x/y |
+| POLYGON | 46 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i32 x/y |
+| POLYBEZIERTO | 47 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i32 x/y |
+| POLYLINETO | 48 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i32 x/y |
+| POLYBEZIER16 | 49 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i16 x/y |
+| POLYGON16 | 50 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i16 x/y |
+| POLYLINE16 | 51 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i16 x/y |
+| POLYBEZIERTO16 | 52 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i16 x/y |
+| POLYLINETO16 | 53 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i16 x/y |
 
 Families match descriptor batches. Malformed supported payloads remain RAW and
 produce diagnostics. COMMENT contains counted data, including the EMF+ identifier
