@@ -9,14 +9,14 @@ require "optparse"
 require "rbconfig"
 require "time"
 
-# Stage timing baseline for the Ruby parser. The parent process never parses a
+# Stage timings through the public parser API. The parent process never parses a
 # fixture: every fixture runs in its own child with an external deadline and a
 # bounded output pipe, so a corrupt input cannot crash or hang the benchmark.
 # Workers must not load `emf` (or bindata) before timing starts, because the
 # cold-load measurement includes those requires.
 module ParserBenchmark
   SCHEMA_VERSION = 1
-  SUPPORTED_BACKENDS = %w[ruby].freeze
+  SUPPORTED_BACKENDS = %w[ruby native].freeze
   ROOT = File.expand_path("../..", __dir__)
   SCRIPT = File.join(ROOT, "bench/parser.rb")
   SLOWEST_STAGE = "parse_to_serialize"
@@ -105,14 +105,16 @@ module ParserBenchmark
 
   # Runs in a fresh child with a warm process: untimed warmups, then timed trials.
   class WarmWorker
-    def initialize(path:, sha256:, iterations:, warmups:)
+    def initialize(path:, sha256:, iterations:, warmups:, backend: "ruby")
       @path = path
       @sha256 = sha256
       @iterations = iterations
       @warmups = warmups
+      @backend = backend
     end
 
     def call
+      ENV["EMF_BACKEND"] = @backend
       require "emf"
       @bytes = File.binread(@path)
       raise InputMismatch, "sha256 differs from the manifest" unless Digest::SHA256.hexdigest(@bytes) == @sha256
@@ -178,11 +180,13 @@ module ParserBenchmark
   # Runs in a fresh child before anything is loaded: require cost plus the
   # first (autoload-heavy) calls of one fixture.
   class ColdWorker
-    def initialize(path:)
+    def initialize(path:, backend: "ruby")
       @path = path
+      @backend = backend
     end
 
     def call
+      ENV["EMF_BACKEND"] = @backend
       loaded = time { require "emf" }
       bytes = File.binread(@path)
       detect = time { Emf.detect_format(bytes) }
@@ -253,9 +257,9 @@ module ParserBenchmark
 
     def parser(options)
       OptionParser.new do |opts|
-        opts.banner = "Usage: bundle exec ruby bench/parser.rb --manifest FILE --backend ruby --output FILE [options]"
+        opts.banner = "Usage: bundle exec ruby bench/parser.rb --manifest FILE --backend NAME --output FILE [options]"
         opts.on("--manifest FILE", "Fixture manifest (spec/fixtures/manifest.json)") { |v| options.manifest = v }
-        opts.on("--backend NAME", "Backend to measure; only: #{SUPPORTED_BACKENDS.join(', ')}") { |v| options.backend = v }
+        opts.on("--backend NAME", "Forced backend to measure (default ruby): #{SUPPORTED_BACKENDS.join(', ')}") { |v| options.backend = v }
         opts.on("--output FILE", "JSON result path") { |v| options.output = v }
         opts.on("--iterations N", Integer, "Timed trials per fixture (default #{DEFAULTS[:iterations]})") { |v| options.iterations = v }
         opts.on("--warmups N", Integer, "Untimed warmup trials per fixture (default #{DEFAULTS[:warmups]})") { |v| options.warmups = v }
@@ -274,9 +278,10 @@ module ParserBenchmark
       $stdout.reopen(File::NULL, "w")
       $stderr.reopen(File::NULL, "w")
       worker = if options.worker == "cold"
-                 ColdWorker.new(path: options.path)
+                 ColdWorker.new(path: options.path, backend: options.backend)
                else
-                 WarmWorker.new(path: options.path, sha256: options.sha256, iterations: options.iterations, warmups: options.warmups)
+                 WarmWorker.new(path: options.path, sha256: options.sha256, iterations: options.iterations,
+                                warmups: options.warmups, backend: options.backend)
                end
       output.write(JSON.generate(worker.call))
       output.close
@@ -344,6 +349,48 @@ module ParserBenchmark
     end
   end
 
+  # Describes the public backend boundaries and identifies the selected library.
+  class BackendDescription
+    def initialize(backend)
+      @backend = backend
+    end
+
+    def native_library
+      return nil unless @backend == "native"
+
+      path = ENV.fetch("EMF_NATIVE_LIBRARY", nil)
+      identity = { "path" => path, "sha256" => nil,
+                   "build_metadata" => { "profile" => nil, "rustc_version" => nil,
+                                         "note" => "The library exposes no build metadata; profile and compiler are unknown." } }
+      return identity if path.nil? || path.empty?
+
+      identity.merge("resolved_path" => File.realpath(path), "sha256" => Digest::SHA256.file(path).hexdigest,
+                     "size_bytes" => File.size(path), "mtime" => File.mtime(path).utc.iso8601)
+    rescue SystemCallError => e
+      identity.merge("identity_error" => e.message)
+    end
+
+    def stage_descriptions
+      return STAGES if @backend == "ruby"
+
+      STAGES.merge("parse" => "Emf.parse(bytes): backend selection/loading, native parse, " \
+                              "ABI snapshot transfer and Ruby model/wire hydration",
+                   "serialize" => "Emf.serialize(metafile): native adapter selection/loading and Ruby Emr::Serializer",
+                   "parse_to_serialize" => "Emf.serialize(Emf.parse(bytes)) through the forced native adapter as one region")
+    end
+
+    def inseparable_boundaries
+      return INSEPARABLE_BOUNDARIES if @backend == "ruby"
+
+      ["Native parse, ABI snapshot transfer and Ruby model/wire hydration share the public Emf.parse region; " \
+       "raw Rust parse, ABI transfer and hydration are not measured separately.",
+       "Backend selection currently loads the native adapter on each parse and serialize call; that cost is included. " \
+       "Native serialization currently delegates to the Ruby Emr::Serializer.",
+       "Traversal snapshots already-hydrated BinData wires; it does not measure native byte decoding. " \
+       "Ruby allocated_objects excludes Rust allocations."]
+    end
+  end
+
   # Parent: selects fixtures, launches bounded children, assembles the report.
   class Run
     OUTPUT_LIMIT = 4 * 1024 * 1024
@@ -351,6 +398,7 @@ module ParserBenchmark
     def initialize(options, argv)
       @options = options
       @argv = argv
+      @backend_description = BackendDescription.new(options.backend)
       @manifest_path = File.expand_path(options.manifest)
     end
 
@@ -388,10 +436,9 @@ module ParserBenchmark
       failures = fixtures.reject { |f| f["status"] == "ok" }.map { |f| f.slice("path", "status", "failure") }
       { "schema_version" => SCHEMA_VERSION, "kind" => "emf-parser-stage-baseline", "backend" => @options.backend,
         "generated_at" => Time.now.utc.iso8601, "command" => ["ruby", "bench/parser.rb", *@argv],
-        **Provenance.new(@manifest).to_h, "inputs" => inputs(selected),
+        **Provenance.new(@manifest).to_h, "native_library" => @backend_description.native_library, "inputs" => inputs(selected),
         "method" => method_description, "cold_load" => cold, "fixtures" => fixtures,
-        "slowest_measured_case" => slowest,
-        "failures" => failures + ParserBenchmark.cold_failures(cold) }
+        "slowest_measured_case" => slowest, "failures" => failures + ParserBenchmark.cold_failures(cold) }
     end
 
     def measure_fixture(entry)
@@ -412,7 +459,7 @@ module ParserBenchmark
     end
 
     def child(args, path)
-      command = [RbConfig.ruby, "-I", File.join(ROOT, "lib"), SCRIPT, *args]
+      command = [RbConfig.ruby, "-I", File.join(ROOT, "lib"), SCRIPT, "--backend", @options.backend, *args]
       FixtureManifest::Runner.new(timeout: @options.timeout, output_limit: OUTPUT_LIMIT, command: command).call(path)
     end
 
@@ -421,7 +468,7 @@ module ParserBenchmark
       runs = Array.new(@options.cold_runs) { child(%w[--worker cold], File.expand_path(smallest.fetch("path"), ROOT)) }
       { "fixture" => smallest.fetch("path"), "runs" => runs,
         "note" => "Each run is a fresh process; require_emf_ns includes loading bindata. Smallest selected fixture, so " \
-                  "first-call costs are dominated by autoload and class setup rather than input size." }
+                  "first-call costs include autoload/class setup and, for native, initial library loading, ABI transfer and hydration." }
     end
 
     def slowest_case(fixtures)
@@ -452,7 +499,8 @@ module ParserBenchmark
         "isolation" => "one child process per fixture (process group, external deadline, #{OUTPUT_LIMIT}-byte output cap); " \
                        "warmup trials run in the same child and are discarded",
         "file_io" => "excluded from every stage except parse_file; bytes are read once per child",
-        "stages" => STAGES, "inseparable_boundaries" => INSEPARABLE_BOUNDARIES, "memory" => ParserBenchmark::Memory.description }
+        "stages" => @backend_description.stage_descriptions,
+        "inseparable_boundaries" => @backend_description.inseparable_boundaries, "memory" => ParserBenchmark::Memory.description }
     end
 
     def summarize(report)

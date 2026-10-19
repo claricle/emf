@@ -5,11 +5,16 @@ require "digest"
 require "json"
 require "tmpdir"
 require_relative "../../bench/support/parser_benchmark"
+require_relative "../support/fixture_manifest"
 
 RSpec.describe ParserBenchmark::CLI do
   let(:tmpdir) { Dir.mktmpdir("parser-benchmark") }
   let(:result_path) { File.join(tmpdir, "result.json") }
-  let(:manifest) { File.join(ParserBenchmark::ROOT, "spec/fixtures/manifest.json") }
+  let(:manifest) do
+    source = JSON.parse(File.read(File.join(ParserBenchmark::ROOT, "spec/fixtures/manifest.json")))
+    source["schema_version"] = FixtureManifest::SCHEMA_VERSION
+    File.join(tmpdir, "current-manifest.json").tap { |path| File.write(path, JSON.generate(source)) }
+  end
   let(:report) { JSON.parse(File.read(result_path)) }
   let(:fast_args) do
     ["--manifest", manifest, "--backend", "ruby", "--output", result_path, "--fixture", "spec/fixtures/simple/*",
@@ -23,7 +28,10 @@ RSpec.describe ParserBenchmark::CLI do
     before(:context) do
       @dir = Dir.mktmpdir("parser-benchmark-shared")
       path = File.join(@dir, "result.json")
-      manifest = File.join(ParserBenchmark::ROOT, "spec/fixtures/manifest.json")
+      source = JSON.parse(File.read(File.join(ParserBenchmark::ROOT, "spec/fixtures/manifest.json")))
+      source["schema_version"] = FixtureManifest::SCHEMA_VERSION
+      manifest = File.join(@dir, "manifest.json")
+      File.write(manifest, JSON.generate(source))
       @status = described_class.new(["--manifest", manifest, "--backend", "ruby", "--output", path, "--fixture",
                                      "spec/fixtures/simple/*", "--iterations", "2", "--warmups", "0", "--cold-runs", "1"]).run
       @report = JSON.parse(File.read(path))
@@ -72,9 +80,72 @@ RSpec.describe ParserBenchmark::CLI do
   end
 
   it "rejects an unsupported backend without writing a result" do
-    args = fast_args.dup.tap { |a| a[a.index("--backend") + 1] = "native" }
-    expect { expect(described_class.new(args).run).to eq(2) }.to output(/unsupported backend "native"/).to_stderr
+    args = fast_args.dup.tap { |a| a[a.index("--backend") + 1] = "other" }
+    expect { expect(described_class.new(args).run).to eq(2) }.to output(/unsupported backend "other"/).to_stderr
     expect(File).not_to exist(result_path)
+  end
+
+  it "forces native in both warm and cold children and reports unavailable libraries" do
+    previous = ENV.to_h.slice("EMF_BACKEND", "EMF_NATIVE_LIBRARY")
+    ENV["EMF_BACKEND"] = "ruby"
+    ENV["EMF_NATIVE_LIBRARY"] = File.join(tmpdir, "missing-library")
+    args = fast_args.dup.tap { |a| a[a.index("--backend") + 1] = "native" }
+
+    expect(described_class.new(args).run).to eq(1)
+    expect(report.fetch("backend")).to eq("native")
+    expect(report.fetch("failures").size).to eq(2)
+    expect(report.fetch("failures").map { |failure| failure.dig("failure", "class") }).to eq(
+      ["Emf::Native::Unavailable", "Emf::Native::Unavailable"]
+    )
+    expect(report.fetch("slowest_measured_case")).to be_nil
+    expect(report.dig("method", "stages", "parse")).to include("ABI", "hydration")
+    expect(report.dig("method", "inseparable_boundaries").join).not_to include("Emr::Parser.call")
+    expect(report.fetch("native_library")).to include("path" => ENV.fetch("EMF_NATIVE_LIBRARY"), "sha256" => nil)
+  ensure
+    previous.each_key { |key| ENV[key] = previous[key] }
+    %w[EMF_BACKEND EMF_NATIVE_LIBRARY].each { |key| ENV.delete(key) unless previous.key?(key) }
+  end
+
+  it "records the exact library identity even when the library cannot load" do
+    previous = ENV.fetch("EMF_NATIVE_LIBRARY", nil)
+    library = File.join(tmpdir, "invalid-library")
+    File.binwrite(library, "not a native library")
+    ENV["EMF_NATIVE_LIBRARY"] = library
+    args = fast_args.dup.tap { |a| a[a.index("--backend") + 1] = "native" }
+
+    expect(described_class.new(args).run).to eq(1)
+    expect(report.fetch("native_library")).to include(
+      "path" => library, "resolved_path" => File.realpath(library),
+      "sha256" => Digest::SHA256.file(library).hexdigest, "size_bytes" => File.size(library)
+    )
+    expect(report.dig("native_library", "build_metadata")).to include("profile" => nil, "rustc_version" => nil)
+    expect(report.fetch("failures").size).to eq(2)
+  ensure
+    ENV["EMF_NATIVE_LIBRARY"] = previous
+  end
+
+  it "rejects stale manifest schemas without writing results" do
+    source = JSON.parse(File.read(manifest))
+    source["schema_version"] = FixtureManifest::SCHEMA_VERSION - 1
+    File.write(manifest, JSON.generate(source))
+
+    expect { expect(described_class.new(fast_args).run).to eq(2) }.to output(/schema/).to_stderr
+    expect(File).not_to exist(result_path)
+  end
+
+  it "defaults to forced Ruby even when the caller requests native" do
+    previous = ENV.fetch("EMF_BACKEND", nil)
+    ENV["EMF_BACKEND"] = "native"
+    args = fast_args.dup
+    args.slice!(args.index("--backend"), 2)
+
+    expect(described_class.new(args).run).to eq(0)
+    expect(report.fetch("backend")).to eq("ruby")
+    expect(report.fetch("fixtures").fetch(0).fetch("status")).to eq("ok")
+    expect(report.dig("cold_load", "runs", 0, "status")).to eq("ok")
+    expect(ENV.fetch("EMF_BACKEND")).to eq("native")
+  ensure
+    ENV["EMF_BACKEND"] = previous
   end
 
   it "requires the manifest and output options" do
@@ -92,7 +163,8 @@ RSpec.describe ParserBenchmark::CLI do
     File.binwrite(garbage, "not an emf")
     entry = { "path" => garbage, "sha256" => Digest::SHA256.file(garbage).hexdigest, "size_bytes" => 10, "outcome" => "parsed" }
     custom = File.join(tmpdir, "manifest.json")
-    File.write(custom, JSON.generate("schema_version" => 1, "backend" => { "name" => "ruby" }, "fixtures" => [entry]))
+    File.write(custom, JSON.generate("schema_version" => FixtureManifest::SCHEMA_VERSION,
+                                     "backend" => { "name" => "ruby" }, "fixtures" => [entry]))
     args = fast_args.dup.tap { |a| a[a.index("--manifest") + 1] = custom }
     args.slice!(args.index("--fixture"), 2)
 
@@ -108,9 +180,14 @@ end
 RSpec.describe ParserBenchmark::Run do
   let(:tmpdir) { Dir.mktmpdir("parser-benchmark-cold") }
   let(:result_path) { File.join(tmpdir, "result.json") }
+  let(:manifest) do
+    source = JSON.parse(File.read(File.join(ParserBenchmark::ROOT, "spec/fixtures/manifest.json")))
+    source["schema_version"] = FixtureManifest::SCHEMA_VERSION
+    File.join(tmpdir, "current-manifest.json").tap { |path| File.write(path, JSON.generate(source)) }
+  end
   let(:options) do
     ParserBenchmark::Options.new(**ParserBenchmark::CLI::DEFAULTS,
-                                 manifest: File.join(ParserBenchmark::ROOT, "spec/fixtures/manifest.json"),
+                                 manifest: manifest,
                                  output: result_path, fixtures: ["spec/fixtures/simple/*"],
                                  iterations: 1, warmups: 0, cold_runs: 2)
   end
