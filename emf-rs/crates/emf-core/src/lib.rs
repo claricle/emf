@@ -14,11 +14,11 @@ mod serialize;
 
 pub use detect::{detect_format, Format};
 pub use error::{EditFailure, LimitKind, ParseFailure, SerializeFailure};
-pub use limits::ParseLimits;
+pub use limits::{ParseLimits, SerializeLimits};
 pub use model::{
     Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, PixelFormatFields, Point,
     RecordData, RecordSpan, Rect, Size, EMR_EOF, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 pub use parse::parse;
 pub use reader::Reader;
-pub use serialize::serialize;
+pub use serialize::{serialize, serialize_with_limits};

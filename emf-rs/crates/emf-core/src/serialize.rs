@@ -1,15 +1,30 @@
 //! Checked serialization with preservation of opaque source bytes.
 
-use crate::error::SerializeFailure;
+use crate::error::{LimitKind, SerializeFailure};
+use crate::limits::SerializeLimits;
 use crate::model::{Document, EmfHeader, RecordData, Rect};
 
 /// Write unchanged bytes exactly; encode edited fields and preserve opaque suffixes.
 /// Comment padding is resized; EOF palette bytes stay before the final SizeLast.
+/// Uses [`SerializeLimits::default`] to bound output and encoding work.
 /// On any edit, refresh the header's total byte and record counts.
 pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
+    serialize_with_limits(document, &SerializeLimits::default())
+}
+
+/// Serialize with explicit inclusive output and work ceilings.
+pub fn serialize_with_limits(
+    document: &Document,
+    limits: &SerializeLimits,
+) -> Result<Vec<u8>, SerializeFailure> {
     let mut total = document.source.len();
     let mut next = document.header_len;
+    let mut edited = document.header_edited;
+    let mut work = 2u64;
+    check_limit(LimitKind::WorkUnits, limits.max_work_units, work)?;
     for record in document.records() {
+        work = work.checked_add(2).ok_or(SerializeFailure::SizeOverflow)?;
+        check_limit(LimitKind::WorkUnits, limits.max_work_units, work)?;
         if record.offset() != next {
             return Err(SerializeFailure::Inconsistent { offset: next });
         }
@@ -20,6 +35,13 @@ pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
             .checked_add(bytes.len())
             .ok_or(SerializeFailure::SizeOverflow)?;
         if record.edited {
+            edited = true;
+            if let RecordData::Polyline { points, .. } = &record.data {
+                work = work
+                    .checked_add(points.len() as u64)
+                    .ok_or(SerializeFailure::SizeOverflow)?;
+                check_limit(LimitKind::WorkUnits, limits.max_work_units, work)?;
+            }
             total = total
                 .checked_sub(record.size as usize)
                 .and_then(|n| n.checked_add(record.edited_size(&record.data)?))
@@ -29,9 +51,24 @@ pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
     if next != document.tail_offset {
         return Err(SerializeFailure::Inconsistent { offset: next });
     }
-    if document.is_edited() {
+    if edited {
         u32::try_from(total).map_err(|_| SerializeFailure::SizeOverflow)?;
     }
+    check_limit(
+        LimitKind::OutputBytes,
+        limits.max_output_bytes as u64,
+        total as u64,
+    )?;
+    work = work
+        .checked_add((total as u64).div_ceil(16))
+        .ok_or(SerializeFailure::SizeOverflow)?;
+    check_limit(LimitKind::WorkUnits, limits.max_work_units, work)?;
+    let record_count = document
+        .records
+        .len()
+        .checked_add(1)
+        .ok_or(SerializeFailure::SizeOverflow)?;
+    let record_count = u32::try_from(record_count).map_err(|_| SerializeFailure::SizeOverflow)?;
     let mut out = Vec::new();
     out.try_reserve_exact(total)
         .map_err(|_| SerializeFailure::AllocationFailed { bytes: total })?;
@@ -39,14 +76,9 @@ pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
     if document.header_edited {
         write_header(&mut out, &document.header);
     }
-    if document.is_edited() {
+    if edited {
         put(&mut out, 48, total as u32);
-        put(
-            &mut out,
-            52,
-            u32::try_from(document.records.len() + 1)
-                .map_err(|_| SerializeFailure::SizeOverflow)?,
-        );
+        put(&mut out, 52, record_count);
     }
     for record in document.records() {
         let bytes = document
@@ -110,6 +142,17 @@ pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
     out.extend_from_slice(&document.source[next..]);
     Ok(out)
 }
+fn check_limit(kind: LimitKind, limit: u64, requested: u64) -> Result<(), SerializeFailure> {
+    if requested > limit {
+        return Err(SerializeFailure::LimitExceeded {
+            kind,
+            limit,
+            requested,
+        });
+    }
+    Ok(())
+}
+
 fn append(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_le_bytes());
 }

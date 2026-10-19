@@ -1,11 +1,31 @@
-//! Resource budgets shared by the readers.
+//! Resource budgets for parsing and serialization.
 //!
-//! Units: bytes for `*_bytes`, records for `max_records`, and work units for
+//! Parse units: bytes for `*_bytes`, records for `max_records`, and work units for
 //! `max_work_units` (one unit per record framed plus one per 16 bytes of
 //! record content examined, plus one per 16 bytes copied into the owned source).
 //! A limit is exceeded when the requested total is strictly greater than the limit.
 
 use crate::error::{LimitKind, ParseFailure};
+
+/// Ceilings checked before serialization allocates or copies output.
+/// Work counts two units per record (including the header), one per 16 output
+/// bytes, and one per point encoded from an edited polyline. Limits are inclusive.
+/// Defaults allow 200 MiB of output and 64 Mi work units.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SerializeLimits {
+    /// Largest serialized buffer, including opaque suffixes, padding and tail.
+    pub max_output_bytes: usize,
+    pub max_work_units: u64,
+}
+
+impl Default for SerializeLimits {
+    fn default() -> Self {
+        Self {
+            max_output_bytes: 200 * 1024 * 1024,
+            max_work_units: 64 * 1024 * 1024,
+        }
+    }
+}
 
 /// Configurable ceilings for one parse.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,7 +98,12 @@ impl<'a> Budget<'a> {
 
     /// Count one framed record and charge its work.
     pub(crate) fn charge_record(&mut self, size: usize) -> Result<(), ParseFailure> {
-        let records = self.records.saturating_add(1);
+        let records = self
+            .records
+            .checked_add(1)
+            .ok_or(ParseFailure::ArithmeticOverflow {
+                offset: self.records,
+            })?;
         if records > self.limits.max_records {
             return Err(exceeded(
                 LimitKind::RecordCount,
@@ -91,7 +116,10 @@ impl<'a> Budget<'a> {
     }
 
     pub(crate) fn charge_work(&mut self, units: u64) -> Result<(), ParseFailure> {
-        let work = self.work.saturating_add(units);
+        let work = self
+            .work
+            .checked_add(units)
+            .ok_or(ParseFailure::ArithmeticOverflow { offset: 0 })?;
         if work > self.limits.max_work_units {
             return Err(exceeded(
                 LimitKind::WorkUnits,
@@ -109,7 +137,13 @@ impl<'a> Budget<'a> {
         if values.len() < values.capacity() {
             return Ok(());
         }
-        let capacity = values.capacity().saturating_mul(2).max(1);
+        let capacity = values
+            .capacity()
+            .checked_mul(2)
+            .ok_or(ParseFailure::ArithmeticOverflow {
+                offset: values.len(),
+            })?
+            .max(1);
         let bytes = capacity.checked_mul(std::mem::size_of::<T>()).ok_or(
             ParseFailure::ArithmeticOverflow {
                 offset: values.len(),
@@ -122,7 +156,10 @@ impl<'a> Budget<'a> {
     }
 
     pub(crate) fn charge_alloc(&mut self, bytes: usize) -> Result<(), ParseFailure> {
-        let total = self.allocated.saturating_add(bytes);
+        let total = self
+            .allocated
+            .checked_add(bytes)
+            .ok_or(ParseFailure::ArithmeticOverflow { offset: 0 })?;
         if total > self.limits.max_allocated_bytes {
             return Err(exceeded(
                 LimitKind::AllocatedBytes,
@@ -145,10 +182,50 @@ fn exceeded(kind: LimitKind, limit: u64, requested: u64) -> ParseFailure {
 
 /// Request capacity for `len` elements with a fallible reservation.
 pub(crate) fn try_vec_with_capacity<T>(len: usize) -> Result<Vec<T>, ParseFailure> {
+    let bytes = len
+        .checked_mul(std::mem::size_of::<T>())
+        .ok_or(ParseFailure::ArithmeticOverflow { offset: 0 })?;
     let mut v = Vec::new();
     v.try_reserve_exact(len)
-        .map_err(|_| ParseFailure::AllocationFailed {
-            bytes: len.saturating_mul(std::mem::size_of::<T>()),
-        })?;
+        .map_err(|_| ParseFailure::AllocationFailed { bytes })?;
     Ok(v)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cumulative_counters_reject_overflow_even_with_maximum_limits() {
+        let limits = ParseLimits {
+            max_records: usize::MAX,
+            max_allocated_bytes: usize::MAX,
+            max_work_units: u64::MAX,
+            ..ParseLimits::default()
+        };
+        let mut budget = Budget::new(&limits);
+        budget.charge_alloc(usize::MAX).unwrap();
+        assert!(matches!(
+            budget.charge_alloc(1),
+            Err(ParseFailure::ArithmeticOverflow { .. })
+        ));
+        budget.charge_work(u64::MAX).unwrap();
+        assert!(matches!(
+            budget.charge_work(1),
+            Err(ParseFailure::ArithmeticOverflow { .. })
+        ));
+        budget.records = usize::MAX;
+        assert!(matches!(
+            budget.charge_record(0),
+            Err(ParseFailure::ArithmeticOverflow { .. })
+        ));
+    }
+
+    #[test]
+    fn element_byte_multiplication_is_checked_before_reservation() {
+        assert!(matches!(
+            try_vec_with_capacity::<u64>(usize::MAX),
+            Err(ParseFailure::ArithmeticOverflow { .. })
+        ));
+    }
 }

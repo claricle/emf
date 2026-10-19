@@ -4,10 +4,11 @@ use std::fmt;
 
 use crate::detect::Format;
 
-/// Which budget a [`ParseFailure::LimitExceeded`] refers to.
+/// Which parsing or serialization resource budget was exceeded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LimitKind {
     InputBytes,
+    OutputBytes,
     RecordBytes,
     RecordCount,
     AllocatedBytes,
@@ -85,6 +86,12 @@ impl std::error::Error for ParseFailure {}
 /// Failure while serializing a document.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SerializeFailure {
+    /// A configured output or work budget was exceeded before allocation.
+    LimitExceeded {
+        kind: LimitKind,
+        limit: u64,
+        requested: u64,
+    },
     SizeOverflow,
     /// The document's pieces are not contiguous and in order.
     Inconsistent {
@@ -100,6 +107,13 @@ impl fmt::Display for SerializeFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::SizeOverflow => write!(f, "serialized size exceeds u32"),
+            Self::LimitExceeded {
+                kind,
+                limit,
+                requested,
+            } => {
+                write!(f, "{kind:?} limit exceeded ({requested} > {limit})")
+            }
             Self::Inconsistent { offset } => {
                 write!(f, "document pieces inconsistent at offset {offset}")
             }
