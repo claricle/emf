@@ -140,7 +140,10 @@ module EmfsvgBenchmark
     end
 
     def child(args, path)
-      command = [RbConfig.ruby, "-I", File.join(ParserBenchmark::ROOT, "lib"), "-I", File.join(@checkout.path, "lib"), SCRIPT,
+      gem_paths = Gem.path
+      gem_paths += Bundler.unbundled_env.fetch("GEM_PATH", "").split(File::PATH_SEPARATOR) if defined?(Bundler)
+      command = [{ "GEM_PATH" => gem_paths.uniq.join(File::PATH_SEPARATOR) },
+                 RbConfig.ruby, "-I", File.join(ParserBenchmark::ROOT, "lib"), "-I", File.join(@checkout.path, "lib"), SCRIPT,
                  "--emfsvg-path", @checkout.path, "--revision", @checkout.revision, *args]
       runner = FixtureManifest::Runner.new(timeout: @options.timeout, output_limit: self.class::OUTPUT_LIMIT, command: command)
       defined?(Bundler) ? Bundler.with_unbundled_env { runner.call(path) } : runner.call(path)
@@ -159,8 +162,9 @@ module EmfsvgBenchmark
       super.merge("stages" => STAGES, "inseparable_boundaries" => [],
                   "file_io" => "from_bytes excludes file IO; from_file includes the file read",
                   "golden_policy" => "Exact bytes checked after each timed region; mismatches fail the fixture. No golden is rewritten.",
-                  "dependencies" => "Children use installed gems outside Bundler; both checkout lib paths are forced " \
-                                    "and source locations verified. Gem versions are reported; gemspec constraints are not resolved.")
+                  "dependencies" => "Children retain configured and unbundled gem directories outside Bundler; " \
+                                    "both checkout lib paths are forced and source locations verified. " \
+                                    "Gem versions are reported; gemspec constraints are not resolved.")
     end
 
     def slowest_case(fixtures)

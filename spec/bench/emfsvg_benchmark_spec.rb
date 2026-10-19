@@ -2,6 +2,7 @@
 
 require "spec_helper"
 require "tmpdir"
+require "bundler"
 require_relative "../../bench/support/emfsvg_benchmark"
 require_relative "../support/emfsvg_benchmark_checkout"
 
@@ -52,6 +53,51 @@ RSpec.describe EmfsvgBenchmark::CLI do
       .to contain_exactly(include("run" => 0, "failure" => include("message" => /differs from golden/)))
     expect(File.read(golden)).to eq("changed golden")
     expect(report.fetch("slowest_measured_case")).to be_nil
+  end
+
+  it "keeps isolated bundle dependencies available to unbundled warm and cold workers" do
+    arguments = args
+    consumer_home = File.join(directory, "consumer-gems")
+    consumer_dependency = Gem::Specification.new do |gem|
+      gem.name = "benchmark_consumer_dependency"
+      gem.version = "1.0.0"
+      gem.summary = "Dependency outside the parser bundle"
+      gem.authors = ["Benchmark"]
+    end
+    consumer_lib = File.join(consumer_home, "gems", consumer_dependency.full_name, "lib")
+    FileUtils.mkdir_p([consumer_lib, File.join(consumer_home, "specifications")])
+    File.write(File.join(consumer_lib, "benchmark_consumer_dependency.rb"), "BENCHMARK_CONSUMER_DEPENDENCY = true\n")
+    File.write(File.join(consumer_home, "specifications", "#{consumer_dependency.full_name}.gemspec"), consumer_dependency.to_ruby)
+    consumer_source = File.join(checkout, "lib/emfsvg.rb")
+    File.write(consumer_source, "require \"benchmark_consumer_dependency\"\n#{File.read(consumer_source)}")
+    system("git", "add", ".", chdir: checkout, out: File::NULL)
+    system("git", "-c", "user.name=Benchmark", "-c", "user.email=benchmark@example.test", "commit", "-qm", "dependency", chdir: checkout)
+    arguments[arguments.index("--revision") + 1] = Open3.capture2("git", "rev-parse", "HEAD", chdir: checkout).first.strip
+    bundle_path = File.join(directory, "bundle")
+    gem_home = File.join(bundle_path, "ruby", RbConfig::CONFIG.fetch("ruby_version"))
+    dependency = Gem.loaded_specs.fetch("bindata")
+    FileUtils.mkdir_p([File.join(gem_home, "gems"), File.join(gem_home, "specifications")])
+    FileUtils.cp_r(dependency.full_gem_path, File.join(gem_home, "gems"))
+    FileUtils.cp(dependency.loaded_from, File.join(gem_home, "specifications"))
+    gemfile = File.join(directory, "Gemfile")
+    File.write(gemfile, "source \"https://rubygems.org\"\ngem \"bindata\", \"=#{dependency.version}\"\n")
+    environment = Bundler.unbundled_env.merge("BUNDLE_GEMFILE" => gemfile, "BUNDLE_PATH" => bundle_path,
+                                              "GEM_HOME" => File.join(directory, "empty"),
+                                              "GEM_PATH" => consumer_home, "RUBYOPT" => "-rbundler/setup")
+    ENV.keys.grep(/\ABUNDLER_ORIG_/).each { |key| environment[key] = nil }
+
+    output, status = Open3.capture2e(environment, RbConfig.ruby, "-I", File.join(ParserBenchmark::ROOT, "lib"),
+                                     EmfsvgBenchmark::SCRIPT, *arguments)
+
+    expect(status.exitstatus).to eq(0), "#{output}\n#{report.fetch('failures').inspect}"
+    workers = [report.fetch("fixtures").fetch(0), report.dig("cold_load", "runs", 0)]
+    workers.each do |worker|
+      expect(worker.fetch("status")).to eq("ok")
+      expect(worker.fetch("gems")).to include("bindata" => dependency.version.to_s)
+      expect(worker.fetch("gems")).to include("benchmark_consumer_dependency" => "1.0.0")
+      expect(worker.fetch("gems")).not_to include("bundler")
+      expect(worker.fetch("validity")).to include("golden_identical" => true)
+    end
   end
 
   it "rejects an unavailable backend without silently falling back" do
