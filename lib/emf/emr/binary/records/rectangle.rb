@@ -10,7 +10,7 @@ module Emf
         # EMR_RECTANGLE: emr + rclBox per MS-EMF 2.3.5.
         # No rclBounds.
         class Rectangle < Emf::Emr::Binary::Record
-  rectl :rcl_box
+          rectl :rcl_box
         end
       end
     end
