@@ -5,8 +5,8 @@ use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
     ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, ExtTextOut, Float32,
-    PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect, ScaleFactors, Size, XForm,
-    EMR_HEADER, HEADER_FIXED_BYTES,
+    PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect, RegionData, ScaleFactors,
+    Size, XForm, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 use crate::reader::{u32_at, Reader};
 
@@ -84,7 +84,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=22 | 24..=47 | 53..=68 | 70 | 83..=92 | 98 | 115 | 120
+                2..=22 | 24..=47 | 53..=68 | 70..=75 | 83..=92 | 98 | 115 | 120
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -695,6 +695,78 @@ fn decode_record(
             },
             16,
         )),
+        71..=75 => {
+            let fixed = match kind {
+                71 => 24,
+                72 => 32,
+                73 | 74 => 20,
+                _ => 8,
+            };
+            if payload.len() < fixed {
+                return malformed();
+            }
+            let bounds = if kind != 75 {
+                Some(read_rect(&mut r)?)
+            } else {
+                None
+            };
+            let count = r.u32()? as usize;
+            let ih_brush = if kind == 71 || kind == 72 {
+                r.u32()?
+            } else {
+                0
+            };
+            let stroke = if kind == 72 {
+                Size {
+                    cx: r.i32()?,
+                    cy: r.i32()?,
+                }
+            } else {
+                Size { cx: 0, cy: 0 }
+            };
+            let region_mode = if kind == 75 { r.u32()? } else { 0 };
+            if count > r.remaining() {
+                return malformed();
+            }
+            if count == 0 && kind == 75 && region_mode == 5 {
+                return Ok((
+                    RecordData::ExtSelectClipRgn {
+                        region_mode,
+                        region: None,
+                    },
+                    fixed,
+                ));
+            }
+            let Some(region) = read_region(r.take(count)?, budget)? else {
+                return malformed();
+            };
+            let data = match kind {
+                71 => RecordData::FillRgn {
+                    bounds: bounds.unwrap(),
+                    ih_brush,
+                    region,
+                },
+                72 => RecordData::FrameRgn {
+                    bounds: bounds.unwrap(),
+                    ih_brush,
+                    stroke,
+                    region,
+                },
+                73 => RecordData::InvertRgn {
+                    bounds: bounds.unwrap(),
+                    region,
+                },
+                74 => RecordData::PaintRgn {
+                    bounds: bounds.unwrap(),
+                    region,
+                },
+                _ => RecordData::ExtSelectClipRgn {
+                    region_mode,
+                    region: Some(region),
+                },
+            };
+            Ok((data, fixed + count))
+        }
         70 if payload.len() >= 4 => {
             let count = r.u32()? as usize;
             if count > r.remaining() {
@@ -1024,4 +1096,50 @@ fn decode_text<T: TextUnit>(
         }),
         end,
     ))
+}
+
+fn read_rect(r: &mut Reader<'_>) -> Result<Rect, ParseFailure> {
+    Ok(Rect {
+        left: r.i32()?,
+        top: r.i32()?,
+        right: r.i32()?,
+        bottom: r.i32()?,
+    })
+}
+
+fn read_region(bytes: &[u8], budget: &mut Budget<'_>) -> Result<Option<RegionData>, ParseFailure> {
+    if bytes.len() < 32 {
+        return Ok(None);
+    }
+    let mut r = Reader::new(bytes);
+    if r.u32()? != 32 {
+        return Ok(None);
+    }
+    let region_type = r.u32()?;
+    let count = r.u32()? as usize;
+    let buffer_size = r.u32()? as usize;
+    let bounds = read_rect(&mut r)?;
+    let Some(rect_bytes) = count.checked_mul(16) else {
+        return Ok(None);
+    };
+    if rect_bytes != buffer_size || rect_bytes > r.remaining() {
+        return Ok(None);
+    }
+    let extra = r.remaining() - rect_bytes;
+    budget.charge_alloc(rect_bytes)?;
+    budget.charge_alloc(extra)?;
+    budget.charge_work(count as u64)?;
+    budget.charge_work((extra as u64).div_ceil(16))?;
+    let mut rectangles = try_vec_with_capacity(count)?;
+    for _ in 0..count {
+        rectangles.push(read_rect(&mut r)?);
+    }
+    let mut trailing_bytes = try_vec_with_capacity(extra)?;
+    trailing_bytes.extend_from_slice(r.take(extra)?);
+    Ok(Some(RegionData {
+        region_type,
+        bounds,
+        rectangles,
+        trailing_bytes,
+    }))
 }

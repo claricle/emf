@@ -2,7 +2,7 @@
 
 use crate::error::{LimitKind, SerializeFailure};
 use crate::limits::SerializeLimits;
-use crate::model::{Document, EmfHeader, ExtTextOut, RecordData, Rect};
+use crate::model::{Document, EmfHeader, ExtTextOut, RecordData, Rect, RegionData};
 
 /// Write unchanged bytes exactly; encode edited fields and preserve opaque suffixes.
 /// Comment padding is resized; EOF palette bytes stay before the final SizeLast.
@@ -90,6 +90,18 @@ pub fn serialize_with_limits(
                 } => points
                     .len()
                     .checked_add(ab_types.len())
+                    .ok_or(SerializeFailure::SizeOverflow)?,
+                RecordData::FillRgn { region, .. }
+                | RecordData::FrameRgn { region, .. }
+                | RecordData::InvertRgn { region, .. }
+                | RecordData::PaintRgn { region, .. }
+                | RecordData::ExtSelectClipRgn {
+                    region: Some(region),
+                    ..
+                } => region
+                    .rectangles
+                    .len()
+                    .checked_add(region.trailing_bytes.len().div_ceil(16))
                     .ok_or(SerializeFailure::SizeOverflow)?,
                 RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
                     body.len().div_ceil(16)
@@ -416,6 +428,48 @@ pub fn serialize_with_limits(
                 append(&mut out, pixel.y as u32);
                 out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
             }
+            RecordData::FillRgn {
+                bounds,
+                ih_brush,
+                region,
+            } => {
+                append_rect(&mut out, *bounds);
+                append_region_size(&mut out, region)?;
+                append(&mut out, *ih_brush);
+                append_region(&mut out, region)?;
+            }
+            RecordData::FrameRgn {
+                bounds,
+                ih_brush,
+                stroke,
+                region,
+            } => {
+                append_rect(&mut out, *bounds);
+                append_region_size(&mut out, region)?;
+                append(&mut out, *ih_brush);
+                append(&mut out, stroke.cx as u32);
+                append(&mut out, stroke.cy as u32);
+                append_region(&mut out, region)?;
+            }
+            RecordData::InvertRgn { bounds, region } | RecordData::PaintRgn { bounds, region } => {
+                append_rect(&mut out, *bounds);
+                append_region_size(&mut out, region)?;
+                append_region(&mut out, region)?;
+            }
+            RecordData::ExtSelectClipRgn {
+                region_mode,
+                region,
+            } => {
+                if let Some(region) = region {
+                    append_region_size(&mut out, region)?;
+                } else {
+                    append(&mut out, 0);
+                }
+                append(&mut out, *region_mode);
+                if let Some(region) = region {
+                    append_region(&mut out, region)?;
+                }
+            }
             RecordData::Comment { data } => {
                 append(
                     &mut out,
@@ -559,5 +613,38 @@ fn append_text<T>(
             }
         }
     }
+    Ok(())
+}
+
+fn append_region_size(out: &mut Vec<u8>, region: &RegionData) -> Result<(), SerializeFailure> {
+    let len = region.encoded_len().ok_or(SerializeFailure::SizeOverflow)?;
+    append(
+        out,
+        u32::try_from(len).map_err(|_| SerializeFailure::SizeOverflow)?,
+    );
+    Ok(())
+}
+
+fn append_region(out: &mut Vec<u8>, region: &RegionData) -> Result<(), SerializeFailure> {
+    append(out, 32);
+    append(out, region.region_type);
+    append(
+        out,
+        u32::try_from(region.rectangles.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+    );
+    let bytes = region
+        .rectangles
+        .len()
+        .checked_mul(16)
+        .ok_or(SerializeFailure::SizeOverflow)?;
+    append(
+        out,
+        u32::try_from(bytes).map_err(|_| SerializeFailure::SizeOverflow)?,
+    );
+    append_rect(out, region.bounds);
+    for rect in &region.rectangles {
+        append_rect(out, *rect);
+    }
+    out.extend_from_slice(&region.trailing_bytes);
     Ok(())
 }

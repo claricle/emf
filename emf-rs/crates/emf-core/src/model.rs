@@ -207,6 +207,30 @@ impl<T> ExtTextOut<T> {
     }
 }
 
+/// Region rectangles and their original metadata. Rectangle count and buffer size
+/// are derived from `rectangles` when encoding; opaque data stays after them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RegionData {
+    /// Wire region type, including unknown values.
+    pub region_type: u32,
+    pub bounds: Rect,
+    pub rectangles: Vec<Rect>,
+    /// Bytes inside RgnDataSize after the rectangle array.
+    pub trailing_bytes: Vec<u8>,
+}
+
+impl RegionData {
+    pub(crate) fn encoded_len(&self) -> Option<usize> {
+        let rect_bytes = self.rectangles.len().checked_mul(16)?;
+        u32::try_from(rect_bytes).ok()?;
+        let len = 32usize
+            .checked_add(rect_bytes)?
+            .checked_add(self.trailing_bytes.len())?;
+        u32::try_from(len).ok()?;
+        Some(len)
+    }
+}
+
 /// Supported payloads. Raw records retain all their original bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordData {
@@ -348,6 +372,31 @@ pub enum RecordData {
         bounds: Rect,
         points: Vec<Point16>,
         ab_types: Vec<u8>,
+    },
+    FillRgn {
+        bounds: Rect,
+        ih_brush: u32,
+        region: RegionData,
+    },
+    FrameRgn {
+        bounds: Rect,
+        ih_brush: u32,
+        stroke: Size,
+        region: RegionData,
+    },
+    InvertRgn {
+        bounds: Rect,
+        region: RegionData,
+    },
+    PaintRgn {
+        bounds: Rect,
+        region: RegionData,
+    },
+    ExtSelectClipRgn {
+        /// Wire RegionMode; unknown values are preserved with nonempty data.
+        region_mode: u32,
+        /// None resets clipping to the default region and requires RGN_COPY (5).
+        region: Option<RegionData>,
     },
     Comment {
         data: Vec<u8>,
@@ -503,6 +552,11 @@ impl RecordData {
             Self::PolylineTo16 { .. } => Some(89),
             Self::PolyDraw { .. } => Some(56),
             Self::PolyDraw16 { .. } => Some(92),
+            Self::FillRgn { .. } => Some(71),
+            Self::FrameRgn { .. } => Some(72),
+            Self::InvertRgn { .. } => Some(73),
+            Self::PaintRgn { .. } => Some(74),
+            Self::ExtSelectClipRgn { .. } => Some(75),
             Self::Comment { .. } => Some(70),
             Self::Ellipse { .. } => Some(42),
             Self::Rectangle { .. } => Some(43),
@@ -629,6 +683,15 @@ impl RecordData {
                 .checked_add(ab_types.len())?
                 .checked_add(20),
             Self::ExtFloodFill { body } | Self::SetTextJustification { body } => Some(body.len()),
+            Self::FillRgn { region, .. } => region.encoded_len()?.checked_add(24),
+            Self::FrameRgn { region, .. } => region.encoded_len()?.checked_add(32),
+            Self::InvertRgn { region, .. } | Self::PaintRgn { region, .. } => {
+                region.encoded_len()?.checked_add(20)
+            }
+            Self::ExtSelectClipRgn { region, .. } => region
+                .as_ref()
+                .map_or(Some(0), RegionData::encoded_len)?
+                .checked_add(8),
             Self::Comment { data } => data.len().checked_add(4),
             Self::Ellipse { .. } | Self::Rectangle { .. } => Some(16),
             Self::RoundRect { .. } => Some(24),
@@ -799,6 +862,10 @@ impl Document {
             } => points.len() != ab_types.len(),
             _ => false,
         };
+        if matches!(&data, RecordData::ExtSelectClipRgn { region_mode, region: None } if *region_mode != 5)
+        {
+            return Err(EditFailure::RecordLayout { index });
+        }
         if mismatched_arrays {
             return Err(EditFailure::RecordLayout { index });
         }
