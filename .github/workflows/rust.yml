@@ -40,3 +40,23 @@ jobs:
 
       - name: Run linked C client
         run: sh crates/emf-ffi/tests/run-c-smoke.sh
+
+      - name: Set up Ruby for native adapter specs
+        if: matrix.toolchain == 'stable'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+          working-directory: .
+
+      - name: Run compiled native Ruby adapter specs
+        if: matrix.toolchain == 'stable'
+        working-directory: .
+        run: |
+          case "$RUNNER_OS" in
+            Linux) library="$GITHUB_WORKSPACE/emf-rs/target/debug/libemf_ffi.so" ;;
+            macOS) library="$GITHUB_WORKSPACE/emf-rs/target/debug/libemf_ffi.dylib" ;;
+            *) echo "unsupported native adapter host: $RUNNER_OS" >&2; exit 1 ;;
+          esac
+          test -f "$library"
+          EMF_TEST_NATIVE_LIBRARY="$library" bundle exec rspec spec/emf/native
