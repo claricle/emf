@@ -2,7 +2,7 @@
 
 use crate::error::{LimitKind, SerializeFailure};
 use crate::limits::SerializeLimits;
-use crate::model::{Document, EmfHeader, RecordData, Rect};
+use crate::model::{Document, EmfHeader, ExtTextOut, RecordData, Rect};
 
 /// Write unchanged bytes exactly; encode edited fields and preserve opaque suffixes.
 /// Comment padding is resized; EOF palette bytes stay before the final SizeLast.
@@ -37,6 +37,12 @@ pub fn serialize_with_limits(
         if record.edited {
             edited = true;
             let element_count = match &record.data {
+                RecordData::ExtTextOutA(text) => {
+                    text.work_len().ok_or(SerializeFailure::SizeOverflow)?
+                }
+                RecordData::ExtTextOutW(text) => {
+                    text.work_len().ok_or(SerializeFailure::SizeOverflow)?
+                }
                 RecordData::PolyBezier { points, .. }
                 | RecordData::Polygon { points, .. }
                 | RecordData::Polyline { points, .. }
@@ -148,6 +154,12 @@ pub fn serialize_with_limits(
         out.extend_from_slice(&record.record_type.to_le_bytes());
         out.extend_from_slice(&[0; 4]);
         match &record.data {
+            RecordData::ExtTextOutA(text) => {
+                append_text(&mut out, start, text, |out, value| out.push(*value))?
+            }
+            RecordData::ExtTextOutW(text) => append_text(&mut out, start, text, |out, value| {
+                out.extend_from_slice(&value.to_le_bytes())
+            })?,
             RecordData::Raw => {
                 return Err(SerializeFailure::Inconsistent {
                     offset: record.offset(),
@@ -423,6 +435,13 @@ pub fn serialize_with_limits(
             RecordData::Eof(_) => {}
             _ => out.extend_from_slice(&bytes[8 + record.decoded_len..]),
         }
+        if matches!(
+            record.data,
+            RecordData::ExtTextOutA(_) | RecordData::ExtTextOutW(_)
+        ) {
+            let padding = (4 - (out.len() - start) % 4) % 4;
+            out.resize(out.len() + padding, 0);
+        }
         let size = u32::try_from(out.len() - start).map_err(|_| SerializeFailure::SizeOverflow)?;
         put(&mut out, start + 4, size);
     }
@@ -492,4 +511,53 @@ fn write_header(out: &mut [u8], h: &EmfHeader) {
         put(out, 100, s.cx as u32);
         put(out, 104, s.cy as u32);
     }
+}
+
+fn append_text<T>(
+    out: &mut Vec<u8>,
+    start: usize,
+    text: &ExtTextOut<T>,
+    write: fn(&mut Vec<u8>, &T),
+) -> Result<(), SerializeFailure> {
+    let (string, dx, _) = text.layout().ok_or(SerializeFailure::SizeOverflow)?;
+    append_rect(out, text.bounds);
+    append(out, text.graphics_mode);
+    append(out, text.ex_scale.to_bits());
+    append(out, text.ey_scale.to_bits());
+    append(out, text.reference.x as u32);
+    append(out, text.reference.y as u32);
+    append(
+        out,
+        u32::try_from(text.text.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+    );
+    append(
+        out,
+        u32::try_from(string).map_err(|_| SerializeFailure::SizeOverflow)?,
+    );
+    append(out, text.options);
+    if let Some(rectangle) = text.rectangle {
+        append_rect(out, rectangle);
+    }
+    append(
+        out,
+        u32::try_from(dx).map_err(|_| SerializeFailure::SizeOverflow)?,
+    );
+    for is_dx in [text.dx_first, !text.dx_first] {
+        if is_dx {
+            if let Some(values) = &text.dx {
+                out.extend_from_slice(&text.dx_padding);
+                out.resize(start + dx, 0);
+                for value in values {
+                    append(out, *value);
+                }
+            }
+        } else if string != 0 {
+            out.extend_from_slice(&text.string_padding);
+            out.resize(start + string, 0);
+            for value in &text.text {
+                write(out, value);
+            }
+        }
+    }
+    Ok(())
 }

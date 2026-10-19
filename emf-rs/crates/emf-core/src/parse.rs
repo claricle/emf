@@ -4,7 +4,7 @@ use crate::detect::{detect_format, Format, EMF_MAGIC};
 use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
-    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, Float32,
+    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, ExtTextOut, Float32,
     PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect, ScaleFactors, Size, XForm,
     EMR_HEADER, HEADER_FIXED_BYTES,
 };
@@ -84,7 +84,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=22 | 24..=47 | 53..=68 | 70 | 85..=92 | 98 | 115 | 120
+                2..=22 | 24..=47 | 53..=68 | 70 | 83..=92 | 98 | 115 | 120
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -230,6 +230,8 @@ fn decode_record(
     let malformed = || Ok((RecordData::Raw, 0));
     let mut r = Reader::new(payload);
     match kind {
+        83 => decode_text::<u8>(payload, budget),
+        84 => decode_text::<u16>(payload, budget),
         31 | 32 if payload.len() >= 16 => {
             let scale = ScaleFactors {
                 x_num: r.i32()?,
@@ -859,4 +861,167 @@ fn decode_record(
         )),
         _ => malformed(),
     }
+}
+
+trait TextUnit: Sized {
+    fn read(r: &mut Reader<'_>) -> Result<Self, ParseFailure>;
+    fn record(text: ExtTextOut<Self>) -> RecordData;
+}
+impl TextUnit for u8 {
+    fn read(r: &mut Reader<'_>) -> Result<Self, ParseFailure> {
+        Ok(r.take(1)?[0])
+    }
+    fn record(text: ExtTextOut<Self>) -> RecordData {
+        RecordData::ExtTextOutA(text)
+    }
+}
+impl TextUnit for u16 {
+    fn read(r: &mut Reader<'_>) -> Result<Self, ParseFailure> {
+        r.u16()
+    }
+    fn record(text: ExtTextOut<Self>) -> RecordData {
+        RecordData::ExtTextOutW(text)
+    }
+}
+
+fn decode_text<T: TextUnit>(
+    payload: &[u8],
+    budget: &mut Budget<'_>,
+) -> Result<(RecordData, usize), ParseFailure> {
+    let raw = || Ok((RecordData::Raw, 0));
+    if payload.len() < 52 {
+        return raw();
+    }
+    let mut r = Reader::new(payload);
+    let read_rect = |r: &mut Reader<'_>| -> Result<Rect, ParseFailure> {
+        Ok(Rect {
+            left: r.i32()?,
+            top: r.i32()?,
+            right: r.i32()?,
+            bottom: r.i32()?,
+        })
+    };
+    let bounds = read_rect(&mut r)?;
+    let graphics_mode = r.u32()?;
+    let ex_scale = Float32::from_bits(r.u32()?);
+    let ey_scale = Float32::from_bits(r.u32()?);
+    let reference = Point {
+        x: r.i32()?,
+        y: r.i32()?,
+    };
+    let count = r.u32()? as usize;
+    let off_string = r.u32()? as usize;
+    let options = r.u32()?;
+    let rectangle = if options & 0x100 == 0 {
+        if r.remaining() < 20 {
+            return raw();
+        }
+        Some(read_rect(&mut r)?)
+    } else {
+        None
+    };
+    let off_dx = r.u32()? as usize;
+    let fixed = r.position();
+    let width = std::mem::size_of::<T>();
+    let Some(string_len) = count.checked_mul(width) else {
+        return raw();
+    };
+    let Some(dx_count) = count.checked_mul(if options & 0x2000 != 0 { 2 } else { 1 }) else {
+        return raw();
+    };
+    let Some(dx_len) = dx_count.checked_mul(4) else {
+        return raw();
+    };
+    // Offsets include the eight-byte record header, while payload slices do not.
+    let span = |offset: usize, len: usize, alignment: usize| {
+        let start = offset.checked_sub(8)?;
+        let end = start.checked_add(len)?;
+        (start >= fixed && offset % alignment == 0 && end <= payload.len()).then_some(start..end)
+    };
+    let string = if off_string == 0 && count == 0 {
+        None
+    } else {
+        let Some(range) = span(off_string, string_len, width) else {
+            return raw();
+        };
+        Some(range)
+    };
+    let dx = if off_dx == 0 {
+        None
+    } else {
+        let Some(range) = span(off_dx, dx_len, 4) else {
+            return raw();
+        };
+        Some(range)
+    };
+    if let (Some(a), Some(b)) = (&string, &dx) {
+        if a.start < b.end && b.start < a.end {
+            return raw();
+        }
+    }
+    let dx_first = match (&string, &dx) {
+        (Some(a), Some(b)) => b.start < a.start,
+        (None, Some(_)) => true,
+        _ => false,
+    };
+    let mut end = fixed;
+    let mut string_padding = Vec::new();
+    let mut dx_padding = Vec::new();
+    for is_dx in [dx_first, !dx_first] {
+        if let Some(range) = if is_dx { &dx } else { &string } {
+            if range.start < end {
+                return raw();
+            }
+            let bytes = &payload[end..range.start];
+            budget.charge_work((bytes.len() as u64).div_ceil(16))?;
+            budget.charge_alloc(bytes.len())?;
+            let mut padding = try_vec_with_capacity(bytes.len())?;
+            padding.extend_from_slice(bytes);
+            if is_dx {
+                dx_padding = padding;
+            } else {
+                string_padding = padding;
+            }
+            end = range.end;
+        }
+    }
+    budget.charge_work(count as u64)?;
+    budget.charge_alloc(string_len)?;
+    let mut text = try_vec_with_capacity(count)?;
+    if let Some(range) = &string {
+        let mut r = Reader::new(&payload[range.clone()]);
+        for _ in 0..count {
+            text.push(T::read(&mut r)?);
+        }
+    }
+    let dx = if let Some(range) = dx {
+        budget.charge_work(dx_count as u64)?;
+        budget.charge_alloc(dx_len)?;
+        let mut values = try_vec_with_capacity(dx_count)?;
+        let mut r = Reader::new(&payload[range]);
+        for _ in 0..dx_count {
+            values.push(r.u32()?);
+        }
+        Some(values)
+    } else {
+        None
+    };
+    Ok((
+        T::record(ExtTextOut {
+            bounds,
+            graphics_mode,
+            ex_scale,
+            ey_scale,
+            reference,
+            options,
+            rectangle,
+            text,
+            dx,
+            string_padding,
+            dx_padding,
+            dx_first,
+            string_present: string.is_some(),
+        }),
+        end,
+    ))
 }

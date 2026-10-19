@@ -16,7 +16,7 @@ pub use detect::{detect_format, Format};
 pub use error::{EditFailure, LimitKind, ParseFailure, SerializeFailure};
 pub use limits::{ParseLimits, SerializeLimits};
 pub use model::{
-    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, Float32,
+    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, ExtTextOut, Float32,
     PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect, ScaleFactors, Size, XForm,
     EMR_EOF, EMR_HEADER, HEADER_FIXED_BYTES,
 };

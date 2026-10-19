@@ -136,10 +136,83 @@ pub struct EofRecord {
     pub n_size_last: u32,
 }
 
+/// Extended text output. A text unit is an uninterpreted byte (A) or UTF-16
+/// code unit (W); neither encoding nor glyph indexes are normalized.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExtTextOut<T> {
+    pub bounds: Rect,
+    pub graphics_mode: u32,
+    pub ex_scale: Float32,
+    pub ey_scale: Float32,
+    pub reference: Point,
+    pub options: u32,
+    /// Absent when ETO_NO_RECT is set.
+    pub rectangle: Option<Rect>,
+    pub text: Vec<T>,
+    /// Wire values; ETO_PDY interleaves horizontal and vertical displacements.
+    pub dx: Option<Vec<u32>>,
+    /// Unused bytes immediately before each buffer, retained when editing.
+    pub string_padding: Vec<u8>,
+    pub dx_padding: Vec<u8>,
+    pub dx_first: bool,
+    /// Retains a zero offString for empty strings.
+    pub string_present: bool,
+}
+
+impl<T> ExtTextOut<T> {
+    pub(crate) fn layout(&self) -> Option<(usize, usize, usize)> {
+        let mut end: usize = if self.rectangle.is_some() { 76 } else { 60 };
+        let mut string = 0;
+        let mut dx = 0;
+        for is_dx in [self.dx_first, !self.dx_first] {
+            if is_dx {
+                if let Some(values) = &self.dx {
+                    end = end.checked_add(self.dx_padding.len())?;
+                    end = end.checked_add((4 - end % 4) % 4)?;
+                    dx = end;
+                    end = end.checked_add(values.len().checked_mul(4)?)?;
+                }
+            } else if self.string_present || !self.text.is_empty() {
+                let width = std::mem::size_of::<T>();
+                end = end.checked_add(self.string_padding.len())?;
+                end = end.checked_add((width - end % width) % width)?;
+                string = end;
+                end = end.checked_add(self.text.len().checked_mul(width)?)?;
+            }
+        }
+        Some((string, dx, end))
+    }
+
+    pub(crate) fn work_len(&self) -> Option<usize> {
+        self.text
+            .len()
+            .checked_add(self.dx.as_ref().map_or(0, Vec::len))?
+            .checked_add(self.string_padding.len().div_ceil(16))?
+            .checked_add(self.dx_padding.len().div_ceil(16))
+    }
+
+    fn valid(&self) -> bool {
+        self.rectangle.is_none() == (self.options & 0x100 != 0)
+            && match &self.dx {
+                Some(dx) => {
+                    self.text
+                        .len()
+                        .checked_mul(if self.options & 0x2000 != 0 { 2 } else { 1 })
+                        == Some(dx.len())
+                }
+                None => true,
+            }
+            && (self.dx.is_some() || (self.dx_padding.is_empty() && !self.dx_first))
+            && (self.string_present || self.string_padding.is_empty())
+    }
+}
+
 /// Supported payloads. Raw records retain all their original bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordData {
     Raw,
+    ExtTextOutA(ExtTextOut<u8>),
+    ExtTextOutW(ExtTextOut<u16>),
     Eof(EofRecord),
     ScaleViewportExtEx {
         scale: ScaleFactors,
@@ -390,6 +463,8 @@ pub enum RecordData {
 impl RecordData {
     pub(crate) fn record_type(&self) -> Option<u32> {
         match self {
+            Self::ExtTextOutA(_) => Some(83),
+            Self::ExtTextOutW(_) => Some(84),
             Self::Raw => None,
             Self::Eof(_) => Some(14),
             Self::ScaleViewportExtEx { .. } => Some(31),
@@ -468,6 +543,8 @@ impl RecordData {
     }
     pub(crate) fn payload_len(&self) -> Option<usize> {
         match self {
+            Self::ExtTextOutA(text) => text.layout()?.2.checked_sub(8),
+            Self::ExtTextOutW(text) => text.layout()?.2.checked_sub(8),
             Self::ScaleViewportExtEx { .. } | Self::ScaleWindowExtEx { .. } => Some(16),
             Self::SetWorldTransform { .. } => Some(24),
             Self::ModifyWorldTransform { .. } => Some(28),
@@ -596,7 +673,15 @@ impl RecordSpan {
         if matches!(data, RecordData::Comment { .. }) {
             size.checked_add((4 - size % 4) % 4)
         } else {
-            size.checked_add(self.size as usize - 8 - self.decoded_len)
+            let size = size.checked_add(self.size as usize - 8 - self.decoded_len)?;
+            if matches!(
+                data,
+                RecordData::ExtTextOutA(_) | RecordData::ExtTextOutW(_)
+            ) {
+                size.checked_add((4 - size % 4) % 4)
+            } else {
+                Some(size)
+            }
         }
     }
 
@@ -696,6 +781,14 @@ impl Document {
             .ok_or(EditFailure::RecordIndex { index })?;
         if record.data == RecordData::Raw || data.record_type() != Some(record.record_type) {
             return Err(EditFailure::RecordFamily { index });
+        }
+        let invalid_text = match &data {
+            RecordData::ExtTextOutA(text) => !text.valid(),
+            RecordData::ExtTextOutW(text) => !text.valid(),
+            _ => false,
+        };
+        if invalid_text {
+            return Err(EditFailure::RecordLayout { index });
         }
         let mismatched_arrays = match &data {
             RecordData::PolyDraw {
