@@ -119,11 +119,6 @@ module EmfsvgBenchmark
 
     def build_report(selected)
       report = super
-      report.fetch("cold_load").fetch("runs").each_with_index do |result, index|
-        next if result["status"] == "ok"
-
-        report.fetch("failures") << { "cold_run" => index, "failure" => result }
-      end
       report.merge("kind" => "emfsvg-conversion-baseline", "command" => [RbConfig.ruby, "bench/emfsvg.rb", *@argv],
                    "consumer" => @checkout.to_h,
                    "golden_inventory" => selected.map do |entry|

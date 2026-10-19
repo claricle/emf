@@ -47,6 +47,9 @@ RSpec.describe EmfsvgBenchmark::CLI do
 
     expect(described_class.new(arguments).run).to eq(1)
     expect(report.fetch("failures")).to include(include("failure" => include("message" => /differs from golden/)))
+    expect(report.fetch("failures").size).to eq(2)
+    expect(report.fetch("failures").select { |failure| failure["stage"] == "cold_load" })
+      .to contain_exactly(include("run" => 0, "failure" => include("message" => /differs from golden/)))
     expect(File.read(golden)).to eq("changed golden")
     expect(report.fetch("slowest_measured_case")).to be_nil
   end
