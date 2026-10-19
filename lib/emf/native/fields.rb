@@ -80,6 +80,30 @@ module Emf
         [klass, { rcl_bounds: bounds, count_field => count, points_field => points }]
       end
 
+      MULTI_POINT_ARRAYS = {
+        54 => [Emr::Binary::Records::PolyPolyline, 8, :c_ptl_total, :aptl],
+        55 => [Emr::Binary::Records::PolyPolygon, 8, :c_ptl_total, :aptl],
+        56 => [Emr::Binary::Records::PolyPolyline16, 4, :c_pts_total, :apts],
+        57 => [Emr::Binary::Records::PolyPolygon16, 4, :c_pts_total, :apts]
+      }.freeze
+
+      def self.multi_point_array(payload, family)
+        klass, width, total_field, points_field = MULTI_POINT_ARRAYS.fetch(family)
+        raise FormatError, "invalid native multi array payload" if payload.bytesize < 32
+
+        poly_count, point_count = payload.byteslice(16, 16).unpack("Q<2")
+        counts_size = poly_count * 4
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 32 + counts_size + (point_count * width)
+        raise FormatError, "native multi array exceeds Ruby model array limit" if poly_count > 1_000_000 || point_count > 1_000_000
+
+        bounds = %i[left top right bottom].zip(payload.unpack("l<4")).to_h
+        counts = payload.byteslice(32, counts_size).unpack("V*")
+        format = width == 8 ? "l<*" : "s<*"
+        points = payload.byteslice((32 + counts_size)..).unpack(format).each_slice(2).map { |x, y| { x: x, y: y } }
+        [klass, { rcl_bounds: bounds, n_polys: poly_count, a_poly_counts: counts,
+                  total_field => point_count, points_field => points }]
+      end
+
       def self.call(payload, family)
         klass, *layouts = LAYOUTS.fetch(family)
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == layouts.sum { |_, _, _, length| length }

@@ -64,6 +64,10 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::Polyline16 { .. } => 51,
         RecordData::PolyBezierTo16 { .. } => 52,
         RecordData::PolylineTo16 { .. } => 53,
+        RecordData::PolyPolyline { .. } => 54,
+        RecordData::PolyPolygon { .. } => 55,
+        RecordData::PolyPolyline16 { .. } => 56,
+        RecordData::PolyPolygon16 { .. } => 57,
     }
 }
 
@@ -74,6 +78,18 @@ fn wire_len(len: usize) -> Result<u64, Error> {
 fn add_len(total: &mut usize, len: usize) -> Result<(), Error> {
     *total = total.checked_add(len).ok_or(Error::SizeOverflow)?;
     Ok(())
+}
+
+fn multi_array_len(poly_count: usize, point_count: usize, width: usize) -> Result<usize, Error> {
+    poly_count
+        .checked_mul(4)
+        .and_then(|counts| {
+            point_count
+                .checked_mul(width)
+                .and_then(|points| counts.checked_add(points))
+        })
+        .and_then(|len| len.checked_add(32))
+        .ok_or(Error::SizeOverflow)
 }
 
 fn payload_len(data: &RecordData) -> Result<usize, Error> {
@@ -138,6 +154,26 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
             .checked_mul(4)
             .and_then(|len| len.checked_add(24))
             .ok_or(Error::SizeOverflow),
+        RecordData::PolyPolyline {
+            poly_counts,
+            points,
+            ..
+        }
+        | RecordData::PolyPolygon {
+            poly_counts,
+            points,
+            ..
+        } => multi_array_len(poly_counts.len(), points.len(), 8),
+        RecordData::PolyPolyline16 {
+            poly_counts,
+            points,
+            ..
+        }
+        | RecordData::PolyPolygon16 {
+            poly_counts,
+            points,
+            ..
+        } => multi_array_len(poly_counts.len(), points.len(), 4),
         RecordData::Comment { data } => data.len().checked_add(8).ok_or(Error::SizeOverflow),
     }
 }
@@ -290,6 +326,48 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
             | RecordData::PolylineTo16 { bounds, points } => {
                 rect(&mut out, *bounds);
                 u64_field(&mut out, wire_len(points.len())?);
+                for point in points {
+                    out.extend_from_slice(&point.x.to_le_bytes());
+                    out.extend_from_slice(&point.y.to_le_bytes());
+                }
+            }
+            RecordData::PolyPolyline {
+                bounds,
+                poly_counts,
+                points,
+            }
+            | RecordData::PolyPolygon {
+                bounds,
+                poly_counts,
+                points,
+            } => {
+                rect(&mut out, *bounds);
+                u64_field(&mut out, wire_len(poly_counts.len())?);
+                u64_field(&mut out, wire_len(points.len())?);
+                for count in poly_counts {
+                    u32_field(&mut out, *count);
+                }
+                for point in points {
+                    i32_field(&mut out, point.x);
+                    i32_field(&mut out, point.y);
+                }
+            }
+            RecordData::PolyPolyline16 {
+                bounds,
+                poly_counts,
+                points,
+            }
+            | RecordData::PolyPolygon16 {
+                bounds,
+                poly_counts,
+                points,
+            } => {
+                rect(&mut out, *bounds);
+                u64_field(&mut out, wire_len(poly_counts.len())?);
+                u64_field(&mut out, wire_len(points.len())?);
+                for count in poly_counts {
+                    u32_field(&mut out, *count);
+                }
                 for point in points {
                     out.extend_from_slice(&point.x.to_le_bytes());
                     out.extend_from_slice(&point.y.to_le_bytes());
@@ -610,6 +688,62 @@ mod tests {
                 assert_eq!(cursor.u64(), 24 + points.len() as u64);
                 assert_eq!(cursor.take(16), &payload[..16]);
                 assert_eq!(cursor.u64(), u64::from(count));
+                assert_eq!(cursor.take(points.len()), points);
+                assert_eq!(cursor.position, encoded.len());
+            }
+        }
+    }
+
+    #[test]
+    fn multi_array_snapshots_preserve_independent_counts_and_signed_points() {
+        for (index, kind) in [7u32, 8, 90, 91].into_iter().enumerate() {
+            for (poly_count, point_count) in [(0u32, 0u32), (2, 0), (0, 2), (2, 2)] {
+                let mut payload = [i32::MIN, i32::MAX, -1, 0]
+                    .into_iter()
+                    .flat_map(i32::to_le_bytes)
+                    .collect::<Vec<_>>();
+                payload.extend_from_slice(&poly_count.to_le_bytes());
+                payload.extend_from_slice(&point_count.to_le_bytes());
+                let counts = if poly_count == 0 {
+                    vec![]
+                } else {
+                    [0u32, u32::MAX]
+                        .into_iter()
+                        .flat_map(u32::to_le_bytes)
+                        .collect()
+                };
+                let points = if point_count == 0 {
+                    vec![]
+                } else if index < 2 {
+                    [i32::MIN, i32::MAX, -1, 0]
+                        .into_iter()
+                        .flat_map(i32::to_le_bytes)
+                        .collect()
+                } else {
+                    [i16::MIN, i16::MAX, -1, 0]
+                        .into_iter()
+                        .flat_map(i16::to_le_bytes)
+                        .collect()
+                };
+                payload.extend_from_slice(&counts);
+                payload.extend_from_slice(&points);
+                payload.extend_from_slice(b"opaque");
+                let mut input = fixture_header(88);
+                record(&mut input, kind, &payload);
+                let document = parse(&input, &ParseLimits::default()).unwrap();
+                let encoded = encode(&document).unwrap();
+                let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+                cursor.take(112 + 88);
+                assert_eq!(cursor.u64(), 0);
+                assert_eq!(cursor.u64(), 88);
+                assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
+                assert_eq!(cursor.u32(), kind);
+                assert_eq!(cursor.u32(), 54 + index as u32);
+                assert_eq!(cursor.u64(), (32 + counts.len() + points.len()) as u64);
+                assert_eq!(cursor.take(16), &payload[..16]);
+                assert_eq!(cursor.u64(), u64::from(poly_count));
+                assert_eq!(cursor.u64(), u64::from(point_count));
+                assert_eq!(cursor.take(counts.len()), counts);
                 assert_eq!(cursor.take(points.len()), points);
                 assert_eq!(cursor.position, encoded.len());
             }

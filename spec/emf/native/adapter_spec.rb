@@ -498,6 +498,111 @@ RSpec.describe Emf::Native do
     end
   end
 
+  let(:multi_array_records) do
+    [
+      [7, Emf::Emr::Binary::Records::PolyPolyline, 54, 8],
+      [8, Emf::Emr::Binary::Records::PolyPolygon, 55, 8],
+      [90, Emf::Emr::Binary::Records::PolyPolyline16, 56, 4],
+      [91, Emf::Emr::Binary::Records::PolyPolygon16, 57, 4]
+    ]
+  end
+
+  it "hydrates independent multi arrays directly with signed extrema and editable counts" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    multi_array_records.each do |type, klass, _, width|
+      expect(klass).not_to receive(:read)
+      maximum = width == 8 ? 0x7FFFFFFF : 0x7FFF
+      total_field, points_field = width == 8 ? %i[c_ptl_total aptl] : %i[c_pts_total apts]
+      points = [{ x: -maximum - 1, y: maximum }, { x: -1, y: 0 }]
+      fields = { rcl_bounds: { left: -0x80000000, top: 0x7FFFFFFF, right: -1, bottom: 0 },
+                 n_polys: 2, a_poly_counts: [0, 0xFFFFFFFF], total_field => 2, points_field => points }
+      length = 40 + (2 * width)
+      original = klass.new(i_type: type, n_size: length, **fields).to_binary_s
+      parsed = Emf.parse(header + original + eof)
+      wire = parsed.records.first.wire
+      expect(wire.class).to eq(klass)
+      fields.each { |field, value| expect(wire.public_send(field).snapshot).to eq(value) }
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(header + original + eof)
+      edited_points = points + [{ x: 1, y: -2 }]
+      edited = fields.merge(n_polys: 1, a_poly_counts: [7], total_field => 3, points_field => edited_points)
+      edited[:rcl_bounds] = { left: 1, top: -2, right: 3, bottom: -4 }
+      edited.each { |field, value| wire.public_send("#{field}=", value) }
+      wire.n_size = 36 + (3 * width)
+      expected = header + klass.new(i_type: type, n_size: wire.n_size.to_i, **edited).to_binary_s + eof
+      expect(Emf.serialize(parsed)).to eq(expected)
+      reparsed = Emf.parse(expected).records.first.wire
+      edited.each { |field, value| expect(reparsed.public_send(field).snapshot).to eq(value) }
+    end
+  end
+
+  it "matches Ruby independent empty multi arrays and suffixes with unknown siblings" do
+    bounds = [-5, 2, 40, 60].pack("l<4")
+    counts = [0, 0xFFFFFFFF]
+    coordinates = [-1, 0, 1, -2]
+    array_lengths = [[0, 0], [2, 0], [0, 2], [2, 2]]
+    multi_array_records.each do |type, _, _, width|
+      array_lengths.each do |poly_count, point_count|
+        ["".b, "opaque".b].each do |suffix|
+          format = width == 8 ? "l<4" : "s<4"
+          payload = bounds + [poly_count, point_count].pack("V2")
+          payload += counts.pack("V2") unless poly_count.zero?
+          payload += coordinates.pack(format) unless point_count.zero?
+          input = header + [type, payload.bytesize + suffix.bytesize + 8].pack("V2") + payload + suffix + unknown + eof
+          ENV["EMF_BACKEND"] = "native"
+          native = Emf.parse(input)
+          ENV["EMF_BACKEND"] = "ruby"
+          ruby = Emf.parse(input)
+          expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
+          expect(native.records).to eq(ruby.records)
+          expect(native.errors).to be_empty
+          expect(native.records[1].wire.class).to eq(Emf::Emr::Binary::Records::Raw)
+          expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+        end
+      end
+    end
+  end
+
+  it "preserves malformed multi arrays as Raw and continues record framing" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    prefix = [-5, 2, 40, 60, 2, 2, 0, 0xFFFFFFFF].pack("l<4V4")
+    overruns = [[0xFFFFFFFF, 0], [0, 0xFFFFFFFF], [2, 0], [0, 2]]
+    multi_array_records.each do |type, _, _, width|
+      payload = prefix + ("x" * (2 * width))
+      payloads = (0...payload.bytesize).map { |length| payload.byteslice(0, length) }
+      payloads.concat(overruns.map { |counts| prefix.byteslice(0, 16) + counts.pack("V2") })
+      payloads.each do |short|
+        input = header + [type, short.bytesize + 8].pack("V2") + short + map_mode + eof
+        parsed = Emf.parse(input)
+        expect(parsed.records.map { |record| record.wire.class }).to eq(
+          [Emf::Emr::Binary::Records::Raw, Emf::Emr::Binary::Records::SetMapMode, Emf::Emr::Binary::Records::Eof]
+        )
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(input)
+      end
+    end
+  end
+
+  it "rejects inconsistent multi array snapshot lengths and both excessive array counts before allocation" do
+    bounds = "\x00".b * 16
+    counts = [2, 2].pack("Q<2")
+    extreme_counts = [[0xFFFFFFFFFFFFFFFF, 0], [0, 0xFFFFFFFFFFFFFFFF]]
+    limit_counts = [[1_000_001, 0], [0, 1_000_001]]
+    multi_array_records.each do |_, _, family, width|
+      payload = bounds + counts + ("x" * (8 + (2 * width)))
+      invalid = [payload.byteslice(0, 31), payload.byteslice(0...-1), "#{payload}x"]
+      invalid.concat(extreme_counts.map { |lengths| bounds + lengths.pack("Q<2") })
+      invalid.each do |bytes|
+        expect { Emf::Native::Fields.multi_point_array(bytes, family) }.to raise_error(Emf::FormatError)
+      end
+      limit_counts.each do |poly_count, point_count|
+        bytes = bounds + [poly_count, point_count].pack("Q<2") + ("x" * ((poly_count * 4) + (point_count * width)))
+        expect { Emf::Native::Fields.multi_point_array(bytes, family) }
+          .to raise_error(Emf::FormatError, "native multi array exceeds Ruby model array limit")
+      end
+    end
+  end
+
   it "matches Ruby canonical models after every wire is traversed" do
     native = Emf.parse(bytes)
     ENV["EMF_BACKEND"] = "ruby"

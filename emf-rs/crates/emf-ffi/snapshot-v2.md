@@ -105,6 +105,15 @@ length u64, type ID u32, family u32, typed payload length u64. Payloads:
 | POLYLINE16 | 51 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i16 x/y |
 | POLYBEZIERTO16 | 52 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i16 x/y |
 | POLYLINETO16 | 53 | bounds left/top/right/bottom: 4 i32; point count u64; then count pairs of i16 x/y |
+| POLYPOLYLINE | 54 | bounds: 4 i32; polygon-array count u64; point count u64; polygon counts: count u32 values; points: count pairs of i32 x/y |
+| POLYPOLYGON | 55 | bounds: 4 i32; polygon-array count u64; point count u64; polygon counts: count u32 values; points: count pairs of i32 x/y |
+| POLYPOLYLINE16 | 56 | bounds: 4 i32; polygon-array count u64; point count u64; polygon counts: count u32 values; points: count pairs of i16 x/y |
+| POLYPOLYGON16 | 57 | bounds: 4 i32; polygon-array count u64; point count u64; polygon counts: count u32 values; points: count pairs of i16 x/y |
+
+Multi-array bounds are left/top/right/bottom. Polygon counts and points have
+independent lengths: the sum of polygon-count values need not equal the point
+count. Array bytes must exactly match both declared lengths; opaque suffixes are
+excluded from typed payloads and remain in the original record span.
 
 Families match descriptor batches. Malformed supported payloads remain RAW and
 produce diagnostics. COMMENT contains counted data, including the EMF+ identifier

@@ -6,8 +6,8 @@ module Emf
   module Native
     class Hydrator
       SUPPORTED_TYPES = [
-        2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 29, 30, 33, 34,
-        37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 54, 55, 57, 59, 60, 61, 62, 63, 64, 67, 68, 70, 85, 86, 87, 88, 89
+        2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 29, 30, 33, 34,
+        37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 54, 55, 57, 59, 60, 61, 62, 63, 64, 67, 68, 70, 85, 86, 87, 88, 89, 90, 91
       ].freeze
 
       def initialize(snapshot, input)
@@ -53,6 +53,7 @@ module Emf
         when 1 then eof_fields(payload, raw)
         when 2 then Fields.call(payload, 2)
         when 3, 45..53 then Fields.point_array(payload, record.fetch(:family))
+        when 54..57 then Fields.multi_point_array(payload, record.fetch(:family))
         when 4 then comment_fields(payload, raw)
         when 33
           klass, fields = Fields.call(payload, 33)

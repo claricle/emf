@@ -524,6 +524,57 @@ static int check_point_array_snapshots(void) {
     return 0;
 }
 
+static int check_multi_array_snapshots(void) {
+    const uint32_t kinds[] = {7, 8, 90, 91};
+    const uint32_t bounds[] = {UINT32_C(0x80000000), INT32_MAX, UINT32_MAX, 0};
+    for (unsigned kind = 0; kind < 4; ++kind) {
+        for (unsigned variant = 0; variant < 4; ++variant) {
+            unsigned polys = (variant & 1) ? 2 : 0, count = (variant & 2) ? 2 : 0;
+            unsigned width = kind < 2 ? 8 : 4;
+            unsigned points_offset = 120 + polys * 4;
+            unsigned wire_size = 32 + polys * 4 + count * width;
+            make_fixture();
+            put_u32(88, kinds[kind]);
+            put_u32(92, wire_size);
+            for (unsigned axis = 0; axis < 4; ++axis) put_u32(96 + axis * 4, bounds[axis]);
+            put_u32(112, polys);
+            put_u32(116, count);
+            if (polys) { put_u32(120, 0); put_u32(124, UINT32_MAX); }
+            if (width == 8) {
+                for (unsigned axis = 0; axis < count * 2; ++axis) put_u32(points_offset + axis * 4, bounds[axis]);
+            } else {
+                const uint16_t points[] = {UINT16_C(0x8000), INT16_MAX, UINT16_MAX, 0};
+                for (unsigned axis = 0; axis < count * 2; ++axis) put_u16(points_offset + axis * 2, points[axis]);
+            }
+            input_length = 88 + wire_size;
+            emf_document *document = NULL;
+            emf_buffer *snapshot = NULL;
+            emf_error *error = NULL;
+            CHECK(emf_parse(input, input_length, NULL, &document, &error) == EMF_OK);
+            CHECK(emf_document_snapshot(document, &snapshot, &error) == EMF_OK);
+            emf_document_free(document);
+            const uint8_t *bytes = NULL;
+            uint64_t length = 0, array_count;
+            CHECK(emf_buffer_view(snapshot, &bytes, &length) == EMF_OK);
+            CHECK(error == NULL && length <= SIZE_MAX);
+            cursor c = {bytes, (size_t)length, 4};
+            uint32_t word;
+            CHECK(get_u32(&c, &word) && word == 2);
+            CHECK(skip(&c, 48 + 112 + HEADER_SIZE));
+            CHECK(check_snapshot_record(&c, 0, 88, wire_size, kinds[kind], 54 + kind, 32 + polys * 4 + count * width) == 0);
+            for (unsigned axis = 0; axis < 4; ++axis) CHECK(get_u32(&c, &word) && word == bounds[axis]);
+            CHECK(get_u64(&c, &array_count) && array_count == polys);
+            CHECK(get_u64(&c, &array_count) && array_count == count);
+            const uint8_t *arrays;
+            CHECK(take(&c, polys * 4 + count * width, &arrays));
+            CHECK(memcmp(arrays, input + 120, polys * 4 + count * width) == 0);
+            CHECK(c.offset == c.length);
+            emf_buffer_free(snapshot);
+        }
+    }
+    return 0;
+}
+
 static int check_fixed_geometry_snapshots(void) {
     const uint32_t kinds[] = {15, 29, 30, 38, 39, 45, 46, 47, 54, 55};
     const unsigned counts[] = {3, 4, 4, 5, 4, 8, 8, 8, 2, 8};
@@ -695,6 +746,7 @@ int main(void) {
     CHECK(check_fixed_state_snapshots() == 0);
     CHECK(check_fixed_geometry_snapshots() == 0);
     CHECK(check_point_array_snapshots() == 0);
+    CHECK(check_multi_array_snapshots() == 0);
     CHECK(check_snapshot_after_malformed_eof() == 0);
     CHECK(emf_abi_version() == EMF_ABI_VERSION);
     make_fixture();
