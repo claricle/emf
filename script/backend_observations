@@ -1,0 +1,91 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require "open3"
+require "fileutils"
+require_relative "../spec/support/fixture_manifest"
+require_relative "../spec/support/backend_parity"
+
+module BackendObservations
+  DEFAULT_TIMEOUT = 120
+  DEFAULT_OUTPUT_LIMIT = 512 * 1024 * 1024
+
+  module_function
+
+  def revision(root)
+    sha, = Open3.capture2("git", "rev-parse", "HEAD", chdir: root)
+    dirty, = Open3.capture2("git", "status", "--porcelain", "--", "lib", chdir: root)
+    { "git_sha" => sha.strip, "lib_dirty" => !dirty.strip.empty? }
+  end
+
+  def backend(root)
+    { "name" => "ruby", "ruby_version" => RUBY_VERSION, "platform" => RUBY_PLATFORM,
+      "bindata_version" => Gem.loaded_specs.fetch("bindata").version.to_s,
+      "parser_source_sha256" => FixtureManifest.source_sha256(root) }
+  end
+
+  def runner(options)
+    command = [RbConfig.ruby, "-I", File.expand_path("../lib", __dir__),
+               File.expand_path("../spec/support/backend_parity.rb", __dir__), "--observe"]
+    FixtureManifest::Runner.new(timeout: options[:timeout], output_limit: options[:output_limit], command: command)
+  end
+
+  def select(entries, only)
+    return entries if only.empty?
+
+    entries.select { |entry| only.any? { |part| entry.fetch("path").include?(part) } }
+  end
+
+  # Streams one JSON document so the whole corpus is never held in memory.
+  def write(root, options)
+    all = FixtureManifest.fixtures(root)
+    entries = select(all, options[:only])
+    full = entries.size == all.size
+    FixtureManifest::Inventory.new(root).send(:verify_counts, all) if full
+    runner = runner(options)
+    tmp = "#{options[:output]}.tmp#{Process.pid}"
+    File.open(tmp, "wb") do |file|
+      header = { "schema_version" => BackendParity::SCHEMA_VERSION, "kind" => "ruby-baseline-observations",
+                 "revision" => revision(root), "backend" => backend(root),
+                 "limits" => { "timeout_seconds" => options[:timeout], "output_limit_bytes" => options[:output_limit] },
+                 "counts" => FixtureManifest.counts(entries), "subset" => !full }
+      file.write(JSON.generate(header).chomp("}"), ',"fixtures":[')
+      entries.each_with_index do |entry, index|
+        file.write(",") unless index.zero?
+        file.write(JSON.generate(entry.merge(observe(runner, root, entry))))
+      end
+      file.write("]}\n")
+    end
+    File.rename(tmp, options[:output])
+    entries.size
+  ensure
+    FileUtils.rm_f(tmp) if tmp
+  end
+
+  def observe(runner, root, entry)
+    result = runner.call(File.join(root, entry.fetch("path")))
+    result.key?("safety_failure") ? result.slice("safety_failure") : { "observation" => result }
+  end
+end
+
+options = { timeout: BackendObservations::DEFAULT_TIMEOUT, output_limit: BackendObservations::DEFAULT_OUTPUT_LIMIT, only: [] }
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: ruby script/backend_observations --output FILE [options]"
+  opts.separator "Capture canonical Ruby observations for every fixture, one isolated child per fixture."
+  opts.on("--output FILE", "Required; the artifact is written atomically (keep it outside the repository)") { |v| options[:output] = v }
+  opts.on("--timeout SECONDS", Float, "Per-fixture deadline, default #{BackendObservations::DEFAULT_TIMEOUT}") { |v| options[:timeout] = v }
+  opts.on("--output-limit BYTES", Integer, "Per-fixture output cap, default #{BackendObservations::DEFAULT_OUTPUT_LIMIT}") { |v| options[:output_limit] = v }
+  opts.on("--only SUBSTRING", "Capture only paths containing this text; marks the artifact as a subset") { |v| options[:only] << v }
+  opts.on("-h", "--help", "Show usage") do
+    puts opts
+    exit
+  end
+end
+parser.parse!
+abort(parser.to_s) if options[:output].nil? || !ARGV.empty?
+abort "--output must not already exist: #{options[:output]}" if File.exist?(options[:output])
+
+root = File.expand_path("..", __dir__)
+count = BackendObservations.write(root, options)
+puts "Wrote #{options[:output]} (#{count} fixtures)."
