@@ -603,6 +603,102 @@ RSpec.describe Emf::Native do
     end
   end
 
+  let(:poly_draw_records) do
+    [[56, Emf::Emr::Binary::Records::PolyDraw, 58, 8],
+     [92, Emf::Emr::Binary::Records::PolyDraw16, 59, 4]]
+  end
+
+  it "hydrates PolyDraw points and opaque type bytes directly with editable shared counts" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    poly_draw_records.each do |type, klass, _, width|
+      expect(klass).not_to receive(:read)
+      maximum = width == 8 ? 0x7FFFFFFF : 0x7FFF
+      count_field, points_field = width == 8 ? %i[cptl aptl] : %i[cpts apts]
+      points = [{ x: -maximum - 1, y: maximum }, { x: -1, y: 0 }]
+      fields = { rcl_bounds: { left: -0x80000000, top: 0x7FFFFFFF, right: -1, bottom: 0 },
+                 count_field => 2, points_field => points, ab_types: [128, 255] }
+      original = klass.new(i_type: type, n_size: 28 + (2 * (width + 1)), **fields).to_binary_s
+      parsed = Emf.parse(header + original + eof)
+      wire = parsed.records.first.wire
+      expect(wire.class).to eq(klass)
+      fields.each { |field, value| expect(wire.public_send(field).snapshot).to eq(value) }
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(header + original + eof)
+      edited = fields.merge(count_field => 3, points_field => points + [{ x: 1, y: -2 }], ab_types: [255, 0, 129])
+      edited[:rcl_bounds] = { left: 1, top: -2, right: 3, bottom: -4 }
+      edited.each { |field, value| wire.public_send("#{field}=", value) }
+      wire.n_size = 28 + (3 * (width + 1))
+      expected = header + klass.new(i_type: type, n_size: wire.n_size.to_i, **edited).to_binary_s + eof
+      expect(Emf.serialize(parsed)).to eq(expected)
+      reparsed = Emf.parse(expected).records.first.wire
+      edited.each { |field, value| expect(reparsed.public_send(field).snapshot).to eq(value) }
+    end
+  end
+
+  it "matches Ruby empty and nonempty PolyDraw models with opaque suffix and unknown siblings" do
+    bounds = [-5, 2, 40, 60].pack("l<4")
+    coordinates = [-1, 0, 1, -2]
+    types = [128, 255].pack("C2")
+    counts = [0, 2]
+    suffixes = ["".b, "opaque".b]
+    poly_draw_records.each do |type, _, _, width|
+      counts.each do |count|
+        suffixes.each do |suffix|
+          payload = bounds + [count].pack("V")
+          payload += coordinates.pack(width == 8 ? "l<4" : "s<4") + types unless count.zero?
+          input = header + [type, payload.bytesize + suffix.bytesize + 8].pack("V2") + payload + suffix + unknown + eof
+          ENV["EMF_BACKEND"] = "native"
+          native = Emf.parse(input)
+          ENV["EMF_BACKEND"] = "ruby"
+          ruby = Emf.parse(input)
+          expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
+          expect(native.records).to eq(ruby.records)
+          expect(native.errors).to be_empty
+          expect(native.records[1].wire.class).to eq(Emf::Emr::Binary::Records::Raw)
+          expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+        end
+      end
+    end
+  end
+
+  it "preserves truncated PolyDraw points or types as Raw with continued framing" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    prefix = [-5, 2, 40, 60, 2].pack("l<4V")
+    excessive_count = [0xFFFFFFFF].pack("V")
+    poly_draw_records.each do |type, _, _, width|
+      payload = prefix + ("x" * (2 * (width + 1)))
+      payloads = (0...payload.bytesize).map { |length| payload.byteslice(0, length) }
+      payloads << (prefix.byteslice(0, 16) + excessive_count)
+      payloads.each do |short|
+        input = header + [type, short.bytesize + 8].pack("V2") + short + map_mode + eof
+        parsed = Emf.parse(input)
+        expect(parsed.records.map { |record| record.wire.class }).to eq(
+          [Emf::Emr::Binary::Records::Raw, Emf::Emr::Binary::Records::SetMapMode, Emf::Emr::Binary::Records::Eof]
+        )
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(input)
+      end
+    end
+  end
+
+  it "rejects PolyDraw snapshot lengths and excessive shared counts before allocation" do
+    bounds = "\x00".b * 16
+    count = [2].pack("Q<")
+    excessive_count = [0xFFFFFFFFFFFFFFFF].pack("Q<")
+    over_limit_count = [1_000_001].pack("Q<")
+    poly_draw_records.each do |_, _, family, width|
+      payload = bounds + count + ("x" * (2 * (width + 1)))
+      invalid = [payload.byteslice(0, 23), payload.byteslice(0...-1), "#{payload}x",
+                 bounds + excessive_count]
+      invalid.each do |bytes|
+        expect { Emf::Native::Fields.poly_draw(bytes, family) }.to raise_error(Emf::FormatError)
+      end
+      bytes = bounds + over_limit_count + ("x" * (1_000_001 * (width + 1)))
+      expect { Emf::Native::Fields.poly_draw(bytes, family) }
+        .to raise_error(Emf::FormatError, "native PolyDraw exceeds Ruby model array limit")
+    end
+  end
+
   it "matches Ruby canonical models after every wire is traversed" do
     native = Emf.parse(bytes)
     ENV["EMF_BACKEND"] = "ruby"

@@ -104,6 +104,26 @@ module Emf
                   total_field => point_count, points_field => points }]
       end
 
+      POLY_DRAW = {
+        58 => [Emr::Binary::Records::PolyDraw, 8, :cptl, :aptl],
+        59 => [Emr::Binary::Records::PolyDraw16, 4, :cpts, :apts]
+      }.freeze
+
+      def self.poly_draw(payload, family)
+        klass, width, count_field, points_field = POLY_DRAW.fetch(family)
+        raise FormatError, "invalid native PolyDraw payload" if payload.bytesize < 24
+
+        count = payload.byteslice(16, 8).unpack1("Q<")
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 24 + (count * (width + 1))
+        raise FormatError, "native PolyDraw exceeds Ruby model array limit" if count > 1_000_000
+
+        bounds = %i[left top right bottom].zip(payload.unpack("l<4")).to_h
+        format = width == 8 ? "l<*" : "s<*"
+        points = payload.byteslice(24, count * width).unpack(format).each_slice(2).map { |x, y| { x: x, y: y } }
+        types = payload.byteslice((24 + (count * width))..).unpack("C*")
+        [klass, { rcl_bounds: bounds, count_field => count, points_field => points, ab_types: types }]
+      end
+
       def self.call(payload, family)
         klass, *layouts = LAYOUTS.fetch(family)
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == layouts.sum { |_, _, _, length| length }

@@ -109,11 +109,19 @@ length u64, type ID u32, family u32, typed payload length u64. Payloads:
 | POLYPOLYGON | 55 | bounds: 4 i32; polygon-array count u64; point count u64; polygon counts: count u32 values; points: count pairs of i32 x/y |
 | POLYPOLYLINE16 | 56 | bounds: 4 i32; polygon-array count u64; point count u64; polygon counts: count u32 values; points: count pairs of i16 x/y |
 | POLYPOLYGON16 | 57 | bounds: 4 i32; polygon-array count u64; point count u64; polygon counts: count u32 values; points: count pairs of i16 x/y |
+| POLYDRAW | 58 | bounds left/top/right/bottom: 4 i32; shared count u64; count pairs of i32 x/y; then count opaque u8 type bytes |
+| POLYDRAW16 | 59 | bounds left/top/right/bottom: 4 i32; shared count u64; count pairs of i16 x/y; then count opaque u8 type bytes |
 
 Multi-array bounds are left/top/right/bottom. Polygon counts and points have
 independent lengths: the sum of polygon-count values need not equal the point
 count. Array bytes must exactly match both declared lengths; opaque suffixes are
 excluded from typed payloads and remain in the original record span.
+
+PolyDraw uses one shared count for its point and type arrays. The typed payload
+length is exactly `24 + count * 9` (POLYDRAW) or `24 + count * 5`
+(POLYDRAW16). Type bytes are opaque and retain unknown values. Opaque suffixes
+remain in the original record span. The Ruby adapter validates the complete
+payload length and its one-million-element limit before decoding either array.
 
 Families match descriptor batches. Malformed supported payloads remain RAW and
 produce diagnostics. COMMENT contains counted data, including the EMF+ identifier

@@ -78,6 +78,8 @@ extern "C" {
 #define EMF_FAMILY_POLYPOLYGON 55u
 #define EMF_FAMILY_POLYPOLYLINE16 56u
 #define EMF_FAMILY_POLYPOLYGON16 57u
+#define EMF_FAMILY_POLYDRAW 58u
+#define EMF_FAMILY_POLYDRAW16 59u
 
 typedef struct emf_document emf_document;
 typedef struct emf_buffer emf_buffer;

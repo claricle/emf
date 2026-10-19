@@ -68,6 +68,8 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::PolyPolygon { .. } => 55,
         RecordData::PolyPolyline16 { .. } => 56,
         RecordData::PolyPolygon16 { .. } => 57,
+        RecordData::PolyDraw { .. } => 58,
+        RecordData::PolyDraw16 { .. } => 59,
     }
 }
 
@@ -174,6 +176,16 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
             points,
             ..
         } => multi_array_len(poly_counts.len(), points.len(), 4),
+        RecordData::PolyDraw { points, .. } => points
+            .len()
+            .checked_mul(9)
+            .and_then(|len| len.checked_add(24))
+            .ok_or(Error::SizeOverflow),
+        RecordData::PolyDraw16 { points, .. } => points
+            .len()
+            .checked_mul(5)
+            .and_then(|len| len.checked_add(24))
+            .ok_or(Error::SizeOverflow),
         RecordData::Comment { data } => data.len().checked_add(8).ok_or(Error::SizeOverflow),
     }
 }
@@ -372,6 +384,32 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                     out.extend_from_slice(&point.x.to_le_bytes());
                     out.extend_from_slice(&point.y.to_le_bytes());
                 }
+            }
+            RecordData::PolyDraw {
+                bounds,
+                points,
+                ab_types,
+            } => {
+                rect(&mut out, *bounds);
+                u64_field(&mut out, wire_len(points.len())?);
+                for point in points {
+                    i32_field(&mut out, point.x);
+                    i32_field(&mut out, point.y);
+                }
+                out.extend_from_slice(ab_types);
+            }
+            RecordData::PolyDraw16 {
+                bounds,
+                points,
+                ab_types,
+            } => {
+                rect(&mut out, *bounds);
+                u64_field(&mut out, wire_len(points.len())?);
+                for point in points {
+                    out.extend_from_slice(&point.x.to_le_bytes());
+                    out.extend_from_slice(&point.y.to_le_bytes());
+                }
+                out.extend_from_slice(ab_types);
             }
             RecordData::Comment { data } => {
                 u64_field(&mut out, wire_len(data.len())?);
@@ -689,6 +727,56 @@ mod tests {
                 assert_eq!(cursor.take(16), &payload[..16]);
                 assert_eq!(cursor.u64(), u64::from(count));
                 assert_eq!(cursor.take(points.len()), points);
+                assert_eq!(cursor.position, encoded.len());
+            }
+        }
+    }
+
+    #[test]
+    fn poly_draw_snapshots_preserve_shared_counts_and_opaque_types() {
+        for (index, kind) in [56, 92].into_iter().enumerate() {
+            for count in [0u32, 2] {
+                let mut payload = [i32::MIN, i32::MAX, -1, 0]
+                    .into_iter()
+                    .flat_map(i32::to_le_bytes)
+                    .collect::<Vec<_>>();
+                payload.extend_from_slice(&count.to_le_bytes());
+                let points = if index == 0 {
+                    [i32::MIN, i32::MAX, -1, 0]
+                        .into_iter()
+                        .flat_map(i32::to_le_bytes)
+                        .collect::<Vec<_>>()
+                } else {
+                    [i16::MIN, i16::MAX, -1, 0]
+                        .into_iter()
+                        .flat_map(i16::to_le_bytes)
+                        .collect::<Vec<_>>()
+                };
+                let points = if count == 0 {
+                    &[][..]
+                } else {
+                    points.as_slice()
+                };
+                payload.extend_from_slice(points);
+                let types = if count == 0 { &[][..] } else { &[128, 255][..] };
+                payload.extend_from_slice(types);
+                payload.extend_from_slice(b"opaque");
+                let mut input = fixture_header(88);
+                record(&mut input, kind, &payload);
+                let document = parse(&input, &ParseLimits::default()).unwrap();
+                let encoded = encode(&document).unwrap();
+                let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+                cursor.take(112 + 88);
+                assert_eq!(cursor.u64(), 0);
+                assert_eq!(cursor.u64(), 88);
+                assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
+                assert_eq!(cursor.u32(), kind);
+                assert_eq!(cursor.u32(), 58 + index as u32);
+                assert_eq!(cursor.u64(), 24 + points.len() as u64 + types.len() as u64);
+                assert_eq!(cursor.take(16), &payload[..16]);
+                assert_eq!(cursor.u64(), u64::from(count));
+                assert_eq!(cursor.take(points.len()), points);
+                assert_eq!(cursor.take(types.len()), types);
                 assert_eq!(cursor.position, encoded.len());
             }
         }
