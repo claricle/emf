@@ -21,6 +21,10 @@ extern "C" {
 #define EMF_FORMAT_WMF_APM 2u
 #define EMF_FORMAT_WMF_STANDARD 3u
 #define EMF_FAMILY_RAW 0u
+#define EMF_FAMILY_EOF 1u
+#define EMF_FAMILY_SETMAPMODE 2u
+#define EMF_FAMILY_POLYLINE 3u
+#define EMF_FAMILY_COMMENT 4u
 
 typedef struct emf_document emf_document;
 typedef struct emf_buffer emf_buffer;
@@ -100,8 +104,9 @@ typedef struct emf_error_info {
  * handle, and never free a handle while it is in use. The caller owns returned
  * handles and frees them exactly once. Allocation aborts cannot be recovered.
  *
- * This initial framing subset retains all payloads as raw bytes. Typed model
- * snapshots and edited-record serialization are not yet provided.
+ * Typed snapshots cover EOF, SETMAPMODE, POLYLINE and COMMENT; other records
+ * remain raw. Snapshot bytes use the encoding documented in snapshot-v1.md.
+ * Documents are immutable through this ABI.
  * Detection recognizes WMF signatures; parsing supports EMF only.
  */
 uint32_t emf_abi_version(void);
@@ -113,6 +118,10 @@ int32_t emf_document_info(const emf_document *document, emf_info *out_info);
  * descriptors. At most capacity records are written, in source order.
  */
 int32_t emf_record_batch(const emf_document *document, uint64_t start, uint64_t capacity, emf_record_descriptor *out_descriptors, uint64_t *out_count);
+/* Owned bulk snapshot: decoded header, typed records, diagnostics and tails.
+ * No raw record bytes are duplicated; use emf_record_bytes for wire hydration.
+ */
+int32_t emf_document_snapshot(const emf_document *document, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_record_bytes(const emf_document *document, uint64_t index, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_serialize(const emf_document *document, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_buffer_view(const emf_buffer *buffer, const uint8_t **out_data, uint64_t *out_length);

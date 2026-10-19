@@ -13,12 +13,53 @@
     } \
 } while (0)
 
-#define INPUT_CAPACITY 160u
+#define INPUT_CAPACITY 256u
 #define HEADER_SIZE 88u
 #define UNKNOWN_TYPE UINT32_C(0x7fff0001)
 
 static uint8_t input[INPUT_CAPACITY];
 static size_t input_length;
+
+typedef struct cursor {
+    const uint8_t *bytes;
+    size_t length;
+    size_t offset;
+} cursor;
+
+static int take(cursor *c, size_t n, const uint8_t **out) {
+    if (n > c->length - c->offset) return 0;
+    *out = c->bytes + c->offset;
+    c->offset += n;
+    return 1;
+}
+
+static int get_u32(cursor *c, uint32_t *out) {
+    const uint8_t *p;
+    if (!take(c, 4, &p)) return 0;
+    *out = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+    return 1;
+}
+
+static int get_u64(cursor *c, uint64_t *out) {
+    const uint8_t *p;
+    if (!take(c, 8, &p)) return 0;
+    *out = 0;
+    for (unsigned i = 0; i < 8; ++i) *out |= (uint64_t)p[i] << (8u * i);
+    return 1;
+}
+
+static int get_i32(cursor *c, int32_t *out) {
+    uint32_t value;
+    if (!get_u32(c, &value)) return 0;
+    memcpy(out, &value, sizeof(value));
+    return 1;
+}
+
+static int skip(cursor *c, size_t n) {
+    const uint8_t *ignored;
+    return take(c, n, &ignored);
+}
 
 static void put_u16(size_t offset, uint16_t value) {
     input[offset] = (uint8_t)value;
@@ -73,6 +114,77 @@ static void make_fixture(void) {
     input_length = HEADER_SIZE + 40;
 }
 
+static void append_record_u32(uint32_t type, uint32_t size, uint32_t value) {
+    put_u32(input_length, type);
+    put_u32(input_length + 4, size);
+    put_u32(input_length + 8, value);
+    input_length += size;
+}
+
+static void make_snapshot_fixture(void) {
+    make_fixture();
+    memset(input + HEADER_SIZE, 0, sizeof(input) - HEADER_SIZE);
+    input_length = HEADER_SIZE;
+    put_u32(48, 196);
+    put_u32(52, 6);
+
+    /* Unknown raw record: 4 opaque payload bytes. */
+    put_u32(input_length, UNKNOWN_TYPE);
+    put_u32(input_length + 4, 12);
+    input[input_length + 8] = 0xde;
+    input[input_length + 9] = 0xad;
+    input[input_length + 10] = 0xbe;
+    input[input_length + 11] = 0xef;
+    input_length += 12;
+
+    append_record_u32(17, 12, 7); /* EMR_SETMAPMODE */
+
+    /* EMR_POLYLINE with two signed points. */
+    put_u32(input_length, 4);
+    put_u32(input_length + 4, 44);
+    put_u32(input_length + 8, (uint32_t)-1);
+    put_u32(input_length + 12, 2);
+    put_u32(input_length + 16, 30);
+    put_u32(input_length + 20, 40);
+    put_u32(input_length + 24, 2);
+    put_u32(input_length + 28, 5);
+    put_u32(input_length + 32, 6);
+    put_u32(input_length + 36, (uint32_t)-7);
+    put_u32(input_length + 40, 8);
+    input_length += 44;
+
+    /* EMR_COMMENT: counted payload remains exact, including arbitrary bytes. */
+    put_u32(input_length, 70);
+    put_u32(input_length + 4, 15);
+    put_u32(input_length + 8, 3);
+    input[input_length + 12] = 0xfa;
+    input[input_length + 13] = 0xfb;
+    input[input_length + 14] = 0xfc;
+    input_length += 15;
+
+    /* EMR_EOF (20 bytes), followed by five opaque trailing bytes. */
+    put_u32(input_length, 14);
+    put_u32(input_length + 4, 20);
+    put_u32(input_length + 8, 3);
+    put_u32(input_length + 12, 12);
+    put_u32(input_length + 16, 20);
+    input_length += 20;
+    static const uint8_t tail[] = {0x10, 0x14, 0xa0, 0xb1, 0xc2};
+    memcpy(input + input_length, tail, sizeof(tail));
+    input_length += sizeof(tail);
+}
+
+static void make_diagnostic_fixture(void) {
+    make_fixture();
+    memset(input + HEADER_SIZE, 0, sizeof(input) - HEADER_SIZE);
+    input_length = HEADER_SIZE;
+    put_u32(48, 93);
+    put_u32(52, 1);
+    static const uint8_t unframed[] = {1, 2, 3, 4, 5};
+    memcpy(input + input_length, unframed, sizeof(unframed));
+    input_length += sizeof(unframed);
+}
+
 static int check_layout(void) {
     CHECK(sizeof(emf_limits) == 48);
     CHECK(offsetof(emf_limits, struct_size) == 0);
@@ -121,6 +233,144 @@ static int check_layout(void) {
     return 0;
 }
 
+static int check_snapshot_record(cursor *c, uint64_t index, uint64_t offset,
+                                 uint64_t length, uint32_t type, uint32_t family,
+                                 uint64_t payload_length) {
+    uint64_t got64;
+    uint32_t got32;
+    CHECK(get_u64(c, &got64) && got64 == index);
+    CHECK(get_u64(c, &got64) && got64 == offset);
+    CHECK(get_u64(c, &got64) && got64 == length);
+    CHECK(get_u32(c, &got32) && got32 == type);
+    CHECK(get_u32(c, &got32) && got32 == family);
+    CHECK(get_u64(c, &got64) && got64 == payload_length);
+    return 0;
+}
+
+static int check_snapshot(void) {
+    make_snapshot_fixture();
+    emf_document *document = NULL;
+    emf_buffer *snapshot = NULL;
+    emf_error *error = NULL;
+    CHECK(emf_parse(input, input_length, NULL, &document, &error) == EMF_OK);
+    CHECK(document != NULL && error == NULL);
+    CHECK(emf_document_snapshot(document, &snapshot, &error) == EMF_OK);
+    CHECK(snapshot != NULL && error == NULL);
+    const uint8_t *bytes = NULL;
+    uint64_t byte_length = 0;
+    CHECK(emf_buffer_view(snapshot, &bytes, &byte_length) == EMF_OK);
+    CHECK(byte_length <= SIZE_MAX);
+    cursor c = {bytes, (size_t)byte_length, 0};
+    const uint8_t *p;
+    CHECK(take(&c, 4, &p) && memcmp(p, "EMFS", 4) == 0);
+    uint32_t u32;
+    uint64_t total, raw_header, record_count, diagnostic_count, trailing, unframed;
+    CHECK(get_u32(&c, &u32) && u32 == 1);
+    CHECK(get_u64(&c, &total) && total == byte_length);
+    CHECK(get_u64(&c, &raw_header) && raw_header == HEADER_SIZE);
+    CHECK(get_u64(&c, &record_count) && record_count == 5);
+    CHECK(get_u64(&c, &diagnostic_count) && diagnostic_count == 0);
+    CHECK(get_u64(&c, &trailing) && trailing == 5);
+    CHECK(get_u64(&c, &unframed) && unframed == 0);
+
+    /* Decode every field in the fixed 112-byte decoded-header section. */
+    int32_t s32;
+    CHECK(get_u32(&c, &u32) && u32 == 88);
+    CHECK(get_i32(&c, &s32) && s32 == 0);
+    CHECK(get_i32(&c, &s32) && s32 == 0);
+    CHECK(get_i32(&c, &s32) && s32 == 99);
+    CHECK(get_i32(&c, &s32) && s32 == 0);
+    CHECK(get_i32(&c, &s32) && s32 == 0);
+    CHECK(get_i32(&c, &s32) && s32 == 0);
+    CHECK(get_i32(&c, &s32) && s32 == 0);
+    CHECK(get_i32(&c, &s32) && s32 == 1250);
+    CHECK(get_u32(&c, &u32) && u32 == UINT32_C(0x464d4520));
+    CHECK(get_u32(&c, &u32) && u32 == UINT32_C(0x00010000));
+    CHECK(get_u32(&c, &u32) && u32 == input_length);
+    CHECK(get_u32(&c, &u32) && u32 == 6);
+    CHECK(get_u32(&c, &u32) && u32 == 1); /* zero-extended nHandles */
+    CHECK(get_u32(&c, &u32) && u32 == 0);
+    CHECK(get_u32(&c, &u32) && u32 == 0);
+    CHECK(get_u32(&c, &u32) && u32 == 0);
+    CHECK(get_u32(&c, &u32) && u32 == 0);
+    CHECK(get_i32(&c, &s32) && s32 == 1024);
+    CHECK(get_i32(&c, &s32) && s32 == 768);
+    CHECK(get_i32(&c, &s32) && s32 == 270);
+    CHECK(get_i32(&c, &s32) && s32 == 203);
+    CHECK(get_u32(&c, &u32) && u32 == 0); /* optional fields absent */
+    for (unsigned i = 0; i < 5; ++i) CHECK(get_u32(&c, &u32) && u32 == 0);
+    CHECK(c.offset == 56 + 112);
+    CHECK(take(&c, HEADER_SIZE, &p));
+    CHECK(memcmp(p, input, HEADER_SIZE) == 0);
+
+    CHECK(check_snapshot_record(&c, 0, 88, 12, UNKNOWN_TYPE, 0, 0) == 0);
+    CHECK(check_snapshot_record(&c, 1, 100, 12, 17, 2, 4) == 0);
+    CHECK(get_u32(&c, &u32) && u32 == 7);
+    CHECK(check_snapshot_record(&c, 2, 112, 44, 4, 3, 40) == 0);
+    CHECK(get_i32(&c, &s32) && s32 == -1);
+    CHECK(get_i32(&c, &s32) && s32 == 2);
+    CHECK(get_i32(&c, &s32) && s32 == 30);
+    CHECK(get_i32(&c, &s32) && s32 == 40);
+    uint64_t count;
+    CHECK(get_u64(&c, &count) && count == 2);
+    CHECK(get_i32(&c, &s32) && s32 == 5);
+    CHECK(get_i32(&c, &s32) && s32 == 6);
+    CHECK(get_i32(&c, &s32) && s32 == -7);
+    CHECK(get_i32(&c, &s32) && s32 == 8);
+    CHECK(check_snapshot_record(&c, 3, 156, 15, 70, 4, 11) == 0);
+    CHECK(get_u64(&c, &count) && count == 3);
+    CHECK(take(&c, 3, &p) && p[0] == 0xfa && p[1] == 0xfb && p[2] == 0xfc);
+    CHECK(check_snapshot_record(&c, 4, 171, 20, 14, 1, 12) == 0);
+    CHECK(get_u32(&c, &u32) && u32 == 3);
+    CHECK(get_u32(&c, &u32) && u32 == 12);
+    CHECK(get_u32(&c, &u32) && u32 == 20);
+    CHECK(take(&c, 5, &p));
+    CHECK(p[0] == 0x10 && p[1] == 0x14 && p[2] == 0xa0 && p[3] == 0xb1 && p[4] == 0xc2);
+    CHECK(c.offset == c.length);
+
+    /* The buffer owns its data independently of the parsed document/input. */
+    emf_document_free(document);
+    document = NULL;
+    memset(input, 0, sizeof(input));
+    CHECK(emf_buffer_view(snapshot, &bytes, &byte_length) == EMF_OK);
+    CHECK(byte_length == c.length && memcmp(bytes, "EMFS", 4) == 0);
+    emf_buffer_free(snapshot);
+    CHECK(emf_document_snapshot(NULL, &snapshot, &error) == EMF_INVALID_ARGUMENT);
+    CHECK(snapshot == NULL && error != NULL);
+    emf_error_free(error);
+    error = NULL;
+
+    /* Stable diagnostic encoding and exact unframed tail. */
+    make_diagnostic_fixture();
+    CHECK(emf_parse(input, input_length, NULL, &document, &error) == EMF_OK);
+    CHECK(error == NULL && document != NULL);
+    CHECK(emf_document_snapshot(document, &snapshot, &error) == EMF_OK);
+    CHECK(error == NULL && snapshot != NULL);
+    CHECK(emf_buffer_view(snapshot, &bytes, &byte_length) == EMF_OK);
+    c = (cursor){bytes, (size_t)byte_length, 0};
+    CHECK(take(&c, 4, &p) && memcmp(p, "EMFS", 4) == 0);
+    CHECK(get_u32(&c, &u32) && u32 == 1);
+    CHECK(get_u64(&c, &total) && total == byte_length);
+    CHECK(get_u64(&c, &raw_header) && raw_header == 88);
+    CHECK(get_u64(&c, &record_count) && record_count == 0);
+    CHECK(get_u64(&c, &diagnostic_count) && diagnostic_count == 1);
+    CHECK(get_u64(&c, &trailing) && trailing == 0);
+    CHECK(get_u64(&c, &unframed) && unframed == 5);
+    CHECK(skip(&c, 112 + 88));
+    CHECK(get_u32(&c, &u32) && u32 == 1); /* truncated record head */
+    CHECK(get_u32(&c, &u32) && u32 == 0); /* no record type */
+    CHECK(get_u32(&c, &u32) && u32 == 0);
+    CHECK(get_u32(&c, &u32) && u32 == 0);
+    CHECK(get_u64(&c, &total) && total == 88);
+    CHECK(get_u64(&c, &total) && total == 5);
+    CHECK(get_u64(&c, &total) && total == 0);
+    CHECK(take(&c, 5, &p) && p[0] == 1 && p[4] == 5);
+    CHECK(c.offset == c.length);
+    emf_document_free(document);
+    emf_buffer_free(snapshot);
+    return 0;
+}
+
 static void init_info(emf_info *info) {
     memset(info, 0, sizeof(*info));
     info->struct_size = (uint32_t)sizeof(*info);
@@ -146,6 +396,7 @@ static void init_limits(emf_limits *limits) {
 
 int main(void) {
     CHECK(check_layout() == 0);
+    CHECK(check_snapshot() == 0);
     CHECK(emf_abi_version() == EMF_ABI_VERSION);
     make_fixture();
     uint8_t original_input[INPUT_CAPACITY];
@@ -186,6 +437,7 @@ int main(void) {
     CHECK(descriptors[0].family == EMF_FAMILY_RAW);
     CHECK(descriptors[1].index == 1 && descriptors[1].offset == HEADER_SIZE + 15);
     CHECK(descriptors[1].byte_length == 20 && descriptors[1].type_id == 14);
+    CHECK(descriptors[1].family == EMF_FAMILY_EOF);
 
     count = UINT64_MAX;
     CHECK(emf_record_batch(document, 2, 0, NULL, &count) == EMF_OK && count == 0);

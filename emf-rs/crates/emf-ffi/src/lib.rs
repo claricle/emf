@@ -1,4 +1,5 @@
 //! C ABI for owned EMF framing handles. See `include/emf.h` for pointer contracts.
+mod snapshot;
 mod types;
 pub use types::*;
 
@@ -295,10 +296,44 @@ pub unsafe extern "C" fn emf_record_batch(
                 offset: record.offset() as u64,
                 byte_length: record.size() as u64,
                 type_id: record.record_type(),
-                family: 0,
+                family: snapshot::family(record.data()),
             });
         }
         out_count.write(count as u64);
+        Ok(())
+    })
+}
+
+/// # Safety
+/// The document must be live; non-NULL output pointers must reference writable handle slots.
+#[no_mangle]
+pub unsafe extern "C" fn emf_document_snapshot(
+    document: *const EmfDocument,
+    out_buffer: *mut *mut EmfBuffer,
+    out_error: *mut *mut EmfError,
+) -> i32 {
+    if !out_buffer.is_null() {
+        out_buffer.write(ptr::null_mut());
+    }
+    run(out_error, || {
+        if out_buffer.is_null() {
+            return Err(Failure::invalid("out_buffer is NULL"));
+        }
+        let document = &document
+            .as_ref()
+            .ok_or_else(|| Failure::invalid("document is NULL"))?
+            .document;
+        let bytes = snapshot::encode(document).map_err(|error| match error {
+            snapshot::Error::SizeOverflow => Failure::new(
+                EMF_LIMIT_EXCEEDED,
+                None,
+                "snapshot size exceeds address space",
+            ),
+            snapshot::Error::AllocationFailed => {
+                Failure::new(EMF_ALLOCATION_FAILED, None, "snapshot allocation failed")
+            }
+        })?;
+        out_buffer.write(Box::into_raw(Box::new(EmfBuffer { bytes })));
         Ok(())
     })
 }

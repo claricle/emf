@@ -6,11 +6,12 @@ tests with `cargo test -p emf-ffi` and the independent C client with
 `sh crates/emf-ffi/tests/run-c-smoke.sh`.
 
 ABI version 1 provides format detection, immutable parsed EMF documents, document
-counts, raw record descriptor batches, owned raw record buffers, byte-preserving
+counts, record descriptor batches, owned raw record buffers, byte-preserving
 serialization, and owned errors. Detection recognizes WMF signatures; parsing
-supports EMF only. Records remain raw even when the core supports typed decoding.
-Typed snapshots, edits, Ruby hydration, and a complete package 04 milestone are
-not provided by this subset.
+supports EMF only. [Snapshot v1](snapshot-v1.md) exposes decoded headers, EOF,
+SETMAPMODE, POLYLINE, COMMENT, diagnostics and preserved header/tail bytes in one
+owned buffer. Other records remain raw. Edits, Ruby hydration, and a complete
+package 04 milestone are not provided by this subset.
 
 Input bytes may be released after parsing returns. Each returned buffer owns its
 bytes and survives freeing the document. A buffer view borrows from its buffer;
