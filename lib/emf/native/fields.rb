@@ -20,7 +20,21 @@ module Emf
         17 => [Emr::Binary::Records::SetBkColor, [:color, %i[red green blue reserved], "C4", 4]],
         18 => [Emr::Binary::Records::Ellipse, [:rcl_box, %i[left top right bottom], "l<4", 16]],
         19 => [Emr::Binary::Records::Rectangle, [:rcl_box, %i[left top right bottom], "l<4", 16]],
-        20 => [Emr::Binary::Records::RoundRect, [:rcl_box, %i[left top right bottom], "l<4", 16], [:szl_corner, %i[cx cy], "l<2", 8]]
+        20 => [Emr::Binary::Records::RoundRect, [:rcl_box, %i[left top right bottom], "l<4", 16], [:szl_corner, %i[cx cy], "l<2", 8]],
+        21 => [Emr::Binary::Records::SetTextAlign, [:text_align_mode, nil, "V", 4]],
+        22 => [Emr::Binary::Records::SaveDc],
+        23 => [Emr::Binary::Records::RestoreDc, [:saved_dc, nil, "l<", 4]],
+        24 => [Emr::Binary::Records::SelectObject, [:ih_object, nil, "V", 4]],
+        25 => [Emr::Binary::Records::DeleteObject, [:ih_object, nil, "V", 4]],
+        26 => [Emr::Binary::Records::SetArcDirection, [:arc_direction, nil, "V", 4]],
+        27 => [Emr::Binary::Records::BeginPath],
+        28 => [Emr::Binary::Records::EndPath],
+        29 => [Emr::Binary::Records::CloseFigure],
+        30 => [Emr::Binary::Records::FillPath, [:rcl_bounds, %i[left top right bottom], "l<4", 16]],
+        31 => [Emr::Binary::Records::StrokeAndFillPath, [:rcl_bounds, %i[left top right bottom], "l<4", 16]],
+        32 => [Emr::Binary::Records::StrokePath, [:rcl_bounds, %i[left top right bottom], "l<4", 16]],
+        33 => [Emr::Binary::Records::SelectClipPath, [:region_mode, nil, "V", 4]],
+        34 => [Emr::Binary::Records::AbortPath]
       }.freeze
 
       def self.call(payload, family)

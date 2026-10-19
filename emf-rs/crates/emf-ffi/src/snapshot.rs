@@ -31,6 +31,20 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::Ellipse { .. } => 18,
         RecordData::Rectangle { .. } => 19,
         RecordData::RoundRect { .. } => 20,
+        RecordData::SetTextAlign { .. } => 21,
+        RecordData::SaveDc => 22,
+        RecordData::RestoreDc { .. } => 23,
+        RecordData::SelectObject { .. } => 24,
+        RecordData::DeleteObject { .. } => 25,
+        RecordData::SetArcDirection { .. } => 26,
+        RecordData::BeginPath => 27,
+        RecordData::EndPath => 28,
+        RecordData::CloseFigure => 29,
+        RecordData::FillPath { .. } => 30,
+        RecordData::StrokeAndFillPath { .. } => 31,
+        RecordData::StrokePath { .. } => 32,
+        RecordData::SelectClipPath { .. } => 33,
+        RecordData::AbortPath => 34,
     }
 }
 
@@ -56,6 +70,20 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         | RecordData::SetBkColor { .. } => Ok(4),
         RecordData::Ellipse { .. } | RecordData::Rectangle { .. } => Ok(16),
         RecordData::RoundRect { .. } => Ok(24),
+        RecordData::SetTextAlign { .. } => Ok(4),
+        RecordData::SaveDc => Ok(0),
+        RecordData::RestoreDc { .. } => Ok(4),
+        RecordData::SelectObject { .. } => Ok(4),
+        RecordData::DeleteObject { .. } => Ok(4),
+        RecordData::SetArcDirection { .. } => Ok(4),
+        RecordData::BeginPath => Ok(0),
+        RecordData::EndPath => Ok(0),
+        RecordData::CloseFigure => Ok(0),
+        RecordData::FillPath { .. } => Ok(16),
+        RecordData::StrokeAndFillPath { .. } => Ok(16),
+        RecordData::StrokePath { .. } => Ok(16),
+        RecordData::SelectClipPath { .. } => Ok(4),
+        RecordData::AbortPath => Ok(0),
         RecordData::SetWindowExtEx { .. }
         | RecordData::SetWindowOrgEx { .. }
         | RecordData::SetViewportExtEx { .. }
@@ -148,6 +176,20 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                 rect(&mut out, *bounds);
                 size(&mut out, *corner);
             }
+            RecordData::SetTextAlign { text_align_mode } => u32_field(&mut out, *text_align_mode),
+            RecordData::SaveDc => {}
+            RecordData::RestoreDc { saved_dc } => i32_field(&mut out, *saved_dc),
+            RecordData::SelectObject { ih_object } => u32_field(&mut out, *ih_object),
+            RecordData::DeleteObject { ih_object } => u32_field(&mut out, *ih_object),
+            RecordData::SetArcDirection { arc_direction } => u32_field(&mut out, *arc_direction),
+            RecordData::BeginPath => {}
+            RecordData::EndPath => {}
+            RecordData::CloseFigure => {}
+            RecordData::FillPath { bounds } => rect(&mut out, *bounds),
+            RecordData::StrokeAndFillPath { bounds } => rect(&mut out, *bounds),
+            RecordData::StrokePath { bounds } => rect(&mut out, *bounds),
+            RecordData::SelectClipPath { region_mode } => u32_field(&mut out, *region_mode),
+            RecordData::AbortPath => {}
             RecordData::Polyline { bounds, points } => {
                 rect(&mut out, *bounds);
                 u64_field(&mut out, wire_len(points.len())?);
@@ -382,6 +424,50 @@ mod tests {
             assert_eq!(cursor.u32(), expected_family);
             assert_eq!(cursor.u64(), (words.len() * 4) as u64);
             cursor.words(&words);
+            assert_eq!(cursor.position, encoded.len());
+        }
+    }
+
+    #[test]
+    fn fixed_state_snapshots_encode_units_signed_bounds_and_scalars_without_suffixes() {
+        for (index, (kind, count)) in [
+            (22, 1),
+            (33, 0),
+            (34, 1),
+            (37, 1),
+            (40, 1),
+            (57, 1),
+            (59, 0),
+            (60, 0),
+            (61, 0),
+            (62, 4),
+            (63, 4),
+            (64, 4),
+            (67, 1),
+            (68, 0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let words = &[0x80000000u32, 0x7fffffff, 0xffffffff, 0][..count];
+            let mut payload = words
+                .iter()
+                .flat_map(|value| value.to_le_bytes())
+                .collect::<Vec<_>>();
+            payload.extend_from_slice(b"opaque");
+            let mut input = fixture_header(88);
+            record(&mut input, kind, &payload);
+            let document = parse(&input, &ParseLimits::default()).unwrap();
+            let encoded = encode(&document).unwrap();
+            let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+            cursor.take(112 + 88);
+            assert_eq!(cursor.u64(), 0);
+            assert_eq!(cursor.u64(), 88);
+            assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
+            assert_eq!(cursor.u32(), kind);
+            assert_eq!(cursor.u32(), 21 + index as u32);
+            assert_eq!(cursor.u64(), (count * 4) as u64);
+            cursor.words(words);
             assert_eq!(cursor.position, encoded.len());
         }
     }

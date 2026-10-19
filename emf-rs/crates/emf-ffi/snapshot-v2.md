@@ -2,7 +2,8 @@
 
 The emitted snapshot schema is 2; the C ABI remains version 1. Snapshot schema
 versions are independent of ABI versions and do not change C layouts or functions.
-Schema 2 is unreleased; its family table includes the coordinate, color and rectangle cohorts below.
+Schema 2 is unreleased; its family table includes coordinate, color, rectangle
+and fixed-state/path cohorts below.
 The historical [snapshot v1 contract](snapshot-v1.md) remains unchanged.
 
 `emf_document_snapshot(document, &buffer, &error)` returns one independently owned
@@ -72,6 +73,20 @@ length u64, type ID u32, family u32, typed payload length u64. Payloads:
 | ELLIPSE | 18 | box left/top/right/bottom: 4 i32 |
 | RECTANGLE | 19 | box left/top/right/bottom: 4 i32 |
 | ROUNDRECT | 20 | box left/top/right/bottom: 4 i32; corner cx/cy: 2 i32 |
+| SETTEXTALIGN | 21 | text_align_mode: u32 |
+| SAVEDC | 22 | empty |
+| RESTOREDC | 23 | saved_dc: i32 |
+| SELECTOBJECT | 24 | ih_object: u32 |
+| DELETEOBJECT | 25 | ih_object: u32 |
+| SETARCDIRECTION | 26 | arc_direction: u32 |
+| BEGINPATH | 27 | empty |
+| ENDPATH | 28 | empty |
+| CLOSEFIGURE | 29 | empty |
+| FILLPATH | 30 | bounds left/top/right/bottom: 4 i32 |
+| STROKEANDFILLPATH | 31 | bounds left/top/right/bottom: 4 i32 |
+| STROKEPATH | 32 | bounds left/top/right/bottom: 4 i32 |
+| SELECTCLIPPATH | 33 | region_mode: u32 |
+| ABORTPATH | 34 | empty |
 
 Families match descriptor batches. Malformed supported payloads remain RAW and
 produce diagnostics. COMMENT contains counted data, including the EMF+ identifier
@@ -99,3 +114,5 @@ All size arithmetic and output reservations are checked. A snapshot exceeding
 the addressable range returns `EMF_LIMIT_EXCEEDED`; reservation failure returns
 `EMF_ALLOCATION_FAILED`. The ABI exposes no document mutation, so original raw
 bytes and decoded snapshot values describe the same parse result.
+
+SELECTCLIPPATH snapshots contain only region_mode; adapters retain its optional opaque suffix from the checked original record span. Unit record payloads are empty. Other fixed-record suffixes remain outside typed snapshots.

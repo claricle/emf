@@ -220,6 +220,96 @@ RSpec.describe Emf::Native do
     end
   end
 
+  let(:fixed_state_records) do
+    [
+      [22, Emf::Emr::Binary::Records::SetTextAlign, { text_align_mode: 0xFFFFFFFF }],
+      [33, Emf::Emr::Binary::Records::SaveDc, {}],
+      [34, Emf::Emr::Binary::Records::RestoreDc, { saved_dc: -0x80000000 }],
+      [37, Emf::Emr::Binary::Records::SelectObject, { ih_object: 0x80000000 }],
+      [40, Emf::Emr::Binary::Records::DeleteObject, { ih_object: 0xFFFFFFFF }],
+      [57, Emf::Emr::Binary::Records::SetArcDirection, { arc_direction: 0x80000000 }],
+      [59, Emf::Emr::Binary::Records::BeginPath, {}],
+      [60, Emf::Emr::Binary::Records::EndPath, {}],
+      [61, Emf::Emr::Binary::Records::CloseFigure, {}],
+      [62, Emf::Emr::Binary::Records::FillPath, { rcl_bounds: { left: -0x80000000, top: 0x7FFFFFFF, right: -1, bottom: 0 } }],
+      [63, Emf::Emr::Binary::Records::StrokeAndFillPath, { rcl_bounds: { left: -1, top: 0, right: -0x80000000, bottom: 0x7FFFFFFF } }],
+      [64, Emf::Emr::Binary::Records::StrokePath, { rcl_bounds: { left: 0x7FFFFFFF, top: -0x80000000, right: 0, bottom: -1 } }],
+      [67, Emf::Emr::Binary::Records::SelectClipPath, { region_mode: 0xFFFFFFFF }],
+      [68, Emf::Emr::Binary::Records::AbortPath, {}]
+    ]
+  end
+
+  it "hydrates fixed state and path fields directly and preserves edits" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    fixed_state_records.each do |type, klass, fields|
+      expect(klass).not_to receive(:read)
+      length = 8 + fields.values.sum { |value| value.is_a?(Hash) ? 16 : 4 }
+      wire_bytes = klass.new(i_type: type, n_size: length, **fields).to_binary_s
+      parsed = Emf.parse(header + wire_bytes + eof)
+      wire = parsed.records.first.wire
+      expect(wire.class).to eq(klass)
+      fields.each { |field, value| expect(wire.public_send(field).snapshot).to eq(value) }
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(header + wire_bytes + eof)
+      edited = fields.transform_values do |value|
+        if value.is_a?(Hash)
+          value.transform_values { |number| -number - 1 }
+        else
+          type == 34 ? -value - 1 : 0
+        end
+      end
+      edited.each { |field, value| wire.public_send("#{field}=", value) }
+      expected = header + klass.new(i_type: type, n_size: length, **edited).to_binary_s + eof
+      expect(Emf.serialize(parsed)).to eq(expected)
+      reparsed = Emf.parse(expected).records.first.wire
+      edited.each { |field, value| expect(reparsed.public_send(field).snapshot).to eq(value) }
+    end
+  end
+
+  it "matches Ruby fixed state canonical models and preserves opaque SelectClipPath suffixes" do
+    fixed_state_records.each do |type, klass, fields|
+      length = 8 + fields.values.sum { |value| value.is_a?(Hash) ? 16 : 4 }
+      original = klass.new(i_type: type, n_size: length, **fields).to_binary_s
+      ["".b, "tail".b, ("opaque" * 3).b].each do |suffix|
+        input = header + [type, length + suffix.bytesize].pack("V2") + original.byteslice(8..) + suffix + eof
+        ENV["EMF_BACKEND"] = "native"
+        native = Emf.parse(input)
+        ENV["EMF_BACKEND"] = "ruby"
+        ruby = Emf.parse(input)
+        expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
+        expect(native.records).to eq(ruby.records)
+        expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+        next unless type == 67
+
+        native.records.first.wire.region_mode = 1
+        expect(native.records.first.wire.trailing.to_s).to eq(suffix)
+        expect(Emf.serialize(native)).to eq(header + [67, length + suffix.bytesize, 1].pack("V3") + suffix + eof)
+      end
+    end
+  end
+
+  it "preserves every short fixed state payload as Raw with diagnostics and continued framing" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    fixed_state_records.each do |type, _, fields|
+      required = fields.values.sum { |value| value.is_a?(Hash) ? 16 : 4 }
+      (0...required).each do |length|
+        input = header + [type, length + 8].pack("V2") + ("x" * length) + map_mode + eof
+        parsed = Emf.parse(input)
+        expect(parsed.records.map { |record| record.wire.class }).to eq(
+          [Emf::Emr::Binary::Records::Raw, Emf::Emr::Binary::Records::SetMapMode, Emf::Emr::Binary::Records::Eof]
+        )
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(input)
+      end
+    end
+  end
+
+  it "rejects invalid fixed state typed lengths including nonempty unit payloads" do
+    (21..34).each do |family|
+      expect { Emf::Native::Fields.call("x".b, family) }.to raise_error(Emf::FormatError, "invalid native typed payload length")
+    end
+  end
+
   it "matches Ruby canonical models after every wire is traversed" do
     native = Emf.parse(bytes)
     ENV["EMF_BACKEND"] = "ruby"
@@ -348,8 +438,8 @@ RSpec.describe Emf::Native do
     allow(loader).to receive(:invoke).and_call_original
     expect(loader).to receive(:invoke).with(:emf_document_free, anything).and_call_original
     expect(Emf::Emr::Parser).not_to receive(:call)
-    expect { backend.parse(header + [22, 12, 1].pack("V3") + eof) }
-      .to raise_error(Emf::FormatError, /does not support typed EMR record 22/)
+    expect { backend.parse(header + [15, 12, 1].pack("V3") + eof) }
+      .to raise_error(Emf::FormatError, /does not support typed EMR record 15/)
   end
 
   it "preserves malformed supported records as Raw with native diagnostics and unframed bytes" do
