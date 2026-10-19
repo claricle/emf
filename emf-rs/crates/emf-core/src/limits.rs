@@ -1,0 +1,154 @@
+//! Resource budgets shared by the readers.
+//!
+//! Units: bytes for `*_bytes`, records for `max_records`, and work units for
+//! `max_work_units` (one unit per record framed plus one per 16 bytes of
+//! record content examined, plus one per 16 bytes copied into the owned source).
+//! A limit is exceeded when the requested total is strictly greater than the limit.
+
+use crate::error::{LimitKind, ParseFailure};
+
+/// Configurable ceilings for one parse.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParseLimits {
+    /// Largest accepted input. Matches the Ruby parser's 200 MiB cap.
+    pub max_input_bytes: usize,
+    /// Largest accepted single record (`nSize`), including the header record.
+    pub max_record_bytes: usize,
+    /// Largest number of framed records, header included.
+    pub max_records: usize,
+    /// Cumulative requested buffer bytes, including each vector growth request.
+    /// Excludes allocator metadata and stack storage.
+    pub max_allocated_bytes: usize,
+    /// Cumulative work units.
+    pub max_work_units: u64,
+}
+
+impl Default for ParseLimits {
+    fn default() -> Self {
+        Self {
+            max_input_bytes: 200 * 1024 * 1024,
+            max_record_bytes: 128 * 1024 * 1024,
+            max_records: 4 * 1024 * 1024,
+            max_allocated_bytes: 640 * 1024 * 1024,
+            max_work_units: 64 * 1024 * 1024,
+        }
+    }
+}
+
+/// Running totals checked against a [`ParseLimits`].
+#[derive(Debug)]
+pub(crate) struct Budget<'a> {
+    limits: &'a ParseLimits,
+    records: usize,
+    allocated: usize,
+    work: u64,
+}
+
+impl<'a> Budget<'a> {
+    pub(crate) fn new(limits: &'a ParseLimits) -> Self {
+        Self {
+            limits,
+            records: 0,
+            allocated: 0,
+            work: 0,
+        }
+    }
+
+    pub(crate) fn check_input(&self, len: usize) -> Result<(), ParseFailure> {
+        if len > self.limits.max_input_bytes {
+            return Err(exceeded(
+                LimitKind::InputBytes,
+                self.limits.max_input_bytes as u64,
+                len as u64,
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_record_bytes(&self, size: usize) -> Result<(), ParseFailure> {
+        if size > self.limits.max_record_bytes {
+            return Err(exceeded(
+                LimitKind::RecordBytes,
+                self.limits.max_record_bytes as u64,
+                size as u64,
+            ));
+        }
+        Ok(())
+    }
+
+    /// Count one framed record and charge its work.
+    pub(crate) fn charge_record(&mut self, size: usize) -> Result<(), ParseFailure> {
+        let records = self.records.saturating_add(1);
+        if records > self.limits.max_records {
+            return Err(exceeded(
+                LimitKind::RecordCount,
+                self.limits.max_records as u64,
+                records as u64,
+            ));
+        }
+        self.records = records;
+        self.charge_work(1 + (size as u64).div_ceil(16))
+    }
+
+    pub(crate) fn charge_work(&mut self, units: u64) -> Result<(), ParseFailure> {
+        let work = self.work.saturating_add(units);
+        if work > self.limits.max_work_units {
+            return Err(exceeded(
+                LimitKind::WorkUnits,
+                self.limits.max_work_units,
+                work,
+            ));
+        }
+        self.work = work;
+        Ok(())
+    }
+
+    /// Grow geometrically so framing many small records stays amortized linear.
+    /// Charge the full request before allocation, including diagnostic storage.
+    pub(crate) fn reserve_one<T>(&mut self, values: &mut Vec<T>) -> Result<(), ParseFailure> {
+        if values.len() < values.capacity() {
+            return Ok(());
+        }
+        let capacity = values.capacity().saturating_mul(2).max(1);
+        let bytes = capacity.checked_mul(std::mem::size_of::<T>()).ok_or(
+            ParseFailure::ArithmeticOverflow {
+                offset: values.len(),
+            },
+        )?;
+        self.charge_alloc(bytes)?;
+        values
+            .try_reserve_exact(capacity - values.len())
+            .map_err(|_| ParseFailure::AllocationFailed { bytes })
+    }
+
+    pub(crate) fn charge_alloc(&mut self, bytes: usize) -> Result<(), ParseFailure> {
+        let total = self.allocated.saturating_add(bytes);
+        if total > self.limits.max_allocated_bytes {
+            return Err(exceeded(
+                LimitKind::AllocatedBytes,
+                self.limits.max_allocated_bytes as u64,
+                total as u64,
+            ));
+        }
+        self.allocated = total;
+        Ok(())
+    }
+}
+
+fn exceeded(kind: LimitKind, limit: u64, requested: u64) -> ParseFailure {
+    ParseFailure::LimitExceeded {
+        kind,
+        limit,
+        requested,
+    }
+}
+
+/// Request capacity for `len` elements with a fallible reservation.
+pub(crate) fn try_vec_with_capacity<T>(len: usize) -> Result<Vec<T>, ParseFailure> {
+    let mut v = Vec::new();
+    v.try_reserve_exact(len)
+        .map_err(|_| ParseFailure::AllocationFailed {
+            bytes: len.saturating_mul(std::mem::size_of::<T>()),
+        })?;
+    Ok(v)
+}
