@@ -2,6 +2,7 @@
 
 The emitted snapshot schema is 2; the C ABI remains version 1. Snapshot schema
 versions are independent of ABI versions and do not change C layouts or functions.
+Schema 2 is unreleased; its family table includes the coordinate cohort below.
 The historical [snapshot v1 contract](snapshot-v1.md) remains unchanged.
 
 `emf_document_snapshot(document, &buffer, &error)` returns one independently owned
@@ -59,6 +60,13 @@ length u64, type ID u32, family u32, typed payload length u64. Payloads:
 | SETPOLYFILLMODE | 6 | poly_fill_mode u32 |
 | SETROP2 | 7 | rop2 u32 |
 | SETSTRETCHBLTMODE | 8 | stretch_mode u32 |
+| SETWINDOWEXTEX | 9 | extent cx/cy: 2 i32 |
+| SETWINDOWORGEX | 10 | origin x/y: 2 i32 |
+| SETVIEWPORTEXTEX | 11 | extent cx/cy: 2 i32 |
+| SETVIEWPORTORGEX | 12 | origin x/y: 2 i32 |
+| SETBRUSHORGEX | 13 | ptl_origin x/y: 2 i32 |
+| OFFSETCLIPRGN | 14 | ptl_offset x/y: 2 i32 |
+| MOVETOEX | 15 | origin x/y: 2 i32 |
 
 Families match descriptor batches. Malformed supported payloads remain RAW and
 produce diagnostics. COMMENT contains counted data, including the EMF+ identifier

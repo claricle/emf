@@ -85,6 +85,69 @@ RSpec.describe Emf::Native do
     end
   end
 
+  let(:coordinate_records) do
+    [
+      [9, Emf::Emr::Binary::Records::SetWindowExtEx, :extent, %i[cx cy]],
+      [10, Emf::Emr::Binary::Records::SetWindowOrgEx, :origin, %i[x y]],
+      [11, Emf::Emr::Binary::Records::SetViewportExtEx, :extent, %i[cx cy]],
+      [12, Emf::Emr::Binary::Records::SetViewportOrgEx, :origin, %i[x y]],
+      [13, Emf::Emr::Binary::Records::SetBrushOrgEx, :ptl_origin, %i[x y]],
+      [26, Emf::Emr::Binary::Records::OffsetClipRgn, :ptl_offset, %i[x y]],
+      [27, Emf::Emr::Binary::Records::MoveToEx, :origin, %i[x y]]
+    ]
+  end
+  let(:coordinate_values) { [[0, -1], [-0x80000000, 0x7FFFFFFF], [0x7FFFFFFF, -0x80000000]] }
+
+  it "hydrates signed coordinate pairs directly and preserves editable serialization" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    coordinate_records.each do |type, klass, field, axes|
+      expect(klass).not_to receive(:read)
+      coordinate_values.each do |values|
+        input = header + [type, 16].pack("V2") + values.pack("l<2") + eof
+        parsed = Emf.parse(input)
+        wire = parsed.records.first.wire
+        expect(wire).to be_a(klass)
+        expect(axes.map { |axis| wire.public_send(field).public_send(axis).to_i }).to eq(values)
+        expect(parsed.errors).to be_empty
+        expect(Emf.serialize(parsed)).to eq(input)
+        edited = values.map { |value| -value - 1 }
+        wire.public_send("#{field}=", axes.zip(edited).to_h)
+        expected = header + [type, 16].pack("V2") + edited.pack("l<2") + eof
+        expect(Emf.serialize(parsed)).to eq(expected)
+        reparsed = Emf.parse(expected).records.first.wire.public_send(field)
+        expect(axes.map { |axis| reparsed.public_send(axis).to_i }).to eq(edited)
+      end
+    end
+  end
+
+  it "matches Ruby canonical coordinate models after wire traversal" do
+    input = header + coordinate_records.flat_map do |type, *_fields|
+      coordinate_values.map { |values| [type, 16].pack("V2") + values.pack("l<2") }
+    end.join + eof
+    native = Emf.parse(input)
+    ENV["EMF_BACKEND"] = "ruby"
+    ruby = Emf.parse(input)
+    expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
+    expect(native.records).to eq(ruby.records)
+    expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+  end
+
+  it "preserves short coordinate payloads as Raw with diagnostics and continued framing" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    coordinate_records.map(&:first).each do |type|
+      (0..7).each do |length|
+        short = [type, 8 + length].pack("V2") + ("x" * length)
+        input = header + short + map_mode + eof
+        parsed = Emf.parse(input)
+        expect(parsed.records.map { |record| record.wire.class }).to eq(
+          [Emf::Emr::Binary::Records::Raw, Emf::Emr::Binary::Records::SetMapMode, Emf::Emr::Binary::Records::Eof]
+        )
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(input)
+      end
+    end
+  end
+
   it "matches Ruby canonical models after every wire is traversed" do
     native = Emf.parse(bytes)
     ENV["EMF_BACKEND"] = "ruby"

@@ -405,6 +405,45 @@ static int check_scalar_state_snapshots(void) {
     return 0;
 }
 
+static int check_coordinate_snapshots(void) {
+    const uint32_t kinds[] = {9, 10, 11, 12, 13, 26, 27};
+    const uint32_t families[] = {EMF_FAMILY_SETWINDOWEXTEX, EMF_FAMILY_SETWINDOWORGEX,
+        EMF_FAMILY_SETVIEWPORTEXTEX, EMF_FAMILY_SETVIEWPORTORGEX,
+        EMF_FAMILY_SETBRUSHORGEX, EMF_FAMILY_OFFSETCLIPRGN, EMF_FAMILY_MOVETOEX};
+    const uint32_t values[][2] = {{0, UINT32_MAX},
+        {UINT32_C(0x80000000), INT32_MAX}, {INT32_MAX, UINT32_C(0x80000000)}};
+    for (unsigned kind = 0; kind < 7; ++kind) {
+        for (unsigned value = 0; value < 3; ++value) {
+            make_fixture();
+            put_u32(88, kinds[kind]);
+            put_u32(92, 16);
+            put_u32(96, values[value][0]);
+            put_u32(100, values[value][1]);
+            input_length = 104;
+            emf_document *document = NULL;
+            emf_buffer *snapshot = NULL;
+            emf_error *error = NULL;
+            CHECK(emf_parse(input, input_length, NULL, &document, &error) == EMF_OK);
+            CHECK(emf_document_snapshot(document, &snapshot, &error) == EMF_OK);
+            const uint8_t *bytes = NULL;
+            uint64_t length = 0;
+            CHECK(emf_buffer_view(snapshot, &bytes, &length) == EMF_OK);
+            emf_document_free(document);
+            CHECK(error == NULL && length <= SIZE_MAX);
+            cursor c = {bytes, (size_t)length, 4};
+            uint32_t word;
+            CHECK(get_u32(&c, &word) && word == 2);
+            CHECK(skip(&c, 48 + 112 + HEADER_SIZE));
+            CHECK(check_snapshot_record(&c, 0, 88, 16, kinds[kind], families[kind], 8) == 0);
+            CHECK(get_u32(&c, &word) && word == values[value][0]);
+            CHECK(get_u32(&c, &word) && word == values[value][1]);
+            CHECK(c.offset == c.length);
+            emf_buffer_free(snapshot);
+        }
+    }
+    return 0;
+}
+
 static int check_snapshot_after_malformed_eof(void) {
     for (uint32_t short_size = 8; short_size <= 16; short_size += 4) {
         make_fixture();
@@ -498,6 +537,7 @@ int main(void) {
     CHECK(check_layout() == 0);
     CHECK(check_snapshot() == 0);
     CHECK(check_scalar_state_snapshots() == 0);
+    CHECK(check_coordinate_snapshots() == 0);
     CHECK(check_snapshot_after_malformed_eof() == 0);
     CHECK(emf_abi_version() == EMF_ABI_VERSION);
     make_fixture();

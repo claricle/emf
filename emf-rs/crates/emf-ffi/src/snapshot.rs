@@ -1,6 +1,6 @@
 //! Version 2 owned snapshot encoding. All fields are explicitly little-endian.
 
-use emf_core::{DiagnosticKind, Document, EmfHeader, RecordData, Rect, Size};
+use emf_core::{DiagnosticKind, Document, EmfHeader, Point, RecordData, Rect, Size};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Error {
@@ -19,6 +19,13 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::SetPolyFillMode { .. } => 6,
         RecordData::SetRop2 { .. } => 7,
         RecordData::SetStretchBltMode { .. } => 8,
+        RecordData::SetWindowExtEx { .. } => 9,
+        RecordData::SetWindowOrgEx { .. } => 10,
+        RecordData::SetViewportExtEx { .. } => 11,
+        RecordData::SetViewportOrgEx { .. } => 12,
+        RecordData::SetBrushOrgEx { .. } => 13,
+        RecordData::OffsetClipRgn { .. } => 14,
+        RecordData::MoveToEx { .. } => 15,
     }
 }
 
@@ -40,6 +47,13 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         | RecordData::SetPolyFillMode { .. }
         | RecordData::SetRop2 { .. }
         | RecordData::SetStretchBltMode { .. } => Ok(4),
+        RecordData::SetWindowExtEx { .. }
+        | RecordData::SetWindowOrgEx { .. }
+        | RecordData::SetViewportExtEx { .. }
+        | RecordData::SetViewportOrgEx { .. }
+        | RecordData::SetBrushOrgEx { .. }
+        | RecordData::OffsetClipRgn { .. }
+        | RecordData::MoveToEx { .. } => Ok(8),
         RecordData::Polyline { points, .. } => points
             .len()
             .checked_mul(8)
@@ -107,6 +121,14 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
             RecordData::SetPolyFillMode { poly_fill_mode } => u32_field(&mut out, *poly_fill_mode),
             RecordData::SetRop2 { rop2 } => u32_field(&mut out, *rop2),
             RecordData::SetStretchBltMode { stretch_mode } => u32_field(&mut out, *stretch_mode),
+            RecordData::SetWindowExtEx { extent } | RecordData::SetViewportExtEx { extent } => {
+                size(&mut out, *extent);
+            }
+            RecordData::SetWindowOrgEx { origin }
+            | RecordData::SetViewportOrgEx { origin }
+            | RecordData::SetBrushOrgEx { origin }
+            | RecordData::MoveToEx { origin } => point(&mut out, *origin),
+            RecordData::OffsetClipRgn { offset } => point(&mut out, *offset),
             RecordData::Polyline { bounds, points } => {
                 rect(&mut out, *bounds);
                 u64_field(&mut out, wire_len(points.len())?);
@@ -157,6 +179,10 @@ fn rect(out: &mut Vec<u8>, value: Rect) {
     for coordinate in [value.left, value.top, value.right, value.bottom] {
         i32_field(out, coordinate);
     }
+}
+fn point(out: &mut Vec<u8>, value: Point) {
+    i32_field(out, value.x);
+    i32_field(out, value.y);
 }
 fn size(out: &mut Vec<u8>, value: Size) {
     i32_field(out, value.cx);
@@ -298,6 +324,39 @@ mod tests {
                 assert_eq!(cursor.u32(), expected_family);
                 assert_eq!(cursor.u64(), 4);
                 assert_eq!(cursor.u32(), value);
+                assert_eq!(cursor.position, encoded.len());
+            }
+        }
+    }
+
+    #[test]
+    fn coordinate_families_encode_signed_pairs_without_opaque_suffixes() {
+        for (kind, expected_family) in [
+            (9, 9),
+            (10, 10),
+            (11, 11),
+            (12, 12),
+            (13, 13),
+            (26, 14),
+            (27, 15),
+        ] {
+            for values in [[0i32, -1], [i32::MIN, i32::MAX], [i32::MAX, i32::MIN]] {
+                let mut input = fixture_header(88);
+                let mut payload = values.map(i32::to_le_bytes).concat();
+                payload.extend_from_slice(b"tail");
+                record(&mut input, kind, &payload);
+                let document = parse(&input, &ParseLimits::default()).unwrap();
+                assert_eq!(family(document.records()[0].data()), expected_family);
+                let encoded = encode(&document).unwrap();
+                let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+                cursor.take(112 + 88);
+                assert_eq!(cursor.u64(), 0);
+                assert_eq!(cursor.u64(), 88);
+                assert_eq!(cursor.u64(), 20);
+                assert_eq!(cursor.u32(), kind);
+                assert_eq!(cursor.u32(), expected_family);
+                assert_eq!(cursor.u64(), 8);
+                cursor.words(&values.map(|value| value as u32));
                 assert_eq!(cursor.position, encoded.len());
             }
         }
