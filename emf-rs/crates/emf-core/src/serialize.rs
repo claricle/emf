@@ -105,6 +105,21 @@ pub fn serialize_with_limits(
                 out.extend_from_slice(&bytes[16..bytes.len() - 4]);
                 append(&mut out, eof.n_size_last);
             }
+            RecordData::SetWindowExtEx { extent } | RecordData::SetViewportExtEx { extent } => {
+                append(&mut out, extent.cx as u32);
+                append(&mut out, extent.cy as u32);
+            }
+            RecordData::SetWindowOrgEx { origin }
+            | RecordData::SetViewportOrgEx { origin }
+            | RecordData::SetBrushOrgEx { origin }
+            | RecordData::MoveToEx { origin } => {
+                append(&mut out, origin.x as u32);
+                append(&mut out, origin.y as u32);
+            }
+            RecordData::OffsetClipRgn { offset } => {
+                append(&mut out, offset.x as u32);
+                append(&mut out, offset.y as u32);
+            }
             RecordData::SetMapMode { map_mode } => append(&mut out, *map_mode),
             RecordData::SetBkMode { bk_mode } => append(&mut out, *bk_mode),
             RecordData::SetPolyFillMode { poly_fill_mode } => append(&mut out, *poly_fill_mode),

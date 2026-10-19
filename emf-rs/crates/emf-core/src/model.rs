@@ -82,6 +82,13 @@ pub struct EofRecord {
 pub enum RecordData {
     Raw,
     Eof(EofRecord),
+    SetWindowExtEx { extent: Size },
+    SetWindowOrgEx { origin: Point },
+    SetViewportExtEx { extent: Size },
+    SetViewportOrgEx { origin: Point },
+    SetBrushOrgEx { origin: Point },
+    OffsetClipRgn { offset: Point },
+    MoveToEx { origin: Point },
     SetMapMode { map_mode: u32 },
     SetBkMode { bk_mode: u32 },
     SetPolyFillMode { poly_fill_mode: u32 },
@@ -95,6 +102,13 @@ impl RecordData {
         match self {
             Self::Raw => None,
             Self::Eof(_) => Some(14),
+            Self::SetWindowExtEx { .. } => Some(9),
+            Self::SetWindowOrgEx { .. } => Some(10),
+            Self::SetViewportExtEx { .. } => Some(11),
+            Self::SetViewportOrgEx { .. } => Some(12),
+            Self::SetBrushOrgEx { .. } => Some(13),
+            Self::OffsetClipRgn { .. } => Some(26),
+            Self::MoveToEx { .. } => Some(27),
             Self::SetMapMode { .. } => Some(17),
             Self::SetBkMode { .. } => Some(18),
             Self::SetPolyFillMode { .. } => Some(19),
@@ -108,6 +122,13 @@ impl RecordData {
         match self {
             Self::Raw => None,
             Self::Eof(_) => Some(12),
+            Self::SetWindowExtEx { .. }
+            | Self::SetWindowOrgEx { .. }
+            | Self::SetViewportExtEx { .. }
+            | Self::SetViewportOrgEx { .. }
+            | Self::SetBrushOrgEx { .. }
+            | Self::OffsetClipRgn { .. }
+            | Self::MoveToEx { .. } => Some(8),
             Self::SetMapMode { .. }
             | Self::SetBkMode { .. }
             | Self::SetPolyFillMode { .. }

@@ -80,7 +80,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             &input[offset + 8..offset + size as usize],
             &mut budget,
         )?;
-        if data == RecordData::Raw && matches!(record_type, 4 | 14 | 17..=21 | 70) {
+        if data == RecordData::Raw && matches!(record_type, 4 | 9..=14 | 17..=21 | 26 | 27 | 70) {
             budget.reserve_one(&mut diagnostics)?;
             diagnostics.push(Diagnostic {
                 offset,
@@ -224,6 +224,69 @@ fn decode_record(
     let malformed = || Ok((RecordData::Raw, 0));
     let mut r = Reader::new(payload);
     match kind {
+        9 if payload.len() >= 8 => Ok((
+            RecordData::SetWindowExtEx {
+                extent: Size {
+                    cx: r.i32()?,
+                    cy: r.i32()?,
+                },
+            },
+            8,
+        )),
+        10 if payload.len() >= 8 => Ok((
+            RecordData::SetWindowOrgEx {
+                origin: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            8,
+        )),
+        11 if payload.len() >= 8 => Ok((
+            RecordData::SetViewportExtEx {
+                extent: Size {
+                    cx: r.i32()?,
+                    cy: r.i32()?,
+                },
+            },
+            8,
+        )),
+        12 if payload.len() >= 8 => Ok((
+            RecordData::SetViewportOrgEx {
+                origin: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            8,
+        )),
+        13 if payload.len() >= 8 => Ok((
+            RecordData::SetBrushOrgEx {
+                origin: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            8,
+        )),
+        26 if payload.len() >= 8 => Ok((
+            RecordData::OffsetClipRgn {
+                offset: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            8,
+        )),
+        27 if payload.len() >= 8 => Ok((
+            RecordData::MoveToEx {
+                origin: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+            },
+            8,
+        )),
         14 if payload.len() >= 12 => Ok((
             RecordData::Eof(EofRecord {
                 n_pal_entries: r.u32()?,
