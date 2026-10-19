@@ -51,7 +51,7 @@ module Emf
       def serialize_record(record)
         case record
         when Model::Wmf::Records::Eof then [3, 0].pack("Vv")
-        when Model::Wmf::Records::PointRecord, Model::Wmf::Records::RectangleRecord
+        when Model::Wmf::Records::PointRecord, Model::Wmf::Records::RectangleRecord, Model::Wmf::Records::OffsetRecord
           serialize_fixed(record)
         when Model::Wmf::Records::PointArrayRecord then serialize_point_array(record)
         when Model::Wmf::Records::UnknownRecord then serialize_unknown(record)

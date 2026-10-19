@@ -74,6 +74,30 @@ module Emf
           end
         end
 
+        class OffsetRecord < Record
+          WIRE_FIELDS = %i[y_offset x_offset].freeze
+
+          def initialize(type_id:, x_offset:, y_offset:, offset: nil)
+            super(type_id: type_id, offset: offset)
+            @x_offset = x_offset
+            @y_offset = y_offset
+          end
+
+          attr_accessor :x_offset, :y_offset
+        end
+
+        class OffsetWindowOrg < OffsetRecord
+          def initialize(x_offset:, y_offset:, offset: nil, type_id: 0x020F)
+            super
+          end
+        end
+
+        class OffsetViewportOrg < OffsetRecord
+          def initialize(x_offset:, y_offset:, offset: nil, type_id: 0x0211)
+            super
+          end
+        end
+
         class RectangleRecord < Record
           WIRE_FIELDS = %i[bottom right top left].freeze
 
@@ -98,6 +122,61 @@ module Emf
           def initialize(left:, top:, right:, bottom:, offset: nil, type_id: 0x0418)
             super
           end
+        end
+
+        class Arc < RectangleRecord
+          WIRE_FIELDS = %i[y_end_arc x_end_arc y_start_arc x_start_arc bottom right top left].freeze
+
+          def initialize(left:, top:, right:, bottom:, x_start_arc:, y_start_arc:, x_end_arc:, y_end_arc:,
+                         offset: nil, type_id: 0x0817)
+            super(type_id: type_id, offset: offset, left: left, top: top, right: right, bottom: bottom)
+            @x_start_arc = x_start_arc
+            @y_start_arc = y_start_arc
+            @x_end_arc = x_end_arc
+            @y_end_arc = y_end_arc
+          end
+
+          attr_accessor :x_start_arc, :y_start_arc, :x_end_arc, :y_end_arc
+        end
+
+        class RadialRecord < RectangleRecord
+          WIRE_FIELDS = %i[y_radial2 x_radial2 y_radial1 x_radial1 bottom right top left].freeze
+
+          def initialize(type_id:, left:, top:, right:, bottom:, x_radial1:, y_radial1:, x_radial2:, y_radial2:, offset: nil)
+            super(type_id: type_id, offset: offset, left: left, top: top, right: right, bottom: bottom)
+            @x_radial1 = x_radial1
+            @y_radial1 = y_radial1
+            @x_radial2 = x_radial2
+            @y_radial2 = y_radial2
+          end
+
+          attr_accessor :x_radial1, :y_radial1, :x_radial2, :y_radial2
+        end
+
+        class Pie < RadialRecord
+          def initialize(left:, top:, right:, bottom:, x_radial1:, y_radial1:, x_radial2:, y_radial2:,
+                         offset: nil, type_id: 0x081A)
+            super
+          end
+        end
+
+        class Chord < RadialRecord
+          def initialize(left:, top:, right:, bottom:, x_radial1:, y_radial1:, x_radial2:, y_radial2:,
+                         offset: nil, type_id: 0x0830)
+            super
+          end
+        end
+
+        class RoundRect < RectangleRecord
+          WIRE_FIELDS = %i[height width bottom right top left].freeze
+
+          def initialize(left:, top:, right:, bottom:, width:, height:, offset: nil, type_id: 0x061C)
+            super(type_id: type_id, offset: offset, left: left, top: top, right: right, bottom: bottom)
+            @width = width
+            @height = height
+          end
+
+          attr_accessor :width, :height
         end
 
         PointS = Struct.new(:x, :y, keyword_init: true)

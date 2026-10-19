@@ -16,8 +16,14 @@ module Emf
         0x0C => Model::Wmf::Records::SetWindowExt,
         0x0D => Model::Wmf::Records::SetViewportOrg,
         0x0E => Model::Wmf::Records::SetViewportExt,
+        0x0F => Model::Wmf::Records::OffsetWindowOrg,
+        0x11 => Model::Wmf::Records::OffsetViewportOrg,
+        0x17 => Model::Wmf::Records::Arc,
         0x18 => Model::Wmf::Records::Ellipse,
-        0x1B => Model::Wmf::Records::Rectangle
+        0x1A => Model::Wmf::Records::Pie,
+        0x1B => Model::Wmf::Records::Rectangle,
+        0x1C => Model::Wmf::Records::RoundRect,
+        0x30 => Model::Wmf::Records::Chord
       }.freeze
       FIXED_FUNCTIONS = FIXED_RECORDS.invert.freeze
 
