@@ -85,15 +85,21 @@ impl std::error::Error for ParseFailure {}
 /// Failure while serializing a document.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SerializeFailure {
+    SizeOverflow,
     /// The document's pieces are not contiguous and in order.
-    Inconsistent { offset: usize },
+    Inconsistent {
+        offset: usize,
+    },
     /// A fallible reservation was refused by the allocator.
-    AllocationFailed { bytes: usize },
+    AllocationFailed {
+        bytes: usize,
+    },
 }
 
 impl fmt::Display for SerializeFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::SizeOverflow => write!(f, "serialized size exceeds u32"),
             Self::Inconsistent { offset } => {
                 write!(f, "document pieces inconsistent at offset {offset}")
             }
@@ -103,3 +109,18 @@ impl fmt::Display for SerializeFailure {
 }
 
 impl std::error::Error for SerializeFailure {}
+
+/// A rejected document edit leaves the document unchanged.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EditFailure {
+    HeaderLayout,
+    RecordIndex { index: usize },
+    RecordFamily { index: usize },
+    SizeOverflow,
+}
+impl fmt::Display for EditFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid document edit: {self:?}")
+    }
+}
+impl std::error::Error for EditFailure {}

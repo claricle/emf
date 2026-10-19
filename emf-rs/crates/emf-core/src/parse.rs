@@ -4,8 +4,8 @@ use crate::detect::{detect_format, Format, EMF_MAGIC};
 use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
-    Diagnostic, DiagnosticKind, Document, EmfHeader, PixelFormatFields, RecordSpan, Rect, Size,
-    EMR_EOF, EMR_HEADER, HEADER_FIXED_BYTES,
+    Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, PixelFormatFields, Point,
+    RecordData, RecordSpan, Rect, Size, EMR_EOF, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 use crate::reader::{u32_at, Reader};
 
@@ -14,8 +14,9 @@ const RECORD_HEAD_BYTES: usize = 8;
 /// Parse an EMF file into an owned [`Document`].
 ///
 /// Only a damaged or oversize header, an unsupported container or an exceeded
-/// budget is fatal. A bad record ends framing with a [`Diagnostic`] and keeps
-/// the remaining bytes so serialization stays exact.
+/// budget is fatal. A bad record head ends framing with a [`Diagnostic`].
+/// Invalid supported payloads stay raw and framing continues. Original bytes
+/// remain available so unchanged serialization stays exact.
 pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailure> {
     let mut budget = Budget::new(limits);
     budget.check_input(input.len())?;
@@ -74,10 +75,26 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         budget.reserve_one(&mut records)?;
         // size >= 8 here, so every iteration advances the cursor.
         reader.skip(size as usize)?;
+        let (data, decoded_len) = decode_record(
+            record_type,
+            &input[offset + 8..offset + size as usize],
+            &mut budget,
+        )?;
+        if data == RecordData::Raw && matches!(record_type, 4 | 14 | 17 | 70) {
+            budget.reserve_one(&mut diagnostics)?;
+            diagnostics.push(Diagnostic {
+                offset,
+                record_type: Some(record_type),
+                kind: DiagnosticKind::InvalidRecordPayload,
+            });
+        }
         records.push(RecordSpan {
             offset,
             size,
             record_type,
+            data,
+            decoded_len,
+            edited: false,
         });
         if record_type == EMR_EOF {
             break;
@@ -89,6 +106,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         source,
         header,
         header_len,
+        header_edited: false,
         records,
         diagnostics,
         tail_offset,
@@ -195,4 +213,61 @@ fn read_header(
         },
         header_len,
     ))
+}
+
+fn decode_record(
+    kind: u32,
+    payload: &[u8],
+    budget: &mut Budget<'_>,
+) -> Result<(RecordData, usize), ParseFailure> {
+    let malformed = || Ok((RecordData::Raw, 0));
+    let mut r = Reader::new(payload);
+    match kind {
+        14 if payload.len() >= 12 => Ok((
+            RecordData::Eof(EofRecord {
+                n_pal_entries: r.u32()?,
+                off_pal_entries: r.u32()?,
+                n_size_last: r.u32()?,
+            }),
+            12,
+        )),
+        17 if payload.len() >= 4 => Ok((RecordData::SetMapMode { map_mode: r.u32()? }, 4)),
+        4 if payload.len() >= 20 => {
+            let bounds = Rect {
+                left: r.i32()?,
+                top: r.i32()?,
+                right: r.i32()?,
+                bottom: r.i32()?,
+            };
+            let count = r.u32()? as usize;
+            let Some(bytes) = count.checked_mul(8) else {
+                return malformed();
+            };
+            if bytes > r.remaining() {
+                return malformed();
+            }
+            budget.charge_alloc(bytes)?;
+            budget.charge_work(count as u64)?;
+            let mut points = try_vec_with_capacity(count)?;
+            for _ in 0..count {
+                points.push(Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                });
+            }
+            Ok((RecordData::Polyline { bounds, points }, 20 + bytes))
+        }
+        70 if payload.len() >= 4 => {
+            let count = r.u32()? as usize;
+            if count > r.remaining() {
+                return malformed();
+            }
+            budget.charge_alloc(count)?;
+            budget.charge_work((count as u64).div_ceil(16))?;
+            let mut data = try_vec_with_capacity(count)?;
+            data.extend_from_slice(r.take(count)?);
+            Ok((RecordData::Comment { data }, 4 + count))
+        }
+        _ => malformed(),
+    }
 }

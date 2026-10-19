@@ -1,0 +1,244 @@
+use emf_core::{
+    parse, serialize, DiagnosticKind, EofRecord, LimitKind, ParseFailure, ParseLimits, Point,
+    RecordData,
+};
+
+fn record(kind: u32, payload: &[u8]) -> Vec<u8> {
+    let mut bytes = kind.to_le_bytes().to_vec();
+    bytes.extend_from_slice(&(8 + payload.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(payload);
+    bytes
+}
+fn fixture() -> Vec<u8> {
+    let mut h = vec![0; 112];
+    h[..4].copy_from_slice(&1u32.to_le_bytes());
+    h[4..8].copy_from_slice(&112u32.to_le_bytes());
+    h[40..44].copy_from_slice(&0x464d4520u32.to_le_bytes());
+    h[108..].copy_from_slice(b"head");
+    h.extend(record(17, &[1, 0, 0, 0, 0xab, 0xcd, 0xef, 0x99]));
+    let mut poly = vec![0; 16];
+    poly.extend_from_slice(&1u32.to_le_bytes());
+    poly.extend_from_slice(&(-2i32).to_le_bytes());
+    poly.extend_from_slice(&3i32.to_le_bytes());
+    poly.extend_from_slice(b"poly");
+    h.extend(record(4, &poly));
+    h.extend(record(
+        70,
+        &[7, 0, 0, 0, b'E', b'M', b'F', b'+', 1, 2, 3, 0xcc],
+    ));
+    h.extend(record(999, b"unknown!"));
+    h.extend(record(14, &[0, 0, 0, 0, 16, 0, 0, 0, 20, 0, 0, 0]));
+    h.extend_from_slice(b"tail");
+    h
+}
+#[test]
+fn typed_round_trip_and_checked_edits_preserve_opaque_bytes() {
+    let input = fixture();
+    let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+    assert!(!doc.is_edited());
+    assert_eq!(serialize(&doc).unwrap(), input);
+    assert_eq!(
+        doc.emf_plus_chunks().collect::<Vec<_>>(),
+        vec![&[1, 2, 3][..]]
+    );
+    assert_eq!(
+        doc.records()[0].data(),
+        &RecordData::SetMapMode { map_mode: 1 }
+    );
+    let RecordData::Polyline { bounds, points } = doc.records()[1].data() else {
+        panic!("polyline")
+    };
+    assert_eq!(points, &[Point { x: -2, y: 3 }]);
+    let bounds = *bounds;
+    doc.edit_record(
+        1,
+        RecordData::Polyline {
+            bounds,
+            points: vec![Point { x: 9, y: -8 }, Point { x: 7, y: 6 }],
+        },
+    )
+    .unwrap();
+    doc.edit_record(0, RecordData::SetMapMode { map_mode: 8 })
+        .unwrap();
+    doc.edit_record(
+        2,
+        RecordData::Comment {
+            data: b"EMF+changed".to_vec(),
+        },
+    )
+    .unwrap();
+    let mut header = doc.header().clone();
+    header.bounds.left = -123;
+    doc.edit_header(header).unwrap();
+    assert!(doc.is_edited() && doc.records()[1].is_edited());
+    assert!(doc
+        .edit_record(3, RecordData::SetMapMode { map_mode: 2 })
+        .is_err());
+    let out = serialize(&doc).unwrap();
+    let reparsed = parse(&out, &ParseLimits::default()).unwrap();
+    assert_eq!(reparsed.header().bounds.left, -123);
+    assert_eq!(reparsed.header().n_bytes as usize, out.len());
+    assert_eq!(reparsed.header().n_records, 6);
+    assert_eq!(&out[108..112], b"head");
+    assert_eq!(&out[124..128], &[0xab, 0xcd, 0xef, 0x99]);
+    assert_eq!(
+        reparsed.emf_plus_chunks().collect::<Vec<_>>(),
+        vec![&b"changed"[..]]
+    );
+    assert_eq!(
+        reparsed.record_bytes(&reparsed.records()[3]).unwrap(),
+        doc.record_bytes(&doc.records()[3]).unwrap()
+    );
+    assert_eq!(reparsed.trailing_bytes(), b"tail");
+    assert!(out.windows(4).any(|b| b == b"poly"));
+    assert_eq!(serialize(&reparsed).unwrap(), out);
+    doc.edit_record(
+        1,
+        RecordData::Polyline {
+            bounds,
+            points: vec![],
+        },
+    )
+    .unwrap();
+    doc.edit_record(2, RecordData::Comment { data: vec![] })
+        .unwrap();
+    let shrunk = serialize(&doc).unwrap();
+    let reparsed = parse(&shrunk, &ParseLimits::default()).unwrap();
+    assert!(reparsed.emf_plus_chunks().next().is_none());
+    assert!(shrunk.windows(4).any(|b| b == b"poly"));
+    assert_eq!(
+        &reparsed.record_bytes(&reparsed.records()[2]).unwrap()[12..],
+        &[0xcc]
+    );
+    assert_eq!(reparsed.trailing_bytes(), b"tail");
+}
+#[test]
+fn malformed_counts_recover_raw_without_swallowing_following_records() {
+    for (kind, payload) in [
+        (4, [vec![0; 16], u32::MAX.to_le_bytes().to_vec()].concat()),
+        (70, u32::MAX.to_le_bytes().to_vec()),
+        (17, vec![]),
+        (14, vec![]),
+    ] {
+        let mut input = fixture()[..112].to_vec();
+        input.extend(record(kind, &payload));
+        if kind != 14 {
+            input.extend(record(17, &1u32.to_le_bytes()));
+        }
+        let doc = parse(&input, &ParseLimits::default()).unwrap();
+        assert_eq!(doc.records()[0].data(), &RecordData::Raw);
+        assert_eq!(
+            doc.diagnostics()[0].kind,
+            DiagnosticKind::InvalidRecordPayload
+        );
+        assert_eq!(serialize(&doc).unwrap(), input);
+        if kind != 14 {
+            assert_eq!(doc.records().len(), 2);
+        }
+    }
+}
+#[test]
+fn typed_allocation_and_work_are_bounded() {
+    let input = fixture();
+    // Source and first two record capacity requests fit; the point allocation does not.
+    let mut limits = ParseLimits {
+        max_allocated_bytes: input.len() + 3 * std::mem::size_of::<emf_core::RecordSpan>(),
+        ..ParseLimits::default()
+    };
+    assert!(matches!(
+        parse(&input, &limits),
+        Err(ParseFailure::LimitExceeded {
+            kind: LimitKind::AllocatedBytes,
+            ..
+        })
+    ));
+    limits = ParseLimits::default();
+    // Typed decode adds one point unit
+    // and one comment-copy unit. Exact boundary catches uncharged decoding.
+    let baseline_work = 1
+        + 112u64.div_ceil(16)
+        + [16u64, 40, 20, 16, 20]
+            .iter()
+            .map(|size| 1 + size.div_ceil(16))
+            .sum::<u64>()
+        + (input.len() as u64).div_ceil(16);
+    limits.max_work_units = baseline_work + 1;
+    assert!(matches!(
+        parse(&input, &limits),
+        Err(ParseFailure::LimitExceeded {
+            kind: LimitKind::WorkUnits,
+            ..
+        })
+    ));
+    limits.max_work_units += 1;
+    assert!(parse(&input, &limits).is_ok());
+}
+#[test]
+fn invalid_header_edit_is_atomic() {
+    let input = fixture();
+    let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+    let mut h = doc.header().clone();
+    h.n_size += 4;
+    assert!(doc.edit_header(h).is_err());
+    assert!(!doc.is_edited());
+    assert_eq!(serialize(&doc).unwrap(), input);
+}
+
+#[test]
+fn eof_edits_preserve_palette_tail_and_original_source_view() {
+    let mut input = fixture()[..112].to_vec();
+    input.extend(record(
+        14,
+        &[1, 0, 0, 0, 20, 0, 0, 0, 24, 0, 0, 0, 0x11, 0x22, 0x33, 0x44],
+    ));
+    let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+    let original = doc.record_bytes(&doc.records()[0]).unwrap().to_vec();
+    let data = RecordData::Eof(EofRecord {
+        n_pal_entries: 1,
+        off_pal_entries: 20,
+        n_size_last: 24,
+    });
+    assert_eq!(doc.records()[0].data(), &data);
+    doc.edit_record(
+        0,
+        RecordData::Eof(EofRecord {
+            n_pal_entries: 1,
+            off_pal_entries: 20,
+            n_size_last: 99,
+        }),
+    )
+    .unwrap();
+    assert_eq!(doc.record_bytes(&doc.records()[0]).unwrap(), original);
+    let out = serialize(&doc).unwrap();
+    assert_eq!(&out[132..], &[0x11, 0x22, 0x33, 0x44]);
+    let parsed = parse(&out, &ParseLimits::default()).unwrap();
+    assert_eq!(
+        parsed.records()[0].data(),
+        &RecordData::Eof(EofRecord {
+            n_pal_entries: 1,
+            off_pal_entries: 20,
+            n_size_last: 99
+        })
+    );
+}
+
+#[test]
+fn emf_plus_extraction_filters_identifiers_and_keeps_chunk_order() {
+    let mut input = fixture()[..112].to_vec();
+    for data in [
+        &b"ordinary"[..],
+        &b"EMF+first"[..],
+        &b"EMF"[..],
+        &b"EMF+second"[..],
+    ] {
+        let mut payload = (data.len() as u32).to_le_bytes().to_vec();
+        payload.extend_from_slice(data);
+        input.extend(record(70, &payload));
+    }
+    let doc = parse(&input, &ParseLimits::default()).unwrap();
+    assert_eq!(
+        doc.emf_plus_chunks().collect::<Vec<_>>(),
+        vec![&b"first"[..], &b"second"[..]]
+    );
+    assert_eq!(serialize(&doc).unwrap(), input);
+}

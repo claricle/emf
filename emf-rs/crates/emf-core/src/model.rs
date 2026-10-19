@@ -4,6 +4,7 @@
 //! spans into that copy, so unchanged serialization reproduces the original
 //! bytes, including padding, unknown payloads and trailing data.
 
+use crate::error::EditFailure;
 use std::ops::Range;
 
 /// `EMR_HEADER` record type.
@@ -62,20 +63,72 @@ pub struct EmfHeader {
     pub micrometers: Option<Size>,
 }
 
-/// One framed record: its type and where its bytes live in the source copy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EofRecord {
+    pub n_pal_entries: u32,
+    pub off_pal_entries: u32,
+    pub n_size_last: u32,
+}
+
+/// Supported payloads. Raw records retain all their original bytes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RecordData {
+    Raw,
+    Eof(EofRecord),
+    SetMapMode { map_mode: u32 },
+    Polyline { bounds: Rect, points: Vec<Point> },
+    Comment { data: Vec<u8> },
+}
+impl RecordData {
+    pub(crate) fn record_type(&self) -> Option<u32> {
+        match self {
+            Self::Raw => None,
+            Self::Eof(_) => Some(14),
+            Self::SetMapMode { .. } => Some(17),
+            Self::Polyline { .. } => Some(4),
+            Self::Comment { .. } => Some(70),
+        }
+    }
+    pub(crate) fn payload_len(&self) -> Option<usize> {
+        match self {
+            Self::Raw => None,
+            Self::Eof(_) => Some(12),
+            Self::SetMapMode { .. } => Some(4),
+            Self::Polyline { points, .. } => points.len().checked_mul(8)?.checked_add(20),
+            Self::Comment { data } => data.len().checked_add(4),
+        }
+    }
+}
+
+/// One framed record: its type and where its bytes live in the source copy.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecordSpan {
     pub(crate) offset: usize,
     pub(crate) size: u32,
     pub(crate) record_type: u32,
+    pub(crate) data: RecordData,
+    pub(crate) decoded_len: usize,
+    pub(crate) edited: bool,
 }
 
 impl RecordSpan {
+    pub fn data(&self) -> &RecordData {
+        &self.data
+    }
+    pub fn is_edited(&self) -> bool {
+        self.edited
+    }
     pub fn offset(&self) -> usize {
         self.offset
     }
 
-    /// The record's declared `nSize`, which is also its byte length.
+    /// Original declared `nSize`; edited output can have a different length.
     pub fn size(&self) -> u32 {
         self.size
     }
@@ -93,9 +146,11 @@ impl RecordSpan {
     }
 }
 
-/// Why framing stopped early or a record could not be framed.
+/// A framing failure or a malformed supported payload.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DiagnosticKind {
+    /// A supported payload has missing fields or a count outside its record.
+    InvalidRecordPayload,
     /// Fewer than eight bytes remain, too few for a record head.
     TruncatedRecordHead { available: usize },
     /// `nSize` below the eight-byte record head; framing cannot progress.
@@ -104,7 +159,7 @@ pub enum DiagnosticKind {
     TruncatedRecord { claimed: u32, available: usize },
 }
 
-/// Recoverable framing problem; parsing stopped at `offset`.
+/// Recoverable problem at `offset`. Invalid payloads do not stop framing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Diagnostic {
     pub offset: usize,
@@ -114,12 +169,13 @@ pub struct Diagnostic {
 
 /// Parsed EMF: header, ordered framed records, diagnostics and leftover bytes.
 ///
-/// Records are not decoded beyond their type and size; all payloads stay raw.
+/// Original bytes remain available even when supported payloads are edited.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Document {
     pub(crate) source: Vec<u8>,
     pub(crate) header: EmfHeader,
     pub(crate) header_len: usize,
+    pub(crate) header_edited: bool,
     pub(crate) records: Vec<RecordSpan>,
     pub(crate) diagnostics: Vec<Diagnostic>,
     /// Start of bytes after the last framed record: the data after `EMR_EOF`
@@ -128,11 +184,59 @@ pub struct Document {
 }
 
 impl Document {
+    pub fn is_edited(&self) -> bool {
+        self.header_edited || self.records.iter().any(RecordSpan::is_edited)
+    }
+
+    /// Replace decoded header fields while preserving its original layout and opaque bytes.
+    pub fn edit_header(&mut self, header: EmfHeader) -> Result<(), EditFailure> {
+        if header.n_size as usize != self.header_len
+            || header.signature != self.header.signature
+            || header.pixel_format.is_some() != self.header.pixel_format.is_some()
+            || header.micrometers.is_some() != self.header.micrometers.is_some()
+        {
+            return Err(EditFailure::HeaderLayout);
+        }
+        self.header = header;
+        self.header_edited = true;
+        Ok(())
+    }
+
+    /// Replace a supported payload; raw records and record families cannot change.
+    pub fn edit_record(&mut self, index: usize, data: RecordData) -> Result<(), EditFailure> {
+        let record = self
+            .records
+            .get_mut(index)
+            .ok_or(EditFailure::RecordIndex { index })?;
+        if record.data == RecordData::Raw || data.record_type() != Some(record.record_type) {
+            return Err(EditFailure::RecordFamily { index });
+        }
+        let len = data
+            .payload_len()
+            .and_then(|n| n.checked_add(8))
+            .and_then(|n| n.checked_add(record.size as usize - 8 - record.decoded_len))
+            .ok_or(EditFailure::SizeOverflow)?;
+        u32::try_from(len).map_err(|_| EditFailure::SizeOverflow)?;
+        record.data = data;
+        record.edited = true;
+        Ok(())
+    }
+
+    /// EMF+ streams carried in comments, without their four-byte identifier.
+    pub fn emf_plus_chunks(&self) -> impl Iterator<Item = &[u8]> {
+        self.records
+            .iter()
+            .filter_map(|record| match record.data() {
+                RecordData::Comment { data } if data.starts_with(b"EMF+") => Some(&data[4..]),
+                _ => None,
+            })
+    }
+
     pub fn header(&self) -> &EmfHeader {
         &self.header
     }
 
-    /// Raw bytes of the header record.
+    /// Original raw bytes of the header record, including after an edit.
     pub fn header_bytes(&self) -> &[u8] {
         &self.source[..self.header_len]
     }
@@ -142,7 +246,7 @@ impl Document {
         &self.records
     }
 
-    /// Raw bytes (head and payload) of a record from [`Document::records`].
+    /// Original raw bytes of a record from [`Document::records`], including after an edit.
     pub fn record_bytes(&self, record: &RecordSpan) -> Option<&[u8]> {
         self.source.get(record.range())
     }

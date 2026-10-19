@@ -1,17 +1,12 @@
-//! Unchanged-document serialization.
+//! Checked serialization with preservation of opaque source bytes.
 
 use crate::error::SerializeFailure;
-use crate::model::Document;
+use crate::model::{Document, EmfHeader, RecordData, Rect};
 
-/// Write the document back out. Header, records and trailing bytes are copied
-/// in order from their original spans; nothing is normalized.
+/// Write unchanged bytes exactly; encode edited fields and preserve opaque suffixes.
+/// On any edit, refresh the header's total byte and record counts.
 pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
-    let total = document.source.len();
-    let mut out = Vec::new();
-    out.try_reserve_exact(total)
-        .map_err(|_| SerializeFailure::AllocationFailed { bytes: total })?;
-
-    out.extend_from_slice(document.header_bytes());
+    let mut total = document.source.len();
     let mut next = document.header_len;
     for record in document.records() {
         if record.offset() != next {
@@ -20,12 +15,139 @@ pub fn serialize(document: &Document) -> Result<Vec<u8>, SerializeFailure> {
         let bytes = document
             .record_bytes(record)
             .ok_or(SerializeFailure::Inconsistent { offset: next })?;
-        out.extend_from_slice(bytes);
-        next += bytes.len();
+        next = next
+            .checked_add(bytes.len())
+            .ok_or(SerializeFailure::SizeOverflow)?;
+        if record.edited {
+            total = total
+                .checked_sub(record.decoded_len)
+                .and_then(|n| n.checked_add(record.data.payload_len()?))
+                .ok_or(SerializeFailure::SizeOverflow)?;
+        }
     }
     if next != document.tail_offset {
         return Err(SerializeFailure::Inconsistent { offset: next });
     }
+    if document.is_edited() {
+        u32::try_from(total).map_err(|_| SerializeFailure::SizeOverflow)?;
+    }
+    let mut out = Vec::new();
+    out.try_reserve_exact(total)
+        .map_err(|_| SerializeFailure::AllocationFailed { bytes: total })?;
+    out.extend_from_slice(document.header_bytes());
+    if document.header_edited {
+        write_header(&mut out, &document.header);
+    }
+    if document.is_edited() {
+        put(&mut out, 48, total as u32);
+        put(
+            &mut out,
+            52,
+            u32::try_from(document.records.len() + 1)
+                .map_err(|_| SerializeFailure::SizeOverflow)?,
+        );
+    }
+    for record in document.records() {
+        let bytes = document
+            .record_bytes(record)
+            .ok_or(SerializeFailure::Inconsistent {
+                offset: record.offset(),
+            })?;
+        if !record.edited {
+            out.extend_from_slice(bytes);
+            continue;
+        }
+        let start = out.len();
+        out.extend_from_slice(&record.record_type.to_le_bytes());
+        out.extend_from_slice(&[0; 4]);
+        match &record.data {
+            RecordData::Raw => {
+                return Err(SerializeFailure::Inconsistent {
+                    offset: record.offset(),
+                })
+            }
+            RecordData::Eof(eof) => {
+                append(&mut out, eof.n_pal_entries);
+                append(&mut out, eof.off_pal_entries);
+                append(&mut out, eof.n_size_last);
+            }
+            RecordData::SetMapMode { map_mode } => append(&mut out, *map_mode),
+            RecordData::Polyline { bounds, points } => {
+                append_rect(&mut out, *bounds);
+                append(
+                    &mut out,
+                    u32::try_from(points.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                for point in points {
+                    append(&mut out, point.x as u32);
+                    append(&mut out, point.y as u32);
+                }
+            }
+            RecordData::Comment { data } => {
+                append(
+                    &mut out,
+                    u32::try_from(data.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                out.extend_from_slice(data);
+            }
+        }
+        out.extend_from_slice(&bytes[8 + record.decoded_len..]);
+        let size = u32::try_from(out.len() - start).map_err(|_| SerializeFailure::SizeOverflow)?;
+        put(&mut out, start + 4, size);
+    }
     out.extend_from_slice(&document.source[next..]);
     Ok(out)
+}
+fn append(out: &mut Vec<u8>, value: u32) {
+    out.extend_from_slice(&value.to_le_bytes());
+}
+fn put(out: &mut [u8], offset: usize, value: u32) {
+    out[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+}
+fn append_rect(out: &mut Vec<u8>, r: Rect) {
+    for v in [r.left, r.top, r.right, r.bottom] {
+        append(out, v as u32);
+    }
+}
+fn write_header(out: &mut [u8], h: &EmfHeader) {
+    let mut offset = 8;
+    for value in [
+        h.bounds.left,
+        h.bounds.top,
+        h.bounds.right,
+        h.bounds.bottom,
+        h.frame.left,
+        h.frame.top,
+        h.frame.right,
+        h.frame.bottom,
+    ] {
+        put(out, offset, value as u32);
+        offset += 4;
+    }
+    for (offset, value) in [
+        (40, h.signature),
+        (44, h.version),
+        (48, h.n_bytes),
+        (52, h.n_records),
+        (60, h.n_description),
+        (64, h.off_description),
+        (68, h.n_pal_entries),
+        (72, h.device.cx as u32),
+        (76, h.device.cy as u32),
+        (80, h.millimeters.cx as u32),
+        (84, h.millimeters.cy as u32),
+    ] {
+        put(out, offset, value);
+    }
+    out[56..58].copy_from_slice(&h.n_handles.to_le_bytes());
+    out[58..60].copy_from_slice(&h.reserved.to_le_bytes());
+    if let Some(p) = h.pixel_format {
+        put(out, 88, p.cb_pixel_format);
+        put(out, 92, p.off_pixel_format);
+        put(out, 96, p.b_open_gl);
+    }
+    if let Some(s) = h.micrometers {
+        put(out, 100, s.cx as u32);
+        put(out, 104, s.cy as u32);
+    }
 }
