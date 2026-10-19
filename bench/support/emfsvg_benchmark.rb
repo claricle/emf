@@ -78,11 +78,23 @@ module EmfsvgBenchmark
                   "allocated_objects" => samples.map { |s| s.fetch(stage).fetch("allocated_objects") } }]
       end
       result.merge("stages" => stages, "memory" => memory_report(memory))
-    rescue StandardError, LoadError => e
-      { "status" => "error", "error" => { "class" => e.class.name, "message" => e.message.byteslice(0, 2048).scrub } }
+    rescue LoadError => e
+      { "status" => "error", "error" => error_payload(e).merge("runtime" => load_error_runtime) }
+    rescue StandardError => e
+      { "status" => "error", "error" => error_payload(e) }
     end
 
     private
+
+    def error_payload(error)
+      { "class" => error.class.name, "message" => error.message.byteslice(0, 2048).scrub }
+    end
+
+    def load_error_runtime
+      { "ruby_version" => RUBY_VERSION, "gem_dir" => Gem.dir.byteslice(0, 512).scrub,
+        "gem_path" => Gem.path.first(20).map { |path| path.byteslice(0, 512).scrub },
+        "bundler_version" => defined?(Bundler::VERSION) ? Bundler::VERSION : nil }
+    end
 
     def verify_sources(loaded)
       expected = { "emf" => File.join(ParserBenchmark::ROOT, "lib/emf.rb"), "emfsvg" => File.join(@checkout.path, "lib/emfsvg.rb") }

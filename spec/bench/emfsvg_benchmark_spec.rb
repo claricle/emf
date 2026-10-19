@@ -5,6 +5,7 @@ require "tmpdir"
 require "bundler"
 require_relative "../../bench/support/emfsvg_benchmark"
 require_relative "../support/emfsvg_benchmark_checkout"
+require_relative "../support/fixture_manifest"
 
 RSpec.describe EmfsvgBenchmark::CLI do
   include EmfsvgBenchmarkCheckout
@@ -117,6 +118,28 @@ RSpec.describe EmfsvgBenchmark::CLI do
       expect(worker.fetch("gems")).not_to include("bundler")
       expect(worker.fetch("validity")).to include("golden_identical" => true)
     end
+  end
+
+  it "reports gem path details when loading the consumer fails" do
+    consumer_lib = File.join(directory, "consumer", "lib")
+    FileUtils.mkdir_p(consumer_lib)
+    File.write(File.join(consumer_lib, "emfsvg.rb"), "require \"missing_consumer_dependency\"\n")
+    $LOAD_PATH.unshift(consumer_lib)
+
+    result = EmfsvgBenchmark::Worker.new(checkout: nil, path: "unused", sha256: "unused",
+                                         iterations: 1, warmups: 0).call
+
+    expect(result.fetch("status")).to eq("error")
+    expect(result.dig("error", "class")).to eq("LoadError")
+    expect(result.dig("error", "message")).to include("missing_consumer_dependency")
+    expect(result.dig("error", "runtime")).to include(
+      "ruby_version" => RUBY_VERSION,
+      "gem_dir" => Gem.dir,
+      "gem_path" => Gem.path.first(20),
+      "bundler_version" => Bundler::VERSION
+    )
+  ensure
+    $LOAD_PATH.delete(consumer_lib) if consumer_lib
   end
 
   it "rejects an unknown backend without silently falling back" do
