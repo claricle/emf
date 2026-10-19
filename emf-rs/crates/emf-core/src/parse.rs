@@ -5,7 +5,7 @@ use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
     Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, PixelFormatFields, Point,
-    RecordData, RecordSpan, Rect, Size, EMR_EOF, EMR_HEADER, HEADER_FIXED_BYTES,
+    RecordData, RecordSpan, Rect, Size, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 use crate::reader::{u32_at, Reader};
 
@@ -88,6 +88,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
                 kind: DiagnosticKind::InvalidRecordPayload,
             });
         }
+        let is_eof = matches!(data, RecordData::Eof(_));
         records.push(RecordSpan {
             offset,
             size,
@@ -96,7 +97,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             decoded_len,
             edited: false,
         });
-        if record_type == EMR_EOF {
+        if is_eof {
             break;
         }
     }

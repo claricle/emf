@@ -147,8 +147,9 @@ impl RecordSpan {
         self.record_type
     }
 
+    /// Whether this record decoded as EOF; malformed type-14 records remain raw.
     pub fn is_eof(&self) -> bool {
-        self.record_type == EMR_EOF
+        matches!(self.data, RecordData::Eof(_))
     }
 
     pub(crate) fn range(&self) -> Range<usize> {
