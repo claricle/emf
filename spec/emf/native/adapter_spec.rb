@@ -119,7 +119,7 @@ RSpec.describe Emf::Native do
     expect { Emf::Native::Snapshot.new(snapshot) }.to raise_error(Emf::FormatError, /schema/)
   end
 
-  it "copies buffers and frees the native document before returning the model" do
+  it "copies input spans without per-record C buffers and frees the native document before returning the model" do
     backend = described_class.backend
     loader = backend.instance_variable_get(:@loader)
     calls = []
@@ -127,11 +127,29 @@ RSpec.describe Emf::Native do
       calls << name
       original.call(name, *arguments)
     end
-    parsed = backend.parse(bytes)
+    input = bytes.dup.force_encoding(Encoding::UTF_8)
+    parsed = backend.parse(input)
+    input.replace("changed after parsing")
     expect(calls.count(:emf_document_free)).to eq(1)
-    expect(calls.count(:emf_buffer_free)).to eq(6)
+    expect(calls.count(:emf_record_bytes)).to eq(0)
+    expect(calls.count(:emf_buffer_free)).to eq(1)
     GC.start
     expect(backend.serialize(parsed)).to eq(bytes)
+  end
+
+  it "rejects snapshot record spans outside the input and frees the native document" do
+    backend = described_class.backend
+    loader = backend.instance_variable_get(:@loader)
+    allow(loader).to receive(:invoke).and_call_original
+    [[-1, 12], [108, -1], [108, 7], [bytes.bytesize, 12], [108, bytes.bytesize]].each do |offset, length|
+      allow(Emf::Native::Snapshot).to receive(:new).and_wrap_original do |original, transport|
+        snapshot = original.call(transport)
+        snapshot.records.first.merge!(offset: offset, length: length)
+        snapshot
+      end
+      expect(loader).to receive(:invoke).with(:emf_document_free, anything).and_call_original
+      expect { backend.parse(bytes) }.to raise_error(Emf::FormatError, /record span/)
+    end
   end
 
   it "frees the native document when an unsupported typed family raises" do

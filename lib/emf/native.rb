@@ -23,9 +23,10 @@ module Emf
       end
 
       def parse(bytes)
-        @loader.document(bytes) do |document|
+        input = bytes.b
+        @loader.document(input) do |document|
           snapshot = Snapshot.new(@loader.snapshot(document))
-          Hydrator.new(snapshot, ->(index) { @loader.record_bytes(document, index) }).call
+          Hydrator.new(snapshot, input).call
         end
       end
 

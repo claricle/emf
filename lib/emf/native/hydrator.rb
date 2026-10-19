@@ -5,9 +5,9 @@ module Emf
     class Hydrator
       SUPPORTED_TYPES = [4, 14, 17, 70].freeze
 
-      def initialize(snapshot, raw_record)
+      def initialize(snapshot, input)
         @snapshot = snapshot
-        @raw_record = raw_record
+        @input = input
       end
 
       def call
@@ -28,8 +28,13 @@ module Emf
       private
 
       def hydrate_record(record)
-        raw = @raw_record.call(record.fetch(:index))
-        raise FormatError, "native record length mismatch" unless raw.bytesize == record.fetch(:length)
+        offset = record.fetch(:offset)
+        length = record.fetch(:length)
+        if offset.negative? || length < 8 || offset > @input.bytesize || length > @input.bytesize - offset
+          raise FormatError, "invalid native record span"
+        end
+
+        raw = @input.byteslice(offset, length)
 
         klass, fields = wire_fields(record, raw)
         wire = klass.new(**fields, i_type: record.fetch(:type), n_size: record.fetch(:length))
