@@ -1,13 +1,13 @@
 # Delivery progress and handoff
 
-Status: execution plan proposed; all implementation work pending.
+Status: execution plan merged; Ruby baseline work in progress.
 
 ## Work record
 
 | Package | State | Evidence / remaining work |
 | --- | --- | --- |
 | 01 Requirements | Baseline documented | Validate contracts through executable oracle in 02 |
-| 02 Baseline/parity | Not started | Manifest, field snapshots, mutation controls, downstream revision and timings |
+| 02 Baseline/parity | In progress | Fixture inventory and Ruby API/mutation controls added; canonical observations, downstream revision and timings pending |
 | 03 Rust core | Not started | Vertical slice, every inventory group, serializer |
 | 04 C ABI | Not started | Binding contract, ownership/lifecycle and failure checks |
 | 05 Ruby binding | Not started | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
@@ -62,8 +62,41 @@ on the new implementation before the evidence describes that version.
 
 ## Next action
 
-Start [02](02-baseline-and-parity.md): enumerate the current corpus into the shared
-manifest, capture API/model/serialization snapshots, and establish the downstream
-baseline. No Rust files need to be introduced before this oracle is available.
+Continue [02](02-baseline-and-parity.md): capture canonical API/model/serialization
+observations and establish the downstream baseline. No Rust files need to be
+introduced before this oracle is available.
 The initial estimates in [00](00-overview.md) should be revised after this milestone
 and after the integrated native slice.
+
+### Ruby API and mutable wire controls
+
+`bundle exec rspec spec/emf/backend_parity_spec.rb` records the existing Ruby
+behavior for EMF detection versus EMF+ model format, header bytes, file API return
+values, binary output and format-error messages. Scalar, nested and array edits
+are serialized after prior reads and serialization, then reparsed. The controls
+also cover wire identity, equality, `eql?`, compatible hashes, type IDs, inspection
+and unchanged sibling records.
+
+These are preservation controls for the existing implementation. They do not yet
+exercise a native backend or provide the complete canonical observation oracle.
+The downstream revision, golden command and reported 12-second workload remain
+unverified; resolve those inputs before claiming a downstream performance result.
+
+### Fixture inventory
+
+`bundle exec ruby script/fixture_manifest` captures every `.emf` fixture in
+`spec/fixtures/manifest.json`, including source fingerprints, input hashes,
+detected format and Ruby parse outcome. Each parse runs in a child with a
+five-second deadline and a 16 KiB output limit. Timeout, process failure and
+unexpected backend exceptions are recorded separately from format rejection.
+
+The initial capture contains 229 fixtures: 220 parsed without diagnostics, seven
+recovered with diagnostics and two rejected with `Emf::FormatError`. No child
+safety failures or unexpected backend exceptions were observed. These counts
+describe Ruby outcomes, not a classification of valid versus corrupt input.
+
+`bundle exec ruby script/fixture_manifest --check` validates fixture metadata and
+the parser source fingerprint against the saved capture without parsing again.
+Regenerate and review the capture after intentional fixture or parser changes.
+The inventory is the first baseline artifact; complete field observations,
+diagnostics, timing measurements and downstream verification remain pending.
