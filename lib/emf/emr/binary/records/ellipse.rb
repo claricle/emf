@@ -10,7 +10,7 @@ module Emf
         # EMR_ELLIPSE: emr + rclBox per MS-EMF 2.3.5.
         # No rclBounds.
         class Ellipse < Emf::Emr::Binary::Record
-  rectl :rcl_box
+          rectl :rcl_box
         end
       end
     end
