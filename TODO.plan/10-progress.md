@@ -8,13 +8,13 @@ Status: execution plan merged; baseline, Rust core and Ruby integration work in 
 | --- | --- | --- |
 | 01 Requirements | Baseline documented | Validate contracts through executable oracle in 02 |
 | 02 Baseline/parity | In progress | Fixture inventory, API/mutation controls, canonical observation/comparison harness and parser/consumer timing drivers added; reported slow workload and native comparisons pending |
-| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed vertical slice and record families pending |
-| 04 C ABI | In progress | Initial interface and C client implementation underway; ownership/lifecycle and full model checks pending |
+| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed header/EOF/SETMAPMODE/POLYLINE/COMMENT slice verified; remaining record families and corpus parity pending |
+| 04 C ABI | In progress | Versioned interface, owned typed snapshots, boundary tests and linked C client verified locally; full model/edit and platform checks pending |
 | 05 Ruby binding | In progress | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
-| 06 Resilience | Not started | Outcome manifest, subprocess limits, fuzz regressions |
+| 06 Resilience | In progress | Ruby subprocess supervisor and Rust budget regressions underway; forced-native corpus and fuzz budgets pending |
 | 07 Performance | Not started | Comparable measured end-to-end target and regression budget |
-| 08 Platform delivery | Not started | Target probes, artifacts, clean installs, CI/release integration |
-| 09 Format extensions | Not started | WMF/EMF+ inventory, fixtures, typed parsing and serialization |
+| 08 Platform delivery | In progress | Feasibility probe underway; artifacts, clean installs and complete CI/release integration pending |
+| 09 Format extensions | In progress | Bounded Ruby standard/placeable WMF headers, EOF/move/line and raw unknown preservation verified; full WMF and structured EMF+ pending |
 | 11 Record coverage | Baseline inventory | Per-record implementation and field-level evidence pending |
 
 Documentation of a requirement is not implementation completion. Keep package
@@ -150,8 +150,8 @@ Later integrations require their own matrix results.
 The typed slice adds header, EOF, SETMAPMODE, POLYLINE and COMMENT models with
 checked edits and ordered EMF+ payload extraction. Unchanged unknown bytes are
 preserved. Comment growth and shrink rebuild DWORD alignment; EOF edits retain
-palette bytes and address the final SizeLast field. The integrated core and raw
-C ABI passed 42 Rust tests locally. This does not complete all record families,
+palette bytes and address the final SizeLast field. The integrated core and typed-snapshot
+C ABI passed 49 Rust tests locally at `b34c69b`; strict Clippy also passed. This does not complete all record families,
 structured EMF+, corpus parity or Ruby native model hydration.
 
 ### Ruby backend selection
@@ -174,6 +174,22 @@ limits, lifecycle and panic-boundary tests accompany a separately compiled C11
 client linked to the actual library. Six ABI tests and the C client passed locally
 on macOS with stable Rust before integration. The C client is included in CI.
 
-This is a raw-framing subset. Typed snapshots, edits, diagnostic enumeration and
-Ruby hydration remain acceptance gaps; header and payload decoding must not be
-repeated in Ruby to substitute for a native model adapter.
+Snapshot v1 now exposes decoded header, EOF, SETMAPMODE, POLYLINE, COMMENT and
+ordered diagnostics in an owned buffer. A malformed short EOF remains a raw record
+and framing continues to later records. The independently compiled C11 smoke
+client passed against the integrated shared library at `b34c69b`. Full record
+coverage, C-side edits, and Ruby hydration remain open. Ruby must consume decoded
+fields rather than repeat the wire parser.
+
+### Initial Ruby WMF slice
+
+Commit `0a32b35` adds standard and placeable headers, checksum validation, bounded
+WORD framing, EOF/MoveTo/LineTo, opaque unknown records, trailing-byte retention
+and checked coordinate edits. Two synthetic fixtures cover both headers. The
+integrated WMF, visitor, backend-selection and public API checks passed 41 examples
+at `b34c69b`. This is a Ruby subset; native WMF, remaining WMF records, structured
+EMF+ and downstream format coverage remain open.
+
+The isolated consumer benchmark subprocess now preserves installed gem paths
+when leaving Bundler. Its six focused examples passed at `b34c69b`, including a
+fresh-process regression for isolated bundle installs. Current-head CI is pending.

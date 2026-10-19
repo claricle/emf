@@ -71,7 +71,7 @@ absent), reserved u32=0, source offset u64, detail1 u64, detail2 u64.
 Diagnostics retain core order. Reason codes and numeric details allow consumers
 to construct messages without parsing Rust text. Tail retention and typed
 validation follow the core, including its EOF stopping rules; consumers choosing
-Ruby compatibility policies must account for differences in malformed EOF,
+Ruby compatibility policies must account for differences in
 comment padding, array ceilings and fixed-record padding normalization.
 
 All size arithmetic and output reservations are checked. A snapshot exceeding
