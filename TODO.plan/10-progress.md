@@ -8,14 +8,14 @@ Status: execution plan merged; baseline, Rust core and Ruby integration work in 
 | --- | --- | --- |
 | 01 Requirements | Baseline documented | Validate contracts through executable oracle in 02 |
 | 02 Baseline/parity | In progress | Fixture inventory, API/mutation controls, canonical observation/comparison harness and parser/consumer timing drivers added; reported slow workload and native comparisons pending |
-| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed header/EOF/SETMAPMODE/POLYLINE/COMMENT slice verified; remaining record families and corpus parity pending |
+| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed header/EOF, scalar state, signed coordinates, color, rectangle, polyline and comment cohorts added; remaining record families and corpus parity pending |
 | 04 C ABI | In progress | Versioned interface, owned typed snapshots, boundary tests and linked C client verified locally; full model/edit and platform checks pending |
 | 05 Ruby binding | In progress | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
 | 06 Resilience | In progress | Ruby subprocess supervisor and Rust budget regressions underway; forced-native corpus and fuzz budgets pending |
 | 07 Performance | Not started | Comparable measured end-to-end target and regression budget |
 | 08 Platform delivery | In progress | Feasibility probe underway; artifacts, clean installs and complete CI/release integration pending |
 | 09 Format extensions | In progress | Bounded Ruby standard/placeable WMF headers, EOF/move/line and raw unknown preservation verified; full WMF and structured EMF+ pending |
-| 11 Record coverage | In progress | Header and four typed records cross core, ABI and Ruby; remaining registry entries and variants pending |
+| 11 Record coverage | In progress | Header and bounded scalar/coordinate/variable cohorts cross core, ABI and Ruby; color/rectangle adaptation, remaining registry entries and variants pending |
 
 Documentation of a requirement is not implementation completion. Keep package
 states as `Not started`, `In progress`, `Blocked` or `Complete`; a blocked entry
@@ -94,6 +94,13 @@ detected format and forced Ruby parse outcome. Each parse runs in a child with a
 limits for recording a baseline, not performance or resource-budget acceptance.
 Timeout, process failure and unexpected backend exceptions remain distinct from
 format rejection and make the capture unsafe.
+
+The latest 231-fixture capture is **not an accepted baseline**: 214 parsed,
+six recovered, two raised format errors and nine hit the 15-second child deadline.
+The saved source fingerprint is also stale after native Ruby adapter edits during
+capture. Preserve the failures as observations; investigate a bounded sample and
+recapture after source stabilization before claiming the inventory check passes.
+The timeout cause remains undetermined.
 
 The initial capture contains 229 fixtures: 220 parsed without diagnostics, seven
 recovered with diagnostics and two rejected with `Emf::FormatError`. No child
@@ -222,3 +229,16 @@ integrated workspace passed 58 Rust tests, strict Clippy, formatting and the
 compiled C smoke client at `c513178`. FFI coverage exercises real output
 and work limit failures through owned error views and preserves `EMF_LIMIT_EXCEEDED`.
 These checks do not complete corrupted-corpus, fuzz or platform acceptance.
+
+### Signed coordinate native cohort
+
+Commit `7371400` extends snapshot schema 2 (ABI version 1 unchanged) with seven
+signed coordinate families: window and viewport origin/extent, brush origin,
+clip offset and move-to. Ruby models hydrate directly from signed fields, retain
+mutable wires, and match the Ruby canonical observations for this cohort.
+
+`cargo test --workspace --locked` passed 69 tests; strict clippy, formatting and
+`sh crates/emf-ffi/tests/smoke.sh` passed. The focused native/backend Ruby suite
+passed 35 examples. These are cohort checks, not complete-corpus parity or a
+performance result. Color and rectangle core cohorts are integrated separately;
+their native adaptation and final combined checks remain in progress.

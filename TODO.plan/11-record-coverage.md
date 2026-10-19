@@ -27,37 +27,37 @@ Keep unsupported extension payloads opaque explicitly where no semantics exist t
 the format-extension inventory in [09](09-format-extension.md) defines new scope.
 
 Implement a small mixed vertical slice first, then complete groups under
-[03](03-rust-core.md). Each row currently has state **Not started**. Group names
-are proposed Rust modules, not a claim about existing semantic support.
+[03](03-rust-core.md). Row states track bounded implementation; no row yet claims complete variant
+and corpus parity. Group names are proposed Rust modules.
 
 | Wire class | Type-code constant | Existing source | Proposed core module | State / evidence |
 | --- | --- | --- | --- | --- |
 | `Raw` | `unknown types` | [`raw.rb`](../lib/emf/emr/binary/records/raw.rb) | `emf::raw` | In progress |
 | `Eof` | `EOF` | [`eof.rb`](../lib/emf/emr/binary/records/eof.rb) | `emf::eof` | In progress |
-| `SetTextColor` | `SETTEXTCOLOR` | [`set_text_color.rb`](../lib/emf/emr/binary/records/set_text_color.rb) | `emf::text` | Not started |
-| `SetBkColor` | `SETBKCOLOR` | [`set_bk_color.rb`](../lib/emf/emr/binary/records/set_bk_color.rb) | `emf::color_palette` | Not started |
-| `SetBkMode` | `SETBKMODE` | [`set_bk_mode.rb`](../lib/emf/emr/binary/records/set_bk_mode.rb) | `emf::state_objects` | Not started |
+| `SetTextColor` | `SETTEXTCOLOR` | [`set_text_color.rb`](../lib/emf/emr/binary/records/set_text_color.rb) | `emf::text` | In progress: typed core and exact edits; `9c3c3d8`; native adapter pending |
+| `SetBkColor` | `SETBKCOLOR` | [`set_bk_color.rb`](../lib/emf/emr/binary/records/set_bk_color.rb) | `emf::color_palette` | In progress: typed core and exact edits; `9c3c3d8`; native adapter pending |
+| `SetBkMode` | `SETBKMODE` | [`set_bk_mode.rb`](../lib/emf/emr/binary/records/set_bk_mode.rb) | `emf::state_objects` | In progress: core and snapshot-2 Ruby parity; `b7b72e6` |
 | `SetMapMode` | `SETMAPMODE` | [`set_map_mode.rb`](../lib/emf/emr/binary/records/set_map_mode.rb) | `emf::state_objects` | In progress |
-| `SetRop2` | `SETROP2` | [`set_rop2.rb`](../lib/emf/emr/binary/records/set_rop2.rb) | `emf::state_objects` | Not started |
-| `SetPolyFillMode` | `SETPOLYFILLMODE` | [`set_poly_fill_mode.rb`](../lib/emf/emr/binary/records/set_poly_fill_mode.rb) | `emf::state_objects` | Not started |
+| `SetRop2` | `SETROP2` | [`set_rop2.rb`](../lib/emf/emr/binary/records/set_rop2.rb) | `emf::state_objects` | In progress: core and snapshot-2 Ruby parity; `b7b72e6` |
+| `SetPolyFillMode` | `SETPOLYFILLMODE` | [`set_poly_fill_mode.rb`](../lib/emf/emr/binary/records/set_poly_fill_mode.rb) | `emf::state_objects` | In progress: core and snapshot-2 Ruby parity; `b7b72e6` |
 | `SetTextAlign` | `SETTEXTALIGN` | [`set_text_align.rb`](../lib/emf/emr/binary/records/set_text_align.rb) | `emf::text` | Not started |
-| `SetStretchBltMode` | `SETSTRETCHBLTMODE` | [`set_stretch_blt_mode.rb`](../lib/emf/emr/binary/records/set_stretch_blt_mode.rb) | `emf::bitmap` | Not started |
+| `SetStretchBltMode` | `SETSTRETCHBLTMODE` | [`set_stretch_blt_mode.rb`](../lib/emf/emr/binary/records/set_stretch_blt_mode.rb) | `emf::bitmap` | In progress: core and snapshot-2 Ruby parity; `b7b72e6` |
 | `SaveDc` | `SAVEDC` | [`save_dc.rb`](../lib/emf/emr/binary/records/save_dc.rb) | `emf::state_objects` | Not started |
 | `RestoreDc` | `RESTOREDC` | [`restore_dc.rb`](../lib/emf/emr/binary/records/restore_dc.rb) | `emf::state_objects` | Not started |
 | `SelectObject` | `SELECTOBJECT` | [`select_object.rb`](../lib/emf/emr/binary/records/select_object.rb) | `emf::state_objects` | Not started |
 | `DeleteObject` | `DELETEOBJECT` | [`delete_object.rb`](../lib/emf/emr/binary/records/delete_object.rb) | `emf::state_objects` | Not started |
 | `CreatePen` | `CREATEPEN` | [`create_pen.rb`](../lib/emf/emr/binary/records/create_pen.rb) | `emf::state_objects` | Not started |
 | `CreateBrushIndirect` | `CREATEBRUSHINDIRECT` | [`create_brush_indirect.rb`](../lib/emf/emr/binary/records/create_brush_indirect.rb) | `emf::state_objects` | Not started |
-| `SetWindowOrgEx` | `SETWINDOWORGEX` | [`set_window_org_ex.rb`](../lib/emf/emr/binary/records/set_window_org_ex.rb) | `emf::transform` | Not started |
-| `SetWindowExtEx` | `SETWINDOWEXTEX` | [`set_window_ext_ex.rb`](../lib/emf/emr/binary/records/set_window_ext_ex.rb) | `emf::transform` | Not started |
-| `SetViewportOrgEx` | `SETVIEWPORTORGEX` | [`set_viewport_org_ex.rb`](../lib/emf/emr/binary/records/set_viewport_org_ex.rb) | `emf::transform` | Not started |
-| `SetViewportExtEx` | `SETVIEWPORTEXTEX` | [`set_viewport_ext_ex.rb`](../lib/emf/emr/binary/records/set_viewport_ext_ex.rb) | `emf::transform` | Not started |
-| `SetBrushOrgEx` | `SETBRUSHORGEX` | [`set_brush_org_ex.rb`](../lib/emf/emr/binary/records/set_brush_org_ex.rb) | `emf::transform` | Not started |
-| `MoveToEx` | `MOVETOEX` | [`move_to_ex.rb`](../lib/emf/emr/binary/records/move_to_ex.rb) | `emf::geometry` | Not started |
+| `SetWindowOrgEx` | `SETWINDOWORGEX` | [`set_window_org_ex.rb`](../lib/emf/emr/binary/records/set_window_org_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
+| `SetWindowExtEx` | `SETWINDOWEXTEX` | [`set_window_ext_ex.rb`](../lib/emf/emr/binary/records/set_window_ext_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
+| `SetViewportOrgEx` | `SETVIEWPORTORGEX` | [`set_viewport_org_ex.rb`](../lib/emf/emr/binary/records/set_viewport_org_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
+| `SetViewportExtEx` | `SETVIEWPORTEXTEX` | [`set_viewport_ext_ex.rb`](../lib/emf/emr/binary/records/set_viewport_ext_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
+| `SetBrushOrgEx` | `SETBRUSHORGEX` | [`set_brush_org_ex.rb`](../lib/emf/emr/binary/records/set_brush_org_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
+| `MoveToEx` | `MOVETOEX` | [`move_to_ex.rb`](../lib/emf/emr/binary/records/move_to_ex.rb) | `emf::geometry` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `LineTo` | `LINETO` | [`line_to.rb`](../lib/emf/emr/binary/records/line_to.rb) | `emf::geometry` | Not started |
-| `Rectangle` | `RECTANGLE` | [`rectangle.rb`](../lib/emf/emr/binary/records/rectangle.rb) | `emf::geometry` | Not started |
-| `Ellipse` | `ELLIPSE` | [`ellipse.rb`](../lib/emf/emr/binary/records/ellipse.rb) | `emf::geometry` | Not started |
-| `RoundRect` | `ROUNDRECT` | [`round_rect.rb`](../lib/emf/emr/binary/records/round_rect.rb) | `emf::geometry` | Not started |
+| `Rectangle` | `RECTANGLE` | [`rectangle.rb`](../lib/emf/emr/binary/records/rectangle.rb) | `emf::geometry` | In progress: typed core and exact edits; `9f2bd4f`; native adapter pending |
+| `Ellipse` | `ELLIPSE` | [`ellipse.rb`](../lib/emf/emr/binary/records/ellipse.rb) | `emf::geometry` | In progress: typed core and exact edits; `9f2bd4f`; native adapter pending |
+| `RoundRect` | `ROUNDRECT` | [`round_rect.rb`](../lib/emf/emr/binary/records/round_rect.rb) | `emf::geometry` | In progress: typed core and exact edits; `9f2bd4f`; native adapter pending |
 | `Arc` | `ARC` | [`arc.rb`](../lib/emf/emr/binary/records/arc.rb) | `emf::geometry` | Not started |
 | `ArcTo` | `ARCTO` | [`arc_to.rb`](../lib/emf/emr/binary/records/arc_to.rb) | `emf::geometry` | Not started |
 | `Chord` | `CHORD` | [`chord.rb`](../lib/emf/emr/binary/records/chord.rb) | `emf::geometry` | Not started |
@@ -101,7 +101,7 @@ are proposed Rust modules, not a claim about existing semantic support.
 | `StretchDIBits` | `STRETCHDIBITS` | [`stretch_dibits.rb`](../lib/emf/emr/binary/records/stretch_dibits.rb) | `emf::bitmap` | Not started |
 | `SetPixelV` | `SETPIXELV` | [`set_pixel_v.rb`](../lib/emf/emr/binary/records/set_pixel_v.rb) | `emf::state_objects` | Not started |
 | `SetMetArgn` | `SETMETARGN` | [`set_metargn.rb`](../lib/emf/emr/binary/records/set_metargn.rb) | `emf::state_objects` | Not started |
-| `OffsetClipRgn` | `OFFSETCLIPRGN` | [`offset_clip_rgn.rb`](../lib/emf/emr/binary/records/offset_clip_rgn.rb) | `emf::path_clip_region` | Not started |
+| `OffsetClipRgn` | `OFFSETCLIPRGN` | [`offset_clip_rgn.rb`](../lib/emf/emr/binary/records/offset_clip_rgn.rb) | `emf::path_clip_region` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `ExcludeClipRect` | `EXCLUDECLIPRECT` | [`exclude_clip_rect.rb`](../lib/emf/emr/binary/records/exclude_clip_rect.rb) | `emf::path_clip_region` | Not started |
 | `IntersectClipRect` | `INTERSECTCLIPRECT` | [`intersect_clip_rect.rb`](../lib/emf/emr/binary/records/intersect_clip_rect.rb) | `emf::path_clip_region` | Not started |
 | `ExtSelectClipRgn` | `EXTSELECTCLIPRGN` | [`ext_select_clip_rgn.rb`](../lib/emf/emr/binary/records/ext_select_clip_rgn.rb) | `emf::path_clip_region` | Not started |
