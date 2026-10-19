@@ -179,7 +179,7 @@ fn wrong_coordinate_family_edits_reject_atomically_before_and_after_valid_edits(
 
 #[test]
 fn neighboring_unknown_types_remain_raw_without_diagnostics() {
-    for kind in [84, 16, 23, 28] {
+    for kind in [84, 23] {
         let mut input = header();
         input.extend(record(kind, &pair(i32::MIN, i32::MAX)));
         let doc = parse(&input, &ParseLimits::default()).unwrap();

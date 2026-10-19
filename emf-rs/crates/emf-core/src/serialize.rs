@@ -85,6 +85,9 @@ pub fn serialize_with_limits(
                     .len()
                     .checked_add(ab_types.len())
                     .ok_or(SerializeFailure::SizeOverflow)?,
+                RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
+                    body.len().div_ceil(16)
+                }
                 _ => 0,
             };
             if element_count != 0 {
@@ -309,7 +312,17 @@ pub fn serialize_with_limits(
             RecordData::DeleteObject { ih_object } => append(&mut out, *ih_object),
             RecordData::SetArcDirection { arc_direction } => append(&mut out, *arc_direction),
             RecordData::SelectClipPath { region_mode } => append(&mut out, *region_mode),
-            RecordData::SaveDc
+            RecordData::SetMapperFlags { flags } => append(&mut out, *flags),
+            RecordData::SetLayout { mode } | RecordData::SetIcmMode { mode } => {
+                append(&mut out, *mode)
+            }
+            RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
+                out.extend_from_slice(body)
+            }
+            RecordData::SetMetaRgn
+            | RecordData::FlattenPath
+            | RecordData::WidenPath
+            | RecordData::SaveDc
             | RecordData::BeginPath
             | RecordData::EndPath
             | RecordData::CloseFigure

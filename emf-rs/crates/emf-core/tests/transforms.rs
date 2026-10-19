@@ -239,7 +239,7 @@ fn wrong_transform_family_edits_reject_atomically_before_and_after_valid_edits()
 
 #[test]
 fn neighboring_unknown_types_remain_raw_without_diagnostics() {
-    for kind in [16, 23, 28, 48, 49, 53, 65] {
+    for kind in [23, 48, 49] {
         let mut input = header();
         input.extend(record(kind, &payload(35, VALUES[1])));
         let doc = parse(&input, &ParseLimits::default()).unwrap();

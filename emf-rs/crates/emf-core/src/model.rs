@@ -307,6 +307,26 @@ pub enum RecordData {
     SelectClipPath {
         region_mode: u32,
     },
+    SetMapperFlags {
+        flags: u32,
+    },
+    SetLayout {
+        mode: u32,
+    },
+    SetIcmMode {
+        mode: u32,
+    },
+    /// Opaque body matching the Ruby compatibility layout.
+    ExtFloodFill {
+        body: Vec<u8>,
+    },
+    /// Opaque body matching the Ruby compatibility layout.
+    SetTextJustification {
+        body: Vec<u8>,
+    },
+    SetMetaRgn,
+    FlattenPath,
+    WidenPath,
     SaveDc,
     BeginPath,
     EndPath,
@@ -418,6 +438,14 @@ impl RecordData {
             Self::DeleteObject { .. } => Some(40),
             Self::SetArcDirection { .. } => Some(57),
             Self::SelectClipPath { .. } => Some(67),
+            Self::SetMapperFlags { .. } => Some(16),
+            Self::SetLayout { .. } => Some(115),
+            Self::SetIcmMode { .. } => Some(98),
+            Self::ExtFloodFill { .. } => Some(53),
+            Self::SetTextJustification { .. } => Some(120),
+            Self::SetMetaRgn => Some(28),
+            Self::FlattenPath => Some(65),
+            Self::WidenPath => Some(66),
             Self::SaveDc => Some(33),
             Self::BeginPath => Some(59),
             Self::EndPath => Some(60),
@@ -523,16 +551,23 @@ impl RecordData {
                 .checked_mul(4)?
                 .checked_add(ab_types.len())?
                 .checked_add(20),
+            Self::ExtFloodFill { body } | Self::SetTextJustification { body } => Some(body.len()),
             Self::Comment { data } => data.len().checked_add(4),
             Self::Ellipse { .. } | Self::Rectangle { .. } => Some(16),
             Self::RoundRect { .. } => Some(24),
-            Self::SetTextAlign { .. }
+            Self::SetMapperFlags { .. }
+            | Self::SetLayout { .. }
+            | Self::SetIcmMode { .. }
+            | Self::SetTextAlign { .. }
             | Self::RestoreDc { .. }
             | Self::SelectObject { .. }
             | Self::DeleteObject { .. }
             | Self::SetArcDirection { .. }
             | Self::SelectClipPath { .. } => Some(4),
-            Self::SaveDc
+            Self::SetMetaRgn
+            | Self::FlattenPath
+            | Self::WidenPath
+            | Self::SaveDc
             | Self::BeginPath
             | Self::EndPath
             | Self::CloseFigure

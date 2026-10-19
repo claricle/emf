@@ -84,7 +84,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=15 | 17..=22 | 24..=27 | 29..=47 | 54..=64 | 67 | 68 | 70 | 85..=92
+                2..=22 | 24..=47 | 53..=68 | 70 | 85..=92 | 98 | 115 | 120
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -637,6 +637,24 @@ fn decode_record(
             },
             4,
         )),
+        16 if payload.len() >= 4 => Ok((RecordData::SetMapperFlags { flags: r.u32()? }, 4)),
+        98 if payload.len() >= 4 => Ok((RecordData::SetIcmMode { mode: r.u32()? }, 4)),
+        115 if payload.len() >= 4 => Ok((RecordData::SetLayout { mode: r.u32()? }, 4)),
+        28 => Ok((RecordData::SetMetaRgn, 0)),
+        65 => Ok((RecordData::FlattenPath, 0)),
+        66 => Ok((RecordData::WidenPath, 0)),
+        53 | 120 => {
+            budget.charge_alloc(payload.len())?;
+            budget.charge_work((payload.len() as u64).div_ceil(16))?;
+            let mut body = try_vec_with_capacity(payload.len())?;
+            body.extend_from_slice(payload);
+            let data = if kind == 53 {
+                RecordData::ExtFloodFill { body }
+            } else {
+                RecordData::SetTextJustification { body }
+            };
+            Ok((data, payload.len()))
+        }
         33 => Ok((RecordData::SaveDc, 0)),
         59 => Ok((RecordData::BeginPath, 0)),
         60 => Ok((RecordData::EndPath, 0)),
