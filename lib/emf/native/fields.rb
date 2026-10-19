@@ -247,6 +247,59 @@ module Emf
         [offsets, trailing + raw.byteslice(consumed..)]
       end
 
+      def self.region(payload, family, raw)
+        klass = [Emr::Binary::Records::FillRgn, Emr::Binary::Records::FrameRgn,
+                 Emr::Binary::Records::InvertRgn, Emr::Binary::Records::PaintRgn,
+                 Emr::Binary::Records::ExtSelectClipRgn].fetch(family - 76)
+        fixed = { 76 => 20, 77 => 28, 78 => 16, 79 => 16, 80 => 8 }.fetch(family)
+        raise FormatError, "invalid native region payload" if payload.bytesize < fixed
+
+        fields = region_scalars(payload, family)
+        data = optional_region_data(payload, family, fixed, fields)
+        count = data ? 32 + (data.fetch(:count_rects) * 16) + data.fetch(:trailing).bytesize : 0
+        wire_fixed = family == 80 ? 16 : fixed + 12
+        raise FormatError, "invalid native region span" if raw.bytesize < wire_fixed + count
+
+        fields[:cb_rgn_data] = count
+        fields[:body] = raw.byteslice((wire_fixed + count)..)
+        fields[:rgn_data] = data if data
+        [klass, fields]
+      end
+
+      def self.optional_region_data(payload, family, fixed, fields)
+        present = family == 80 ? payload.byteslice(4, 4).unpack1("V") : 1
+        raise FormatError, "invalid native region presence" unless (0..1).cover?(present)
+        return region_data(payload.byteslice(fixed..)) if present == 1
+
+        raise FormatError, "invalid native clip reset" unless fields.fetch(:dw_mode) == 5 && payload.bytesize == fixed
+
+        nil
+      end
+
+      def self.region_scalars(payload, family)
+        return { dw_mode: payload.unpack1("V") } if family == 80
+
+        fields = { rcl_bounds: %i[left top right bottom].zip(payload.unpack("l<4")).to_h }
+        fields[:ih_brush] = payload.byteslice(16, 4).unpack1("V") if [76, 77].include?(family)
+        fields[:szl_stroke] = %i[cx cy].zip(payload.byteslice(20, 8).unpack("l<2")).to_h if family == 77
+        fields
+      end
+
+      def self.region_data(payload)
+        raise FormatError, "invalid native region data" if payload.bytesize < 36
+
+        count, extra = payload.byteslice(20, 16).unpack("Q<2")
+        expected = 36 + (count * 16) + extra
+        raise FormatError, "invalid native region data length" unless payload.bytesize == expected
+        raise FormatError, "invalid native region count" if count > 1_000_000 || 32 + (count * 16) + extra > 0xFFFFFFFF
+
+        axes = %i[left top right bottom]
+        rectangles = payload.byteslice(36, count * 16).unpack("l<*").each_slice(4).map { |values| axes.zip(values).to_h }
+        { header_size: 32, region_type: payload.unpack1("V"), count_rects: count, rgn_size: count * 16,
+          bounds: axes.zip(payload.byteslice(4, 16).unpack("l<4")).to_h,
+          rectangles: rectangles, trailing: payload.byteslice(36 + (count * 16), extra) }
+      end
+
       def self.call(payload, family)
         return opaque(payload, family) if OPAQUE.key?(family)
 

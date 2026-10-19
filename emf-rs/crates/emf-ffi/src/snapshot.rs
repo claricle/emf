@@ -1,7 +1,8 @@
 //! Version 2 owned snapshot encoding. All fields are explicitly little-endian.
 
 use emf_core::{
-    DiagnosticKind, Document, EmfHeader, ExtTextOut, Point, RecordData, Rect, Size, XForm,
+    DiagnosticKind, Document, EmfHeader, ExtTextOut, Point, RecordData, Rect, RegionData, Size,
+    XForm,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,12 +23,12 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::SetIcmMode { .. } => 71,
         RecordData::SetLayout { .. } => 72,
         RecordData::SetTextJustification { .. } => 73,
-        RecordData::Raw
-        | RecordData::FillRgn { .. }
-        | RecordData::FrameRgn { .. }
-        | RecordData::InvertRgn { .. }
-        | RecordData::PaintRgn { .. }
-        | RecordData::ExtSelectClipRgn { .. } => 0,
+        RecordData::FillRgn { .. } => 76,
+        RecordData::FrameRgn { .. } => 77,
+        RecordData::InvertRgn { .. } => 78,
+        RecordData::PaintRgn { .. } => 79,
+        RecordData::ExtSelectClipRgn { .. } => 80,
+        RecordData::Raw => 0,
         RecordData::Eof(_) => 1,
         RecordData::SetMapMode { .. } => 2,
         RecordData::Polyline { .. } => 3,
@@ -117,6 +118,35 @@ fn multi_array_len(poly_count: usize, point_count: usize, width: usize) -> Resul
         .ok_or(Error::SizeOverflow)
 }
 
+// Region snapshot: type, bounds, u64 rectangle count, u64 opaque length,
+// signed RectL array, then bytes inside RgnDataSize after the array.
+fn region_len(region: &RegionData, fixed: usize) -> Result<usize, Error> {
+    let mut len = fixed;
+    add_len(&mut len, 36)?;
+    add_len(
+        &mut len,
+        region
+            .rectangles
+            .len()
+            .checked_mul(16)
+            .ok_or(Error::SizeOverflow)?,
+    )?;
+    add_len(&mut len, region.trailing_bytes.len())?;
+    Ok(len)
+}
+
+fn region_payload(out: &mut Vec<u8>, region: &RegionData) -> Result<(), Error> {
+    u32_field(out, region.region_type);
+    rect(out, region.bounds);
+    u64_field(out, wire_len(region.rectangles.len())?);
+    u64_field(out, wire_len(region.trailing_bytes.len())?);
+    for bounds in &region.rectangles {
+        rect(out, *bounds);
+    }
+    out.extend_from_slice(&region.trailing_bytes);
+    Ok(())
+}
+
 fn text_len<T>(text: &ExtTextOut<T>) -> Result<usize, Error> {
     let mut len = 104;
     add_len(
@@ -191,12 +221,15 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
             body.len().checked_add(8).ok_or(Error::SizeOverflow)
         }
-        RecordData::Raw
-        | RecordData::FillRgn { .. }
-        | RecordData::FrameRgn { .. }
-        | RecordData::InvertRgn { .. }
-        | RecordData::PaintRgn { .. }
-        | RecordData::ExtSelectClipRgn { .. } => Ok(0),
+        RecordData::FillRgn { region, .. } => region_len(region, 20),
+        RecordData::FrameRgn { region, .. } => region_len(region, 28),
+        RecordData::InvertRgn { region, .. } | RecordData::PaintRgn { region, .. } => {
+            region_len(region, 16)
+        }
+        RecordData::ExtSelectClipRgn { region, .. } => region
+            .as_ref()
+            .map_or(Ok(8), |region| region_len(region, 8)),
+        RecordData::Raw => Ok(0),
         RecordData::ScaleViewportExtEx { .. } | RecordData::ScaleWindowExtEx { .. } => Ok(16),
         RecordData::SetWorldTransform { .. } => Ok(24),
         RecordData::ModifyWorldTransform { .. } => Ok(28),
@@ -357,12 +390,41 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                 u64_field(&mut out, wire_len(body.len())?);
                 out.extend_from_slice(body);
             }
-            RecordData::Raw
-            | RecordData::FillRgn { .. }
-            | RecordData::FrameRgn { .. }
-            | RecordData::InvertRgn { .. }
-            | RecordData::PaintRgn { .. }
-            | RecordData::ExtSelectClipRgn { .. } => {}
+            RecordData::FillRgn {
+                bounds,
+                ih_brush,
+                region,
+            } => {
+                rect(&mut out, *bounds);
+                u32_field(&mut out, *ih_brush);
+                region_payload(&mut out, region)?;
+            }
+            RecordData::FrameRgn {
+                bounds,
+                ih_brush,
+                stroke,
+                region,
+            } => {
+                rect(&mut out, *bounds);
+                u32_field(&mut out, *ih_brush);
+                size(&mut out, *stroke);
+                region_payload(&mut out, region)?;
+            }
+            RecordData::InvertRgn { bounds, region } | RecordData::PaintRgn { bounds, region } => {
+                rect(&mut out, *bounds);
+                region_payload(&mut out, region)?;
+            }
+            RecordData::ExtSelectClipRgn {
+                region_mode,
+                region,
+            } => {
+                u32_field(&mut out, *region_mode);
+                u32_field(&mut out, u32::from(region.is_some()));
+                if let Some(region) = region {
+                    region_payload(&mut out, region)?;
+                }
+            }
+            RecordData::Raw => {}
             RecordData::ScaleViewportExtEx { scale } | RecordData::ScaleWindowExtEx { scale } => {
                 for value in [scale.x_num, scale.x_denom, scale.y_num, scale.y_denom] {
                     i32_field(&mut out, value);
