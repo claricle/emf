@@ -5,3 +5,10 @@ version = 3
 [[package]]
 name = "emf-core"
 version = "0.0.0"
+
+[[package]]
+name = "emf-ffi"
+version = "0.0.0"
+dependencies = [
+ "emf-core",
+]
