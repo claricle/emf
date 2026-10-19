@@ -238,7 +238,24 @@ clip offset and move-to. Ruby models hydrate directly from signed fields, retain
 mutable wires, and match the Ruby canonical observations for this cohort.
 
 `cargo test --workspace --locked` passed 69 tests; strict clippy, formatting and
-`sh crates/emf-ffi/tests/smoke.sh` passed. The focused native/backend Ruby suite
+`sh crates/emf-ffi/tests/run-c-smoke.sh` passed. The focused native/backend Ruby suite
 passed 35 examples. These are cohort checks, not complete-corpus parity or a
-performance result. Color and rectangle core cohorts are integrated separately;
-their native adaptation and final combined checks remain in progress.
+performance result. The subsequent color and rectangle cohort is integrated below.
+
+
+### Color, rectangle and fixed state/path cohorts
+
+Commit `fd55d22` adds direct Ruby hydration for text/background COLORREF values,
+ellipse, rectangle and rounded rectangle records. Snapshot schema 2 tags 16–20
+retain all four color bytes and signed bounds/corner fields; the C ABI remains 1.
+The combined workspace passed 79 Rust tests, strict Clippy, formatting and the
+compiled C smoke client. The native Ruby suite passed 39 examples, including
+field edits, canonical Ruby comparisons, fixed-record suffix normalization and
+truncated known records retained as Raw with diagnostics.
+
+Commit `0b6c21b` adds 14 fixed state/path families in the Rust core, including
+signed RestoreDc, unsigned object/state fields, zero-payload path operations,
+signed path bounds and SelectClipPath with an opaque optional suffix. All 70
+core tests, core Clippy and formatting passed before integration. ABI and Ruby
+adaptation is in progress; this core-only evidence does not establish native
+parity for those families. Full registry, corpus and platform acceptance remain open.

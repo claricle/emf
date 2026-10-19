@@ -34,18 +34,18 @@ and corpus parity. Group names are proposed Rust modules.
 | --- | --- | --- | --- | --- |
 | `Raw` | `unknown types` | [`raw.rb`](../lib/emf/emr/binary/records/raw.rb) | `emf::raw` | In progress |
 | `Eof` | `EOF` | [`eof.rb`](../lib/emf/emr/binary/records/eof.rb) | `emf::eof` | In progress |
-| `SetTextColor` | `SETTEXTCOLOR` | [`set_text_color.rb`](../lib/emf/emr/binary/records/set_text_color.rb) | `emf::text` | In progress: typed core and exact edits; `9c3c3d8`; native adapter pending |
-| `SetBkColor` | `SETBKCOLOR` | [`set_bk_color.rb`](../lib/emf/emr/binary/records/set_bk_color.rb) | `emf::color_palette` | In progress: typed core and exact edits; `9c3c3d8`; native adapter pending |
+| `SetTextColor` | `SETTEXTCOLOR` | [`set_text_color.rb`](../lib/emf/emr/binary/records/set_text_color.rb) | `emf::text` | In progress: typed core, snapshot-2 Ruby parity and edits; `fd55d22` |
+| `SetBkColor` | `SETBKCOLOR` | [`set_bk_color.rb`](../lib/emf/emr/binary/records/set_bk_color.rb) | `emf::color_palette` | In progress: typed core, snapshot-2 Ruby parity and edits; `fd55d22` |
 | `SetBkMode` | `SETBKMODE` | [`set_bk_mode.rb`](../lib/emf/emr/binary/records/set_bk_mode.rb) | `emf::state_objects` | In progress: core and snapshot-2 Ruby parity; `b7b72e6` |
 | `SetMapMode` | `SETMAPMODE` | [`set_map_mode.rb`](../lib/emf/emr/binary/records/set_map_mode.rb) | `emf::state_objects` | In progress |
 | `SetRop2` | `SETROP2` | [`set_rop2.rb`](../lib/emf/emr/binary/records/set_rop2.rb) | `emf::state_objects` | In progress: core and snapshot-2 Ruby parity; `b7b72e6` |
 | `SetPolyFillMode` | `SETPOLYFILLMODE` | [`set_poly_fill_mode.rb`](../lib/emf/emr/binary/records/set_poly_fill_mode.rb) | `emf::state_objects` | In progress: core and snapshot-2 Ruby parity; `b7b72e6` |
-| `SetTextAlign` | `SETTEXTALIGN` | [`set_text_align.rb`](../lib/emf/emr/binary/records/set_text_align.rb) | `emf::text` | Not started |
+| `SetTextAlign` | `SETTEXTALIGN` | [`set_text_align.rb`](../lib/emf/emr/binary/records/set_text_align.rb) | `emf::text` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
 | `SetStretchBltMode` | `SETSTRETCHBLTMODE` | [`set_stretch_blt_mode.rb`](../lib/emf/emr/binary/records/set_stretch_blt_mode.rb) | `emf::bitmap` | In progress: core and snapshot-2 Ruby parity; `b7b72e6` |
-| `SaveDc` | `SAVEDC` | [`save_dc.rb`](../lib/emf/emr/binary/records/save_dc.rb) | `emf::state_objects` | Not started |
-| `RestoreDc` | `RESTOREDC` | [`restore_dc.rb`](../lib/emf/emr/binary/records/restore_dc.rb) | `emf::state_objects` | Not started |
-| `SelectObject` | `SELECTOBJECT` | [`select_object.rb`](../lib/emf/emr/binary/records/select_object.rb) | `emf::state_objects` | Not started |
-| `DeleteObject` | `DELETEOBJECT` | [`delete_object.rb`](../lib/emf/emr/binary/records/delete_object.rb) | `emf::state_objects` | Not started |
+| `SaveDc` | `SAVEDC` | [`save_dc.rb`](../lib/emf/emr/binary/records/save_dc.rb) | `emf::state_objects` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
+| `RestoreDc` | `RESTOREDC` | [`restore_dc.rb`](../lib/emf/emr/binary/records/restore_dc.rb) | `emf::state_objects` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
+| `SelectObject` | `SELECTOBJECT` | [`select_object.rb`](../lib/emf/emr/binary/records/select_object.rb) | `emf::state_objects` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
+| `DeleteObject` | `DELETEOBJECT` | [`delete_object.rb`](../lib/emf/emr/binary/records/delete_object.rb) | `emf::state_objects` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
 | `CreatePen` | `CREATEPEN` | [`create_pen.rb`](../lib/emf/emr/binary/records/create_pen.rb) | `emf::state_objects` | Not started |
 | `CreateBrushIndirect` | `CREATEBRUSHINDIRECT` | [`create_brush_indirect.rb`](../lib/emf/emr/binary/records/create_brush_indirect.rb) | `emf::state_objects` | Not started |
 | `SetWindowOrgEx` | `SETWINDOWORGEX` | [`set_window_org_ex.rb`](../lib/emf/emr/binary/records/set_window_org_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
@@ -55,15 +55,15 @@ and corpus parity. Group names are proposed Rust modules.
 | `SetBrushOrgEx` | `SETBRUSHORGEX` | [`set_brush_org_ex.rb`](../lib/emf/emr/binary/records/set_brush_org_ex.rb) | `emf::transform` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `MoveToEx` | `MOVETOEX` | [`move_to_ex.rb`](../lib/emf/emr/binary/records/move_to_ex.rb) | `emf::geometry` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `LineTo` | `LINETO` | [`line_to.rb`](../lib/emf/emr/binary/records/line_to.rb) | `emf::geometry` | Not started |
-| `Rectangle` | `RECTANGLE` | [`rectangle.rb`](../lib/emf/emr/binary/records/rectangle.rb) | `emf::geometry` | In progress: typed core and exact edits; `9f2bd4f`; native adapter pending |
-| `Ellipse` | `ELLIPSE` | [`ellipse.rb`](../lib/emf/emr/binary/records/ellipse.rb) | `emf::geometry` | In progress: typed core and exact edits; `9f2bd4f`; native adapter pending |
-| `RoundRect` | `ROUNDRECT` | [`round_rect.rb`](../lib/emf/emr/binary/records/round_rect.rb) | `emf::geometry` | In progress: typed core and exact edits; `9f2bd4f`; native adapter pending |
+| `Rectangle` | `RECTANGLE` | [`rectangle.rb`](../lib/emf/emr/binary/records/rectangle.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `fd55d22` |
+| `Ellipse` | `ELLIPSE` | [`ellipse.rb`](../lib/emf/emr/binary/records/ellipse.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `fd55d22` |
+| `RoundRect` | `ROUNDRECT` | [`round_rect.rb`](../lib/emf/emr/binary/records/round_rect.rb) | `emf::geometry` | In progress: typed core, snapshot-2 Ruby parity and edits; `fd55d22` |
 | `Arc` | `ARC` | [`arc.rb`](../lib/emf/emr/binary/records/arc.rb) | `emf::geometry` | Not started |
 | `ArcTo` | `ARCTO` | [`arc_to.rb`](../lib/emf/emr/binary/records/arc_to.rb) | `emf::geometry` | Not started |
 | `Chord` | `CHORD` | [`chord.rb`](../lib/emf/emr/binary/records/chord.rb) | `emf::geometry` | Not started |
 | `Pie` | `PIE` | [`pie.rb`](../lib/emf/emr/binary/records/pie.rb) | `emf::geometry` | Not started |
 | `AngleArc` | `ANGLEARC` | [`angle_arc.rb`](../lib/emf/emr/binary/records/angle_arc.rb) | `emf::geometry` | Not started |
-| `SetArcDirection` | `SETARCDIRECTION` | [`set_arc_direction.rb`](../lib/emf/emr/binary/records/set_arc_direction.rb) | `emf::geometry` | Not started |
+| `SetArcDirection` | `SETARCDIRECTION` | [`set_arc_direction.rb`](../lib/emf/emr/binary/records/set_arc_direction.rb) | `emf::geometry` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
 | `Polygon` | `POLYGON` | [`polygon.rb`](../lib/emf/emr/binary/records/polygon.rb) | `emf::geometry` | Not started |
 | `Polyline` | `POLYLINE` | [`polyline.rb`](../lib/emf/emr/binary/records/polyline.rb) | `emf::geometry` | In progress |
 | `PolyBezier` | `POLYBEZIER` | [`poly_bezier.rb`](../lib/emf/emr/binary/records/poly_bezier.rb) | `emf::geometry` | Not started |
@@ -83,16 +83,16 @@ and corpus parity. Group names are proposed Rust modules.
 | `Comment` | `COMMENT` | [`comment.rb`](../lib/emf/emr/binary/records/comment.rb) | `emf::opaque_extensions` | In progress |
 | `SetWorldTransform` | `SETWORLDTRANSFORM` | [`set_world_transform.rb`](../lib/emf/emr/binary/records/set_world_transform.rb) | `emf::transform` | Not started |
 | `ModifyWorldTransform` | `MODIFYWORLDTRANSFORM` | [`modify_world_transform.rb`](../lib/emf/emr/binary/records/modify_world_transform.rb) | `emf::transform` | Not started |
-| `BeginPath` | `BEGINPATH` | [`begin_path.rb`](../lib/emf/emr/binary/records/begin_path.rb) | `emf::path_clip_region` | Not started |
-| `EndPath` | `ENDPATH` | [`end_path.rb`](../lib/emf/emr/binary/records/end_path.rb) | `emf::path_clip_region` | Not started |
-| `CloseFigure` | `CLOSEFIGURE` | [`close_figure.rb`](../lib/emf/emr/binary/records/close_figure.rb) | `emf::path_clip_region` | Not started |
-| `FillPath` | `FILLPATH` | [`fill_path.rb`](../lib/emf/emr/binary/records/fill_path.rb) | `emf::path_clip_region` | Not started |
-| `StrokePath` | `STROKEPATH` | [`stroke_path.rb`](../lib/emf/emr/binary/records/stroke_path.rb) | `emf::path_clip_region` | Not started |
-| `StrokeAndFillPath` | `STROKEANDFILLPATH` | [`stroke_and_fill_path.rb`](../lib/emf/emr/binary/records/stroke_and_fill_path.rb) | `emf::path_clip_region` | Not started |
+| `BeginPath` | `BEGINPATH` | [`begin_path.rb`](../lib/emf/emr/binary/records/begin_path.rb) | `emf::path_clip_region` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
+| `EndPath` | `ENDPATH` | [`end_path.rb`](../lib/emf/emr/binary/records/end_path.rb) | `emf::path_clip_region` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
+| `CloseFigure` | `CLOSEFIGURE` | [`close_figure.rb`](../lib/emf/emr/binary/records/close_figure.rb) | `emf::path_clip_region` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
+| `FillPath` | `FILLPATH` | [`fill_path.rb`](../lib/emf/emr/binary/records/fill_path.rb) | `emf::path_clip_region` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
+| `StrokePath` | `STROKEPATH` | [`stroke_path.rb`](../lib/emf/emr/binary/records/stroke_path.rb) | `emf::path_clip_region` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
+| `StrokeAndFillPath` | `STROKEANDFILLPATH` | [`stroke_and_fill_path.rb`](../lib/emf/emr/binary/records/stroke_and_fill_path.rb) | `emf::path_clip_region` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
 | `FlattenPath` | `FLATTENPATH` | [`flatten_path.rb`](../lib/emf/emr/binary/records/flatten_path.rb) | `emf::path_clip_region` | Not started |
 | `WidenPath` | `WIDENPATH` | [`widen_path.rb`](../lib/emf/emr/binary/records/widen_path.rb) | `emf::path_clip_region` | Not started |
-| `SelectClipPath` | `SELECTCLIPPATH` | [`select_clip_path.rb`](../lib/emf/emr/binary/records/select_clip_path.rb) | `emf::path_clip_region` | Not started |
-| `AbortPath` | `ABORTPATH` | [`abort_path.rb`](../lib/emf/emr/binary/records/abort_path.rb) | `emf::path_clip_region` | Not started |
+| `SelectClipPath` | `SELECTCLIPPATH` | [`select_clip_path.rb`](../lib/emf/emr/binary/records/select_clip_path.rb) | `emf::path_clip_region` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
+| `AbortPath` | `ABORTPATH` | [`abort_path.rb`](../lib/emf/emr/binary/records/abort_path.rb) | `emf::path_clip_region` | In progress: typed core and exact edits; `0b6c21b`; native adapter pending |
 | `SetMiterLimit` | `SETMITERLIMIT` | [`set_miter_limit.rb`](../lib/emf/emr/binary/records/set_miter_limit.rb) | `emf::path_clip_region` | Not started |
 | `ExtTextOutW` | `EXTTEXTOUTW` | [`ext_text_out_w.rb`](../lib/emf/emr/binary/records/ext_text_out_w.rb) | `emf::text` | Not started |
 | `ExtTextOutA` | `EXTTEXTOUTA` | [`ext_text_out_a.rb`](../lib/emf/emr/binary/records/ext_text_out_a.rb) | `emf::text` | Not started |
