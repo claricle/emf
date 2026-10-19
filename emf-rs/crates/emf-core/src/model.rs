@@ -110,6 +110,20 @@ pub enum RecordData {
     Ellipse { bounds: Rect },
     Rectangle { bounds: Rect },
     RoundRect { bounds: Rect, corner: Size },
+    SetTextAlign { text_align_mode: u32 },
+    RestoreDc { saved_dc: i32 },
+    SelectObject { ih_object: u32 },
+    DeleteObject { ih_object: u32 },
+    SetArcDirection { arc_direction: u32 },
+    SelectClipPath { region_mode: u32 },
+    SaveDc,
+    BeginPath,
+    EndPath,
+    CloseFigure,
+    AbortPath,
+    FillPath { bounds: Rect },
+    StrokeAndFillPath { bounds: Rect },
+    StrokePath { bounds: Rect },
 }
 impl RecordData {
     pub(crate) fn record_type(&self) -> Option<u32> {
@@ -135,6 +149,20 @@ impl RecordData {
             Self::Ellipse { .. } => Some(42),
             Self::Rectangle { .. } => Some(43),
             Self::RoundRect { .. } => Some(44),
+            Self::SetTextAlign { .. } => Some(22),
+            Self::RestoreDc { .. } => Some(34),
+            Self::SelectObject { .. } => Some(37),
+            Self::DeleteObject { .. } => Some(40),
+            Self::SetArcDirection { .. } => Some(57),
+            Self::SelectClipPath { .. } => Some(67),
+            Self::SaveDc => Some(33),
+            Self::BeginPath => Some(59),
+            Self::EndPath => Some(60),
+            Self::CloseFigure => Some(61),
+            Self::AbortPath => Some(68),
+            Self::FillPath { .. } => Some(62),
+            Self::StrokeAndFillPath { .. } => Some(63),
+            Self::StrokePath { .. } => Some(64),
         }
     }
     pub(crate) fn payload_len(&self) -> Option<usize> {
@@ -159,6 +187,20 @@ impl RecordData {
             Self::Comment { data } => data.len().checked_add(4),
             Self::Ellipse { .. } | Self::Rectangle { .. } => Some(16),
             Self::RoundRect { .. } => Some(24),
+            Self::SetTextAlign { .. }
+            | Self::RestoreDc { .. }
+            | Self::SelectObject { .. }
+            | Self::DeleteObject { .. }
+            | Self::SetArcDirection { .. }
+            | Self::SelectClipPath { .. } => Some(4),
+            Self::SaveDc
+            | Self::BeginPath
+            | Self::EndPath
+            | Self::CloseFigure
+            | Self::AbortPath => Some(0),
+            Self::FillPath { .. } | Self::StrokeAndFillPath { .. } | Self::StrokePath { .. } => {
+                Some(16)
+            }
         }
     }
 }

@@ -147,6 +147,20 @@ pub fn serialize_with_limits(
                 append(&mut out, corner.cx as u32);
                 append(&mut out, corner.cy as u32);
             }
+            RecordData::SetTextAlign { text_align_mode } => append(&mut out, *text_align_mode),
+            RecordData::RestoreDc { saved_dc } => append(&mut out, *saved_dc as u32),
+            RecordData::SelectObject { ih_object } => append(&mut out, *ih_object),
+            RecordData::DeleteObject { ih_object } => append(&mut out, *ih_object),
+            RecordData::SetArcDirection { arc_direction } => append(&mut out, *arc_direction),
+            RecordData::SelectClipPath { region_mode } => append(&mut out, *region_mode),
+            RecordData::SaveDc
+            | RecordData::BeginPath
+            | RecordData::EndPath
+            | RecordData::CloseFigure
+            | RecordData::AbortPath => {}
+            RecordData::FillPath { bounds }
+            | RecordData::StrokeAndFillPath { bounds }
+            | RecordData::StrokePath { bounds } => append_rect(&mut out, *bounds),
             RecordData::Comment { data } => {
                 append(
                     &mut out,

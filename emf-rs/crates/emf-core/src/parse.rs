@@ -81,7 +81,10 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             &mut budget,
         )?;
         if data == RecordData::Raw
-            && matches!(record_type, 4 | 9..=14 | 17..=21 | 24..=27 | 42..=44 | 70)
+            && matches!(
+                record_type,
+                4 | 9..=14 | 17..=22 | 24..=27 | 33 | 34 | 37 | 40 | 42..=44 | 57 | 59..=64 | 67 | 68 | 70
+            )
         {
             budget.reserve_one(&mut diagnostics)?;
             diagnostics.push(Diagnostic {
@@ -387,6 +390,75 @@ fn decode_record(
                 },
             },
             24,
+        )),
+        22 if payload.len() >= 4 => Ok((
+            RecordData::SetTextAlign {
+                text_align_mode: r.u32()?,
+            },
+            4,
+        )),
+        34 if payload.len() >= 4 => Ok((RecordData::RestoreDc { saved_dc: r.i32()? }, 4)),
+        37 if payload.len() >= 4 => Ok((
+            RecordData::SelectObject {
+                ih_object: r.u32()?,
+            },
+            4,
+        )),
+        40 if payload.len() >= 4 => Ok((
+            RecordData::DeleteObject {
+                ih_object: r.u32()?,
+            },
+            4,
+        )),
+        57 if payload.len() >= 4 => Ok((
+            RecordData::SetArcDirection {
+                arc_direction: r.u32()?,
+            },
+            4,
+        )),
+        67 if payload.len() >= 4 => Ok((
+            RecordData::SelectClipPath {
+                region_mode: r.u32()?,
+            },
+            4,
+        )),
+        33 => Ok((RecordData::SaveDc, 0)),
+        59 => Ok((RecordData::BeginPath, 0)),
+        60 => Ok((RecordData::EndPath, 0)),
+        61 => Ok((RecordData::CloseFigure, 0)),
+        68 => Ok((RecordData::AbortPath, 0)),
+        62 if payload.len() >= 16 => Ok((
+            RecordData::FillPath {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+            },
+            16,
+        )),
+        63 if payload.len() >= 16 => Ok((
+            RecordData::StrokeAndFillPath {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+            },
+            16,
+        )),
+        64 if payload.len() >= 16 => Ok((
+            RecordData::StrokePath {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+            },
+            16,
         )),
         70 if payload.len() >= 4 => {
             let count = r.u32()? as usize;
