@@ -101,9 +101,11 @@ RSpec.describe EmfsvgBenchmark::CLI do
     FileUtils.cp(dependency.loaded_from, File.join(gem_home, "specifications"))
     gemfile = File.join(directory, "Gemfile")
     File.write(gemfile, "source \"https://rubygems.org\"\ngem \"bindata\", \"=#{dependency.version}\"\n")
+    bundler_setup = File.join(File.dirname(Bundler.method(:setup).source_location.first), "bundler/setup.rb")
     environment = Bundler.unbundled_env.merge("BUNDLE_GEMFILE" => gemfile, "BUNDLE_PATH" => bundle_path,
                                               "GEM_HOME" => File.join(directory, "empty"),
-                                              "GEM_PATH" => consumer_home, "RUBYOPT" => "-rbundler/setup")
+                                              "GEM_PATH" => consumer_home, "RUBYOPT" => "-rbundler/setup",
+                                              "BUNDLER_SETUP" => bundler_setup)
     ENV.keys.grep(/\ABUNDLER_ORIG_/).each { |key| environment[key] = nil }
 
     output, status = Open3.capture2e(environment, RbConfig.ruby, "-I", File.join(ParserBenchmark::ROOT, "lib"),
