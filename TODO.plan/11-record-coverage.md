@@ -97,8 +97,8 @@ and corpus parity. Group names are proposed Rust modules.
 | `SelectClipPath` | `SELECTCLIPPATH` | [`select_clip_path.rb`](../lib/emf/emr/binary/records/select_clip_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `AbortPath` | `ABORTPATH` | [`abort_path.rb`](../lib/emf/emr/binary/records/abort_path.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
 | `SetMiterLimit` | `SETMITERLIMIT` | [`set_miter_limit.rb`](../lib/emf/emr/binary/records/set_miter_limit.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
-| `ExtTextOutW` | `EXTTEXTOUTW` | [`ext_text_out_w.rb`](../lib/emf/emr/binary/records/ext_text_out_w.rb) | `emf::text` | Not started |
-| `ExtTextOutA` | `EXTTEXTOUTA` | [`ext_text_out_a.rb`](../lib/emf/emr/binary/records/ext_text_out_a.rb) | `emf::text` | Not started |
+| `ExtTextOutW` | `EXTTEXTOUTW` | [`ext_text_out_w.rb`](../lib/emf/emr/binary/records/ext_text_out_w.rb) | `emf::text` | In progress: semantic core, snapshot-2 native Ruby hydration and edited serialization; corpus parity pending |
+| `ExtTextOutA` | `EXTTEXTOUTA` | [`ext_text_out_a.rb`](../lib/emf/emr/binary/records/ext_text_out_a.rb) | `emf::text` | In progress: semantic core, snapshot-2 native Ruby hydration and edited serialization; corpus parity pending |
 | `CreateFontIndirectW` | `EXTCREATEFONTINDIRECTW` | [`create_font_indirect_w.rb`](../lib/emf/emr/binary/records/create_font_indirect_w.rb) | `emf::text` | Not started |
 | `ExtCreatePen` | `EXTCREATEPEN` | [`ext_create_pen.rb`](../lib/emf/emr/binary/records/ext_create_pen.rb) | `emf::state_objects` | Not started |
 | `StretchDIBits` | `STRETCHDIBITS` | [`stretch_dibits.rb`](../lib/emf/emr/binary/records/stretch_dibits.rb) | `emf::bitmap` | Not started |
@@ -107,7 +107,7 @@ and corpus parity. Group names are proposed Rust modules.
 | `OffsetClipRgn` | `OFFSETCLIPRGN` | [`offset_clip_rgn.rb`](../lib/emf/emr/binary/records/offset_clip_rgn.rb) | `emf::path_clip_region` | In progress: signed core, snapshot and Ruby parity/edit controls; `7371400` |
 | `ExcludeClipRect` | `EXCLUDECLIPRECT` | [`exclude_clip_rect.rb`](../lib/emf/emr/binary/records/exclude_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
 | `IntersectClipRect` | `INTERSECTCLIPRECT` | [`intersect_clip_rect.rb`](../lib/emf/emr/binary/records/intersect_clip_rect.rb) | `emf::path_clip_region` | In progress: typed core, snapshot-2 Ruby parity and edits; `0fb8deb` |
-| `ExtSelectClipRgn` | `EXTSELECTCLIPRGN` | [`ext_select_clip_rgn.rb`](../lib/emf/emr/binary/records/ext_select_clip_rgn.rb) | `emf::path_clip_region` | Not started |
+| `ExtSelectClipRgn` | `EXTSELECTCLIPRGN` | [`ext_select_clip_rgn.rb`](../lib/emf/emr/binary/records/ext_select_clip_rgn.rb) | `emf::path_clip_region` | In progress: semantic Rust core and checked edits (`6a9b2fc`); native hydration and corpus parity pending |
 | `ScaleViewportExtEx` | `SCALEVIEWPORTEXTEX` | [`scale_viewport_ext_ex.rb`](../lib/emf/emr/binary/records/scale_viewport_ext_ex.rb) | `emf::transform` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
 | `ScaleWindowExtEx` | `SCALEWINDOWEXTEX` | [`scale_window_ext_ex.rb`](../lib/emf/emr/binary/records/scale_window_ext_ex.rb) | `emf::transform` | In progress: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
 | `SetMapperFlags` | `SETMAPPERFLAGS` | [`set_mapper_flags.rb`](../lib/emf/emr/binary/records/set_mapper_flags.rb) | `emf::state_objects` | In progress: core `e0fa139`, native `8598911`; remaining corpus/variant checks |
@@ -117,10 +117,10 @@ and corpus parity. Group names are proposed Rust modules.
 | `ResizePalette` | `RESIZEPALETTE` | [`resize_palette.rb`](../lib/emf/emr/binary/records/resize_palette.rb) | `emf::color_palette` | Not started |
 | `SetPaletteEntries` | `SETPALETTEENTRIES` | [`set_palette_entries.rb`](../lib/emf/emr/binary/records/set_palette_entries.rb) | `emf::color_palette` | Not started |
 | `ExtFloodFill` | `EXTFLOODFILL` | [`ext_flood_fill.rb`](../lib/emf/emr/binary/records/ext_flood_fill.rb) | `emf::state_objects` | In progress: opaque compatibility body through core/native (`8598911`); semantic fields remain open |
-| `FillRgn` | `FILLRGN` | [`fill_rgn.rb`](../lib/emf/emr/binary/records/fill_rgn.rb) | `emf::path_clip_region` | Not started |
-| `FrameRgn` | `FRAMERGN` | [`frame_rgn.rb`](../lib/emf/emr/binary/records/frame_rgn.rb) | `emf::path_clip_region` | Not started |
-| `InvertRgn` | `INVERTRGN` | [`invert_rgn.rb`](../lib/emf/emr/binary/records/invert_rgn.rb) | `emf::path_clip_region` | Not started |
-| `PaintRgn` | `PAINTRGN` | [`paint_rgn.rb`](../lib/emf/emr/binary/records/paint_rgn.rb) | `emf::path_clip_region` | Not started |
+| `FillRgn` | `FILLRGN` | [`fill_rgn.rb`](../lib/emf/emr/binary/records/fill_rgn.rb) | `emf::path_clip_region` | In progress: semantic Rust core and checked edits (`6a9b2fc`); native hydration and corpus parity pending |
+| `FrameRgn` | `FRAMERGN` | [`frame_rgn.rb`](../lib/emf/emr/binary/records/frame_rgn.rb) | `emf::path_clip_region` | In progress: semantic Rust core and checked edits (`6a9b2fc`); native hydration and corpus parity pending |
+| `InvertRgn` | `INVERTRGN` | [`invert_rgn.rb`](../lib/emf/emr/binary/records/invert_rgn.rb) | `emf::path_clip_region` | In progress: semantic Rust core and checked edits (`6a9b2fc`); native hydration and corpus parity pending |
+| `PaintRgn` | `PAINTRGN` | [`paint_rgn.rb`](../lib/emf/emr/binary/records/paint_rgn.rb) | `emf::path_clip_region` | In progress: semantic Rust core and checked edits (`6a9b2fc`); native hydration and corpus parity pending |
 | `BitBlt` | `BITBLT` | [`bit_blt.rb`](../lib/emf/emr/binary/records/bit_blt.rb) | `emf::bitmap` | Not started |
 | `StretchBlt` | `STRETCHBLT` | [`stretch_blt.rb`](../lib/emf/emr/binary/records/stretch_blt.rb) | `emf::bitmap` | Not started |
 | `MaskBlt` | `MASKBLT` | [`mask_blt.rb`](../lib/emf/emr/binary/records/mask_blt.rb) | `emf::bitmap` | Not started |

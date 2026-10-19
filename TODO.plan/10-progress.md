@@ -349,3 +349,30 @@ including checked signed coordinates and edited serialization. The bounded WMF
 suite passed 36 examples. The integrated WMF, fixture-manifest and consumer
 benchmark checks passed 52 examples at that commit. These results do not
 establish complete WMF, native WMF or performance acceptance.
+
+### Extended text output core
+
+Commit `b61f7cd` adds semantic Rust models for `ExtTextOutA` and `ExtTextOutW`.
+The model retains raw A bytes, UTF-16 code units, float bit patterns, optional
+clipping rectangles, per-character advances, both buffer orders and padding.
+Edits regenerate checked counts and offsets. Invalid spans, overlaps and
+alignments retain the complete Raw record with diagnostics.
+
+The native bridge adds checked snapshot payloads and direct Ruby hydration for
+both families, including empty buffers, ETO_NO_RECT, per-character advances and
+float bit preservation until reassignment. ABI 1 and snapshot schema 2 remain
+unchanged. Commit `86bf701` supplies the bridge. The integrated checkpoint passed 141 Rust
+tests, 70 native Ruby examples, strict workspace Clippy, formatting and linked
+C ABI smoke.
+Full corpus parity and performance acceptance remain open.
+
+### Region records and benchmark diagnostics
+
+Commit `6a9b2fc` adds semantic Rust models and checked edited serialization for
+FillRgn, FrameRgn, InvertRgn, PaintRgn and ExtSelectClipRgn. Four new region tests
+and 32 existing focused compatibility/framing checks passed. Native region
+hydration remains pending; these records continue through the Ruby fallback.
+
+Commit `8a9c7d5` adds bounded Ruby/Gem/Bundler diagnostics to benchmark dependency
+load errors. Its seven focused examples pass locally. This does not establish
+a fix for the two Ruby 3.2 CI failures; the next CI run must expose their cause.
