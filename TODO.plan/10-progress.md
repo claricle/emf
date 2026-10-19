@@ -7,10 +7,10 @@ Status: execution plan merged; Ruby baseline work in progress.
 | Package | State | Evidence / remaining work |
 | --- | --- | --- |
 | 01 Requirements | Baseline documented | Validate contracts through executable oracle in 02 |
-| 02 Baseline/parity | In progress | Fixture inventory and Ruby API/mutation controls added; canonical observations, downstream revision and timings pending |
-| 03 Rust core | Not started | Vertical slice, every inventory group, serializer |
-| 04 C ABI | Not started | Binding contract, ownership/lifecycle and failure checks |
-| 05 Ruby binding | Not started | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
+| 02 Baseline/parity | In progress | Fixture inventory, API/mutation controls, canonical observation/comparison harness and parser/consumer timing drivers added; downstream full-suite classification and reported slow workload pending |
+| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed vertical slice and record families pending |
+| 04 C ABI | In progress | Initial interface and C client implementation underway; ownership/lifecycle and full model checks pending |
+| 05 Ruby binding | In progress | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
 | 06 Resilience | Not started | Outcome manifest, subprocess limits, fuzz regressions |
 | 07 Performance | Not started | Comparable measured end-to-end target and regression budget |
 | 08 Platform delivery | Not started | Target probes, artifacts, clean installs, CI/release integration |
@@ -62,9 +62,10 @@ on the new implementation before the evidence describes that version.
 
 ## Next action
 
-Continue [02](02-baseline-and-parity.md): capture canonical API/model/serialization
-observations and establish the downstream baseline. No Rust files need to be
-introduced before this oracle is available.
+Continue [02](02-baseline-and-parity.md): classify the pinned downstream golden
+and round-trip baseline and identify the reported slow workload. Use the canonical
+oracle and timing drivers for the bounded native slice in [03](03-rust-core.md),
+then connect it through [04](04-c-abi.md) and [05](05-ruby-binding.md).
 The initial estimates in [00](00-overview.md) should be revised after this milestone
 and after the integrated native slice.
 
@@ -79,8 +80,9 @@ and unchanged sibling records.
 
 These are preservation controls for the existing implementation. They do not yet
 exercise a native backend or provide the complete canonical observation oracle.
-The downstream revision, golden command and reported 12-second workload remain
-unverified; resolve those inputs before claiming a downstream performance result.
+The downstream revision and commands are documented in `bench/emfsvg.md`. The
+reported 12-second workload remains unidentified; local samples do not establish
+the issue performance target.
 
 ### Fixture inventory
 
@@ -98,5 +100,45 @@ describe Ruby outcomes, not a classification of valid versus corrupt input.
 `bundle exec ruby script/fixture_manifest --check` validates fixture metadata and
 the parser source fingerprint against the saved capture without parsing again.
 Regenerate and review the capture after intentional fixture or parser changes.
-The inventory is the first baseline artifact; complete field observations,
-diagnostics, timing measurements and downstream verification remain pending.
+The inventory is the first baseline artifact; downstream full-suite classification
+and the reported performance workload remain pending.
+
+### Canonical observations and timing drivers
+
+`ruby script/backend_observations --output tmp/ruby-observations.json` captures
+model and wire fields, ordered diagnostics, binary/float representations, raw
+records, trailing bytes, serialization and reparse outcomes. The comparator
+reports differing leaf paths and distinguishes missing fields from explicit nil.
+Focused coverage includes NaN payloads, signed zero, mutable fields and truncated
+record behavior. A full local capture covered 229 inputs: 226 parsed, two raised
+format errors and one corrupt input exceeded the 120-second child deadline. All
+208 valid inputs serialized identically and reparsed equally. The timeout is an
+explicit incomplete observation, not a passing parse result.
+
+`bench/parser.rb` measures Ruby parsing, serialization and full model/wire
+consumption with fixture/source identities, subprocess bounds and separately
+reported cold loading. `bench/emfsvg.rb` measures real `from_bytes` and `from_file`
+calls against consumer commit `101356dcf673841fda0693076131bca7a0f34948`,
+checking exact SVG bytes outside timed regions. See `bench/README.md` and
+`bench/emfsvg.md` for reproduction and measurement limits. Both drivers propagate
+cold-child failures into the command result.
+
+The combined canonical/parser/consumer focused checks passed 34 examples before
+the final duplicate-cold-failure correction; its affected consumer checks passed
+five examples afterward. These checks use installed runtime gems with explicit
+load paths because the local consumer dependency bundle is unresolved. The full
+pinned consumer suite, required CI and native comparisons remain separate gates.
+
+### Rust framing foundation
+
+`emf-rs` contains an independent core with checked little-endian reads, owned
+source spans, EMF header decoding, bounded record framing, recoverable tail
+diagnostics and exact unchanged serialization. Detection recognizes WMF containers;
+WMF parsing remains unsupported. Formatting, Clippy and 28 focused integration
+tests passed locally on stable Rust. The declared Rust 1.73 minimum and Linux/macOS
+checks are included in the Rust CI matrix; their results remain pending.
+
+This foundation does not complete typed record decoding, edited serialization,
+corpus parity, the C ABI or Ruby native model hydration. The next core slice adds
+header/EOF, fixed and variable record models with checked edits while preserving
+unknown bytes.
