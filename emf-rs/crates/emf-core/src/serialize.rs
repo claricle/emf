@@ -2,7 +2,7 @@
 
 use crate::error::{LimitKind, SerializeFailure};
 use crate::limits::SerializeLimits;
-use crate::model::{Document, EmfHeader, ExtTextOut, RecordData, Rect, RegionData};
+use crate::model::{Document, EmfHeader, ExtCreatePen, ExtTextOut, RecordData, Rect, RegionData};
 
 /// Write unchanged bytes exactly; encode edited fields and preserve opaque suffixes.
 /// Comment padding is resized; EOF palette bytes stay before the final SizeLast.
@@ -37,6 +37,9 @@ pub fn serialize_with_limits(
         if record.edited {
             edited = true;
             let element_count = match &record.data {
+                RecordData::ExtCreatePen(pen) => {
+                    pen.work_len().ok_or(SerializeFailure::SizeOverflow)?
+                }
                 RecordData::ExtTextOutA(text) => {
                     text.work_len().ok_or(SerializeFailure::SizeOverflow)?
                 }
@@ -371,6 +374,7 @@ pub fn serialize_with_limits(
             RecordData::ExcludeClipRect { clip } | RecordData::IntersectClipRect { clip } => {
                 append_rect(&mut out, *clip)
             }
+            RecordData::ExtCreatePen(pen) => append_extended_pen(&mut out, start, pen)?,
             RecordData::CreatePen {
                 ih_pen,
                 pen_style,
@@ -491,7 +495,7 @@ pub fn serialize_with_limits(
         }
         if matches!(
             record.data,
-            RecordData::ExtTextOutA(_) | RecordData::ExtTextOutW(_)
+            RecordData::ExtTextOutA(_) | RecordData::ExtTextOutW(_) | RecordData::ExtCreatePen(_)
         ) {
             let padding = (4 - (out.len() - start) % 4) % 4;
             out.resize(out.len() + padding, 0);
@@ -646,5 +650,50 @@ fn append_region(out: &mut Vec<u8>, region: &RegionData) -> Result<(), Serialize
         append_rect(out, *rect);
     }
     out.extend_from_slice(&region.trailing_bytes);
+    Ok(())
+}
+
+fn append_extended_pen(
+    out: &mut Vec<u8>,
+    start: usize,
+    pen: &ExtCreatePen,
+) -> Result<(), SerializeFailure> {
+    let (info, bits, _) = pen.layout().ok_or(SerializeFailure::SizeOverflow)?;
+    let checked = |n| u32::try_from(n).map_err(|_| SerializeFailure::SizeOverflow);
+    for value in [
+        pen.ih_pen,
+        checked(info)?,
+        checked(pen.bitmap_info.as_ref().map_or(0, Vec::len))?,
+        checked(bits)?,
+        checked(pen.bitmap_bits.as_ref().map_or(0, Vec::len))?,
+        pen.pen_style,
+        pen.width,
+        pen.brush_style,
+    ] {
+        append(out, value);
+    }
+    out.extend_from_slice(&[
+        pen.color.red,
+        pen.color.green,
+        pen.color.blue,
+        pen.color.reserved,
+    ]);
+    append(out, pen.brush_hatch);
+    append(out, checked(pen.style_entries.len())?);
+    for entry in &pen.style_entries {
+        append(out, *entry);
+    }
+    for is_bits in [pen.bits_first, !pen.bits_first] {
+        let (data, padding, offset) = if is_bits {
+            (&pen.bitmap_bits, &pen.bits_padding, bits)
+        } else {
+            (&pen.bitmap_info, &pen.info_padding, info)
+        };
+        if let Some(data) = data {
+            out.extend_from_slice(padding);
+            out.resize(start + offset, 0);
+            out.extend_from_slice(data);
+        }
+    }
     Ok(())
 }

@@ -231,10 +231,84 @@ impl RegionData {
     }
 }
 
+/// Extended logical pen (EMR_EXTCREATEPEN). Style flags, brush values and
+/// COLORREF bits are retained without interpreting their combinations.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExtCreatePen {
+    pub ih_pen: u32,
+    pub pen_style: u32,
+    pub width: u32,
+    pub brush_style: u32,
+    pub color: ColorRef,
+    pub brush_hatch: u32,
+    /// Alternating dash and gap lengths; the wire count is derived on encoding.
+    pub style_entries: Vec<u32>,
+    /// DIB header and bits, retained as uninterpreted bytes. Some(empty) retains
+    /// a present, zero-length buffer and its offset.
+    pub bitmap_info: Option<Vec<u8>>,
+    pub bitmap_bits: Option<Vec<u8>>,
+    /// Unused bytes immediately before each buffer, retained when editing.
+    pub info_padding: Vec<u8>,
+    pub bits_padding: Vec<u8>,
+    pub bits_first: bool,
+}
+
+impl ExtCreatePen {
+    pub(crate) fn layout(&self) -> Option<(usize, usize, usize)> {
+        u32::try_from(self.style_entries.len()).ok()?;
+        let mut end = 52usize.checked_add(self.style_entries.len().checked_mul(4)?)?;
+        let mut info = 0;
+        let mut bits = 0;
+        for is_bits in [self.bits_first, !self.bits_first] {
+            let (data, padding) = if is_bits {
+                (&self.bitmap_bits, &self.bits_padding)
+            } else {
+                (&self.bitmap_info, &self.info_padding)
+            };
+            if let Some(data) = data {
+                u32::try_from(data.len()).ok()?;
+                end = end.checked_add(padding.len())?;
+                end = end.checked_add((4 - end % 4) % 4)?;
+                if is_bits {
+                    bits = end;
+                } else {
+                    info = end;
+                }
+                end = end.checked_add(data.len())?;
+            }
+        }
+        u32::try_from(end).ok()?;
+        Some((info, bits, end))
+    }
+
+    pub(crate) fn work_len(&self) -> Option<usize> {
+        self.style_entries
+            .len()
+            .checked_add(
+                self.bitmap_info
+                    .as_ref()
+                    .map_or(0, |v| v.len().div_ceil(16)),
+            )?
+            .checked_add(
+                self.bitmap_bits
+                    .as_ref()
+                    .map_or(0, |v| v.len().div_ceil(16)),
+            )?
+            .checked_add(self.info_padding.len().div_ceil(16))?
+            .checked_add(self.bits_padding.len().div_ceil(16))
+    }
+
+    fn valid(&self) -> bool {
+        (self.bitmap_info.is_some() || self.info_padding.is_empty())
+            && (self.bitmap_bits.is_some() || (self.bits_padding.is_empty() && !self.bits_first))
+    }
+}
+
 /// Supported payloads. Raw records retain all their original bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordData {
     Raw,
+    ExtCreatePen(ExtCreatePen),
     ExtTextOutA(ExtTextOut<u8>),
     ExtTextOutW(ExtTextOut<u16>),
     Eof(EofRecord),
@@ -512,6 +586,7 @@ pub enum RecordData {
 impl RecordData {
     pub(crate) fn record_type(&self) -> Option<u32> {
         match self {
+            Self::ExtCreatePen(_) => Some(95),
             Self::ExtTextOutA(_) => Some(83),
             Self::ExtTextOutW(_) => Some(84),
             Self::Raw => None,
@@ -597,6 +672,7 @@ impl RecordData {
     }
     pub(crate) fn payload_len(&self) -> Option<usize> {
         match self {
+            Self::ExtCreatePen(pen) => pen.layout()?.2.checked_sub(8),
             Self::ExtTextOutA(text) => text.layout()?.2.checked_sub(8),
             Self::ExtTextOutW(text) => text.layout()?.2.checked_sub(8),
             Self::ScaleViewportExtEx { .. } | Self::ScaleWindowExtEx { .. } => Some(16),
@@ -739,7 +815,9 @@ impl RecordSpan {
             let size = size.checked_add(self.size as usize - 8 - self.decoded_len)?;
             if matches!(
                 data,
-                RecordData::ExtTextOutA(_) | RecordData::ExtTextOutW(_)
+                RecordData::ExtTextOutA(_)
+                    | RecordData::ExtTextOutW(_)
+                    | RecordData::ExtCreatePen(_)
             ) {
                 size.checked_add((4 - size % 4) % 4)
             } else {
@@ -845,12 +923,13 @@ impl Document {
         if record.data == RecordData::Raw || data.record_type() != Some(record.record_type) {
             return Err(EditFailure::RecordFamily { index });
         }
-        let invalid_text = match &data {
+        let invalid_layout = match &data {
+            RecordData::ExtCreatePen(pen) => !pen.valid(),
             RecordData::ExtTextOutA(text) => !text.valid(),
             RecordData::ExtTextOutW(text) => !text.valid(),
             _ => false,
         };
-        if invalid_text {
+        if invalid_layout {
             return Err(EditFailure::RecordLayout { index });
         }
         let mismatched_arrays = match &data {

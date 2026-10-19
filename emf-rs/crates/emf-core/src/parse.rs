@@ -4,9 +4,9 @@ use crate::detect::{detect_format, Format, EMF_MAGIC};
 use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
-    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, ExtTextOut, Float32,
-    PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect, RegionData, ScaleFactors,
-    Size, XForm, EMR_HEADER, HEADER_FIXED_BYTES,
+    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, ExtCreatePen, ExtTextOut,
+    Float32, PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect, RegionData,
+    ScaleFactors, Size, XForm, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 use crate::reader::{u32_at, Reader};
 
@@ -84,7 +84,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=22 | 24..=47 | 53..=68 | 70..=75 | 83..=92 | 98 | 115 | 120
+                2..=22 | 24..=47 | 53..=68 | 70..=75 | 83..=92 | 95 | 98 | 115 | 120
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -885,6 +885,7 @@ fn decode_record(
             },
             16,
         )),
+        95 => decode_extended_pen(payload, budget),
         38 if payload.len() >= 20 => Ok((
             RecordData::CreatePen {
                 ih_pen: r.u32()?,
@@ -1142,4 +1143,127 @@ fn read_region(bytes: &[u8], budget: &mut Budget<'_>) -> Result<Option<RegionDat
         rectangles,
         trailing_bytes,
     }))
+}
+
+fn decode_extended_pen(
+    payload: &[u8],
+    budget: &mut Budget<'_>,
+) -> Result<(RecordData, usize), ParseFailure> {
+    let raw = || Ok((RecordData::Raw, 0));
+    if payload.len() < 44 {
+        return raw();
+    }
+    let mut r = Reader::new(payload);
+    let ih_pen = r.u32()?;
+    let off_info = r.u32()? as usize;
+    let cb_info = r.u32()? as usize;
+    let off_bits = r.u32()? as usize;
+    let cb_bits = r.u32()? as usize;
+    let pen_style = r.u32()?;
+    let width = r.u32()?;
+    let brush_style = r.u32()?;
+    let color = ColorRef {
+        red: r.take(1)?[0],
+        green: r.take(1)?[0],
+        blue: r.take(1)?[0],
+        reserved: r.take(1)?[0],
+    };
+    let brush_hatch = r.u32()?;
+    let count = r.u32()? as usize;
+    let Some(style_bytes) = count.checked_mul(4) else {
+        return raw();
+    };
+    let Some(fixed) = 44usize.checked_add(style_bytes) else {
+        return raw();
+    };
+    if fixed > payload.len() {
+        return raw();
+    }
+    // Wire offsets include the eight-byte record header.
+    let span = |offset: usize, len: usize| {
+        let start = offset.checked_sub(8)?;
+        let end = start.checked_add(len)?;
+        (offset % 4 == 0 && start >= fixed && end <= payload.len()).then_some(start..end)
+    };
+    let info = if off_info == 0 && cb_info == 0 {
+        None
+    } else {
+        let Some(range) = span(off_info, cb_info) else {
+            return raw();
+        };
+        Some(range)
+    };
+    let bits = if off_bits == 0 && cb_bits == 0 {
+        None
+    } else {
+        let Some(range) = span(off_bits, cb_bits) else {
+            return raw();
+        };
+        Some(range)
+    };
+    let bits_first = match (&info, &bits) {
+        (Some(a), Some(b)) => b.start < a.start || (b.start == a.start && b.is_empty()),
+        (None, Some(_)) => true,
+        _ => false,
+    };
+    // Validate every span and its ordering before allocating any decoded data.
+    let mut end = fixed;
+    for is_bits in [bits_first, !bits_first] {
+        if let Some(range) = if is_bits { &bits } else { &info } {
+            if range.start < end {
+                return raw();
+            }
+            end = range.end;
+        }
+    }
+    budget.charge_alloc(style_bytes)?;
+    budget.charge_work(count as u64)?;
+    let mut style_entries = try_vec_with_capacity(count)?;
+    for _ in 0..count {
+        style_entries.push(r.u32()?);
+    }
+    let mut bitmap_info = None;
+    let mut bitmap_bits = None;
+    let mut info_padding = Vec::new();
+    let mut bits_padding = Vec::new();
+    let mut cursor = fixed;
+    for is_bits in [bits_first, !bits_first] {
+        if let Some(range) = if is_bits { &bits } else { &info } {
+            let padding = copy_pen_bytes(&payload[cursor..range.start], budget)?;
+            let data = copy_pen_bytes(&payload[range.clone()], budget)?;
+            if is_bits {
+                bits_padding = padding;
+                bitmap_bits = Some(data);
+            } else {
+                info_padding = padding;
+                bitmap_info = Some(data);
+            }
+            cursor = range.end;
+        }
+    }
+    Ok((
+        RecordData::ExtCreatePen(ExtCreatePen {
+            ih_pen,
+            pen_style,
+            width,
+            brush_style,
+            color,
+            brush_hatch,
+            style_entries,
+            bitmap_info,
+            bitmap_bits,
+            info_padding,
+            bits_padding,
+            bits_first,
+        }),
+        end,
+    ))
+}
+
+fn copy_pen_bytes(bytes: &[u8], budget: &mut Budget<'_>) -> Result<Vec<u8>, ParseFailure> {
+    budget.charge_alloc(bytes.len())?;
+    budget.charge_work((bytes.len() as u64).div_ceil(16))?;
+    let mut values = try_vec_with_capacity(bytes.len())?;
+    values.extend_from_slice(bytes);
+    Ok(values)
 }
