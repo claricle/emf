@@ -4,8 +4,9 @@ use crate::detect::{detect_format, Format, EMF_MAGIC};
 use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
-    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, PixelFormatFields, Point,
-    Point16, RecordData, RecordSpan, Rect, Size, EMR_HEADER, HEADER_FIXED_BYTES,
+    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, Float32,
+    PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect, ScaleFactors, Size, XForm,
+    EMR_HEADER, HEADER_FIXED_BYTES,
 };
 use crate::reader::{u32_at, Reader};
 
@@ -83,7 +84,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=15 | 17..=22 | 24..=27 | 29 | 30 | 33 | 34 | 37..=40 | 42..=47 | 54..=57 | 59..=64 | 67 | 68 | 70 | 85..=92
+                2..=15 | 17..=22 | 24..=27 | 29..=47 | 54..=64 | 67 | 68 | 70 | 85..=92
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -229,6 +230,61 @@ fn decode_record(
     let malformed = || Ok((RecordData::Raw, 0));
     let mut r = Reader::new(payload);
     match kind {
+        31 | 32 if payload.len() >= 16 => {
+            let scale = ScaleFactors {
+                x_num: r.i32()?,
+                x_denom: r.i32()?,
+                y_num: r.i32()?,
+                y_denom: r.i32()?,
+            };
+            Ok((
+                if kind == 31 {
+                    RecordData::ScaleViewportExtEx { scale }
+                } else {
+                    RecordData::ScaleWindowExtEx { scale }
+                },
+                16,
+            ))
+        }
+        35 | 36 if payload.len() >= if kind == 35 { 24 } else { 28 } => {
+            let xform = XForm {
+                m11: Float32::from_bits(r.u32()?),
+                m12: Float32::from_bits(r.u32()?),
+                m21: Float32::from_bits(r.u32()?),
+                m22: Float32::from_bits(r.u32()?),
+                dx: Float32::from_bits(r.u32()?),
+                dy: Float32::from_bits(r.u32()?),
+            };
+            Ok((
+                if kind == 35 {
+                    RecordData::SetWorldTransform { xform }
+                } else {
+                    RecordData::ModifyWorldTransform {
+                        xform,
+                        modify_mode: r.u32()?,
+                    }
+                },
+                if kind == 35 { 24 } else { 28 },
+            ))
+        }
+        41 if payload.len() >= 20 => Ok((
+            RecordData::AngleArc {
+                center: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+                radius: r.u32()?,
+                start_angle: Float32::from_bits(r.u32()?),
+                sweep_angle: Float32::from_bits(r.u32()?),
+            },
+            20,
+        )),
+        58 if payload.len() >= 4 => Ok((
+            RecordData::SetMiterLimit {
+                miter_limit: Float32::from_bits(r.u32()?),
+            },
+            4,
+        )),
         9 if payload.len() >= 8 => Ok((
             RecordData::SetWindowExtEx {
                 extent: Size {

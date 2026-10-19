@@ -75,6 +75,50 @@ pub struct Point16 {
     pub y: i16,
 }
 
+/// IEEE 754 single-precision wire value. Equality compares bits, preserving
+/// distinct NaNs and signed zero even when documents are cloned or edited.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Float32(u32);
+
+impl Float32 {
+    pub const fn from_bits(bits: u32) -> Self {
+        Self(bits)
+    }
+
+    pub const fn to_bits(self) -> u32 {
+        self.0
+    }
+
+    /// Convert without performing floating-point arithmetic.
+    pub fn from_f32(value: f32) -> Self {
+        Self(value.to_bits())
+    }
+
+    pub fn to_f32(self) -> f32 {
+        f32::from_bits(self.0)
+    }
+}
+
+/// Signed viewport or window extent scaling ratios, without normalization.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScaleFactors {
+    pub x_num: i32,
+    pub x_denom: i32,
+    pub y_num: i32,
+    pub y_denom: i32,
+}
+
+/// World transform coefficients in wire order, retaining every float bit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct XForm {
+    pub m11: Float32,
+    pub m12: Float32,
+    pub m21: Float32,
+    pub m22: Float32,
+    pub dx: Float32,
+    pub dy: Float32,
+}
+
 /// COLORREF bytes as stored, including the unmodified reserved byte.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ColorRef {
@@ -97,6 +141,29 @@ pub struct EofRecord {
 pub enum RecordData {
     Raw,
     Eof(EofRecord),
+    ScaleViewportExtEx {
+        scale: ScaleFactors,
+    },
+    ScaleWindowExtEx {
+        scale: ScaleFactors,
+    },
+    SetWorldTransform {
+        xform: XForm,
+    },
+    ModifyWorldTransform {
+        xform: XForm,
+        /// Raw mode value; unknown values are preserved.
+        modify_mode: u32,
+    },
+    AngleArc {
+        center: Point,
+        radius: u32,
+        start_angle: Float32,
+        sweep_angle: Float32,
+    },
+    SetMiterLimit {
+        miter_limit: Float32,
+    },
     SetWindowExtEx {
         extent: Size,
     },
@@ -305,6 +372,12 @@ impl RecordData {
         match self {
             Self::Raw => None,
             Self::Eof(_) => Some(14),
+            Self::ScaleViewportExtEx { .. } => Some(31),
+            Self::ScaleWindowExtEx { .. } => Some(32),
+            Self::SetWorldTransform { .. } => Some(35),
+            Self::ModifyWorldTransform { .. } => Some(36),
+            Self::AngleArc { .. } => Some(41),
+            Self::SetMiterLimit { .. } => Some(58),
             Self::SetWindowExtEx { .. } => Some(9),
             Self::SetWindowOrgEx { .. } => Some(10),
             Self::SetViewportExtEx { .. } => Some(11),
@@ -367,6 +440,11 @@ impl RecordData {
     }
     pub(crate) fn payload_len(&self) -> Option<usize> {
         match self {
+            Self::ScaleViewportExtEx { .. } | Self::ScaleWindowExtEx { .. } => Some(16),
+            Self::SetWorldTransform { .. } => Some(24),
+            Self::ModifyWorldTransform { .. } => Some(28),
+            Self::AngleArc { .. } => Some(20),
+            Self::SetMiterLimit { .. } => Some(4),
             Self::LineTo { .. } => Some(8),
             Self::Arc { .. } => Some(32),
             Self::ArcTo { .. } => Some(32),

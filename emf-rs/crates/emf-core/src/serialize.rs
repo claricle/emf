@@ -357,6 +357,35 @@ pub fn serialize_with_limits(
                 out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
                 append(&mut out, *brush_hatch);
             }
+            RecordData::ScaleViewportExtEx { scale } | RecordData::ScaleWindowExtEx { scale } => {
+                for value in [scale.x_num, scale.x_denom, scale.y_num, scale.y_denom] {
+                    append(&mut out, value as u32);
+                }
+            }
+            RecordData::SetWorldTransform { xform }
+            | RecordData::ModifyWorldTransform { xform, .. } => {
+                for value in [
+                    xform.m11, xform.m12, xform.m21, xform.m22, xform.dx, xform.dy,
+                ] {
+                    append(&mut out, value.to_bits());
+                }
+                if let RecordData::ModifyWorldTransform { modify_mode, .. } = &record.data {
+                    append(&mut out, *modify_mode);
+                }
+            }
+            RecordData::AngleArc {
+                center,
+                radius,
+                start_angle,
+                sweep_angle,
+            } => {
+                append(&mut out, center.x as u32);
+                append(&mut out, center.y as u32);
+                append(&mut out, *radius);
+                append(&mut out, start_angle.to_bits());
+                append(&mut out, sweep_angle.to_bits());
+            }
+            RecordData::SetMiterLimit { miter_limit } => append(&mut out, miter_limit.to_bits()),
             RecordData::SetPixelV { pixel, color } => {
                 append(&mut out, pixel.x as u32);
                 append(&mut out, pixel.y as u32);

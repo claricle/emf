@@ -190,7 +190,7 @@ fn wrong_rectangle_family_edits_reject_atomically_before_and_after_valid_edits()
 
 #[test]
 fn neighboring_unknown_types_remain_raw_without_diagnostics() {
-    for kind in [41, 48] {
+    for kind in [48, 49] {
         let mut input = header();
         input.extend(record(kind, &payload(44, VALUES[1])));
         let doc = parse(&input, &ParseLimits::default()).unwrap();

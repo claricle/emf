@@ -217,7 +217,7 @@ fn wrong_fixed_state_family_edits_reject_atomically_before_and_after_valid_edits
 
 #[test]
 fn neighboring_unknown_types_remain_raw_without_diagnostics() {
-    for kind in [32, 35, 58, 65, 66, 69] {
+    for kind in [48, 49, 50, 65, 66, 69] {
         let mut input = header();
         input.extend(record(kind, &payload(62, VALUES[1])));
         let doc = parse(&input, &ParseLimits::default()).unwrap();
