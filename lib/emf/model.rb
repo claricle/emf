@@ -7,5 +7,6 @@ module Emf
     autoload :Visitor, "emf/model/visitor"
     autoload :Geometry, "emf/model/geometry"
     autoload :Emr, "emf/model/emr"
+    autoload :Wmf, "emf/model/wmf"
   end
 end
