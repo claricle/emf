@@ -60,7 +60,7 @@ test; unexplained differences remain failures.
 | `spec/fixtures/simple/` | 1 EMF file | First integration controls and full parity |
 | `spec/fixtures/emf-corrupted/` | 21 `.emf` files; README is not a fixture | Bounded execution, explicit outcome manifest |
 | WMF fixtures | None in current corpus | Add licensed or synthetic standard/placeable examples in 09 |
-| `lib/emf/emr/binary/records.rb` | Wire-class dispatch registry and Raw fallback | Complete item inventory in [11](11-record-coverage.md) |
+| `lib/emf/emr/binary/records.rb` | Wire-class dispatch registry and Raw fallback | Complete item inventory in [11](../TODO.rust/11-record-coverage.md) |
 | `lib/emf/emf_plus/` | Stub typed implementation; raw extraction occurs in EMR parser | Preserve extraction; add typed coverage in 09 |
 
 The existing round-trip spec covers 208 valid files. These counts are a baseline,

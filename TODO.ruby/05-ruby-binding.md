@@ -1,10 +1,13 @@
 # 05 — Ruby binding and backend compatibility
 
 Status: **Not started**. Estimate: **3–4 engineering days**, contingent on the
-[baseline](02-baseline-and-parity.md) and the [core](03-rust-core.md)/
-[ABI](04-c-abi.md) vertical slice. Resolve wire hydration cost before scaling the
-port. See [performance](07-performance.md), [platform delivery](08-platform-delivery.md),
-and [progress](10-progress.md) for the remaining gates.
+[baseline](../TODO.plan/02-baseline-and-parity.md) and the [core](../TODO.rust/03-rust-core.md)/
+[ABI](../TODO.rust/04-c-abi.md) vertical slice. Resolve wire hydration cost before scaling the
+port. See [performance](../TODO.delivery/07-performance.md), [platform delivery](../TODO.delivery/08-platform-delivery.md),
+and [progress](../TODO.plan/10-progress.md) for the remaining gates.
+
+See [Ruby execution sequence](00-execution.md) for the existing-file change map,
+require-path checks, CLI verification and ordered integration steps.
 
 ## Planned files and dispatch
 
@@ -61,7 +64,7 @@ failure or internal native failure is returned as an error. Do not retry the
 input in Ruby, hide a crash, or silently change the selected backend. Malformed
 input and unsupported structured formats are not library availability failures.
 EMF/WMF/EMF+ capabilities and their staged behavior must follow
-[format extension](09-format-extension.md), with explicit errors for unimplemented
+[format extension](../TODO.formats/09-format-extension.md), with explicit errors for unimplemented
 parsing rather than a successful empty model. Native becomes the default preferred
 path only after the delivery acceptance gates pass.
 
@@ -70,7 +73,7 @@ Map ABI `FORMAT_ERROR` and `LIMIT_EXCEEDED` to `Emf::FormatError`, and
 `Emf::Error` with bounded detail. Convert successful parse diagnostics into ordered
 `Emf::ParseError` instances with offset and record code. Treat invalid arguments
 from binding-owned calls as an adapter defect. Diagnostic compatibility and
-reviewed safety changes follow [02](02-baseline-and-parity.md).
+reviewed safety changes follow [02](../TODO.plan/02-baseline-and-parity.md).
 
 ## Planned native model and mutable wire behavior
 

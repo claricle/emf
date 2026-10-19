@@ -20,8 +20,8 @@ wrapper around the GPLv2 `libemf2svg` C library.
   1/1 in `spec/fixtures/simple/`).
 * **EMF+**: EMF+ payloads are extracted from EMF carrier records as raw
   bytes (`Metafile#emf_plus`). Structured EMF+ parsing is TODO
-  (see `TODO.impl/12-14`).
-* **WMF**: detected but not yet parsed (`TODO.impl/07`).
+  (see link:TODO.formats/09-format-extension.md[format extension plan]).
+* **WMF**: detected but not yet parsed (see link:TODO.formats/09-format-extension.md[format extension plan]).
 * **License**: BSD-2-Clause. No GPL obligation.
 
 == Installation
@@ -95,7 +95,7 @@ Three layers, kept strictly separate (MECE):
 * No AI attribution in any commit. All changes go through PRs.
 
 See `docs/architecture.adoc` and `docs/format_notes.adoc` for the deep
-dive, and `TODO.impl/PROGRESS.md` for what's done vs what remains.
+dive, and link:TODO.plan/10-progress.md[delivery progress] for implementation status.
 
 === Reference documentation
 
@@ -119,13 +119,21 @@ byte-identical parse -> serialise -> parse.
 
 == Roadmap
 
-Full TODO list lives in `TODO.impl/`. Highlights:
+The execution plan for issue #15 starts at
+link:TODO.plan/00-overview.md[the shared roadmap]. Implementation has not started.
 
-* TODO 09 -- finish remaining ~60 EMR wire types (currently 117 of ~122 done)
-* TODO 10 -- semantic domain records (currently WireAdapter for most types)
-* TODO 11 -- 2-pass path association (BEGINPATH <-> FILLPATH/STROKEPATH)
-* TODO 07 -- WMF parser + fixtures
-* TODO 12-14 -- EMF+ wire + domain + parser
+* link:TODO.ruby/00-execution.md[Ruby implementation]: existing API dispatch,
+  model compatibility, mutable wire serialization, fallback and CLI behavior.
+* link:TODO.rust/03-rust-core.md[Rust core] and
+  link:TODO.rust/04-c-abi.md[C ABI]: typed decoding, serialization and native ownership.
+* link:TODO.formats/09-format-extension.md[Format extensions]: WMF and structured EMF+.
+* link:TODO.delivery/06-resilience.md[Resilience],
+  link:TODO.delivery/07-performance.md[performance] and
+  link:TODO.delivery/08-platform-delivery.md[platform delivery].
+
+Other roadmap items include semantic domain records beyond `WireAdapter` and
+two-pass path association (`BEGINPATH` with `FILLPATH`/`STROKEPATH`). These remain
+separate from the issue #15 delivery criteria.
 
 == License
 

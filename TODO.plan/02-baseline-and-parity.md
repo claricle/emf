@@ -5,8 +5,8 @@ fixture inventory and downstream checkout are available. This phase is the first
 executable milestone; it does not require Rust.
 
 Depends on [requirements](01-requirements.md). Supplies acceptance data to
-[the core](03-rust-core.md), [binding](05-ruby-binding.md),
-[resilience](06-resilience.md), and [performance](07-performance.md).
+[the core](../TODO.rust/03-rust-core.md), [binding](../TODO.ruby/05-ruby-binding.md),
+[resilience](../TODO.delivery/06-resilience.md), and [performance](../TODO.delivery/07-performance.md).
 Track completion in [progress](10-progress.md); overall sequencing is in
 [the overview](00-overview.md).
 
@@ -30,7 +30,7 @@ and observed outcome (`parsed`, `recovered`, or `format_error`). Record backend
 exceptions and reviewed safety deviations separately rather than declaring every
 corrupt fixture an unconditional byte-round-trip target. Existing RSpec fixture
 paths remain valid. Later WMF/EMF+ cases extend this schema under
-[format extension](09-format-extension.md).
+[format extension](../TODO.formats/09-format-extension.md).
 
 ## Planned baseline capture
 
@@ -99,7 +99,7 @@ bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backen
 EMFSVG_PATH=/path/to/emfsvg bundle exec ruby bench/emfsvg.rb --backend ruby --output tmp/bench/emfsvg-ruby.json
 ```
 
-The native invocation is deferred until [the ABI](04-c-abi.md) and binding exist;
+The native invocation is deferred until [the ABI](../TODO.rust/04-c-abi.md) and binding exist;
 it must fail if the native library is unavailable. Baseline completion requires
 manifest coverage, a saved Ruby observation for all 229 fixtures, measured stage
 costs, and a reproducible downstream baseline. Resolve the wire-heavy cost and

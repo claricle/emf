@@ -15,7 +15,7 @@ and Ruby adapter parity. Record real fixture coverage or add synthetic controls 
 uncovered fields/variants. Update a row with its Rust symbol, tests and implementation
 PR/commit before marking it complete. Raw passthrough alone is not typed coverage.
 Keep unsupported extension payloads opaque explicitly where no semantics exist today;
-the format-extension inventory in [09](09-format-extension.md) defines new scope.
+the format-extension inventory in [09](../TODO.formats/09-format-extension.md) defines new scope.
 
 Implement a small mixed vertical slice first, then complete groups under
 [03](03-rust-core.md). Each row currently has state **Not started**. Group names
