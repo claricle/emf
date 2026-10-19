@@ -1,0 +1,106 @@
+# frozen_string_literal: true
+
+module Emf
+  module Native
+    class Hydrator
+      SUPPORTED_TYPES = [4, 14, 17, 70].freeze
+
+      def initialize(snapshot, raw_record)
+        @snapshot = snapshot
+        @raw_record = raw_record
+      end
+
+      def call
+        records = @snapshot.records.map { |record| hydrate_record(record) }
+        emf_plus = records.filter_map do |record|
+          wire = record.wire
+          next unless wire.is_a?(Emr::Binary::Records::Comment) && wire.cb_data >= 4 && wire.data.start_with?("EMF+")
+
+          wire.data.to_s.byteslice(4..)
+        end.join.b
+        Model::Metafile.new(
+          format: emf_plus.empty? ? :emf : :emf_plus, header: Header.new.call(@snapshot.header, @snapshot.raw_header), records: records,
+          errors: diagnostics, emf_plus: emf_plus.empty? ? nil : emf_plus,
+          trailing: @snapshot.trailing + @snapshot.unframed
+        )
+      end
+
+      private
+
+      def hydrate_record(record)
+        raw = @raw_record.call(record.fetch(:index))
+        raise FormatError, "native record length mismatch" unless raw.bytesize == record.fetch(:length)
+
+        klass, fields = wire_fields(record, raw)
+        wire = klass.new(**fields, i_type: record.fetch(:type), n_size: record.fetch(:length))
+        Model::Emr::Records::WireAdapter.new(wire: wire, offset: record.fetch(:offset))
+      end
+
+      def wire_fields(record, raw)
+        payload = record.fetch(:payload)
+        case record.fetch(:family)
+        when 0 then raw_fields(record, raw)
+        when 1 then eof_fields(payload, raw)
+        when 2
+          require_length(payload, 4)
+          [Emr::Binary::Records::SetMapMode, { map_mode: payload.unpack1("V") }]
+        when 3 then polyline_fields(payload)
+        when 4 then comment_fields(payload, raw)
+        else raise FormatError, "unsupported native snapshot record family #{record.fetch(:family)}"
+        end
+      end
+
+      def require_length(payload, length)
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == length
+      end
+
+      def raw_fields(record, raw)
+        require_length(record.fetch(:payload), 0)
+        type = record.fetch(:type)
+        if !SUPPORTED_TYPES.include?(type) && Emr::Binary::Records.lookup(type) != Emr::Binary::Records::Raw
+          raise FormatError, "native backend does not support typed EMR record #{type}"
+        end
+
+        [Emr::Binary::Records::Raw, { payload: raw.byteslice(8..) }]
+      end
+
+      def eof_fields(payload, raw)
+        require_length(payload, 12)
+        entries, offset, last = payload.unpack("V3")
+        raise FormatError, "native backend does not support extended or paletted EOF records" unless entries.zero? && raw.bytesize == 20
+
+        [Emr::Binary::Records::Eof, { n_pal_entries: entries, off_pal_entries: offset, n_size_last: last, body: "".b }]
+      end
+
+      def polyline_fields(payload)
+        raise FormatError, "invalid native POLYLINE payload" if payload.bytesize < 24
+
+        count = payload.byteslice(16, 8).unpack1("Q<")
+        require_length(payload, 24 + (count * 8))
+        raise FormatError, "native POLYLINE exceeds Ruby model array limit" if count > 1_000_000
+
+        bounds = %i[left top right bottom].zip(payload.unpack("l<4")).to_h
+        points = payload.byteslice(24..).unpack("l<*").each_slice(2).map { |x, y| { x: x, y: y } }
+        [Emr::Binary::Records::Polyline, { rcl_bounds: bounds, cptl: count, aptl: points }]
+      end
+
+      def comment_fields(payload, raw)
+        raise FormatError, "invalid native COMMENT payload" if payload.bytesize < 8
+
+        count = payload.unpack1("Q<")
+        require_length(payload, 8 + count)
+        data = payload.byteslice(8..) + (raw.byteslice((12 + count)..) || "".b)
+        [Emr::Binary::Records::Comment, { cb_data: count, data: data }]
+      end
+
+      def diagnostics
+        @snapshot.diagnostics.map do |kind, has_type, type, reserved, offset, detail1, detail2|
+          raise FormatError, "invalid native snapshot diagnostic" unless (1..4).cover?(kind) && (0..1).cover?(has_type) && reserved.zero?
+
+          message = "native parse diagnostic #{kind} at offset #{offset} (#{detail1}, #{detail2})"
+          ParseError.new(offset: offset, record_code: has_type == 1 ? type : nil, message: message)
+        end
+      end
+    end
+  end
+end
