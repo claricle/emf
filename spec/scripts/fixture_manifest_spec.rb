@@ -8,6 +8,19 @@ RSpec.describe FixtureManifest do
   let(:root) { File.expand_path("../..", __dir__) }
   let(:inventory) { described_class::Inventory.new(root) }
   let(:manifest) { JSON.parse(File.read(File.join(root, "spec/fixtures/manifest.json"))) }
+  let(:current_manifest) do
+    entries = described_class.fixtures(root).map do |entry|
+      entry.merge("detected_format" => entry.fetch("expected_format") == "wmf" ? "wmf" : "emf",
+                  "outcome" => "parsed")
+    end
+    {
+      "schema_version" => described_class::SCHEMA_VERSION,
+      "capture" => described_class::CAPTURE_METADATA,
+      "backend" => { "name" => "ruby", "bindata_version" => Gem.loaded_specs.fetch("bindata").version.to_s,
+                     "parser_source_sha256" => described_class.source_sha256(root) },
+      "counts" => described_class.counts(entries), "fixtures" => entries
+    }
+  end
 
   it "inventories every existing fixture in deterministic path order without parsing" do
     entries = described_class.fixtures(root)
@@ -30,9 +43,9 @@ RSpec.describe FixtureManifest do
     expect(entries.first.fetch("sha256")).to eq(Digest::SHA256.file(File.join(root, entries.first.fetch("path"))).hexdigest)
   end
 
-  it "checks the saved capture without starting parser processes" do
+  it "rejects a legacy schema without starting parser processes" do
     expect(described_class::Runner).not_to receive(:new)
-    expect(inventory.check(manifest)).to be(true)
+    expect(inventory.check(current_manifest.merge("schema_version" => 1))).to be(false)
   end
 
   it "rejects fixture, source, schema, observation and safety drift" do
@@ -52,18 +65,14 @@ RSpec.describe FixtureManifest do
       ->(data) { data["backend"] = nil }
     ]
     mutations.each do |mutate|
-      altered = Marshal.load(Marshal.dump(manifest))
-      altered["schema_version"] = 2
-      altered["capture"] = Marshal.load(Marshal.dump(described_class::CAPTURE_METADATA))
+      altered = Marshal.load(Marshal.dump(current_manifest))
       mutate.call(altered)
       expect(inventory.check(altered)).to be(false)
     end
   end
 
   it "checks capture limits exactly" do
-    saved = manifest.merge("schema_version" => 2, "capture" => described_class::CAPTURE_METADATA)
-    allow(inventory).to receive(:current_backend?).and_return(true)
-    allow(inventory).to receive(:valid_observation?).and_return(true)
+    saved = current_manifest
     expect(inventory.check(saved)).to be(true)
 
     altered = Marshal.load(Marshal.dump(saved))

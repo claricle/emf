@@ -9,13 +9,32 @@ require_relative "../support/emfsvg_benchmark_checkout"
 RSpec.describe EmfsvgBenchmark::CLI do
   include EmfsvgBenchmarkCheckout
 
+  before(:context) do
+    @manifest_directory = Dir.mktmpdir("emfsvg-manifest")
+    @manifest_path = File.join(@manifest_directory, "manifest.json")
+    entries = FixtureManifest.fixtures(ParserBenchmark::ROOT).map do |entry|
+      entry.merge("detected_format" => entry.fetch("expected_format") == "wmf" ? "wmf" : "emf",
+                  "outcome" => "parsed")
+    end
+    manifest = {
+      "schema_version" => FixtureManifest::SCHEMA_VERSION,
+      "capture" => FixtureManifest::CAPTURE_METADATA,
+      "backend" => { "name" => "ruby", "bindata_version" => Gem.loaded_specs.fetch("bindata").version.to_s,
+                     "parser_source_sha256" => FixtureManifest.source_sha256(ParserBenchmark::ROOT) },
+      "counts" => FixtureManifest.counts(entries), "fixtures" => entries
+    }
+    File.write(@manifest_path, JSON.generate(manifest))
+  end
+
+  after(:context) { FileUtils.remove_entry(@manifest_directory) }
+
   let(:directory) { Dir.mktmpdir("emfsvg-benchmark") }
   let(:checkout) { File.join(directory, "consumer") }
   let(:revision) { create_emfsvg_checkout(checkout) }
   let(:result_path) { File.join(directory, "result.json") }
   let(:report) { JSON.parse(File.read(result_path)) }
   let(:args) do
-    ["--manifest", File.join(ParserBenchmark::ROOT, "spec/fixtures/manifest.json"), "--emfsvg-path", checkout,
+    ["--manifest", @manifest_path, "--emfsvg-path", checkout,
      "--revision", revision, "--output", result_path, "--fixture", "spec/fixtures/simple/*", "--iterations", "2",
      "--warmups", "0", "--cold-runs", "1"]
   end
@@ -100,8 +119,8 @@ RSpec.describe EmfsvgBenchmark::CLI do
     end
   end
 
-  it "rejects an unavailable backend without silently falling back" do
-    expect { expect(described_class.new([*args, "--backend", "native"]).run).to eq(2) }.to output(/unsupported backend/).to_stderr
+  it "rejects an unknown backend without silently falling back" do
+    expect { expect(described_class.new([*args, "--backend", "unknown"]).run).to eq(2) }.to output(/unsupported backend/).to_stderr
     expect(File).not_to exist(result_path)
   end
 
