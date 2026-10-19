@@ -125,13 +125,25 @@ its lock. Measure Fiddle scheduling behavior rather than promising GVL release.
 
 ```sh
 cargo test --manifest-path emf-rs/Cargo.toml -p emf-ffi
+mkdir -p tmp
 cargo build --manifest-path emf-rs/Cargo.toml -p emf-ffi --release
 cc -std=c11 -Wall -Wextra -Werror -I emf-rs/crates/emf-ffi/include emf-rs/crates/emf-ffi/tests/abi.c -L emf-rs/target/release -lemf_ffi -o tmp/emf-abi-smoke
 ```
 
-The smoke executable must be run with the built library discoverable using the
-platform's loader settings; [08](08-platform-delivery.md) owns exact Linux/macOS
-invocations. Create `tmp/` before compiling. These commands are planned, not run.
+Run the compiled client against the same built library, from the repository
+root (Linux and macOS respectively):
+
+```sh
+LD_LIBRARY_PATH="$PWD/emf-rs/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ./tmp/emf-abi-smoke
+DYLD_LIBRARY_PATH="$PWD/emf-rs/target/release${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" ./tmp/emf-abi-smoke
+```
+
+The client must exercise its vertical-slice fixture and exit nonzero on assertion
+failure; a successful compile alone is insufficient. These host commands assume
+the workspace's default target directory. [08](08-platform-delivery.md) must adapt
+the library path and executable invocation to each target's staging directory and
+loader, including Windows, and run on that target. These commands are planned,
+not run.
 Tests must independently verify ABI version rejection, structure sizes, status
 mapping, null/zero-length arguments, truncated input, batches, exact bytes,
 diagnostic positions and all free paths. Use sanitizer/leak checks on supported

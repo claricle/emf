@@ -78,6 +78,14 @@ unmodified sibling records, existing header conversion, manually constructed
 models, and unsupported-record serialization errors as preservation controls.
 A native-only proxy with similar field names is insufficient.
 
+Assert `==`, `eql?`, `hash`, `type_id` and `inspect` before and after scalar and
+nested-array edits. Compare independently parsed equivalent records and a changed
+record against the Ruby control; equal records must have equal hashes within the
+same process. Compare equality outcomes across isolated backend runs, not numeric
+hash values, which Ruby may randomize per process. Do not require unequal records
+to have distinct hashes. Check first-access hydration and repeated access so
+cached original bytes cannot conceal edits in equality, hashing or inspection.
+
 For malformed input, compare established safe outcomes: rejection versus recovery,
 public error class, error ordering and diagnostic positions, raw preservation and
 trailing handling where reachable. Preserve existing messages where behavior is
