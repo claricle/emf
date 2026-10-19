@@ -80,7 +80,9 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             &input[offset + 8..offset + size as usize],
             &mut budget,
         )?;
-        if data == RecordData::Raw && matches!(record_type, 4 | 9..=14 | 17..=21 | 26 | 27 | 70) {
+        if data == RecordData::Raw
+            && matches!(record_type, 4 | 9..=14 | 17..=21 | 26 | 27 | 42..=44 | 70)
+        {
             budget.reserve_one(&mut diagnostics)?;
             diagnostics.push(Diagnostic {
                 offset,
@@ -335,6 +337,43 @@ fn decode_record(
             }
             Ok((RecordData::Polyline { bounds, points }, 20 + bytes))
         }
+        42 if payload.len() >= 16 => Ok((
+            RecordData::Ellipse {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+            },
+            16,
+        )),
+        43 if payload.len() >= 16 => Ok((
+            RecordData::Rectangle {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+            },
+            16,
+        )),
+        44 if payload.len() >= 24 => Ok((
+            RecordData::RoundRect {
+                bounds: Rect {
+                    left: r.i32()?,
+                    top: r.i32()?,
+                    right: r.i32()?,
+                    bottom: r.i32()?,
+                },
+                corner: Size {
+                    cx: r.i32()?,
+                    cy: r.i32()?,
+                },
+            },
+            24,
+        )),
         70 if payload.len() >= 4 => {
             let count = r.u32()? as usize;
             if count > r.remaining() {

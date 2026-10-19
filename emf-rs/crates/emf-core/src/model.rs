@@ -96,6 +96,9 @@ pub enum RecordData {
     SetStretchBltMode { stretch_mode: u32 },
     Polyline { bounds: Rect, points: Vec<Point> },
     Comment { data: Vec<u8> },
+    Ellipse { bounds: Rect },
+    Rectangle { bounds: Rect },
+    RoundRect { bounds: Rect, corner: Size },
 }
 impl RecordData {
     pub(crate) fn record_type(&self) -> Option<u32> {
@@ -116,6 +119,9 @@ impl RecordData {
             Self::SetStretchBltMode { .. } => Some(21),
             Self::Polyline { .. } => Some(4),
             Self::Comment { .. } => Some(70),
+            Self::Ellipse { .. } => Some(42),
+            Self::Rectangle { .. } => Some(43),
+            Self::RoundRect { .. } => Some(44),
         }
     }
     pub(crate) fn payload_len(&self) -> Option<usize> {
@@ -136,6 +142,8 @@ impl RecordData {
             | Self::SetStretchBltMode { .. } => Some(4),
             Self::Polyline { points, .. } => points.len().checked_mul(8)?.checked_add(20),
             Self::Comment { data } => data.len().checked_add(4),
+            Self::Ellipse { .. } | Self::Rectangle { .. } => Some(16),
+            Self::RoundRect { .. } => Some(24),
         }
     }
 }

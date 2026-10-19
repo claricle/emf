@@ -136,6 +136,14 @@ pub fn serialize_with_limits(
                     append(&mut out, point.y as u32);
                 }
             }
+            RecordData::Ellipse { bounds } | RecordData::Rectangle { bounds } => {
+                append_rect(&mut out, *bounds);
+            }
+            RecordData::RoundRect { bounds, corner } => {
+                append_rect(&mut out, *bounds);
+                append(&mut out, corner.cx as u32);
+                append(&mut out, corner.cy as u32);
+            }
             RecordData::Comment { data } => {
                 append(
                     &mut out,
