@@ -148,6 +148,78 @@ RSpec.describe Emf::Native do
     end
   end
 
+  let(:color_shape_sizes) { { 24 => 12, 25 => 12, 42 => 24, 43 => 24, 44 => 32 } }
+
+  let(:color_shape_records) do
+    [
+      [24, Emf::Emr::Binary::Records::SetTextColor, { color: { red: 0, green: 128, blue: 255, reserved: 219 } }],
+      [25, Emf::Emr::Binary::Records::SetBkColor, { color: { red: 255, green: 0, blue: 127, reserved: 255 } }],
+      [42, Emf::Emr::Binary::Records::Ellipse, { rcl_box: { left: -0x80000000, top: 0x7FFFFFFF, right: -1, bottom: 0 } }],
+      [43, Emf::Emr::Binary::Records::Rectangle, { rcl_box: { left: 0x7FFFFFFF, top: -0x80000000, right: 0, bottom: -1 } }],
+      [44, Emf::Emr::Binary::Records::RoundRect,
+       { rcl_box: { left: -1, top: 0, right: -0x80000000, bottom: 0x7FFFFFFF }, szl_corner: { cx: -0x80000000, cy: 0x7FFFFFFF } }]
+    ]
+  end
+
+  it "hydrates colors and rectangles directly, preserving reserved bytes and editable signed fields" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    color_shape_records.each do |type, klass, fields|
+      expect(klass).not_to receive(:read)
+      original = klass.new(i_type: type, n_size: color_shape_sizes.fetch(type), **fields).to_binary_s
+      parsed = Emf.parse(header + original + eof)
+      wire = parsed.records.first.wire
+      expect(wire.class).to eq(klass)
+      fields.each { |field, values| expect(wire.public_send(field).snapshot).to eq(values) }
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(header + original + eof)
+      edited = fields.transform_values { |values| values.transform_values { |value| type < 26 ? 255 - value : -value - 1 } }
+      edited.each { |field, values| wire.public_send("#{field}=", values) }
+      expected = header + klass.new(i_type: type, n_size: color_shape_sizes.fetch(type), **edited).to_binary_s + eof
+      expect(Emf.serialize(parsed)).to eq(expected)
+      reparsed = Emf.parse(expected).records.first.wire
+      edited.each { |field, values| expect(reparsed.public_send(field).snapshot).to eq(values) }
+    end
+  end
+
+  it "matches Ruby canonical color and rectangle models including fixed-record suffix normalization" do
+    color_shape_records.each do |type, klass, fields|
+      original = klass.new(i_type: type, n_size: color_shape_sizes.fetch(type), **fields).to_binary_s
+      ["".b, "tail".b].each do |suffix|
+        record = [type, original.bytesize + suffix.bytesize].pack("V2") + original.byteslice(8..) + suffix
+        input = header + record + eof
+        ENV["EMF_BACKEND"] = "native"
+        native = Emf.parse(input)
+        ENV["EMF_BACKEND"] = "ruby"
+        ruby = Emf.parse(input)
+        expect(native.records.map { |entry| entry.wire.snapshot }).to eq(ruby.records.map { |entry| entry.wire.snapshot })
+        expect(native.records).to eq(ruby.records)
+        expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+      end
+    end
+  end
+
+  it "preserves every short color and rectangle payload as Raw and continues framing" do
+    expect(Emf::Emr::Parser).not_to receive(:call)
+    color_shape_records.each do |type, klass, fields|
+      required = klass.new(i_type: type, n_size: color_shape_sizes.fetch(type), **fields).to_binary_s.bytesize - 8
+      (0...required).each do |length|
+        input = header + [type, length + 8].pack("V2") + ("x" * length) + map_mode + eof
+        parsed = Emf.parse(input)
+        expect(parsed.records.map { |record| record.wire.class }).to eq(
+          [Emf::Emr::Binary::Records::Raw, Emf::Emr::Binary::Records::SetMapMode, Emf::Emr::Binary::Records::Eof]
+        )
+        expect(parsed.errors.map(&:record_code)).to eq([type])
+        expect(Emf.serialize(parsed)).to eq(input)
+      end
+    end
+  end
+
+  it "validates exact typed field lengths for colors and rectangles" do
+    [16, 17, 18, 19, 20].each do |family|
+      expect { Emf::Native::Fields.call("".b, family) }.to raise_error(Emf::FormatError, "invalid native typed payload length")
+    end
+  end
+
   it "matches Ruby canonical models after every wire is traversed" do
     native = Emf.parse(bytes)
     ENV["EMF_BACKEND"] = "ruby"

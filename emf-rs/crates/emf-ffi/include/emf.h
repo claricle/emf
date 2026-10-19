@@ -36,6 +36,11 @@ extern "C" {
 #define EMF_FAMILY_SETBRUSHORGEX 13u
 #define EMF_FAMILY_OFFSETCLIPRGN 14u
 #define EMF_FAMILY_MOVETOEX 15u
+#define EMF_FAMILY_SETTEXTCOLOR 16u
+#define EMF_FAMILY_SETBKCOLOR 17u
+#define EMF_FAMILY_ELLIPSE 18u
+#define EMF_FAMILY_RECTANGLE 19u
+#define EMF_FAMILY_ROUNDRECT 20u
 
 typedef struct emf_document emf_document;
 typedef struct emf_buffer emf_buffer;
@@ -118,7 +123,9 @@ typedef struct emf_error_info {
  * Typed snapshots cover EOF, SETMAPMODE, POLYLINE, COMMENT and scalar state
  * records, plus coordinate records SETWINDOWEXTEX, SETWINDOWORGEX,
  * SETVIEWPORTEXTEX, SETVIEWPORTORGEX, SETBRUSHORGEX, OFFSETCLIPRGN and MOVETOEX.
- * Other records remain raw. Snapshot bytes use the encoding documented in snapshot-v2.md.
+ * Color records SETTEXTCOLOR and SETBKCOLOR and shapes ELLIPSE, RECTANGLE and
+ * ROUNDRECT are also typed. Other records remain raw. Snapshot bytes use the
+ * encoding documented in snapshot-v2.md.
  * Snapshot versions are independent of ABI versions.
  * Documents are immutable through this ABI.
  * Detection recognizes WMF signatures; parsing supports EMF only.

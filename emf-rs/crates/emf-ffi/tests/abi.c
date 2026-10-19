@@ -405,6 +405,46 @@ static int check_scalar_state_snapshots(void) {
     return 0;
 }
 
+static int check_color_shape_snapshots(void) {
+    const uint32_t kinds[] = {24, 25, 42, 43, 44};
+    const uint32_t families[] = {EMF_FAMILY_SETTEXTCOLOR, EMF_FAMILY_SETBKCOLOR,
+        EMF_FAMILY_ELLIPSE, EMF_FAMILY_RECTANGLE, EMF_FAMILY_ROUNDRECT};
+    const unsigned counts[] = {1, 1, 4, 4, 6};
+    const uint32_t values[][6] = {
+        {UINT32_C(0xdbff8000)}, {UINT32_C(0xff7f00ff)},
+        {UINT32_C(0x80000000), INT32_MAX, UINT32_MAX, 0},
+        {INT32_MAX, UINT32_C(0x80000000), 0, UINT32_MAX},
+        {UINT32_MAX, 0, UINT32_C(0x80000000), INT32_MAX, UINT32_C(0x80000000), INT32_MAX}};
+    for (unsigned kind = 0; kind < 5; ++kind) {
+        make_fixture();
+        put_u32(88, kinds[kind]);
+        put_u32(92, 8 + counts[kind] * 4);
+        for (unsigned value = 0; value < counts[kind]; ++value) put_u32(96 + value * 4, values[kind][value]);
+        input_length = 96 + counts[kind] * 4;
+        emf_document *document = NULL;
+        emf_buffer *snapshot = NULL;
+        emf_error *error = NULL;
+        CHECK(emf_parse(input, input_length, NULL, &document, &error) == EMF_OK);
+        CHECK(emf_document_snapshot(document, &snapshot, &error) == EMF_OK);
+        const uint8_t *bytes = NULL;
+        uint64_t length = 0;
+        CHECK(emf_buffer_view(snapshot, &bytes, &length) == EMF_OK);
+        emf_document_free(document);
+        CHECK(error == NULL && length <= SIZE_MAX);
+        cursor c = {bytes, (size_t)length, 4};
+        uint32_t word;
+        CHECK(get_u32(&c, &word) && word == 2);
+        CHECK(skip(&c, 48 + 112 + HEADER_SIZE));
+        CHECK(check_snapshot_record(&c, 0, 88, 8 + counts[kind] * 4, kinds[kind], families[kind], counts[kind] * 4) == 0);
+        for (unsigned value = 0; value < counts[kind]; ++value) {
+            CHECK(get_u32(&c, &word) && word == values[kind][value]);
+        }
+        CHECK(c.offset == c.length);
+        emf_buffer_free(snapshot);
+    }
+    return 0;
+}
+
 static int check_coordinate_snapshots(void) {
     const uint32_t kinds[] = {9, 10, 11, 12, 13, 26, 27};
     const uint32_t families[] = {EMF_FAMILY_SETWINDOWEXTEX, EMF_FAMILY_SETWINDOWORGEX,
@@ -538,6 +578,7 @@ int main(void) {
     CHECK(check_snapshot() == 0);
     CHECK(check_scalar_state_snapshots() == 0);
     CHECK(check_coordinate_snapshots() == 0);
+    CHECK(check_color_shape_snapshots() == 0);
     CHECK(check_snapshot_after_malformed_eof() == 0);
     CHECK(emf_abi_version() == EMF_ABI_VERSION);
     make_fixture();

@@ -1,23 +1,11 @@
 # frozen_string_literal: true
 
+require_relative "fields"
+
 module Emf
   module Native
     class Hydrator
-      SUPPORTED_TYPES = [4, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 26, 27, 70].freeze
-
-      WIRE_FIELDS = {
-        5 => [Emr::Binary::Records::SetBkMode, :bk_mode],
-        6 => [Emr::Binary::Records::SetPolyFillMode, :poly_fill_mode],
-        7 => [Emr::Binary::Records::SetRop2, :rop2],
-        8 => [Emr::Binary::Records::SetStretchBltMode, :stretch_mode],
-        9 => [Emr::Binary::Records::SetWindowExtEx, :extent, %i[cx cy]],
-        10 => [Emr::Binary::Records::SetWindowOrgEx, :origin, %i[x y]],
-        11 => [Emr::Binary::Records::SetViewportExtEx, :extent, %i[cx cy]],
-        12 => [Emr::Binary::Records::SetViewportOrgEx, :origin, %i[x y]],
-        13 => [Emr::Binary::Records::SetBrushOrgEx, :ptl_origin, %i[x y]],
-        14 => [Emr::Binary::Records::OffsetClipRgn, :ptl_offset, %i[x y]],
-        15 => [Emr::Binary::Records::MoveToEx, :origin, %i[x y]]
-      }.freeze
+      SUPPORTED_TYPES = [4, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20, 21, 24, 25, 26, 27, 42, 43, 44, 70].freeze
 
       def initialize(snapshot, input)
         @snapshot = snapshot
@@ -60,22 +48,16 @@ module Emf
         case record.fetch(:family)
         when 0 then raw_fields(record, raw)
         when 1 then eof_fields(payload, raw)
-        when 2 then typed_fields(payload, Emr::Binary::Records::SetMapMode, :map_mode)
+        when 2 then Fields.call(payload, 2)
         when 3 then polyline_fields(payload)
         when 4 then comment_fields(payload, raw)
-        when 5..15 then typed_fields(payload, *WIRE_FIELDS.fetch(record.fetch(:family)))
+        when 5..20 then Fields.call(payload, record.fetch(:family))
         else raise FormatError, "unsupported native snapshot record family #{record.fetch(:family)}"
         end
       end
 
       def require_length(payload, length)
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == length
-      end
-
-      def typed_fields(payload, klass, field, axes = nil)
-        require_length(payload, axes ? 8 : 4)
-        value = axes ? axes.zip(payload.unpack("l<2")).to_h : payload.unpack1("V")
-        [klass, { field => value }]
       end
 
       def raw_fields(record, raw)

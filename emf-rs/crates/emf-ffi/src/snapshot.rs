@@ -26,6 +26,11 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::SetBrushOrgEx { .. } => 13,
         RecordData::OffsetClipRgn { .. } => 14,
         RecordData::MoveToEx { .. } => 15,
+        RecordData::SetTextColor { .. } => 16,
+        RecordData::SetBkColor { .. } => 17,
+        RecordData::Ellipse { .. } => 18,
+        RecordData::Rectangle { .. } => 19,
+        RecordData::RoundRect { .. } => 20,
     }
 }
 
@@ -46,7 +51,11 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         | RecordData::SetBkMode { .. }
         | RecordData::SetPolyFillMode { .. }
         | RecordData::SetRop2 { .. }
-        | RecordData::SetStretchBltMode { .. } => Ok(4),
+        | RecordData::SetStretchBltMode { .. }
+        | RecordData::SetTextColor { .. }
+        | RecordData::SetBkColor { .. } => Ok(4),
+        RecordData::Ellipse { .. } | RecordData::Rectangle { .. } => Ok(16),
+        RecordData::RoundRect { .. } => Ok(24),
         RecordData::SetWindowExtEx { .. }
         | RecordData::SetWindowOrgEx { .. }
         | RecordData::SetViewportExtEx { .. }
@@ -129,6 +138,16 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
             | RecordData::SetBrushOrgEx { origin }
             | RecordData::MoveToEx { origin } => point(&mut out, *origin),
             RecordData::OffsetClipRgn { offset } => point(&mut out, *offset),
+            RecordData::SetTextColor { color } | RecordData::SetBkColor { color } => {
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+            }
+            RecordData::Ellipse { bounds } | RecordData::Rectangle { bounds } => {
+                rect(&mut out, *bounds)
+            }
+            RecordData::RoundRect { bounds, corner } => {
+                rect(&mut out, *bounds);
+                size(&mut out, *corner);
+            }
             RecordData::Polyline { bounds, points } => {
                 rect(&mut out, *bounds);
                 u64_field(&mut out, wire_len(points.len())?);
@@ -326,6 +345,44 @@ mod tests {
                 assert_eq!(cursor.u32(), value);
                 assert_eq!(cursor.position, encoded.len());
             }
+        }
+    }
+
+    #[test]
+    fn color_and_shape_snapshots_preserve_typed_bytes_without_suffixes() {
+        for (kind, expected_family, words) in [
+            (24, 16, vec![0xdbff8000u32]),
+            (25, 17, vec![0xff7f00ff]),
+            (42, 18, vec![0x80000000, 0x7fffffff, 0xffffffff, 0]),
+            (43, 19, vec![0x7fffffff, 0x80000000, 0, 0xffffffff]),
+            (
+                44,
+                20,
+                vec![
+                    0xffffffff, 0, 0x80000000, 0x7fffffff, 0x80000000, 0x7fffffff,
+                ],
+            ),
+        ] {
+            let mut input = fixture_header(88);
+            let mut payload = words
+                .iter()
+                .flat_map(|value| value.to_le_bytes())
+                .collect::<Vec<_>>();
+            payload.extend_from_slice(b"tail");
+            record(&mut input, kind, &payload);
+            let document = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(family(document.records()[0].data()), expected_family);
+            let encoded = encode(&document).unwrap();
+            let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+            cursor.take(112 + 88);
+            assert_eq!(cursor.u64(), 0);
+            assert_eq!(cursor.u64(), 88);
+            assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
+            assert_eq!(cursor.u32(), kind);
+            assert_eq!(cursor.u32(), expected_family);
+            assert_eq!(cursor.u64(), (words.len() * 4) as u64);
+            cursor.words(&words);
+            assert_eq!(cursor.position, encoded.len());
         }
     }
 
