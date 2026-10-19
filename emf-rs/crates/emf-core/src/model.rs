@@ -179,6 +179,26 @@ pub enum RecordData {
         bounds: Rect,
         points: Vec<Point>,
     },
+    PolyPolyline {
+        bounds: Rect,
+        poly_counts: Vec<u32>,
+        points: Vec<Point>,
+    },
+    PolyPolygon {
+        bounds: Rect,
+        poly_counts: Vec<u32>,
+        points: Vec<Point>,
+    },
+    PolyPolyline16 {
+        bounds: Rect,
+        poly_counts: Vec<u32>,
+        points: Vec<Point16>,
+    },
+    PolyPolygon16 {
+        bounds: Rect,
+        poly_counts: Vec<u32>,
+        points: Vec<Point16>,
+    },
     Comment {
         data: Vec<u8>,
     },
@@ -294,6 +314,10 @@ impl RecordData {
             Self::Polyline { .. } => Some(4),
             Self::PolyBezierTo { .. } => Some(5),
             Self::PolylineTo { .. } => Some(6),
+            Self::PolyPolyline { .. } => Some(7),
+            Self::PolyPolygon { .. } => Some(8),
+            Self::PolyPolyline16 { .. } => Some(90),
+            Self::PolyPolygon16 { .. } => Some(91),
             Self::PolyBezier16 { .. } => Some(85),
             Self::Polygon16 { .. } => Some(86),
             Self::Polyline16 { .. } => Some(87),
@@ -367,6 +391,34 @@ impl RecordData {
             | Self::Polyline16 { points, .. }
             | Self::PolyBezierTo16 { points, .. }
             | Self::PolylineTo16 { points, .. } => points.len().checked_mul(4)?.checked_add(20),
+            Self::PolyPolyline {
+                poly_counts,
+                points,
+                ..
+            }
+            | Self::PolyPolygon {
+                poly_counts,
+                points,
+                ..
+            } => poly_counts
+                .len()
+                .checked_mul(4)?
+                .checked_add(points.len().checked_mul(8)?)?
+                .checked_add(24),
+            Self::PolyPolyline16 {
+                poly_counts,
+                points,
+                ..
+            }
+            | Self::PolyPolygon16 {
+                poly_counts,
+                points,
+                ..
+            } => poly_counts
+                .len()
+                .checked_mul(4)?
+                .checked_add(points.len().checked_mul(4)?)?
+                .checked_add(24),
             Self::Comment { data } => data.len().checked_add(4),
             Self::Ellipse { .. } | Self::Rectangle { .. } => Some(16),
             Self::RoundRect { .. } => Some(24),

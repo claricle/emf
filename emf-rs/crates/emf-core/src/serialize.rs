@@ -36,7 +36,7 @@ pub fn serialize_with_limits(
             .ok_or(SerializeFailure::SizeOverflow)?;
         if record.edited {
             edited = true;
-            let point_count = match &record.data {
+            let element_count = match &record.data {
                 RecordData::PolyBezier { points, .. }
                 | RecordData::Polygon { points, .. }
                 | RecordData::Polyline { points, .. }
@@ -47,11 +47,37 @@ pub fn serialize_with_limits(
                 | RecordData::Polyline16 { points, .. }
                 | RecordData::PolyBezierTo16 { points, .. }
                 | RecordData::PolylineTo16 { points, .. } => points.len(),
+                RecordData::PolyPolyline {
+                    poly_counts,
+                    points,
+                    ..
+                }
+                | RecordData::PolyPolygon {
+                    poly_counts,
+                    points,
+                    ..
+                } => poly_counts
+                    .len()
+                    .checked_add(points.len())
+                    .ok_or(SerializeFailure::SizeOverflow)?,
+                RecordData::PolyPolyline16 {
+                    poly_counts,
+                    points,
+                    ..
+                }
+                | RecordData::PolyPolygon16 {
+                    poly_counts,
+                    points,
+                    ..
+                } => poly_counts
+                    .len()
+                    .checked_add(points.len())
+                    .ok_or(SerializeFailure::SizeOverflow)?,
                 _ => 0,
             };
-            if point_count != 0 {
+            if element_count != 0 {
                 work = work
-                    .checked_add(point_count as u64)
+                    .checked_add(element_count as u64)
                     .ok_or(SerializeFailure::SizeOverflow)?;
                 check_limit(LimitKind::WorkUnits, limits.max_work_units, work)?;
             }
@@ -166,6 +192,60 @@ pub fn serialize_with_limits(
                     &mut out,
                     u32::try_from(points.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
                 );
+                for point in points {
+                    out.extend_from_slice(&point.x.to_le_bytes());
+                    out.extend_from_slice(&point.y.to_le_bytes());
+                }
+            }
+            RecordData::PolyPolyline {
+                bounds,
+                poly_counts,
+                points,
+            }
+            | RecordData::PolyPolygon {
+                bounds,
+                poly_counts,
+                points,
+            } => {
+                append_rect(&mut out, *bounds);
+                append(
+                    &mut out,
+                    u32::try_from(poly_counts.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                append(
+                    &mut out,
+                    u32::try_from(points.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                for count in poly_counts {
+                    append(&mut out, *count);
+                }
+                for point in points {
+                    append(&mut out, point.x as u32);
+                    append(&mut out, point.y as u32);
+                }
+            }
+            RecordData::PolyPolyline16 {
+                bounds,
+                poly_counts,
+                points,
+            }
+            | RecordData::PolyPolygon16 {
+                bounds,
+                poly_counts,
+                points,
+            } => {
+                append_rect(&mut out, *bounds);
+                append(
+                    &mut out,
+                    u32::try_from(poly_counts.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                append(
+                    &mut out,
+                    u32::try_from(points.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                for count in poly_counts {
+                    append(&mut out, *count);
+                }
                 for point in points {
                     out.extend_from_slice(&point.x.to_le_bytes());
                     out.extend_from_slice(&point.y.to_le_bytes());

@@ -83,7 +83,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=6 | 9..=15 | 17..=22 | 24..=27 | 29 | 30 | 33 | 34 | 37..=40 | 42..=47 | 54 | 55 | 57 | 59..=64 | 67 | 68 | 70 | 85..=89
+                2..=15 | 17..=22 | 24..=27 | 29 | 30 | 33 | 34 | 37..=40 | 42..=47 | 54 | 55 | 57 | 59..=64 | 67 | 68 | 70 | 85..=91
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -392,6 +392,76 @@ fn decode_record(
                 _ => RecordData::PolylineTo16 { bounds, points },
             };
             Ok((data, 20 + bytes))
+        }
+        7 | 8 | 90 | 91 if payload.len() >= 24 => {
+            let bounds = Rect {
+                left: r.i32()?,
+                top: r.i32()?,
+                right: r.i32()?,
+                bottom: r.i32()?,
+            };
+            let poly_count = r.u32()? as usize;
+            let point_count = r.u32()? as usize;
+            let point_width = if kind < 90 { 8 } else { 4 };
+            let Some(bytes) = poly_count
+                .checked_mul(4)
+                .and_then(|n| n.checked_add(point_count.checked_mul(point_width)?))
+            else {
+                return malformed();
+            };
+            if bytes > r.remaining() {
+                return malformed();
+            }
+            budget.charge_alloc(bytes)?;
+            budget.charge_work(poly_count as u64 + point_count as u64)?;
+            let mut poly_counts = try_vec_with_capacity(poly_count)?;
+            for _ in 0..poly_count {
+                poly_counts.push(r.u32()?);
+            }
+            let data = if kind < 90 {
+                let mut points = try_vec_with_capacity(point_count)?;
+                for _ in 0..point_count {
+                    points.push(Point {
+                        x: r.i32()?,
+                        y: r.i32()?,
+                    });
+                }
+                if kind == 7 {
+                    RecordData::PolyPolyline {
+                        bounds,
+                        poly_counts,
+                        points,
+                    }
+                } else {
+                    RecordData::PolyPolygon {
+                        bounds,
+                        poly_counts,
+                        points,
+                    }
+                }
+            } else {
+                let mut points = try_vec_with_capacity(point_count)?;
+                for _ in 0..point_count {
+                    points.push(Point16 {
+                        x: r.u16()? as i16,
+                        y: r.u16()? as i16,
+                    });
+                }
+                if kind == 90 {
+                    RecordData::PolyPolyline16 {
+                        bounds,
+                        poly_counts,
+                        points,
+                    }
+                } else {
+                    RecordData::PolyPolygon16 {
+                        bounds,
+                        poly_counts,
+                        points,
+                    }
+                }
+            };
+            Ok((data, 24 + bytes))
         }
         42 if payload.len() >= 16 => Ok((
             RecordData::Ellipse {
