@@ -50,6 +50,21 @@ RSpec.describe Emf::Native::WmfFields do
   let(:dib_pattern_payload) { [3, 0, dib_target.bytesize].pack("V3") + dib_target }
   let(:dib_pattern_raw) { [8, dib_pattern_type].pack("Vv") + [3, 0].pack("v2") + dib_target }
   let(:dib_pattern_descriptor) { { type: dib_pattern_type, offset: offset, payload: dib_pattern_payload, family: 10 } }
+  let(:bitmap_type) { 0x0122 }
+  let(:bitmap_bytes) { "\xDE\xAD\xBE\xEF".b }
+
+  let(:bitmap_descriptor) do
+    lambda do |type, scalars, present:, bytes: "".b|
+      payload = [*scalars, present ? 1 : 0, bytes.bytesize].pack("V*") + bytes
+      { type: type, offset: offset, payload: payload, family: 11 }
+    end
+  end
+  let(:bitmap_raw) do
+    lambda do |type, body, suffix: "".b|
+      bytes = body + suffix
+      [3 + (bytes.bytesize / 2), type].pack("Vv") + bytes
+    end
+  end
 
   it "rejects a supported state with a non-state native family" do
     record = descriptor.merge(family: 4)
@@ -197,6 +212,91 @@ RSpec.describe Emf::Native::WmfFields do
 
     invalid.each do |record, raw_bytes|
       expect { described_class.new(record, raw_bytes).call }.to raise_error(Emf::Error)
+    end
+  end
+
+  it "decodes family 11 optional blits and retains absent reserved words and suffixes" do
+    cases = [
+      [0x0922, Emf::Model::Wmf::Records::BitBlt, [0xCCBBAA99, -32_768, 32_767, -1, 2, -3, 4, 0xBEEF],
+       [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xBEEF, 0xFFFF, 2, 0xFFFD, 4].pack("v*"), :bitmap],
+      [0x0940, Emf::Model::Wmf::Records::DibBitBlt, [0xCCBBAA99, -32_768, 32_767, -1, 2, -3, 4, 0xBEEF],
+       [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xBEEF, 0xFFFF, 2, 0xFFFD, 4].pack("v*"), :bitmap],
+      [0x0B23, Emf::Model::Wmf::Records::StretchBlt, [0xCCBBAA99, -32_768, 32_767, -1, 2, -3, 4, -5, 6, 0xBEEF],
+       [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xFFFF, 2, 0xBEEF, 0xFFFD, 4, 0xFFFB, 6].pack("v*"), :bitmap],
+      [0x0B41, Emf::Model::Wmf::Records::DibStretchBlt, [0xCCBBAA99, -32_768, 32_767, -1, 2, -3, 4, -5, 6, 0xBEEF],
+       [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xFFFF, 2, 0xBEEF, 0xFFFD, 4, 0xFFFB, 6].pack("v*"), :bitmap]
+    ]
+
+    cases.each do |function, klass, scalars, absent_body, _present|
+      reserved = scalars.last
+      suffix = "\xAA\xBB".b
+      absent_type = (((absent_body.bytesize + suffix.bytesize) / 2) << 8) | (function & 0xFF)
+      raw_bytes = bitmap_raw.call(absent_type, absent_body, suffix: suffix)
+      record = described_class.new(bitmap_descriptor.call(absent_type, scalars, present: false), raw_bytes).call
+
+      expect(record).to be_a(klass)
+      expect(record.type_id).to eq(absent_type)
+      expect(record.reserved).to eq(reserved)
+      expect(record.bitmap).to be_nil
+      expect(record.suffix).to eq(suffix)
+    end
+  end
+
+  it "decodes family 11 present blits and mandatory DIB transfers, including opaque DIB bytes" do
+    cases = [
+      [0x0922, Emf::Model::Wmf::Records::BitBlt, [0xCCBBAA99, -32_768, 32_767, -1, 2, -3, 4, 0],
+       [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xFFFF, 2, 0xFFFD, 4].pack("v*"), :optional],
+      [0x0940, Emf::Model::Wmf::Records::DibBitBlt, [0xCCBBAA99, -32_768, 32_767, -1, 2, -3, 4, 0],
+       [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xFFFF, 2, 0xFFFD, 4].pack("v*"), :optional],
+      [0x0B23, Emf::Model::Wmf::Records::StretchBlt, [0xCCBBAA99, -32_768, 32_767, -1, 2, -3, 4, -5, 6, 0],
+       [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xFFFF, 2, 0xFFFD, 4, 0xFFFB, 6].pack("v*"), :optional],
+      [0x0B41, Emf::Model::Wmf::Records::DibStretchBlt, [0xCCBBAA99, -32_768, 32_767, -1, 2, -3, 4, -5, 6, 0],
+       [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xFFFF, 2, 0xFFFD, 4, 0xFFFB, 6].pack("v*"), :optional],
+      [0x0D33, Emf::Model::Wmf::Records::SetDibToDev, [2, 65_535, 32_768, 65_534, 1, 2, 3, 4, 5],
+       [2, 0xFFFF, 0x8000, 0xFFFE, 1, 2, 3, 4, 5].pack("v*"), :mandatory],
+      [0x0F43, Emf::Model::Wmf::Records::StretchDib, [0xCCBBAA99, 2, -32_768, 32_767, -1, 2, -3, 4, -5, 6],
+       [0xAA99, 0xCCBB, 2, 0x8000, 0x7FFF, 0xFFFF, 2, 0xFFFD, 4, 0xFFFB, 6].pack("v*"), :mandatory]
+    ]
+
+    cases.each do |function, klass, scalars, wire_prefix, _presence|
+      raw_bytes = bitmap_raw.call(function, wire_prefix + bitmap_bytes)
+      record = described_class.new(bitmap_descriptor.call(function, scalars, present: true, bytes: bitmap_bytes), raw_bytes).call
+
+      expect(record).to be_a(klass)
+      expect(record.bitmap).to eq(bitmap_bytes)
+      expect(record.type_id).to eq(function)
+      expect(record.suffix).to eq("".b)
+    end
+  end
+
+  it "rejects malformed family 11 payloads, narrowing, flags, raw bounds and source discriminators" do
+    blt_scalars = [0xCCBBAA99, -1, 2, -3, 4, -5, 6, 0]
+    blt_body = [0xAA99, 0xCCBB, 0xFFFF, 2, 0xFFFD, 4, 0xFFFB, 6].pack("v*") + bitmap_bytes
+    good = bitmap_descriptor.call(bitmap_type, blt_scalars, present: true, bytes: bitmap_bytes)
+    raw_bytes = bitmap_raw.call(bitmap_type, blt_body)
+    expect { described_class.new(good, raw_bytes).call }.not_to raise_error
+    invalid = [
+      [good.merge(family: 10), raw_bytes],
+      [good.merge(payload: good[:payload].byteslice(0, good[:payload].bytesize - 1)), raw_bytes],
+      [good.merge(payload: [*blt_scalars, 2, bitmap_bytes.bytesize].pack("V*") + bitmap_bytes), raw_bytes],
+      [good.merge(payload: [*blt_scalars, 1, bitmap_bytes.bytesize + 2].pack("V*") + bitmap_bytes), raw_bytes],
+      [good.merge(payload: [blt_scalars.first, 32_768, *blt_scalars.drop(2), 1, bitmap_bytes.bytesize].pack("V*") + bitmap_bytes),
+       raw_bytes],
+      [good.merge(payload: [*blt_scalars, 1, bitmap_bytes.bytesize].pack("V*") + bitmap_bytes), raw_bytes.byteslice(0, 17)],
+      [good, bitmap_raw.call(0x0A22, blt_body)],
+      [bitmap_descriptor.call(bitmap_type, blt_scalars, present: false), bitmap_raw.call(0x0922, blt_body)]
+    ]
+
+    mandatory_type = 0x0D33
+    mandatory_scalars = [2, 1, 0, 0, 0, 1, 1, 0, 0]
+    mandatory_body = [2, 1, 0, 0, 0, 1, 1, 0, 0].pack("v*") + bitmap_bytes
+    invalid << [bitmap_descriptor.call(mandatory_type, mandatory_scalars, present: false),
+                bitmap_raw.call(mandatory_type, mandatory_body)]
+    invalid << [bitmap_descriptor.call(mandatory_type, [0x10000, *mandatory_scalars.drop(1)], present: true, bytes: bitmap_bytes),
+                bitmap_raw.call(mandatory_type, [2, 1, 0, 0, 0, 1, 1, 0, 0].pack("v*") + bitmap_bytes)]
+
+    invalid.each do |record, raw_record|
+      expect { described_class.new(record, raw_record).call }.to raise_error(Emf::Error)
     end
   end
 end

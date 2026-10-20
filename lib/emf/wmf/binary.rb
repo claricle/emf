@@ -4,6 +4,7 @@ require "emf/wmf/text_codec"
 require "emf/wmf/palette_codec"
 require "emf/wmf/region_codec"
 require "emf/wmf/brush_codec"
+require "emf/wmf/bitmap_codec"
 
 module Emf
   module Wmf
@@ -54,7 +55,8 @@ module Emf
         0x49 => Model::Wmf::Records::SetLayout
       }.freeze
       STATE_FUNCTIONS = STATE_RECORDS.invert.freeze
-      PREFIX_FUNCTIONS = ([0xFB] + STATE_RECORDS.keys + PaletteCodec::RECORDS.keys + RegionCodec::RECORDS.keys + BrushCodec::RECORDS.keys).freeze
+      PREFIX_FUNCTIONS = ([0xFB] + STATE_RECORDS.keys + PaletteCodec::RECORDS.keys + RegionCodec::RECORDS.keys +
+                          BrushCodec::RECORDS.keys + BitmapCodec::RECORDS.keys).freeze
 
       OBJECT_RECORDS = {
         0xFA => Model::Wmf::Records::CreatePenIndirect,
@@ -67,12 +69,13 @@ module Emf
       OBJECT_CREATORS = [0xFA, 0xFC, 0xFB, 0xF7, 0xF9, 0xFF, 0x42].freeze
       TEXT_FUNCTIONS = [0x21, 0x32].freeze
       TYPED_FUNCTIONS = (FIXED_RECORDS.keys + POINT_ARRAY_RECORDS.keys + OBJECT_RECORDS.keys + STATE_RECORDS.keys +
-                         TEXT_FUNCTIONS + PaletteCodec::RECORDS.keys + RegionCodec::RECORDS.keys + BrushCodec::RECORDS.keys + [0xFB]).freeze
+                         TEXT_FUNCTIONS + PaletteCodec::RECORDS.keys + RegionCodec::RECORDS.keys + BrushCodec::RECORDS.keys +
+                         BitmapCodec::RECORDS.keys + [0xFB]).freeze
 
       module_function
 
       def prefix_codec(record)
-        [PaletteCodec, RegionCodec, BrushCodec].find { |codec| codec::FUNCTIONS.key?(record.class) }
+        [PaletteCodec, RegionCodec, BrushCodec, BitmapCodec].find { |codec| codec::FUNCTIONS.key?(record.class) }
       end
 
       def checksum(bytes)

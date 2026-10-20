@@ -376,12 +376,17 @@ fn version100_dib_diagnostic_preserves_wire_details_and_source() {
             let bytes = snapshot(doc);
             assert_eq!(u32_at(&bytes, 56), u32::from(version));
             assert_eq!(u64_at(&bytes, 24), u64::from(version == 0x0100));
-            assert_eq!(payloads(&bytes), [(0x0940, 0, vec![]), (0, 1, vec![])]);
+            let mut expected = vec![0; 32]; // Eight scalar fields, including reserved.
+            expected.extend_from_slice(&1u32.to_le_bytes());
+            expected.extend_from_slice(&((body.len() - 16) as u32).to_le_bytes());
+            expected.extend_from_slice(&body[16..]);
+            let payload_length = expected.len();
+            assert_eq!(payloads(&bytes), [(0x0940, 11, expected), (0, 1, vec![])]);
             assert_eq!(u64_at(&bytes, 128), 18); // DIB source offset.
             assert_eq!(u64_at(&bytes, 136), 6 + body.len() as u64);
             assert_eq!(&bytes[bytes.len() - 5..], b"tail\0");
             if version == 0x0100 {
-                let offset = 120 + 80; // Both record payloads are empty.
+                let offset = 120 + 80 + payload_length;
                 assert_eq!(u32_at(&bytes, offset), 12);
                 assert_eq!(u32_at(&bytes, offset + 4), 1);
                 assert_eq!(u32_at(&bytes, offset + 8), 0x0940);
@@ -864,6 +869,168 @@ fn malformed_pattern_brush_headers_remain_opaque_with_complete_spans() {
         assert_eq!(
             &input[offset..offset + records[index].len()],
             records[index]
+        );
+        offset += records[index].len();
+    }
+    assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
+    assert_eq!(&bytes[bytes.len() - 4..], b"tail");
+}
+
+fn bitmap_case(kind: u16, present: bool) -> (u16, Vec<u8>, Vec<u8>) {
+    let signed = [i16::MIN, i16::MAX, -1, 0, -12345, 12345, -2, 2];
+    let image = [0, 0xff, 0x80, 0, 0xfe, 0xff]; // Raw malformed interiors stay typed.
+    let mut body = Vec::new();
+    let mut words = Vec::new();
+    if kind == 0x33 {
+        for n in [u16::MAX, 0x8000, 0, 0xfffe, 1, 0x8001, 2, 0xfffd, 3] {
+            body.extend_from_slice(&n.to_le_bytes());
+            words.push(u32::from(n));
+        }
+    } else {
+        body.extend_from_slice(&u32::MAX.to_le_bytes());
+        words.push(u32::MAX);
+        if kind == 0x43 {
+            body.extend_from_slice(&u16::MAX.to_le_bytes());
+            words.push(u32::from(u16::MAX));
+        }
+        let geometry = if matches!(kind, 0x22 | 0x40) {
+            &signed[..6]
+        } else {
+            &signed[..]
+        };
+        for (index, n) in geometry.iter().enumerate() {
+            if !present && index == geometry.len() - 4 {
+                body.extend_from_slice(&u16::MAX.to_le_bytes());
+            }
+            body.extend_from_slice(&n.to_le_bytes());
+            words.push(*n as i32 as u32);
+        }
+        if matches!(kind, 0x22 | 0x40 | 0x23 | 0x41) {
+            words.push(if present { 0 } else { u32::from(u16::MAX) });
+        }
+    }
+    words.push(u32::from(present));
+    words.push(if present { image.len() as u32 } else { 0 });
+    let mut expected: Vec<_> = words.iter().flat_map(|n| n.to_le_bytes()).collect();
+    if present {
+        body.extend_from_slice(&image);
+        expected.extend_from_slice(&image);
+    } else {
+        body.extend_from_slice(&[0xde, 0xad, 0xbe, 0xef]);
+    }
+    let function = if present {
+        0xa700 | kind
+    } else {
+        ((body.len() as u16 / 2) << 8) | kind
+    };
+    (function, body, expected)
+}
+
+#[test]
+fn bitmap_headers_preserve_signed_unsigned_fields_presence_raw_images_and_source_suffix() {
+    let mut cases = Vec::new();
+    for kind in [0x22, 0x40, 0x23, 0x41, 0x33, 0x43] {
+        cases.push(bitmap_case(kind, true));
+        if !matches!(kind, 0x33 | 0x43) {
+            cases.push(bitmap_case(kind, false));
+        }
+    }
+    let mut records: Vec<_> = cases
+        .iter()
+        .map(|(function, body, _)| record(*function, body))
+        .collect();
+    records.push(record(0x7777, &[0x80, 0xff]));
+    records.push(record(0, &[]));
+    let input = source(&records, b"tail\0");
+    unsafe {
+        let doc = parse(&input);
+        let mut buffer = ptr::null_mut();
+        assert_eq!(emf_wmf_serialize(doc, &mut buffer, ptr::null_mut()), EMF_OK);
+        let mut data = ptr::null();
+        let mut length = 0;
+        assert_eq!(emf_buffer_view(buffer, &mut data, &mut length), EMF_OK);
+        assert_eq!(slice::from_raw_parts(data, length as usize), input);
+        emf_buffer_free(buffer);
+        let bytes = snapshot(doc);
+        let values = payloads(&bytes);
+        let mut descriptor = 120;
+        let mut offset = 18;
+        for (index, (function, body, expected)) in cases.iter().enumerate() {
+            assert_eq!(values[index], (u32::from(*function), 11, expected.clone()));
+            assert_eq!(u64_at(&bytes, descriptor + 8), offset as u64);
+            assert_eq!(u64_at(&bytes, descriptor + 16), records[index].len() as u64);
+            assert_eq!(
+                &input[offset..offset + records[index].len()],
+                records[index]
+            );
+            assert_eq!(&input[offset + 6..offset + records[index].len()], body);
+            descriptor += 40 + expected.len();
+            offset += records[index].len();
+        }
+        assert_eq!(values[cases.len()], (0x7777, 0, vec![]));
+        assert_eq!(values[cases.len() + 1], (0, 1, vec![]));
+        assert_eq!(u64_at(&bytes, 40), input.len() as u64);
+        assert_eq!(&bytes[bytes.len() - 5..], b"tail\0");
+    }
+}
+
+#[test]
+fn bitmap_function_high_byte_controls_optional_presence_and_suffix_boundary() {
+    for kind in [0x22, 0x40, 0x23, 0x41] {
+        let (function, body, expected) = bitmap_case(kind, false);
+        let records = [
+            record(function, &body),
+            record(0xa700 | kind, &body),
+            record(0, &[]),
+        ];
+        let bytes = unsafe { snapshot(parse(&source(&records, &[]))) };
+        let values = payloads(&bytes);
+        assert_eq!(values[0], (u32::from(function), 11, expected));
+        assert_eq!(values[1].1, 11);
+        let (presence, prefix) = if matches!(kind, 0x22 | 0x40) {
+            (32, 16)
+        } else {
+            (40, 20)
+        };
+        assert_eq!(u32_at(&values[0].2, presence), 0);
+        assert_eq!(u32_at(&values[0].2, presence + 4), 0);
+        assert_eq!(u32_at(&values[1].2, presence - 4), 0); // Present form has no reserved wire word.
+        assert_eq!(u32_at(&values[1].2, presence), 1);
+        assert_eq!(
+            u32_at(&values[1].2, presence + 4),
+            (body.len() - prefix) as u32
+        );
+        assert_eq!(&values[1].2[presence + 8..], &body[prefix..]);
+    }
+}
+
+#[test]
+fn bitmap_truncated_headers_and_empty_required_images_remain_opaque() {
+    let mut records = Vec::new();
+    for (kind, prefix) in [
+        (0x22, 16),
+        (0x40, 16),
+        (0x23, 20),
+        (0x41, 20),
+        (0x33, 18),
+        (0x43, 22),
+    ] {
+        let (_, body, _) = bitmap_case(kind, true);
+        records.push(record(0xa700 | kind, &body[..prefix - 2]));
+        records.push(record(0xa700 | kind, &body[..prefix]));
+    }
+    records.push(record(0, &[]));
+    let input = source(&records, b"tail");
+    let bytes = unsafe { snapshot(parse(&input)) };
+    let values = payloads(&bytes);
+    let mut offset = 18;
+    for (index, value) in values[..values.len() - 1].iter().enumerate() {
+        assert_eq!(value.1, 0);
+        assert!(value.2.is_empty());
+        assert_eq!(u64_at(&bytes, 120 + index * 40 + 8), offset as u64);
+        assert_eq!(
+            u64_at(&bytes, 120 + index * 40 + 16),
+            records[index].len() as u64
         );
         offset += records[index].len();
     }

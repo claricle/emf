@@ -84,7 +84,31 @@ length, then payload. The function includes the original high byte. Families:
   is performed for this payload. Function high bytes and complete source spans
   are retained for both variants. CreateBrushIndirect remains family 4.
 
-Families 2–10 cover the existing Ruby WMF models only. Rust-only typed records
+- 11: bitmap transfers. Every payload ends with u32 bitmap presence (0 or 1),
+  u32 byte length, and that many raw bitmap bytes. BitBlt (22) and DibBitBlt
+  (40) begin with u32 raster-operation, sign-extended i32 source-y/source-x/
+  height/width/destination-y/destination-x, and u32 reserved (40 + length bytes
+  total). StretchBlt (23) and DibStretchBlt (41) begin with u32 raster-operation,
+  sign-extended i32 source-height/source-width/source-y/source-x/destination-height/
+  destination-width/destination-y/destination-x, and u32 reserved (48 + length).
+  For these four variants, bitmap absence is determined by the complete wire
+  body word count equaling the function high byte. An absent bitmap has presence
+  and length zero; reserved zero-extends the stored u16. The complete source span
+  retains suffix bytes after the absent 18-byte Blt or 22-byte StretchBlt header,
+  without duplicating them in the payload. Present bitmaps have reserved zero and
+  contain the entire nonempty, even-length remainder after the 16-byte Blt or
+  20-byte StretchBlt header.
+  SetDibToDev (33) begins with nine u32 values: color-usage, scan-count, start-scan,
+  source-y, source-x, height, width, destination-y, destination-x, all zero-extended
+  from u16 (44 + length bytes total). StretchDib (43) begins with u32
+  raster-operation/color-usage, then the eight sign-extended StretchBlt geometry
+  values in the same order (48 + length). These two variants always have presence
+  1 and retain the entire nonempty, even-length remainder after their 18-byte or
+  22-byte wire headers respectively. Color-usage retains the complete u16 range.
+  Bitmap interiors remain opaque, including malformed or unsupported DIB data.
+  All six variants retain complete function words and source spans.
+
+Families 2–11 cover the existing Ruby WMF models only. Rust-only typed records
 remain opaque. For Ruby compatibility, ExtTextOut DX consumes one i16 per
 character even with ETO_PDY set; the original flag and remaining bytes survive
 as suffix. The compatibility view uses the Rust typed decoder with only that

@@ -3,9 +3,9 @@
 //! their source spans and remain opaque, even when the native core knows more.
 use super::*;
 use emf_core::wmf::{
-    brush::BrushRecord as B, geometry::GeometryRecord as G, objects::ObjectIssue,
-    objects::ObjectKind, region::RegionRecord as R, state::StateRecord as S, text::TextRecord as T,
-    DiagnosticKind as D, Document, Record, TypedRecord,
+    bitmap::BitmapRecord as M, brush::BrushRecord as B, geometry::GeometryRecord as G,
+    objects::ObjectIssue, objects::ObjectKind, region::RegionRecord as R, state::StateRecord as S,
+    text::TextRecord as T, DiagnosticKind as D, Document, Record, TypedRecord,
 };
 
 const MAX_BYTES: usize = 200 * 1024 * 1024;
@@ -159,6 +159,7 @@ fn family(record: &Record) -> u32 {
             G::OffsetClipRgn { .. } | G::ExcludeClipRect { .. } | G::IntersectClipRect { .. },
         )) => 9,
         Some(TypedRecord::Brush(_)) => 10,
+        Some(TypedRecord::Bitmap(_)) => 11,
         _ => 0,
     }
 }
@@ -336,6 +337,80 @@ fn payload(
                 out.raw(&b.target)?;
             }
         },
+        (11, Some(TypedRecord::Bitmap(bitmap))) => {
+            let image = match bitmap {
+                M::BitBlt(b) | M::DibBitBlt(b) => {
+                    out.u32(b.raster_operation)?;
+                    for value in [
+                        b.source_y,
+                        b.source_x,
+                        b.height,
+                        b.width,
+                        b.destination_y,
+                        b.destination_x,
+                    ] {
+                        out.i32(value)?;
+                    }
+                    out.u32(u32::from(b.reserved))?;
+                    b.bitmap.as_deref()
+                }
+                M::StretchBlt(b) | M::DibStretchBlt(b) => {
+                    out.u32(b.raster_operation)?;
+                    for value in [
+                        b.source_height,
+                        b.source_width,
+                        b.source_y,
+                        b.source_x,
+                        b.destination_height,
+                        b.destination_width,
+                        b.destination_y,
+                        b.destination_x,
+                    ] {
+                        out.i32(value)?;
+                    }
+                    out.u32(u32::from(b.reserved))?;
+                    b.bitmap.as_deref()
+                }
+                M::SetDibToDev(b) => {
+                    for value in [
+                        b.color_usage,
+                        b.scan_count,
+                        b.start_scan,
+                        b.source_y,
+                        b.source_x,
+                        b.height,
+                        b.width,
+                        b.destination_y,
+                        b.destination_x,
+                    ] {
+                        out.u32(u32::from(value))?;
+                    }
+                    Some(b.bitmap.as_slice())
+                }
+                M::StretchDib(b) => {
+                    out.u32(b.raster_operation)?;
+                    out.u32(u32::from(b.color_usage))?;
+                    for value in [
+                        b.source_height,
+                        b.source_width,
+                        b.source_y,
+                        b.source_x,
+                        b.destination_height,
+                        b.destination_width,
+                        b.destination_y,
+                        b.destination_x,
+                    ] {
+                        out.i32(value)?;
+                    }
+                    Some(b.bitmap.as_slice())
+                }
+            };
+            out.u32(u32::from(image.is_some()))?;
+            out.u32(image.map_or(0, |bytes| bytes.len() as u32))?;
+            if let Some(bytes) = image {
+                out.raw(bytes)?;
+            }
+        }
         (5, Some(TypedRecord::Text(t))) => {
             let (x, y, text, padding, options, rectangle, dx, suffix) = match t {
                 T::TextOut {
@@ -635,6 +710,21 @@ mod tests {
         assert_eq!(bytes.len(), 214);
         assert_eq!(
             encode(&doc, 213, doc.source()).unwrap_err().status,
+            EMF_LIMIT_EXCEEDED
+        );
+    }
+    #[test]
+    fn checks_bitmap_data_output_budget_before_allocating() {
+        let mut source = vec![
+            1, 0, 9, 0, 0, 3, 25, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0x33, 0x0d,
+        ];
+        source.extend_from_slice(&[0; 18]);
+        source.extend_from_slice(&[0x80, 0xff, 3, 0, 0, 0, 0, 0]);
+        let doc = emf_core::wmf::parse(&source, &emf_core::ParseLimits::default()).unwrap();
+        let bytes = encode(&doc, 246, doc.source()).unwrap_or_else(|e| panic!("{:?}", e.message));
+        assert_eq!(bytes.len(), 246);
+        assert_eq!(
+            encode(&doc, 245, doc.source()).unwrap_err().status,
             EMF_LIMIT_EXCEEDED
         );
     }

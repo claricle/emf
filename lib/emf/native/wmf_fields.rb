@@ -4,6 +4,7 @@ require_relative "wmf_text_fields"
 require_relative "wmf_palette_fields"
 require_relative "wmf_region_fields"
 require_relative "wmf_brush_fields"
+require_relative "wmf_bitmap_fields"
 
 module Emf
   module Native
@@ -34,6 +35,8 @@ module Emf
       private
 
       def prefix_record
+        return WmfBitmapFields.new(@record, @raw).call if Wmf::BitmapCodec::RECORDS.key?(@function)
+
         return WmfBrushFields.new(@record, @raw).call if Wmf::BrushCodec::RECORDS.key?(@function)
         return font if @function == 0xFB
         return state(Wmf::Binary::STATE_RECORDS.fetch(@function)) if Wmf::Binary::STATE_RECORDS.key?(@function)
