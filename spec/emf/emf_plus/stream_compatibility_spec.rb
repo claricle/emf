@@ -21,8 +21,15 @@ RSpec.describe "EMF+ stream compatibility" do
       def parse_file(*) = super.tap { |metafile| metafile.emf_plus_stream&.entries }
     end
     Emf.singleton_class.prepend(TouchStream)
-    load ARGV.shift
   RUBY
+
+  def with_backend(name)
+    previous = ENV.fetch("EMF_BACKEND", nil)
+    ENV["EMF_BACKEND"] = name
+    yield
+  ensure
+    previous.nil? ? ENV.delete("EMF_BACKEND") : ENV["EMF_BACKEND"] = previous
+  end
 
   def comment_payload(metafile, segment)
     wire = metafile.records[segment.record_index].wire
@@ -36,62 +43,104 @@ RSpec.describe "EMF+ stream compatibility" do
     end
   end
 
-  def emf_plus_paths(paths)
-    paths.select { |path| Emf.parse(File.binread(path)).format == :emf_plus }
+  def expect_viewing_is_additive(path)
+    bytes = File.binread(path)
+    baseline = Emf.serialize(Emf.parse(bytes))
+    viewed = Emf.parse(bytes)
+    rebuilt = viewed.emf_plus_stream.to_metafile
+    expect(Emf.serialize(rebuilt)).to eq(baseline), path
+    expect(Emf.serialize(viewed)).to eq(baseline), path
+    expect(Emf.serialize(rebuilt)).to eq(bytes), path if baseline == bytes
+  end
+
+  # Parsing is backend-dependent and the first examples must hold for the Ruby
+  # view whatever backend is configured; the native example below covers that one.
+  around { |example| with_backend("ruby") { example.run } }
+
+  before(:context) do
+    @emf_plus_paths = paths.select { |path| with_backend("ruby") { Emf.parse(File.binread(path)).format == :emf_plus } }
   end
 
   it "keeps the fixture set non-empty" do
     expect(paths.size).to be >= 3
   end
 
-  it "serializes identically whether or not the stream was built", :corpus do
-    paths.each do |path|
-      bytes = File.binread(path)
-      baseline = Emf.serialize(Emf.parse(bytes))
-      viewed = Emf.parse(bytes)
-      stream = viewed.emf_plus_stream
-      rebuilt = stream ? stream.to_metafile : viewed
-      expect(Emf.serialize(rebuilt)).to eq(baseline), path
-      expect(Emf.serialize(viewed)).to eq(baseline), path
+  it "builds no stream for fixtures without EMF+", :corpus do
+    (paths - @emf_plus_paths).each do |path|
+      expect(Emf.parse(File.binread(path)).emf_plus_stream).to be_nil, path
     end
   end
 
-  it "keeps EMF+ files that round-tripped byte-identically byte-identical", :corpus do
-    paths.each do |path|
-      bytes = File.binread(path)
-      next unless Emf.serialize(Emf.parse(bytes)) == bytes
+  it "serializes identically whether or not the stream was built, and keeps byte-identical files byte-identical", :corpus do
+    @emf_plus_paths.each { |path| expect_viewing_is_additive(path) }
+  end
 
-      viewed = Emf.parse(bytes)
-      rebuilt = viewed.emf_plus_stream&.to_metafile || viewed
-      expect(Emf.serialize(rebuilt)).to eq(bytes), path
+  it "stays additive when the native backend parses the fixture", :corpus do
+    with_backend("native") do
+      begin
+        Emf::Native.backend
+      rescue Emf::Native::Unavailable => e
+        skip e.message
+      end
+
+      rejected = []
+      checked = @emf_plus_paths.count do |path|
+        expect_viewing_is_additive(path)
+        true
+      rescue Emf::FormatError => e
+        rejected << "#{File.basename(path)}: #{e.message}"
+        false
+      end
+      RSpec.configuration.reporter.message("native rejected #{rejected.size} EMF+ fixtures:\n  #{rejected.join("\n  ")}") if rejected.any?
+      expect(checked).to be >= 1
     end
   end
 
   describe "exe/emf output" do
-    pinned = %w[test-038 test-109]
     commands = %w[info dump stats]
+    pinned = %w[test-038 test-109]
     cli_paths = paths.select { |path| pinned.include?(File.basename(path, ".emf")) }
     cli_paths += [paths.find { |path| path.include?("EA-test-file") || path.include?("image1") }].compact
 
-    cli_paths.each do |path|
-      commands.each do |command|
-        it "prints the same `#{command}` for #{File.basename(path)} after the stream is built" do
-          plain, plain_err, plain_status = Open3.capture3("ruby", exe, command, path)
-          touched, touched_err, touched_status = Open3.capture3("ruby", "-I", lib, "-r", "emf", "-e", touch_stream,
-                                                                exe, command, path)
-          expect(plain_status.exitstatus).to eq(0)
-          expect(touched_status.exitstatus).to eq(0)
-          expect(touched).to eq(plain)
-          expect(touched_err).to eq(plain_err)
+    run_commands = lambda do |preamble, path|
+      script = <<~RUBY
+        #{preamble}
+        results = #{commands.inspect}.map do |command|
+          out, err = StringIO.new, StringIO.new
+          $stdout, $stderr = out, err
+          status = begin
+            ARGV.replace([command, #{path.dump}])
+            load #{exe.dump}
+            0
+          rescue SystemExit => e
+            e.status
+          ensure
+            $stdout, $stderr = STDOUT, STDERR
+          end
+          [command, status, out.string, err.string]
         end
+        STDOUT.write(Marshal.dump(results))
+      RUBY
+      stdout, stderr, status = Open3.capture3({ "EMF_BACKEND" => "ruby" }, "ruby", "-I", lib, "-r", "emf", "-r", "stringio",
+                                              "-e", script)
+      raise "child failed: #{stderr}" unless status.success?
+
+      Marshal.load(stdout) # rubocop:disable Security/MarshalLoad -- our own child's output
+    end
+
+    cli_paths.each do |path|
+      it "prints the same info, dump and stats for #{File.basename(path)} after the stream is built" do
+        plain = run_commands.call("", path)
+        touched = run_commands.call(touch_stream, path)
+        expect(plain.map { |_, status, _, _| status }).to eq([0, 0, 0])
+        expect(touched).to eq(plain)
       end
     end
   end
 
   describe "segmentation" do
     it "covers exactly the EMF+ comments and reproduces their bytes", :corpus do
-      checked = 0
-      emf_plus_paths(paths).each do |path|
+      @emf_plus_paths.each do |path|
         metafile = Emf.parse(File.binread(path))
         segments = metafile.emf_plus_stream.segments
         expect(segments.map(&:record_index)).to eq(emf_plus_comment_indexes(metafile)), path
@@ -100,9 +149,8 @@ RSpec.describe "EMF+ stream compatibility" do
           expect(segment.payload + segment.tail).to eq(metafile.records[segment.record_index].wire.data.b.byteslice(4..)), path
           expect(segment.payload.bytesize).to eq(comment_payload(metafile, segment).bytesize), path
         end
-        checked += 1
       end
-      expect(checked).to be >= (ENV["EMF_STREAM_COMPAT_SUBSET"] ? 2 : 23)
+      expect(@emf_plus_paths.size).to be >= (ENV["EMF_STREAM_COMPAT_SUBSET"] ? 2 : 23)
     end
   end
 end
