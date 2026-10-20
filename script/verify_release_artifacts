@@ -12,7 +12,7 @@
 # library), match the checkout's crate version and Cargo.lock hash, and declare
 # the expected target and ABI version. Nothing is written unless every
 # check passes; then the gems and a SHA256SUMS file are written flat to --output.
-# The source gem carries no provenance, so its revision cannot be verified here.
+# Source gems must carry matching revision/lock/crate metadata in their gemspec.
 
 require "digest"
 require "fileutils"
@@ -22,6 +22,8 @@ require "optparse"
 require "rbconfig"
 require "rubygems/package"
 require "tmpdir"
+
+load File.expand_path("build_source_release_gem", __dir__)
 
 class ReleaseArtifactVerifier
   ROOT = File.expand_path("..", __dir__)
@@ -79,13 +81,11 @@ class ReleaseArtifactVerifier
 
   def extra_rows(seen) = (seen.keys - expected_rows).map { |row| "unexpected #{row} gem" }
 
-  def expected_rows
-    @platforms + [SOURCE]
-  end
+  def expected_rows = @platforms + [SOURCE]
 
   def gem_problems(gems)
     gems.flat_map do |path, spec|
-      problems = []
+      problems = spec.platform.to_s == SOURCE ? SourceReleaseGemBuilder.problems(spec, @revision) : []
       problems << "#{relative(path)}: gem name #{spec.name} != #{GEM_NAME}" unless spec.name == GEM_NAME
       problems << "#{relative(path)}: filename #{File.basename(path)} != #{spec.file_name}" unless File.basename(path) == spec.file_name
       problems << "#{relative(path)}: version #{spec.version} != #{@version}" unless spec.version.to_s == @version

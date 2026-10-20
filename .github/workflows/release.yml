@@ -155,7 +155,9 @@ jobs:
           ruby-version: "3.4"
 
       - name: Build the source gem
-        run: script/build_native_gem --platform ruby --output source-out
+        env:
+          RELEASE_SHA: ${{ needs.version.outputs.sha }}
+        run: script/build_source_release_gem --revision "$RELEASE_SHA" --output source-out
 
       - uses: actions/upload-artifact@v4
         with:

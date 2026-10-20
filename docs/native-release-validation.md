@@ -17,6 +17,15 @@ rejected so an older gem cannot survive into the verified set.
 Successful verification writes canonical gem filenames and SHA256SUMS into the
 empty output directory.
 
+The source release job uses `script/build_source_release_gem`, which records
+`emf_revision`, `emf_cargo_lock_sha256` and `emf_crate_version` in the gemspec's
+metadata. An explicit `--revision` must match the builder's actual checkout before
+any package is written. Verification requires those metadata values to match the
+same intended revision and checkout lock/crate values as the native gems. A
+regular source gem built without release metadata is valid for development, but
+is rejected from this release set. Source gem files stay Ruby-only, with no
+native library or Rust source/compiler requirement.
+
 For example, using the release job's actual revision and version:
 
 ```sh
@@ -38,12 +47,11 @@ requires `dry_run: false`. Local focused tests substitute the gem command and
 never publish to RubyGems.
 
 These checks validate recorded metadata and byte integrity; they are not build
-attestations. The source gem has no revision provenance, so its revision is
-established by the workflow's checkout/build chain, not by inspecting the gem.
-The verifier cannot independently prove that native bytes were compiled from the
-recorded revision, that a package contains machine code for its declared target,
+attestations. The verifier cannot independently prove that packaged bytes were
+produced from the recorded revision, that a package contains machine code for its declared target,
 or that the installed workload ran. Those properties depend on the row build and
-acceptance jobs. SHA256SUMS is an integrity inventory carried by the workflow artifact, not an authenticated signature.
+acceptance jobs. SHA256SUMS is an integrity inventory carried by the workflow
+artifact, not an authenticated signature.
 Unexecuted platform rows remain unverified; local temporary-package regressions
 do not establish platform support.
 
@@ -51,8 +59,11 @@ Focused local checks need Ruby and the bundle, but no Rust compiler or native
 library:
 
 ```sh
-EMF_BACKEND=ruby bundle exec rspec spec/scripts/verify_release_artifacts_spec.rb \
+EMF_BACKEND=ruby bundle exec rspec spec/scripts/build_source_release_gem_spec.rb \
+  spec/scripts/verify_release_artifacts_spec.rb \
   spec/scripts/publish_release_gems_spec.rb
-bundle exec rubocop --cache false script/verify_release_artifacts script/publish_release_gems \
+bundle exec rubocop --cache false script/build_source_release_gem \
+  script/verify_release_artifacts script/publish_release_gems \
+  spec/scripts/build_source_release_gem_spec.rb \
   spec/scripts/verify_release_artifacts_spec.rb spec/scripts/publish_release_gems_spec.rb
 ```
