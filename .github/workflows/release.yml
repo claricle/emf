@@ -109,13 +109,13 @@ jobs:
       # real_row.sh builds the emf-ffi library, packages and checks the gems,
       # install-smokes them with no compiler on PATH and runs the installed
       # workload; it exits non-zero on any failure, which skips the upload.
-      # GITHUB_SHA is overridden so provenance records the release revision,
-      # which differs from the dispatch revision when the version was bumped.
+      # EMF_RELEASE_REVISION makes provenance record the release revision, which
+      # differs from the dispatch revision when the version was bumped.
       - name: Build and accept (Rust runner)
         if: ${{ matrix.row.kind == 'setup-ruby' }}
         shell: bash
         env:
-          GITHUB_SHA: ${{ needs.version.outputs.sha }}
+          EMF_RELEASE_REVISION: ${{ needs.version.outputs.sha }}
         run: script/platform_probe/real_row.sh "${{ matrix.row.target }}" "${{ matrix.row.platform }}" "$OUT_DIR"
 
       # musl rows run in Alpine through `docker run` because JS actions need the
@@ -124,7 +124,7 @@ jobs:
         if: ${{ matrix.row.kind == 'alpine' }}
         run: |
           docker run --rm -v "$PWD:/work" -w /work -e RUNNER_OS -e RUNNER_ARCH \
-            -e EXPECTED_RUBY=3.4 -e GITHUB_SHA="$RELEASE_SHA" alpine:3.22 \
+            -e EXPECTED_RUBY=3.4 -e EMF_RELEASE_REVISION="$RELEASE_SHA" alpine:3.22 \
             sh script/platform_probe/alpine.sh "${{ matrix.row.target }}" "${{ matrix.row.platform }}" "$OUT_DIR"
 
       - name: Upload the platform gem
@@ -205,6 +205,10 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.4"
@@ -224,8 +228,4 @@ jobs:
         uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
 
       - name: Push the verified gems
-        working-directory: verified
-        run: |
-          for gem_file in *.gem; do
-            gem push "$gem_file"
-          done
+        run: script/publish_release_gems --directory verified
