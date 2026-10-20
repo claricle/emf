@@ -18,6 +18,7 @@
 # machines have a compiler. Without it the compiler is only reported, and the
 # "no extensions, nothing built" assertions still hold.
 
+require "digest"
 require "fiddle"
 require "json"
 require "open3"
@@ -129,6 +130,7 @@ class NativeInstallSmoke
   def check_abi(spec, manifest)
     path = File.join(spec.full_gem_path, "lib/emf/native", @platform, manifest.fetch("library"))
     fail!("installed library missing: #{path}") unless File.file?(path)
+    fail!("installed library sha256 mismatch: #{path}") unless Digest::SHA256.file(path).hexdigest == manifest.fetch("sha256")
     actual = abi_version(path)
     fail!("ABI version #{actual}, platforms.json says #{manifest['abi_version']}") unless actual == manifest["abi_version"]
     puts "library #{File.basename(path)} reports ABI #{actual}"
