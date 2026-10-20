@@ -1,5 +1,10 @@
 //! Escape transport framing and borrowed or fixed payload views. Escape data is never executed.
 
+mod color_table;
+mod postscript;
+pub use color_table::GetColorTablePayload;
+pub use postscript::EncapsulatedPostScriptPayload;
+
 use super::DecodeError;
 use crate::limits::{try_vec_with_capacity, Budget};
 use crate::EditFailure;
@@ -143,7 +148,71 @@ impl<'a> CountedEscapePayload<'a> {
     }
 }
 
+/// Inert SPCLPASSTHROUGH2 bytes, borrowed without interpreting driver resources.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SpecialPassthrough2Payload<'a> {
+    /// Reserved bits are retained verbatim.
+    pub reserved: u32,
+    /// Raw bytes bounded by the inner Size field, excluding alignment and suffix.
+    pub data: &'a [u8],
+}
+
 impl EscapeRecord {
+    /// Borrows SPCLPASSTHROUGH2 only when its inner size consumes the exact payload.
+    /// Malformed transport, trailing payload bytes and other subtypes return `None`.
+    pub fn typed_special_passthrough2_payload(&self) -> Option<SpecialPassthrough2Payload<'_>> {
+        if self.function & 0xff != 0x26
+            || self.escape_function != 0x11d8
+            || self.padding.is_some() != (self.data.len() % 2 != 0)
+            || self.data.len() > usize::from(u16::MAX)
+        {
+            return None;
+        }
+        let reserved = u32::from_le_bytes(self.data.get(..4)?.try_into().ok()?);
+        let size = usize::from(u16::from_le_bytes(self.data.get(4..6)?.try_into().ok()?));
+        if self.data.len() != 6 + size {
+            return None;
+        }
+        Some(SpecialPassthrough2Payload {
+            reserved,
+            data: &self.data[6..],
+        })
+    }
+
+    /// Replaces SPCLPASSTHROUGH2 atomically, deriving both counts from raw bytes.
+    /// The six-byte header and data must fit the enclosing u16 byte count.
+    /// Odd results retain existing alignment or use zero; even results remove it.
+    /// The full function is retained; document replacement retains the suffix.
+    pub fn replace_special_passthrough2_payload(
+        &mut self,
+        payload: SpecialPassthrough2Payload<'_>,
+    ) -> Result<(), EditFailure> {
+        if self.function & 0xff != 0x26 {
+            return Err(EditFailure::RecordLayout { index: 0 });
+        }
+        let size = payload
+            .data
+            .len()
+            .checked_add(6)
+            .ok_or(EditFailure::SizeOverflow)?;
+        u16::try_from(size).map_err(|_| EditFailure::SizeOverflow)?;
+        let mut data = Vec::new();
+        data.try_reserve_exact(size)
+            .map_err(|_| EditFailure::SizeOverflow)?;
+        data.extend_from_slice(&payload.reserved.to_le_bytes());
+        data.extend_from_slice(&(payload.data.len() as u16).to_le_bytes());
+        data.extend_from_slice(payload.data);
+        let padding = if size % 2 != 0 {
+            Some(self.padding.unwrap_or(0))
+        } else {
+            None
+        };
+        self.escape_function = 0x11d8;
+        self.data = data;
+        self.padding = padding;
+        Ok(())
+    }
+
     /// Borrows the complete counted payload without copying or interpreting it.
     /// Invalid transport, oversized STARTDOC names, and other subtypes return `None`.
     pub fn typed_counted_payload(&self) -> Option<CountedEscapePayload<'_>> {

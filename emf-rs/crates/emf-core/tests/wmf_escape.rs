@@ -341,6 +341,7 @@ fn clip_to_path_preserves_both_record_sizes_and_reserved_field() {
 }
 
 use wmf::escape::CountedEscapePayload;
+use wmf::escape::SpecialPassthrough2Payload;
 
 fn counted_fixtures(data: &[u8]) -> [(u16, CountedEscapePayload<'_>); 7] {
     use CountedEscapePayload::*;
@@ -535,4 +536,165 @@ fn counted_dispatch_keeps_deferred_codes_and_suffix_bytes_opaque() {
         &[0x0a, 0, 2, 0, 0xc0, 0, 0x99, 0x88, 0x77, 0x66]
     );
     assert_eq!(reparsed.tail(), &[0xde, 0xad]);
+}
+
+fn special_payload(reserved: u32, data: &[u8]) -> Vec<u8> {
+    let mut payload = reserved.to_le_bytes().to_vec();
+    payload.extend_from_slice(&(data.len() as u16).to_le_bytes());
+    payload.extend_from_slice(data);
+    payload
+}
+
+#[test]
+fn special_passthrough2_borrows_exact_raw_bytes_and_reserved_bits() {
+    for reserved in [0, 0xdead_beef, u32::MAX] {
+        for data in [&[][..], &[0xff][..], &[0, 0xc0, 0xff, 0x80][..]] {
+            let bytes = subtype_document(0x11d8, &special_payload(reserved, data), &[0xca, 0xfe]);
+            let doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+            let record = escape(&doc);
+            let view = record.typed_special_passthrough2_payload().unwrap();
+            assert_eq!(view, SpecialPassthrough2Payload { reserved, data });
+            assert_eq!(view.data.as_ptr(), record.data[6..].as_ptr());
+            assert_eq!(record.function, 0xff26);
+            assert_eq!(record.typed_counted_payload(), None);
+            assert_eq!(record.typed_payload(), None);
+            assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+            assert_eq!(doc.tail(), &[0xde, 0xad]);
+        }
+    }
+}
+
+#[test]
+fn special_passthrough2_edits_derive_both_counts_and_preserve_byte_domains() {
+    let bytes = subtype_document(0x0013, &[0x80], &[0xca, 0xfe, 0x99, 0x88]);
+    let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+    for (data, pad) in [
+        (&[0xff, 0, 0xc0][..], Some(0xa5)),
+        (&[0, 0xff][..], None),
+        (&[0x80][..], Some(0)),
+    ] {
+        let payload = SpecialPassthrough2Payload {
+            reserved: 0xfedc_ba98,
+            data,
+        };
+        let mut record = escape(&doc).clone();
+        record
+            .replace_special_passthrough2_payload(payload)
+            .unwrap();
+        assert_eq!(record.function, 0xff26);
+        assert_eq!(record.escape_function, 0x11d8);
+        assert_eq!(record.padding, pad);
+        doc.replace_typed(0, wmf::TypedRecord::Escape(record))
+            .unwrap();
+        let output = wmf::serialize(&doc).unwrap();
+        doc = wmf::parse(&output, &ParseLimits::default()).unwrap();
+        assert_eq!(
+            escape(&doc).typed_special_passthrough2_payload(),
+            Some(payload)
+        );
+        let body = doc.record_body(&doc.records()[0]).unwrap();
+        assert_eq!(&body[..2], &0x11d8u16.to_le_bytes());
+        assert_eq!(
+            u16::from_le_bytes(body[2..4].try_into().unwrap()) as usize,
+            6 + data.len()
+        );
+        assert_eq!(
+            &body[4..10 + data.len()],
+            special_payload(payload.reserved, data)
+        );
+        assert_eq!(
+            &body[10 + data.len() + usize::from(pad.is_some())..],
+            &[0xca, 0xfe, 0x99, 0x88]
+        );
+        assert_eq!(doc.tail(), &[0xde, 0xad]);
+    }
+}
+
+#[test]
+fn special_passthrough2_malformed_interiors_stay_opaque() {
+    let mut cases: Vec<Vec<u8>> = (0..6).map(|len| vec![0xff; len]).collect();
+    // Inner count exceeds available bytes, or leaves undeclared bytes inside ByteCount.
+    cases.extend([
+        vec![0, 0, 0, 0, 1, 0],
+        vec![0, 0, 0, 0, 0, 0, 0xff],
+        vec![0, 0, 0, 0, 0xff, 0xff, 0xff],
+    ]);
+    for data in cases {
+        let bytes = subtype_document(0x11d8, &data, &[0xca, 0xfe]);
+        let doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+        assert_eq!(escape(&doc).typed_special_passthrough2_payload(), None);
+        assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+    }
+    let mut record = EscapeRecord {
+        function: 0xab26,
+        escape_function: 0x11d8,
+        data: special_payload(0, &[0xff]),
+        padding: None,
+    };
+    assert_eq!(record.typed_special_passthrough2_payload(), None);
+    record.padding = Some(0xa5);
+    record.escape_function = 0xffff;
+    assert_eq!(record.typed_special_passthrough2_payload(), None);
+    record.escape_function = 0x11d8;
+    record.function = 0x1234;
+    assert_eq!(record.typed_special_passthrough2_payload(), None);
+    let before = record.clone();
+    assert!(record
+        .replace_special_passthrough2_payload(SpecialPassthrough2Payload {
+            reserved: 0,
+            data: &[]
+        })
+        .is_err());
+    assert_eq!(record, before);
+}
+
+#[test]
+fn special_passthrough2_count_bound_and_failed_edits_are_atomic() {
+    let raw = vec![0xff; u16::MAX as usize - 6];
+    let mut record = EscapeRecord {
+        function: 0xab26,
+        escape_function: 0x0013,
+        data: vec![0x80],
+        padding: Some(0x97),
+    };
+    let payload = SpecialPassthrough2Payload {
+        reserved: 0xdead_beef,
+        data: &raw,
+    };
+    record
+        .replace_special_passthrough2_payload(payload)
+        .unwrap();
+    assert_eq!(record.data.len(), u16::MAX as usize);
+    assert_eq!(record.typed_special_passthrough2_payload(), Some(payload));
+    assert_eq!(record.function, 0xab26);
+    assert_eq!(record.padding, Some(0x97));
+    let bytes = subtype_document(
+        0x11d8,
+        &special_payload(payload.reserved, &raw),
+        &[0xca, 0xfe],
+    );
+    let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+    assert_eq!(
+        escape(&doc).typed_special_passthrough2_payload(),
+        Some(payload)
+    );
+    assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+    doc.replace_typed(0, wmf::TypedRecord::Escape(record.clone()))
+        .unwrap();
+    let before_doc = wmf::serialize(&doc).unwrap();
+    for len in [65530, 65535, 65536] {
+        let excessive = vec![0; len];
+        let before = record.clone();
+        assert!(record
+            .replace_special_passthrough2_payload(SpecialPassthrough2Payload {
+                reserved: 1,
+                data: &excessive
+            })
+            .is_err());
+        assert_eq!(record, before);
+        assert_eq!(wmf::serialize(&doc).unwrap(), before_doc);
+    }
+    record.data = special_payload(0, &vec![0; 65530]);
+    record.padding = None;
+    assert_eq!(record.typed_special_passthrough2_payload(), None);
 }
