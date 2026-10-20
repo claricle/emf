@@ -36,7 +36,8 @@ module Emf
 
           # Read-only; computed from the current fields on each call.
           def dib_header_view
-            DibHeader.view(off_bmi_src, cb_bmi_src, 108, body)
+            DibHeader.view(off_bmi_src, cb_bmi_src, 108, body,
+                           bits_offset: off_bits_src, bits_size: cb_bits_src)
           end
         end
       end
