@@ -11,7 +11,8 @@ module Emf
         DIRECTIVES = {
           "BinData::Uint32le" => "V",
           "BinData::Int32le" => "l<",
-          "BinData::Uint8" => "C"
+          "BinData::Uint8" => "C",
+          "BinData::FloatLe" => "e"
         }.freeze
         EMPTY_SUFFIX = "".b.freeze
         private_constant :DIRECTIVES, :EMPTY_SUFFIX
@@ -69,7 +70,8 @@ module Emf
           TypeCodes::DELETEOBJECT, TypeCodes::CREATEBRUSHINDIRECT,
           TypeCodes::SETBKCOLOR, TypeCodes::SETPIXELV, TypeCodes::CREATEPEN,
           TypeCodes::SETBKMODE, TypeCodes::SETTEXTCOLOR, TypeCodes::SETTEXTALIGN,
-          TypeCodes::ELLIPSE, TypeCodes::SETVIEWPORTORGEX, TypeCodes::RESTOREDC
+          TypeCodes::ELLIPSE, TypeCodes::SETVIEWPORTORGEX, TypeCodes::RESTOREDC,
+          TypeCodes::SETWORLDTRANSFORM, TypeCodes::MODIFYWORLDTRANSFORM
         ].freeze
         BY_TYPE = ENABLED_TYPES.to_h { |type_id| [type_id, new(Records.lookup(type_id))] }.freeze
         private_constant :ENABLED_TYPES, :BY_TYPE

@@ -19,7 +19,9 @@ RSpec.describe Emf::Emr::Binary::FastFill do
     "SetTextAlign" => [codes::SETTEXTALIGN, 12, ->(w) { w.text_align_mode = 7 }],
     "Ellipse" => [codes::ELLIPSE, 24, ->(w) { w.rcl_box.bottom = -7 }],
     "SetViewportOrgEx" => [codes::SETVIEWPORTORGEX, 16, ->(w) { w.origin.x = -7 }],
-    "RestoreDc" => [codes::RESTOREDC, 12, ->(w) { w.saved_dc = -7 }]
+    "RestoreDc" => [codes::RESTOREDC, 12, ->(w) { w.saved_dc = -7 }],
+    "SetWorldTransform" => [codes::SETWORLDTRANSFORM, 32, ->(w) { w.xform.dy = -7.5 }],
+    "ModifyWorldTransform" => [codes::MODIFYWORLDTRANSFORM, 36, ->(w) { w.modify_mode = 7 }]
   }
 
   extras = [0, 4, 8].freeze
@@ -89,6 +91,21 @@ RSpec.describe Emf::Emr::Binary::FastFill do
         expect(adapters.map { |r| r.wire.class }).to all(eq(klass))
         expect(adapters.map { |r| r.suffix.bytesize }).to eq([0, 8])
         expect(parsed.errors).to be_empty
+      end
+    end
+  end
+
+  {
+    "quiet NaN" => 0x7fc00000, "signalling NaN" => 0x7fa00001, "NaN with low payload" => 0x7f800001,
+    "negative NaN payload" => 0xffc12345, "-0.0" => 0x80000000, "denormal" => 0x00000001,
+    "largest denormal" => 0x007fffff, "+Inf" => 0x7f800000, "-Inf" => 0xff800000
+  }.each do |label, bits|
+    types.keys.grep(/WorldTransform/).each do |name|
+      it "#{name} keeps #{label} bytes identical to read" do
+        type, size, = types.fetch(name)
+        bytes = [type, size].pack("VV") + ([bits] * 6).pack("V*") + ("\x01".b * (size - 32))
+        wire, = described_class.for(type).call(bytes)
+        expect(wire.to_binary_s).to eq(Emf::Emr::Binary::Records.const_get(name).read(bytes).to_binary_s)
       end
     end
   end
