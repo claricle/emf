@@ -11,7 +11,7 @@ module Emf
         metafile.records.each do |record|
           case record
           when Model::Emr::Records::WireAdapter
-            bytes << record.wire.to_binary_s
+            bytes << record.to_binary_s
           else
             raise SerializeError, "cannot serialize #{record.class} (TODO 10 lands domain to_wire)"
           end
