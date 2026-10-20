@@ -276,7 +276,78 @@ fn missing_eof_is_diagnostic_and_mismatched_declared_sizes_are_preserved() {
         .diagnostics()
         .iter()
         .any(|d| d.kind == wmf::DiagnosticKind::MissingEof));
+    assert_eq!(doc.diagnostics().len(), 1);
     assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+}
+
+#[test]
+fn completed_stream_reports_header_metadata_damage_without_losing_bytes() {
+    for with_placeable in [false, true] {
+        for field in [4usize, 6, 12] {
+            let mut bytes = standard(&[record(0xfefe, &[1, 2]), record(0, &[])], &[9, 8, 7]);
+            if field == 4 {
+                bytes[4..6].copy_from_slice(&0x0200u16.to_le_bytes());
+            } else {
+                bytes[field..field + 4].copy_from_slice(&u32::MAX.to_le_bytes());
+            }
+            let bytes = if with_placeable {
+                placeable(&bytes)
+            } else {
+                bytes
+            };
+            let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+            assert_eq!(
+                doc.diagnostics().len(),
+                1,
+                "field {field}, placeable {with_placeable}"
+            );
+            let diagnostic = &doc.diagnostics()[0];
+            assert_eq!(
+                diagnostic.offset,
+                field + if with_placeable { 22 } else { 0 }
+            );
+            assert_eq!(diagnostic.function, None);
+            assert_eq!(
+                diagnostic.kind,
+                match field {
+                    4 => wmf::DiagnosticKind::UnsupportedVersion { version: 0x0200 },
+                    6 => wmf::DiagnosticKind::HeaderSizeMismatch {
+                        declared_words: u32::MAX,
+                        actual_words: 16,
+                    },
+                    _ => wmf::DiagnosticKind::MaxRecordMismatch {
+                        declared_words: u32::MAX,
+                        actual_words: 4,
+                    },
+                }
+            );
+            assert_eq!(doc.tail(), [9, 8, 7]);
+            assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+            if field != 4 {
+                doc.replace_record(0, 0xfefe, vec![1, 2, 3, 4]).unwrap();
+                let encoded = wmf::serialize(&doc).unwrap();
+                let reparsed = wmf::parse(&encoded, &ParseLimits::default()).unwrap();
+                assert!(reparsed.diagnostics().is_empty());
+                assert_eq!(reparsed.header().size, 17);
+                assert_eq!(reparsed.header().max_record, 5);
+                assert_eq!(reparsed.tail(), [9, 8, 7]);
+            }
+        }
+    }
+}
+
+#[test]
+fn supported_header_versions_and_file_types_have_no_metadata_diagnostics() {
+    for version in [0x0100u16, 0x0300] {
+        for file_type in [1u16, 2] {
+            let mut bytes = standard(&[record(0, &[])], &[]);
+            bytes[..2].copy_from_slice(&file_type.to_le_bytes());
+            bytes[4..6].copy_from_slice(&version.to_le_bytes());
+            let doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+            assert!(doc.diagnostics().is_empty());
+            assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+        }
+    }
 }
 
 #[test]
@@ -290,4 +361,29 @@ fn existing_standard_and_placeable_line_fixtures_roundtrip() {
         assert!(doc.records().iter().any(|r| r.function() == 0x0214));
         assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
     }
+}
+
+#[test]
+fn invalid_typed_edit_reports_target_index_and_preserves_document() {
+    use wmf::{geometry::GeometryRecord, TypedRecord};
+
+    let bytes = standard(
+        &[
+            record(0xfefe, &[0xaa, 0xbb]),
+            record(0x0324, &[2, 0, 1, 0, 2, 0, 3, 0, 4, 0]),
+            record(0, &[]),
+        ],
+        &[0xde, 0xad, 0xbe],
+    );
+    let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+    let original = doc.records()[1].typed().unwrap().clone();
+    assert_eq!(
+        doc.replace_typed(
+            1,
+            TypedRecord::Geometry(GeometryRecord::Polygon { points: vec![] }),
+        ),
+        Err(EditFailure::RecordLayout { index: 1 })
+    );
+    assert_eq!(doc.records()[1].typed(), Some(&original));
+    assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
 }
