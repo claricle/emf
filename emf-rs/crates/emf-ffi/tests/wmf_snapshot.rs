@@ -255,18 +255,15 @@ fn other_state_records_remain_opaque() {
         record(0x001e, &[]),           // SaveDC.
         record(0x0127, &[0xff, 0xff]), // RestoreDC.
         record(0x0105, &[0xde, 0xad]), // Reserved SetRelAbs.
-        record(0x0035, &[]),           // RealizePalette.
-        record(0x0139, &[2, 0]),       // ResizePalette.
-        record(0x0234, &[0, 0]),       // SelectPalette.
         record(0, &[]),
     ];
     let bytes = unsafe { snapshot(parse(&source(&records, b""))) };
     let values = payloads(&bytes);
-    for value in &values[..6] {
+    for value in &values[..3] {
         assert_eq!(value.1, 0);
         assert!(value.2.is_empty());
     }
-    assert_eq!(values[6], (0, 1, vec![]));
+    assert_eq!(values[3], (0, 1, vec![]));
 }
 
 #[test]
@@ -395,4 +392,124 @@ fn version100_dib_diagnostic_preserves_wire_details_and_source() {
             }
         }
     }
+}
+
+#[test]
+fn palette_fields_are_unsigned_in_wire_order_and_preserve_complete_source_spans() {
+    let cases: [(u16, &[u8], &[u32]); 10] = [
+        (
+            0x00f7,
+            &[0, 3, 2, 0, 0xff, 0x80, 0, 0xfe, 1, 2, 3, 4],
+            &[0x0300, 2, 0xff, 0x80, 0, 0xfe, 1, 2, 3, 4],
+        ),
+        (
+            0xab37,
+            &[0xff, 0xff, 1, 0, 0x81, 0x82, 0x83, 0xff],
+            &[0xffff, 1, 0x81, 0x82, 0x83, 0xff],
+        ),
+        (
+            0xcd36,
+            &[0, 0x80, 1, 0, 0xfe, 0xfd, 0xfc, 0xfb],
+            &[0x8000, 1, 0xfe, 0xfd, 0xfc, 0xfb],
+        ),
+        (0xeff7, &[0xff, 0xff, 0, 0], &[0xffff, 0]),
+        (0x0037, &[0, 0x80, 0, 0], &[0x8000, 0]),
+        (0x0036, &[0, 0, 0, 0], &[0, 0]),
+        (0xab34, &[0xff, 0xff], &[0xffff]),
+        (0xcd39, &[0xff, 0xff], &[0xffff]),
+        (0xef35, &[], &[]),
+        (0x0035, &[], &[]),
+    ];
+    let suffix = [0xde, 0xad, 0xbe, 0xef];
+    let mut records: Vec<_> = cases
+        .iter()
+        .map(|(function, prefix, _)| {
+            let mut body = prefix.to_vec();
+            body.extend_from_slice(&suffix);
+            record(*function, &body)
+        })
+        .collect();
+    // Malformed arrays/scalars and unrelated states remain opaque.
+    records.extend([
+        record(0x00f7, &[0, 3]),
+        record(0x0037, &[0, 0, 2, 0, 1, 2, 3, 4]),
+        record(0x0036, &[0, 0, 0xff, 0xff]),
+        record(0x0234, &[]),
+        record(0x0139, &[]),
+        record(0x001e, &[]),
+        record(0x7777, &[0x80, 0xff]),
+        record(0, &[]),
+    ]);
+    let input = source(&records, b"palette-tail\0");
+    unsafe {
+        let doc = parse(&input);
+        let mut buffer = ptr::null_mut();
+        assert_eq!(emf_wmf_serialize(doc, &mut buffer, ptr::null_mut()), EMF_OK);
+        let mut data = ptr::null();
+        let mut length = 0;
+        assert_eq!(emf_buffer_view(buffer, &mut data, &mut length), EMF_OK);
+        assert_eq!(slice::from_raw_parts(data, length as usize), input);
+        emf_buffer_free(buffer);
+
+        let bytes = snapshot(doc);
+        let values = payloads(&bytes);
+        for (index, (function, _, expected)) in cases.iter().enumerate() {
+            assert_eq!(
+                values[index],
+                (
+                    u32::from(*function),
+                    8,
+                    expected.iter().flat_map(|n| n.to_le_bytes()).collect()
+                )
+            );
+        }
+        for value in &values[cases.len()..values.len() - 1] {
+            assert_eq!(value.1, 0);
+            assert!(value.2.is_empty());
+        }
+        assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
+        let mut descriptor = 120;
+        let mut source_offset = 18;
+        for (index, original) in records.iter().enumerate() {
+            let offset = u64_at(&bytes, descriptor + 8) as usize;
+            let length = u64_at(&bytes, descriptor + 16) as usize;
+            assert_eq!(offset, source_offset);
+            assert_eq!(length, original.len());
+            assert_eq!(&input[offset..offset + length], original);
+            if index < cases.len() {
+                assert_eq!(
+                    &input[offset + 6 + cases[index].1.len()..offset + length],
+                    suffix
+                );
+            }
+            descriptor += 40 + values[index].2.len();
+            source_offset += length;
+        }
+        assert_eq!(u64_at(&bytes, 40), input.len() as u64);
+        assert_eq!(&bytes[bytes.len() - 13..], b"palette-tail\0");
+    }
+}
+
+#[test]
+fn palette_entry_count_reaches_unsigned_wire_maximum() {
+    let mut body = vec![0xff, 0xff, 0xff, 0xff];
+    for index in 0..u16::MAX {
+        body.extend_from_slice(&[index as u8, (index >> 8) as u8, 0x80, 0xff]);
+    }
+    let input = source(&[record(0x00f7, &body), record(0, &[])], b"");
+    let bytes = unsafe { snapshot(parse(&input)) };
+    let values = payloads(&bytes);
+    let payload = &values[0].2;
+    assert_eq!(values[0].1, 8);
+    assert_eq!(payload.len(), 8 + 16 * usize::from(u16::MAX));
+    assert_eq!(u32_at(payload, 0), 0xffff);
+    assert_eq!(u32_at(payload, 4), 0xffff);
+    for index in 0..usize::from(u16::MAX) {
+        let offset = 8 + 16 * index;
+        assert_eq!(u32_at(payload, offset), (index & 0xff) as u32);
+        assert_eq!(u32_at(payload, offset + 4), (index >> 8) as u32);
+        assert_eq!(u32_at(payload, offset + 8), 0x80);
+        assert_eq!(u32_at(payload, offset + 12), 0xff);
+    }
+    assert_eq!(values[1], (0, 1, vec![]));
 }

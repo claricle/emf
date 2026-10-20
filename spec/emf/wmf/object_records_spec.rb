@@ -101,15 +101,24 @@ RSpec.describe "WMF object records" do
 
   it "reserves handles for opaque object creators without decoding their payloads" do
     select_one = object_record(0x012D, [1].pack("v"))
-    palette_payload = [0x0300, 0].pack("v2")
-    [0x00F7, 0x01F9, 0x06FF, 0x0142].each do |function|
-      payload = function == 0x00F7 ? palette_payload : "\x00\x00".b
-      creator = object_record(function, payload)
+    [0x01F9, 0x06FF, 0x0142].each do |function|
+      creator = object_record(function, "\x00\x00".b)
       bytes = object_file([creator, pen, select_one, delete_zero, brush, select_zero])
       metafile = Emf.parse(bytes)
       expect(metafile.records.first.raw_bytes).to eq(creator)
       expect(Emf.serialize(metafile)).to eq(bytes)
     end
+  end
+
+  it "decodes CreatePalette while reserving its object handle" do
+    palette = object_record(0x00F7, [0x0300, 1, 10, 20, 30, 40].pack("v2C*"))
+    bytes = object_file([palette, object_record(0x012D, [0].pack("v"))])
+
+    records = Emf.parse(bytes).records
+    expect(records.first).to be_a(Emf::Model::Wmf::Records::CreatePalette)
+    expect(records.first.entries.map { |entry| [entry.red, entry.green, entry.blue, entry.flags] }).to eq([[10, 20, 30, 40]])
+    expect(records[1].object_index).to eq(0)
+    expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
   end
 
   it "rejects nonexistent, deleted and out-of-capacity handles with the record location" do

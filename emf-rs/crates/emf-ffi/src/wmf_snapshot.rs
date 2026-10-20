@@ -145,6 +145,14 @@ fn family(record: &Record) -> u32 {
         Some(TypedRecord::Text(_)) => 5,
         Some(TypedRecord::State(s)) if scalar_state(s).is_some() => 6,
         Some(TypedRecord::State(S::CreateFontIndirect(_))) => 7,
+        Some(TypedRecord::State(
+            S::CreatePalette(_)
+            | S::SetPalEntries(_)
+            | S::AnimatePalette(_)
+            | S::SelectPalette(_)
+            | S::RealizePalette
+            | S::ResizePalette(_),
+        )) => 8,
         _ => 0,
     }
 }
@@ -225,6 +233,20 @@ fn payload(
             }
             out.raw(&font.face_name)?;
         }
+        (8, Some(TypedRecord::State(s))) => match s {
+            S::CreatePalette(p) | S::SetPalEntries(p) | S::AnimatePalette(p) => {
+                out.u32(u32::from(p.start))?;
+                out.u32(p.entries.len() as u32)?;
+                for entry in &p.entries {
+                    for value in [entry.red, entry.green, entry.blue, entry.flags] {
+                        out.u32(u32::from(value))?;
+                    }
+                }
+            }
+            S::SelectPalette(index) | S::ResizePalette(index) => out.u32(u32::from(*index))?,
+            S::RealizePalette => (),
+            _ => unreachable!(),
+        },
         (5, Some(TypedRecord::Text(t))) => {
             let (x, y, text, padding, options, rectangle, dx, suffix) = match t {
                 T::TextOut {

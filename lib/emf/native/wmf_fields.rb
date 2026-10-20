@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "wmf_text_fields"
+require_relative "wmf_palette_fields"
 
 module Emf
   module Native
@@ -19,8 +20,7 @@ module Emf
           validate(@record.fetch(:family) == 1 && @payload.empty? && @raw.bytesize == 6)
           return Model::Wmf::Records::Eof.new(offset: @offset)
         end
-        return font if @function == 0xFB
-        return state(Wmf::Binary::STATE_RECORDS.fetch(@function)) if Wmf::Binary::STATE_RECORDS.key?(@function)
+        return prefix_record if Wmf::Binary::PREFIX_FUNCTIONS.include?(@function)
         return fixed(Wmf::Binary::OBJECT_RECORDS.fetch(@function), 4) if Wmf::Binary::OBJECT_RECORDS.key?(@function)
         return WmfTextFields.new(@record, @raw).call if Wmf::Binary::TEXT_FUNCTIONS.include?(@function)
         return points(Wmf::Binary::POINT_ARRAY_RECORDS.fetch(@function)) if Wmf::Binary::POINT_ARRAY_RECORDS.key?(@function)
@@ -30,6 +30,13 @@ module Emf
       end
 
       private
+
+      def prefix_record
+        return font if @function == 0xFB
+        return state(Wmf::Binary::STATE_RECORDS.fetch(@function)) if Wmf::Binary::STATE_RECORDS.key?(@function)
+
+        WmfPaletteFields.new(@record, @raw).call
+      end
 
       def font
         klass = Model::Wmf::Records::CreateFontIndirect

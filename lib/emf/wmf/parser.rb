@@ -72,8 +72,7 @@ module Emf
           parse_error(offset, function, "invalid EOF length") unless raw.bytesize == 6
           return Model::Wmf::Records::Eof.new(offset: offset)
         end
-        return decode_font(raw, function, offset) if function & 0xFF == 0xFB
-        return decode_state(raw, function, offset) if Binary::STATE_RECORDS.key?(function & 0xFF)
+        return decode_prefix_record(raw, function, offset) if Binary::PREFIX_FUNCTIONS.include?(function & 0xFF)
         return decode_object(raw, function, offset) if Binary::OBJECT_RECORDS.key?(function & 0xFF)
         if Binary::TEXT_FUNCTIONS.include?(function & 0xFF)
           return TextCodec.decode(raw, function, offset) { |message| parse_error(offset, function, message) }
@@ -87,6 +86,13 @@ module Emf
         parse_error(offset, function, "invalid fixed record length") unless raw.bytesize == 6 + (fields.length * 2)
         values = raw.byteslice(6..).unpack("s<*")
         record_class.new(**fields.zip(values).to_h, type_id: function, offset: offset)
+      end
+
+      def decode_prefix_record(raw, function, offset)
+        return decode_font(raw, function, offset) if function & 0xFF == 0xFB
+        return decode_state(raw, function, offset) if Binary::STATE_RECORDS.key?(function & 0xFF)
+
+        PaletteCodec.decode(raw, function, offset) { |message| parse_error(offset, function, message) }
       end
 
       def decode_state(raw, function, offset)
@@ -140,6 +146,8 @@ module Emf
       end
 
       def record_size(record)
+        return PaletteCodec.byte_size(record) / 2 if PaletteCodec::FUNCTIONS.key?(record.class)
+
         return record.raw_bytes.bytesize / 2 if record.is_a?(Model::Wmf::Records::UnknownRecord)
         return TextCodec.byte_size(record) / 2 if record.is_a?(Model::Wmf::Records::TextOut)
 

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "emf/wmf/text_codec"
+require "emf/wmf/palette_codec"
 
 module Emf
   module Wmf
@@ -51,6 +52,7 @@ module Emf
         0x49 => Model::Wmf::Records::SetLayout
       }.freeze
       STATE_FUNCTIONS = STATE_RECORDS.invert.freeze
+      PREFIX_FUNCTIONS = ([0xFB] + STATE_RECORDS.keys + PaletteCodec::RECORDS.keys).freeze
 
       OBJECT_RECORDS = {
         0xFA => Model::Wmf::Records::CreatePenIndirect,
@@ -63,7 +65,7 @@ module Emf
       OBJECT_CREATORS = [0xFA, 0xFC, 0xFB, 0xF7, 0xF9, 0xFF, 0x42].freeze
       TEXT_FUNCTIONS = [0x21, 0x32].freeze
       TYPED_FUNCTIONS = (FIXED_RECORDS.keys + POINT_ARRAY_RECORDS.keys + OBJECT_RECORDS.keys + STATE_RECORDS.keys +
-                         TEXT_FUNCTIONS + [0xFB]).freeze
+                         TEXT_FUNCTIONS + PaletteCodec::RECORDS.keys + [0xFB]).freeze
 
       module_function
 
@@ -96,16 +98,21 @@ module Emf
           if OBJECT_CREATORS.include?(function)
             index = slots.index(false)
             yield record, "object table capacity exceeded" unless index
-            slots[index] = true
+            slots[index] = function
           elsif record.is_a?(Model::Wmf::Records::ObjectReference)
-            index = record.object_index
-            # Preserve high-bit stock selectors without interpreting their numeric ID.
-            next if record.is_a?(Model::Wmf::Records::SelectObject) && index.anybits?(0x8000)
-
-            yield record, "invalid object reference #{index}" unless index < capacity && slots[index]
-            slots[index] = false if record.is_a?(Model::Wmf::Records::DeleteObject)
+            validate_object_reference(record, capacity, slots) { |message| yield record, message }
           end
         end
+      end
+
+      def validate_object_reference(record, capacity, slots)
+        index = record.object_index
+        # Preserve high-bit stock selectors without interpreting their numeric ID.
+        return if record.is_a?(Model::Wmf::Records::SelectObject) && index.anybits?(0x8000)
+
+        yield "invalid object reference #{index}" unless index < capacity && slots[index]
+        yield "object reference #{index} is not a palette" if record.is_a?(Model::Wmf::Records::SelectPalette) && slots[index] != 0xF7
+        slots[index] = false if record.is_a?(Model::Wmf::Records::DeleteObject)
       end
 
       def int16(value, name)

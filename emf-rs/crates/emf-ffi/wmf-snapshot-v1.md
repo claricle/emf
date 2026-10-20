@@ -42,8 +42,17 @@ length, then payload. The function includes the original high byte. Families:
   bytes survive, including NUL and bytes after it. No suffix length or suffix
   bytes are included; the complete source span retains any bytes after the
   known 50-byte WMF font prefix.
+- 8: palette state. CreatePalette (low function byte f7), SetPalEntries (37)
+  and AnimatePalette (36) have u32 start/count followed by count entries, each
+  four u32 values in red/green/blue/flags wire order (8 + 16 * count bytes).
+  Start is the palette version for CreatePalette and the entry offset for updates.
+  SelectPalette (34) has one u32 object index; ResizePalette (39) has one u32
+  entry count; RealizePalette (35) has an empty payload. All u16 and u8 values
+  are zero-extended. No suffix length or suffix bytes are included. The complete
+  source span retains bytes after the known WMF prefix: 4 + 4 * count bytes for
+  array variants, two bytes for SelectPalette/ResizePalette, zero for RealizePalette.
 
-Families 2–7 cover the existing Ruby WMF models only. Rust-only typed records
+Families 2–8 cover the existing Ruby WMF models only. Rust-only typed records
 remain opaque. For Ruby compatibility, ExtTextOut DX consumes one i16 per
 character even with ETO_PDY set; the original flag and remaining bytes survive
 as suffix. The compatibility view uses the Rust typed decoder with only that

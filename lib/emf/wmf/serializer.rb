@@ -53,6 +53,8 @@ module Emf
       end
 
       def serialize_record(record)
+        return PaletteCodec.encode(record) if PaletteCodec::FUNCTIONS.key?(record.class)
+
         case record
         when Model::Wmf::Records::Eof then [3, 0].pack("Vv")
         when Model::Wmf::Records::PointRecord, Model::Wmf::Records::RectangleRecord, Model::Wmf::Records::OffsetRecord
