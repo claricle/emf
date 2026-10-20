@@ -7,7 +7,7 @@ module Emf
       class ColorCurve < Effect
         GUID = "dd6a0022-58e4-4a67-9d9b-d48eb881a53d"
 
-        class ColorCurveBody < BinData::Record
+        class ColorCurveBody < Records::Body
           endian :little
           uint32 :curve_adjustment
           uint32 :curve_channel

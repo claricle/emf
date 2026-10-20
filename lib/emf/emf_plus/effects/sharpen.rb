@@ -7,7 +7,7 @@ module Emf
       class Sharpen < Effect
         GUID = "63cbf3ee-c526-402c-8f71-62c540bf5142"
 
-        class SharpenBody < BinData::Record
+        class SharpenBody < Records::Body
           endian :little
           float :radius
           float :amount

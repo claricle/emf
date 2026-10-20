@@ -8,7 +8,7 @@ module Emf
     module Objects
       # EmfPlusImageAttributes (2.2.1.5).
       class ImageAttributes < Typed
-        class ImageAttributesBody < BinData::Record
+        class ImageAttributesBody < Records::Body
           endian :little
           graphics_version :version
           uint32 :reserved1

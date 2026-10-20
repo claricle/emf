@@ -7,7 +7,7 @@ module Emf
       class BrightnessContrast < Effect
         GUID = "d3a1dbe1-8ec4-4c17-9f4c-ea97ad1c343d"
 
-        class BrightnessContrastBody < BinData::Record
+        class BrightnessContrastBody < Records::Body
           endian :little
           int32 :brightness_level
           int32 :contrast_level

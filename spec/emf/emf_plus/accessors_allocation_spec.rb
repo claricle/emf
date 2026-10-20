@@ -13,6 +13,22 @@ RSpec.describe "EMF+ BinData field accessors" do
     expect(body.send(body.field_names.first).singleton_methods).to be_empty
   end
 
+  it "defines no singleton methods on an object body" do
+    logical = Emf::EmfPlus::ObjectChain.call(records).find { |e| e.is_a?(Emf::EmfPlus::ObjectChain::LogicalObject) }
+    body = logical.body.body
+    expect(body.singleton_methods).to be_empty
+    expect(body.send(body.field_names.first).singleton_methods).to be_empty
+  end
+
+  it "defines no singleton methods on an effect body" do
+    metafile = Emf.parse(File.binread(File.join(__dir__, "../../fixtures/emf/test-038.emf")))
+    frames = Emf::EmfPlus::Parser.from_metafile(metafile, errors: [])
+    record = Emf::EmfPlus::Records.decode_all(frames).find { |r| r.respond_to?(:effect) && r.effect.respond_to?(:body) }
+    body = record.effect.body
+    expect(body.singleton_methods).to be_empty
+    expect(body.send(body.field_names.first).singleton_methods).to be_empty
+  end
+
   it "defines no singleton methods on a primitive instance" do
     point = Emf::EmfPlus::Records::Primitives::Point.new(x: 1, y: 2)
     expect(point.x).to eq(1)

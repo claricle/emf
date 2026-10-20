@@ -12,7 +12,7 @@ module Emf
         FIXED_SIZE = 60
         COUNTS_OFFSET = 52
 
-        class StringFormatBody < BinData::Record
+        class StringFormatBody < Records::Body
           endian :little
           graphics_version :version
           uint32 :string_format_flags

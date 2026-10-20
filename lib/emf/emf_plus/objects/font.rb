@@ -10,7 +10,7 @@ module Emf
         FIXED_SIZE = 24
         LENGTH_OFFSET = 20
 
-        class FontBody < BinData::Record
+        class FontBody < Records::Body
           endian :little
           graphics_version :version
           float :em_size

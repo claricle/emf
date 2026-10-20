@@ -16,14 +16,14 @@ module Emf
         DATA_FILL_PATH = 0x01
         DATA_LINE_PATH = 0x02
 
-        class CustomLineCapHeader < BinData::Record
+        class CustomLineCapHeader < Records::Body
           endian :little
           graphics_version :version
           uint32 :cap_type
         end
 
         # EmfPlusCustomLineCapData (2.2.2.13) without OptionalData.
-        class CustomLineCapDefaultData < BinData::Record
+        class CustomLineCapDefaultData < Records::Body
           endian :little
           uint32 :custom_line_cap_data_flags
           uint32 :base_cap
@@ -38,7 +38,7 @@ module Emf
         end
 
         # EmfPlusCustomLineCapArrowData (2.2.2.12).
-        class CustomLineCapArrowData < BinData::Record
+        class CustomLineCapArrowData < Records::Body
           endian :little
           float :width
           float :height

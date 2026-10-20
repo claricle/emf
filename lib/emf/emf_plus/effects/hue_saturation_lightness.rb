@@ -7,7 +7,7 @@ module Emf
       class HueSaturationLightness < Effect
         GUID = "8b2dd6c3-eb07-4d87-a5f0-7108e26a9c5f"
 
-        class HueSaturationLightnessBody < BinData::Record
+        class HueSaturationLightnessBody < Records::Body
           endian :little
           int32 :hue_level
           int32 :saturation_level

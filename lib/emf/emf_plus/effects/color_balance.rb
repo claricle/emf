@@ -7,7 +7,7 @@ module Emf
       class ColorBalance < Effect
         GUID = "537e597d-251e-48da-9664-29ca496b70f8"
 
-        class ColorBalanceBody < BinData::Record
+        class ColorBalanceBody < Records::Body
           endian :little
           int32 :cyan_red
           int32 :magenta_green

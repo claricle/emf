@@ -28,7 +28,7 @@ module Emf
         P = Records::Primitives
         private_constant :P
 
-        class PenHeader < BinData::Record
+        class PenHeader < Records::Body
           endian :little
           graphics_version :version
           uint32 :pen_type
@@ -38,14 +38,14 @@ module Emf
         end
 
         # EmfPlusDashedLineData (2.2.2.16).
-        class DashedLineData < BinData::Record
+        class DashedLineData < Records::Body
           endian :little
           uint32 :dashed_line_data_size
           array :dashed_line_data, type: :float_le, initial_length: :dashed_line_data_size
         end
 
         # EmfPlusCompoundLineData (2.2.2.9).
-        class CompoundLineData < BinData::Record
+        class CompoundLineData < Records::Body
           endian :little
           uint32 :compound_line_data_size
           array :compound_line_data, type: :float_le, initial_length: :compound_line_data_size

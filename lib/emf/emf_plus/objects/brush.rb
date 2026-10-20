@@ -37,20 +37,20 @@ module Emf
         P = Records::Primitives
         private_constant :P
 
-        class BrushHeader < BinData::Record
+        class BrushHeader < Records::Body
           endian :little
           graphics_version :version
           uint32 :brush_type
         end
 
         # EmfPlusSolidBrushData (2.2.2.43).
-        class SolidBrushData < BinData::Record
+        class SolidBrushData < Records::Body
           endian :little
           argb :solid_color
         end
 
         # EmfPlusHatchBrushData (2.2.2.20).
-        class HatchBrushData < BinData::Record
+        class HatchBrushData < Records::Body
           endian :little
           uint32 :hatch_style
           argb :fore_color
@@ -58,14 +58,14 @@ module Emf
         end
 
         # EmfPlusTextureBrushData (2.2.2.45) without OptionalData.
-        class TextureBrushData < BinData::Record
+        class TextureBrushData < Records::Body
           endian :little
           uint32 :brush_data_flags
           int32 :wrap_mode
         end
 
         # EmfPlusLinearGradientBrushData (2.2.2.24) without OptionalData.
-        class LinearGradientBrushData < BinData::Record
+        class LinearGradientBrushData < Records::Body
           endian :little
           uint32 :brush_data_flags
           int32 :wrap_mode
@@ -77,7 +77,7 @@ module Emf
         end
 
         # EmfPlusPathGradientBrushData (2.2.2.29) up to SurroundingColorCount.
-        class PathGradientBrushData < BinData::Record
+        class PathGradientBrushData < Records::Body
           endian :little
           uint32 :brush_data_flags
           int32 :wrap_mode
@@ -85,21 +85,21 @@ module Emf
           point_f :center_point_f
         end
 
-        class SurroundingColors < BinData::Record
+        class SurroundingColors < Records::Body
           endian :little
           uint32 :surrounding_color_count
           array :surrounding_color, type: :argb, initial_length: :surrounding_color_count
         end
 
         # EmfPlusBoundaryPathData (2.2.2.6).
-        class BoundaryPathData < BinData::Record
+        class BoundaryPathData < Records::Body
           endian :little
           int32 :boundary_path_size
           string :boundary_path_data, read_length: :boundary_path_size
         end
 
         # EmfPlusBoundaryPointData (2.2.2.7).
-        class BoundaryPointData < BinData::Record
+        class BoundaryPointData < Records::Body
           endian :little
           int32 :boundary_point_count
           array :boundary_point_data, type: :point_f, initial_length: :boundary_point_count

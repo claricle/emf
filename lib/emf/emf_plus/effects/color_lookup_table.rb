@@ -7,7 +7,7 @@ module Emf
       class ColorLookupTable < Effect
         GUID = "a7ce72a9-0f7f-40d7-b3cc-d0c02d5c3212"
 
-        class ColorLookupTableBody < BinData::Record
+        class ColorLookupTableBody < Records::Body
           endian :little
           string :blue_lookup_table, length: 256
           string :green_lookup_table, length: 256

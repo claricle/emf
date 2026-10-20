@@ -21,7 +21,7 @@ module Emf
         METAFILE_SIZE_OFFSET = 12
         METAFILE_DATA_OFFSET = 16
 
-        class ImageBody < BinData::Record
+        class ImageBody < Records::Body
           endian :little
           graphics_version :version
           uint32 :image_type
