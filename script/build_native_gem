@@ -1,15 +1,20 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Usage: script/build_native_gem --platform NAME --output DIR [--library PATH --abi-version N]
+# Usage: script/build_native_gem --platform NAME --output DIR
+#          [--library PATH --abi-version N --target TRIPLE [--revision SHA]]
 #
 # Builds a platform gem (or, with --platform ruby, the source gem) from
 # emf.gemspec in a temporary staging tree. The repository is never modified:
-# the native library and platforms.json exist only in the staging copy.
+# the native library, platforms.json and provenance.json exist only in the
+# staging copy. provenance.json records the library hash, Rust target, the
+# rustc/cargo found on PATH, the Cargo.lock hash, the crate version, the git
+# revision and the gem version.
 
 require "digest"
 require "fileutils"
 require "json"
+require "open3"
 require "optparse"
 require "rubygems/package"
 require "tmpdir"
@@ -17,12 +22,16 @@ require "tmpdir"
 class NativeGemBuilder
   ROOT = File.expand_path("..", __dir__)
   NATIVE_DIR = "lib/emf/native"
+  CARGO_LOCK = "emf-rs/Cargo.lock"
+  FFI_MANIFEST = "emf-rs/crates/emf-ffi/Cargo.toml"
 
-  def initialize(platform:, output:, library: nil, abi_version: nil)
+  def initialize(platform:, output:, library: nil, abi_version: nil, target: nil, revision: nil)
     @platform = platform
     @output = File.expand_path(output)
     @library = library && File.expand_path(library)
     @abi_version = abi_version
+    @target = target
+    @revision = revision
   end
 
   def build
@@ -44,6 +53,7 @@ class NativeGemBuilder
     abort "--library is required unless --platform is ruby" unless @library
     abort "library not found: #{@library}" unless File.file?(@library)
     abort "--abi-version is required with --library" unless @abi_version
+    abort "--target is required with --library" unless @target
   end
 
   def build_in(stage)
@@ -59,16 +69,45 @@ class NativeGemBuilder
     name = File.basename(@library)
     relative = File.join(NATIVE_DIR, @platform, name)
     stage_file(stage, @library, relative)
-    manifest = File.join(NATIVE_DIR, "platforms.json")
-    File.write(File.join(stage, manifest), JSON.pretty_generate(manifest_data(name)) << "\n")
+    manifest = write_json(stage, "platforms.json", manifest_data(name))
+    provenance = write_json(stage, "provenance.json", provenance_data(spec))
     spec.platform = @platform
-    spec.files += [relative, manifest]
+    spec.files += [relative, manifest, provenance]
     spec
+  end
+
+  def write_json(stage, name, data)
+    relative = File.join(NATIVE_DIR, name)
+    File.write(File.join(stage, relative), JSON.pretty_generate(data) << "\n")
+    relative
   end
 
   def manifest_data(name)
     { platform: @platform, library: name, sha256: Digest::SHA256.file(@library).hexdigest,
       abi_version: Integer(@abi_version) }
+  end
+
+  def provenance_data(spec)
+    { platform: @platform, target: @target, library_sha256: Digest::SHA256.file(@library).hexdigest,
+      rustc: tool_version("rustc"), cargo: tool_version("cargo"),
+      cargo_lock_sha256: Digest::SHA256.file(File.join(ROOT, CARGO_LOCK)).hexdigest,
+      crate_version: crate_version, revision: @revision || git_revision, gem_version: spec.version.to_s }
+  end
+
+  def tool_version(tool)
+    out, status = Open3.capture2(tool, "--version")
+    abort "#{tool} --version failed; provenance needs the build toolchain on PATH" unless status.success?
+    out.strip
+  end
+
+  def crate_version
+    File.read(File.join(ROOT, FFI_MANIFEST))[/^version\s*=\s*"([^"]+)"/, 1] || abort("no version in #{FFI_MANIFEST}")
+  end
+
+  def git_revision
+    out, status = Open3.capture2("git", "rev-parse", "HEAD", chdir: ROOT)
+    abort "git rev-parse HEAD failed; pass --revision" unless status.success?
+    out.strip
   end
 
   def stage_file(stage, source, relative)
@@ -89,6 +128,8 @@ OptionParser.new do |o|
   o.on("--output DIR", "directory receiving the .gem") { |v| options[:output] = v }
   o.on("--library PATH", "built native library (platform gems)") { |v| options[:library] = v }
   o.on("--abi-version N", "ABI version the library reports") { |v| options[:abi_version] = v }
+  o.on("--target TRIPLE", "Rust target triple the library was built for") { |v| options[:target] = v }
+  o.on("--revision SHA", "git revision (default: HEAD)") { |v| options[:revision] = v }
 end.parse!
 
 abort "--platform and --output are required" unless options[:platform] && options[:output]

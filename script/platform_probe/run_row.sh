@@ -133,7 +133,7 @@ package_steps() {
   nroot=$(native_path "$root") nlib=$(native_path "$lib") npkg=$(native_path "$pkg") ninstall=$(native_path "$install_dir")
   rm -rf "${pkg:?}" "${install_dir:?}" "${out:?}/bin"
   step "build_platform_gem" package-build-platform.log \
-    ruby "$nroot/script/build_native_gem" --platform "$platform" --library "$nlib" --abi-version 1 --output "$npkg" || return
+    ruby "$nroot/script/build_native_gem" --platform "$platform" --library "$nlib" --abi-version 1 --target "$target" ${GITHUB_SHA:+--revision "$GITHUB_SHA"} --output "$npkg" || return
   step "build_source_gem" package-build-source.log \
     ruby "$nroot/script/build_native_gem" --platform ruby --output "$npkg" || return
   step "package_check" package-check.log ruby "$nroot/script/check_native_package" --directory "$npkg" || return

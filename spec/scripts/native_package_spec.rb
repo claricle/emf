@@ -29,9 +29,12 @@ RSpec.describe "native gem packaging scripts" do
 
     @library = File.join(target, "release", library_name)
     @platform = Gem::Platform.local.to_s
+    @target = `rustc -vV`[/^host: (.+)$/, 1]
+    @revision = "a" * 40
     @good = File.join(@tmp, "good")
     script = ->(name, *args) { Open3.capture3(RbConfig.ruby, File.join(root, "script", name), *args) }
-    [[@platform, "--library", @library, "--abi-version", "1"], ["ruby"]].each do |platform, *rest|
+    native = ["--library", @library, "--abi-version", "1", "--target", @target, "--revision", @revision]
+    [[@platform, *native], ["ruby"]].each do |platform, *rest|
       _o, e, s = script.call("build_native_gem", "--platform", platform, "--output", @good, *rest)
       raise "build failed: #{e}" unless s.success?
     end
@@ -56,6 +59,14 @@ RSpec.describe "native gem packaging scripts" do
       out
     end
   end
+  let(:provenance) do
+    lambda do |gem_path|
+      Dir.mktmpdir("emf-provenance", @tmp) do |dir|
+        Gem::Package.new(gem_path).extract_files(dir)
+        JSON.parse(File.read(File.join(dir, "lib/emf/native/provenance.json")))
+      end
+    end
+  end
   let(:check) { ->(dir) { script.call("check_native_package", "--directory", dir) } }
 
   it "passes a platform gem and a source gem built from the probe library" do
@@ -76,6 +87,17 @@ RSpec.describe "native gem packaging scripts" do
       expect(data).to include("platform" => @platform, "library" => library_name, "abi_version" => 1,
                               "sha256" => Digest::SHA256.file(@library).hexdigest)
     end
+  end
+
+  it "records provenance bound to the library, toolchain, Cargo.lock, revision and gem version" do
+    data = provenance.call(platform_gem)
+    expect(data).to include(
+      "platform" => @platform, "target" => @target, "revision" => @revision, "gem_version" => Emf::VERSION,
+      "library_sha256" => Digest::SHA256.file(@library).hexdigest,
+      "rustc" => `rustc --version`.strip, "cargo" => `cargo --version`.strip,
+      "cargo_lock_sha256" => Digest::SHA256.file(File.join(root, "emf-rs/Cargo.lock")).hexdigest,
+      "crate_version" => File.read(File.join(root, "emf-rs/crates/emf-ffi/Cargo.toml"))[/^version\s*=\s*"([^"]+)"/, 1]
+    )
   end
 
   it "installs the platform gem without compiling and loads it through Fiddle" do
@@ -139,6 +161,48 @@ RSpec.describe "native gem packaging scripts" do
     end
     _out, err, status = check.call(dir)
     expect([status.exitstatus, err]).to match([1, /sha256 mismatch/])
+  end
+
+  it "rejects a platform gem whose provenance library hash does not match its library" do
+    dir = rebuild.call(platform_gem) do |extracted, _spec|
+      file = File.join(extracted, "lib/emf/native/provenance.json")
+      File.write(file, JSON.generate(JSON.parse(File.read(file)).merge("library_sha256" => "0" * 64)))
+    end
+    _out, err, status = check.call(dir)
+    expect([status.exitstatus, err]).to match([1, /provenance.json library_sha256 0{64} != actual/])
+  end
+
+  it "rejects a platform gem whose provenance lacks a field" do
+    dir = rebuild.call(platform_gem) do |extracted, _spec|
+      file = File.join(extracted, "lib/emf/native/provenance.json")
+      File.write(file, JSON.generate(JSON.parse(File.read(file)).except("cargo_lock_sha256")))
+    end
+    _out, err, status = check.call(dir)
+    expect([status.exitstatus, err]).to match([1, /provenance.json has no cargo_lock_sha256/])
+  end
+
+  it "rejects a platform gem without provenance.json" do
+    dir = rebuild.call(platform_gem) do |extracted, spec|
+      FileUtils.rm(File.join(extracted, "lib/emf/native/provenance.json"))
+      spec.files -= ["lib/emf/native/provenance.json"]
+    end
+    _out, err, status = check.call(dir)
+    expect([status.exitstatus, err]).to match([1, %r{missing lib/emf/native/provenance.json}])
+  end
+
+  it "rejects provenance bound to another gem version" do
+    dir = rebuild.call(platform_gem) do |extracted, _spec|
+      file = File.join(extracted, "lib/emf/native/provenance.json")
+      File.write(file, JSON.generate(JSON.parse(File.read(file)).merge("gem_version" => "9.9.9")))
+    end
+    _out, err, status = check.call(dir)
+    expect([status.exitstatus, err]).to match([1, /gem_version 9.9.9 != #{Regexp.escape(Emf::VERSION)}/o])
+  end
+
+  it "rejects provenance recording another revision than the expected one" do
+    other = "b" * 40
+    _out, err, status = script.call("check_native_package", "--directory", @good, "--revision", other)
+    expect([status.exitstatus, err]).to match([1, /revision #{@revision} != #{other}/])
   end
 
   it "rejects a gem missing a file the source gemspec lists" do
