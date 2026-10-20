@@ -36,6 +36,22 @@ module Emf
       }.freeze
       POINT_ARRAY_FUNCTIONS = POINT_ARRAY_RECORDS.invert.freeze
 
+      STATE_RECORDS = {
+        0x01 => Model::Wmf::Records::SetBkColor,
+        0x02 => Model::Wmf::Records::SetBkMode,
+        0x03 => Model::Wmf::Records::SetMapMode,
+        0x31 => Model::Wmf::Records::SetMapperFlags,
+        0x06 => Model::Wmf::Records::SetPolyFillMode,
+        0x04 => Model::Wmf::Records::SetRop2,
+        0x07 => Model::Wmf::Records::SetStretchBltMode,
+        0x2E => Model::Wmf::Records::SetTextAlign,
+        0x08 => Model::Wmf::Records::SetTextCharExtra,
+        0x09 => Model::Wmf::Records::SetTextColor,
+        0x0A => Model::Wmf::Records::SetTextJustification,
+        0x49 => Model::Wmf::Records::SetLayout
+      }.freeze
+      STATE_FUNCTIONS = STATE_RECORDS.invert.freeze
+
       OBJECT_RECORDS = {
         0xFA => Model::Wmf::Records::CreatePenIndirect,
         0xFC => Model::Wmf::Records::CreateBrushIndirect,
@@ -46,6 +62,8 @@ module Emf
       # Opaque creators still consume the lowest available object-table slot.
       OBJECT_CREATORS = [0xFA, 0xFC, 0xFB, 0xF7, 0xF9, 0xFF, 0x42].freeze
       TEXT_FUNCTIONS = [0x21, 0x32].freeze
+      TYPED_FUNCTIONS = (FIXED_RECORDS.keys + POINT_ARRAY_RECORDS.keys + OBJECT_RECORDS.keys + STATE_RECORDS.keys +
+                         TEXT_FUNCTIONS).freeze
 
       module_function
 

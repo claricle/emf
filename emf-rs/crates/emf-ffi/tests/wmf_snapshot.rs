@@ -89,7 +89,7 @@ fn typed_values_and_opaque_records_have_independent_owned_payloads() {
         record(0x0214, &[0xff, 0xff, 0, 0x80]),
         record(0x0324, &[2, 0, 1, 0, 0xff, 0xff, 0, 0x80, 0xff, 0x7f]),
         record(0x02fa, &[1, 0, 0xfe, 0xff, 3, 0, 0x12, 0x34, 0x56, 0x78]),
-        record(0x0103, &[8, 0]), // Rust knows this state record, Ruby keeps it opaque.
+        record(0x001e, &[]), // SaveDC remains opaque.
         record(0x7777, &[0x80, 0xff]),
         record(0, &[]),
     ];
@@ -114,6 +114,92 @@ fn typed_values_and_opaque_records_have_independent_owned_payloads() {
     assert_eq!(&bytes[bytes.len() - 5..], b"tail\0");
     assert_eq!(u64_at(&bytes, 40), input.len() as u64);
 }
+#[test]
+fn scalar_state_fields_are_unsigned_in_wire_order_with_complete_source_spans() {
+    let cases: [(u16, &[u8], &[u32]); 12] = [
+        (0xab01, &[0x12, 0x34, 0x56, 0xf8], &[0xf8563412]),
+        (0xcd02, &[0x01, 0x80], &[0x8001]),
+        (0xef03, &[0xff, 0xff], &[0xffff]),
+        (0x0131, &[0xef, 0xcd, 0xab, 0x89], &[0x89abcdef]),
+        (0x0106, &[0x02, 0x80], &[0x8002]),
+        (0x0104, &[0x03, 0x80], &[0x8003]),
+        (0x0107, &[0x04, 0x80], &[0x8004]),
+        (0x012e, &[0x05, 0x80], &[0x8005]),
+        (0x0108, &[0xfe, 0xff], &[0xfffe]),
+        (0x0209, &[0x98, 0x76, 0x54, 0xf2], &[0xf2547698]),
+        (0x020a, &[0x01, 0x80, 0xfe, 0xff], &[0x8001, 0xfffe]),
+        (0x0149, &[0x02, 0x80, 0xfd, 0xff], &[0x8002, 0xfffd]),
+    ];
+    let suffix = [0xde, 0xad, 0xbe, 0xef];
+    let mut records: Vec<_> = cases
+        .iter()
+        .map(|(function, prefix, _)| {
+            let mut body = prefix.to_vec();
+            body.extend_from_slice(&suffix);
+            record(*function, &body)
+        })
+        .collect();
+    records.push(record(0, &[]));
+    let input = source(&records, b"tail");
+    unsafe {
+        let doc = parse(&input);
+        let mut buffer = ptr::null_mut();
+        assert_eq!(emf_wmf_serialize(doc, &mut buffer, ptr::null_mut()), EMF_OK);
+        let mut data = ptr::null();
+        let mut length = 0;
+        assert_eq!(emf_buffer_view(buffer, &mut data, &mut length), EMF_OK);
+        assert_eq!(slice::from_raw_parts(data, length as usize), input);
+        emf_buffer_free(buffer);
+
+        let bytes = snapshot(doc);
+        let values = payloads(&bytes);
+        let mut descriptor = 120;
+        let mut source_offset = 18;
+        for (index, (function, prefix, expected)) in cases.iter().enumerate() {
+            assert_eq!(values[index].0, u32::from(*function));
+            assert_eq!(values[index].1, 6);
+            assert_eq!(
+                values[index].2,
+                expected
+                    .iter()
+                    .flat_map(|n| n.to_le_bytes())
+                    .collect::<Vec<_>>()
+            );
+            let offset = u64_at(&bytes, descriptor + 8) as usize;
+            let length = u64_at(&bytes, descriptor + 16) as usize;
+            assert_eq!(offset, source_offset);
+            assert_eq!(length, 6 + prefix.len() + suffix.len());
+            assert_eq!(&input[offset..offset + length], records[index]);
+            assert_eq!(&input[offset + 6 + prefix.len()..offset + length], suffix);
+            descriptor += 40 + values[index].2.len();
+            source_offset += length;
+        }
+        assert_eq!(values[12], (0, 1, vec![]));
+        assert_eq!(u64_at(&bytes, descriptor + 8), source_offset as u64);
+        assert_eq!(&bytes[bytes.len() - 4..], b"tail");
+    }
+}
+
+#[test]
+fn other_state_records_remain_opaque() {
+    let records = [
+        record(0x001e, &[]),           // SaveDC.
+        record(0x0127, &[0xff, 0xff]), // RestoreDC.
+        record(0x0105, &[0xde, 0xad]), // Reserved SetRelAbs.
+        record(0x0035, &[]),           // RealizePalette.
+        record(0x0139, &[2, 0]),       // ResizePalette.
+        record(0x02fb, &[0; 50]),      // CreateFontIndirect.
+        record(0, &[]),
+    ];
+    let bytes = unsafe { snapshot(parse(&source(&records, b""))) };
+    let values = payloads(&bytes);
+    for value in &values[..6] {
+        assert_eq!(value.1, 0);
+        assert!(value.2.is_empty());
+    }
+    assert_eq!(values[6], (0, 1, vec![]));
+}
+
 #[test]
 fn text_rectangle_padding_spacing_and_unconsumed_suffix_are_preserved() {
     let text = record(

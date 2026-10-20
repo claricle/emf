@@ -57,6 +57,7 @@ module Emf
         when Model::Wmf::Records::Eof then [3, 0].pack("Vv")
         when Model::Wmf::Records::PointRecord, Model::Wmf::Records::RectangleRecord, Model::Wmf::Records::OffsetRecord
           serialize_fixed(record)
+        when Model::Wmf::Records::StateRecord then serialize_state(record)
         when Model::Wmf::Records::ObjectRecord then serialize_object(record)
         when Model::Wmf::Records::TextOut then TextCodec.encode(record)
         when Model::Wmf::Records::PointArrayRecord then serialize_point_array(record)
@@ -72,6 +73,21 @@ module Emf
 
         values = record.class::WIRE_FIELDS.map { |field| Binary.int16(record.public_send(field), field) }
         [3 + values.length, function, *values].pack("Vvs<*")
+      end
+
+      def serialize_state(record)
+        function = Binary.uint16(record.type_id, "RecordFunction")
+        expected = Binary::STATE_FUNCTIONS[record.class]
+        raise SerializeError, "WMF state RecordFunction mismatch" unless function & 0xFF == expected
+        unless record.suffix.is_a?(String) && record.suffix.bytesize.even?
+          raise SerializeError, "WMF state suffix must be a String with even length"
+        end
+
+        values = record.class::WIRE_FIELDS.zip(record.class::WIRE_TYPES).map do |field, type|
+          Binary.public_send(type, record.public_send(field), field)
+        end
+        payload = values.pack(record.class::WIRE_FORMAT) + record.suffix.b
+        [3 + (payload.bytesize / 2), function].pack("Vv") + payload
       end
 
       def serialize_object(record)
@@ -123,8 +139,7 @@ module Emf
         raw = record.raw_bytes
         words, function = raw.unpack("Vv")
         unless raw.bytesize >= 6 && raw.bytesize.even? && words == raw.bytesize / 2 && function == record.type_id &&
-               !function.zero? && !Binary::OBJECT_RECORDS.key?(function & 0xFF) && !Binary::TEXT_FUNCTIONS.include?(function & 0xFF) &&
-               !Binary::FIXED_RECORDS.key?(function & 0xFF) && !Binary::POINT_ARRAY_RECORDS.key?(function & 0xFF)
+               !function.zero? && !Binary::TYPED_FUNCTIONS.include?(function & 0xFF)
           raise SerializeError, "invalid raw WMF record"
         end
 

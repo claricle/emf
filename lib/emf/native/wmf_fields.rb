@@ -19,6 +19,7 @@ module Emf
           validate(@record.fetch(:family) == 1 && @payload.empty? && @raw.bytesize == 6)
           return Model::Wmf::Records::Eof.new(offset: @offset)
         end
+        return state(Wmf::Binary::STATE_RECORDS.fetch(@function)) if Wmf::Binary::STATE_RECORDS.key?(@function)
         return fixed(Wmf::Binary::OBJECT_RECORDS.fetch(@function), 4) if Wmf::Binary::OBJECT_RECORDS.key?(@function)
         return WmfTextFields.new(@record, @raw).call if Wmf::Binary::TEXT_FUNCTIONS.include?(@function)
         return points(Wmf::Binary::POINT_ARRAY_RECORDS.fetch(@function)) if Wmf::Binary::POINT_ARRAY_RECORDS.key?(@function)
@@ -28,6 +29,18 @@ module Emf
       end
 
       private
+
+      def state(klass)
+        fields = klass::WIRE_FIELDS
+        prefix_size = 6 + klass::PAYLOAD_BYTES
+        validate(@record.fetch(:family) == 6 && @payload.bytesize == fields.length * 4 &&
+                 @raw.bytesize >= prefix_size && @raw.bytesize.even?)
+        values = @payload.unpack("V*")
+        values.zip(klass::WIRE_TYPES).each do |value, type|
+          validate(type != :uint16 || value <= 0xFFFF)
+        end
+        klass.new(**fields.zip(values).to_h, type_id: @type, offset: @offset, suffix: @raw.byteslice(prefix_size..))
+      end
 
       def fixed(klass, family)
         fields = klass::WIRE_FIELDS

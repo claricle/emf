@@ -124,15 +124,15 @@ RSpec.describe "Native WMF bridge" do
     end
   end
 
-  it "keeps Rust-only families unknown even when their native payload is malformed" do
-    # SetBkColor is understood by Rust but has no typed Ruby WMF model.
-    record = native_wmf_record(0x0201, [3].pack("v"))
-    input = native_wmf_bytes([record])
+  it "keeps Rust-only state families unknown and preserves their source bytes" do
+    # SaveDC and RestoreDC are understood by Rust but have no typed Ruby WMF model.
+    records = [native_wmf_record(0x001E, ""), native_wmf_record(0x0127, [-1].pack("s<"))]
+    input = native_wmf_bytes(records)
     expect(Emf::Wmf::Parser).not_to receive(:call)
     expect(Emf::Wmf::TextCodec).not_to receive(:decode)
     parsed = Emf.parse(input)
-    expect(parsed.records.first).to be_a(Emf::Model::Wmf::Records::UnknownRecord)
-    expect(parsed.records.first.raw_bytes).to eq(record)
+    expect(parsed.records.first(2)).to all(be_a(Emf::Model::Wmf::Records::UnknownRecord))
+    expect(parsed.records.first(2).map(&:raw_bytes)).to eq(records)
     expect(Emf.serialize(parsed)).to eq(input)
   end
 

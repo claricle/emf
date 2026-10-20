@@ -72,6 +72,7 @@ module Emf
           parse_error(offset, function, "invalid EOF length") unless raw.bytesize == 6
           return Model::Wmf::Records::Eof.new(offset: offset)
         end
+        return decode_state(raw, function, offset) if Binary::STATE_RECORDS.key?(function & 0xFF)
         return decode_object(raw, function, offset) if Binary::OBJECT_RECORDS.key?(function & 0xFF)
         if Binary::TEXT_FUNCTIONS.include?(function & 0xFF)
           return TextCodec.decode(raw, function, offset) { |message| parse_error(offset, function, message) }
@@ -85,6 +86,15 @@ module Emf
         parse_error(offset, function, "invalid fixed record length") unless raw.bytesize == 6 + (fields.length * 2)
         values = raw.byteslice(6..).unpack("s<*")
         record_class.new(**fields.zip(values).to_h, type_id: function, offset: offset)
+      end
+
+      def decode_state(raw, function, offset)
+        record_class = Binary::STATE_RECORDS.fetch(function & 0xFF)
+        prefix_size = 6 + record_class::PAYLOAD_BYTES
+        parse_error(offset, function, "invalid state record length") if raw.bytesize < prefix_size
+        values = raw.byteslice(6, record_class::PAYLOAD_BYTES).unpack(record_class::WIRE_FORMAT)
+        fields = record_class::WIRE_FIELDS.zip(values).to_h
+        record_class.new(**fields, type_id: function, offset: offset, suffix: raw.byteslice(prefix_size..))
       end
 
       def decode_object(raw, function, offset)
@@ -123,6 +133,7 @@ module Emf
         return record.raw_bytes.bytesize / 2 if record.is_a?(Model::Wmf::Records::UnknownRecord)
         return TextCodec.byte_size(record) / 2 if record.is_a?(Model::Wmf::Records::TextOut)
 
+        return 3 + ((record.class::PAYLOAD_BYTES + record.suffix.bytesize) / 2) if record.is_a?(Model::Wmf::Records::StateRecord)
         return 3 + (record.class::PAYLOAD_BYTES / 2) if record.is_a?(Model::Wmf::Records::ObjectRecord)
 
         if record.is_a?(Model::Wmf::Records::PointArrayRecord)

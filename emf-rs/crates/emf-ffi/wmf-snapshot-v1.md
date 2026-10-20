@@ -27,8 +27,16 @@ length, then payload. The function includes the original high byte. Families:
   u32 has-DX/reserved-zero, four i32 rectangle coordinates (always present),
   text bytes, padding bytes, i32 DX values, suffix bytes. TextOut has no options,
   rectangle, DX or suffix. Rectangle order is left/top/right/bottom.
+- 6: scalar state fields, one u32 per field in WMF wire order. SetBkColor,
+  SetMapperFlags and SetTextColor retain their u32 values. SetBkMode, SetMapMode,
+  SetPolyFillMode, SetRop2, SetStretchBltMode, SetTextAlign and SetTextCharExtra
+  zero-extend their u16 values. SetTextJustification has break-count/break-extra;
+  SetLayout has layout/reserved, each zero-extended from u16. The payload contains
+  only these fields, with no suffix length or suffix bytes. The complete source
+  span includes any suffix; Ruby retains it from the original record body after
+  the known wire prefix (two bytes for single u16 fields, four bytes otherwise).
 
-Families 2–5 cover the existing Ruby WMF models only. Rust-only typed records
+Families 2–6 cover the existing Ruby WMF models only. Rust-only typed records
 remain opaque. For Ruby compatibility, ExtTextOut DX consumes one i16 per
 character even with ETO_PDY set; the original flag and remaining bytes survive
 as suffix. The compatibility view uses the Rust typed decoder with only that
@@ -48,7 +56,8 @@ u32. Object kinds are brush1/font2/palette3/pen4/region5. These are core diagnos
 the Ruby bridge independently enforces its existing stricter parsing policy.
 
 Trailing bytes follow the diagnostics. Record source bytes are not duplicated in
-the snapshot; Ruby hydration uses the input for opaque records and span checks.
+the snapshot; Ruby hydration uses the input for opaque records, state suffixes
+and span checks.
 EOF, malformed fixed sizes, headers/checksums, object lifetimes, and count limits
 remain subject to Ruby compatibility checks. The snapshot API itself is lossless
 and diagnostic, and does not apply all those strict Ruby rejection policies.

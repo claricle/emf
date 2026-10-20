@@ -109,6 +109,24 @@ fn fixed(value: &G) -> Option<([i16; 8], usize)> {
         _ => None,
     }
 }
+fn scalar_state(value: &S) -> Option<([u32; 2], usize)> {
+    match *value {
+        S::SetBkColor(n) | S::SetMapperFlags(n) | S::SetTextColor(n) => Some(([n, 0], 1)),
+        S::SetBkMode(n)
+        | S::SetMapMode(n)
+        | S::SetPolyFillMode(n)
+        | S::SetRop2(n)
+        | S::SetStretchBltMode(n)
+        | S::SetTextAlign(n)
+        | S::SetTextCharExtra(n) => Some(([u32::from(n), 0], 1)),
+        S::SetTextJustification {
+            break_count,
+            break_extra,
+        } => Some(([u32::from(break_count), u32::from(break_extra)], 2)),
+        S::SetLayout { layout, reserved } => Some(([u32::from(layout), u32::from(reserved)], 2)),
+        _ => None,
+    }
+}
 fn family(record: &Record) -> u32 {
     if record.is_eof() {
         return 1;
@@ -125,6 +143,7 @@ fn family(record: &Record) -> u32 {
             | S::DeleteObject(_),
         )) => 4,
         Some(TypedRecord::Text(_)) => 5,
+        Some(TypedRecord::State(s)) if scalar_state(s).is_some() => 6,
         _ => 0,
     }
 }
@@ -175,6 +194,12 @@ fn payload(
             S::SelectObject(i) | S::DeleteObject(i) => out.u32(u32::from(*i))?,
             _ => unreachable!(),
         },
+        (6, Some(TypedRecord::State(s))) => {
+            let (values, len) = scalar_state(s).expect("scalar state family");
+            for value in &values[..len] {
+                out.u32(*value)?;
+            }
+        }
         (5, Some(TypedRecord::Text(t))) => {
             let (x, y, text, padding, options, rectangle, dx, suffix) = match t {
                 T::TextOut {
