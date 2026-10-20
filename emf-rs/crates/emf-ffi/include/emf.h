@@ -98,6 +98,7 @@ extern "C" {
 #define EMF_FAMILY_SETTEXTJUSTIFICATION 73u
 
 typedef struct emf_document emf_document;
+typedef struct emf_wmf_document emf_wmf_document;
 typedef struct emf_buffer emf_buffer;
 typedef struct emf_error emf_error;
 
@@ -185,8 +186,8 @@ typedef struct emf_error_info {
  * Other records remain raw. Snapshot bytes use the
  * encoding documented in snapshot-v2.md.
  * Snapshot versions are independent of ABI versions.
- * Documents are immutable through this ABI.
- * Detection recognizes WMF signatures; parsing supports EMF only.
+ * EMF documents are immutable through this ABI. WMF supports record replacement.
+ * emf_parse supports EMF; emf_wmf_parse supports standard and placeable WMF.
  */
 uint32_t emf_abi_version(void);
 int32_t emf_detect(const uint8_t *data, uint64_t length, uint32_t *out_format, emf_error **out_error);
@@ -203,6 +204,23 @@ int32_t emf_record_batch(const emf_document *document, uint64_t start, uint64_t 
 int32_t emf_document_snapshot(const emf_document *document, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_record_bytes(const emf_document *document, uint64_t index, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_serialize(const emf_document *document, emf_buffer **out_buffer, emf_error **out_error);
+/* WMF handles use the same limits, statuses, buffer ownership and descriptor layouts.
+ * type_id is the original 16-bit META function; family is EOF or RAW.
+ * header_bytes includes the optional 22-byte placeable prefix. Trailing bytes
+ * follow valid EOF; unframed bytes are the remainder after malformed framing.
+ * Record descriptors/bytes describe original source spans, including after edits.
+ * Replacement payload excludes the six-byte record header and must be word aligned.
+ * Failed edits preserve the document. Serialization updates length/max-record fields.
+ * Replacement requires exclusive access to the handle; concurrent readers are forbidden.
+ * WMF and EMF document handles must never be interchanged.
+ */
+int32_t emf_wmf_parse(const uint8_t *data, uint64_t length, const emf_limits *limits, emf_wmf_document **out_document, emf_error **out_error);
+int32_t emf_wmf_document_info(const emf_wmf_document *document, emf_info *out_info);
+int32_t emf_wmf_record_batch(const emf_wmf_document *document, uint64_t start, uint64_t capacity, emf_record_descriptor *out_descriptors, uint64_t *out_count);
+int32_t emf_wmf_record_bytes(const emf_wmf_document *document, uint64_t index, emf_buffer **out_buffer, emf_error **out_error);
+int32_t emf_wmf_replace_record(emf_wmf_document *document, uint64_t index, uint32_t function, const uint8_t *data, uint64_t length, emf_error **out_error);
+int32_t emf_wmf_serialize(const emf_wmf_document *document, emf_buffer **out_buffer, emf_error **out_error);
+void emf_wmf_document_free(emf_wmf_document *document);
 int32_t emf_buffer_view(const emf_buffer *buffer, const uint8_t **out_data, uint64_t *out_length);
 int32_t emf_error_view(const emf_error *error, emf_error_info *out_info);
 void emf_document_free(emf_document *document);

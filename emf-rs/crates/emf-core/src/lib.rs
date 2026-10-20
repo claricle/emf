@@ -6,6 +6,7 @@
 
 mod bitmap;
 mod detect;
+pub mod emf_plus;
 mod error;
 mod gradient;
 mod limits;

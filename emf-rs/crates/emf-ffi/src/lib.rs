@@ -1,7 +1,9 @@
 //! C ABI for owned EMF framing handles. See `include/emf.h` for pointer contracts.
 mod snapshot;
 mod types;
+mod wmf;
 pub use types::*;
+pub use wmf::*;
 
 use emf_core::{Format, ParseFailure, ParseLimits, SerializeFailure};
 use std::{
