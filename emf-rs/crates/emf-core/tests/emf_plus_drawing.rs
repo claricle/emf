@@ -220,3 +220,127 @@ fn object_reference_drawing_words_are_typed_and_mutable() {
         assert_eq!(&edited[12..16], &3u32.to_le_bytes());
     }
 }
+
+#[test]
+fn cardinal_splines_preserve_relative_or_reserved_flags_and_edit_tension() {
+    for kind in 0x4016..=0x4018 {
+        for compressed in [false, true] {
+            for relative in [false, true] {
+                let count = if kind == 0x4018 { 2 } else { 3 };
+                let mut body = Vec::new();
+                if kind == 0x4016 {
+                    body.extend(words(&[0xffabcdef]));
+                }
+                body.extend(words(&[0x7fc12345]));
+                if kind == 0x4018 {
+                    body.extend(words(&[1, 1]));
+                }
+                body.extend(words(&[count]));
+                if relative && kind != 0x4018 {
+                    body.extend(vec![1u8; count as usize * 2]);
+                    body.extend([0xab, 0xcd]);
+                } else if compressed {
+                    body.extend(vec![0x7fu8; count as usize * 4]);
+                } else {
+                    body.extend(words(&vec![0x80000000; count as usize * 2]));
+                }
+                let flags = 0xa055
+                    | if compressed { 0x4000 } else { 0 }
+                    | if relative { 0x0800 } else { 0 };
+                let bytes = record(kind, flags, &body);
+                let mut stream = parse(&bytes);
+                assert_eq!(plus::serialize(&stream).unwrap(), bytes);
+                let RecordData::Drawing(Drawing::Curve {
+                    brush,
+                    tension,
+                    range,
+                    points,
+                    ..
+                }) = &mut stream.records[0].data
+                else {
+                    panic!("curve remains opaque")
+                };
+                assert_eq!(*brush, (kind == 0x4016).then_some(0xffabcdef));
+                assert_eq!(*tension, 0x7fc12345);
+                assert_eq!(*range, (kind == 0x4018).then_some([1, 1]));
+                assert_eq!(points.count(), count as usize);
+                assert_eq!(
+                    matches!(points, PointData::Relative(_)),
+                    relative && kind != 0x4018
+                );
+                *tension = 0x3f800000;
+                assert_eq!(parse(&plus::serialize(&stream).unwrap()), stream);
+            }
+        }
+    }
+    for kind in 0x4016..=0x4018 {
+        let mut body = Vec::new();
+        if kind == 0x4016 {
+            body.extend(words(&[0]));
+        }
+        body.extend(words(&[0]));
+        if kind == 0x4018 {
+            body.extend(words(&[0, 1]));
+        }
+        body.extend(words(&[u32::MAX]));
+        assert!(plus::parse(&record(kind, 0x4800, &body), &ParseLimits::default()).is_err());
+    }
+}
+
+#[test]
+fn image_destinations_are_typed_counted_and_mutable() {
+    for kind in [0x401a, 0x401b] {
+        for compressed in [false, true] {
+            for relative in [false, true] {
+                let mut body = words(&[u32::MAX, 2, 0x80000000, 0x7fc12345, 3, 4]);
+                let count = if kind == 0x401b {
+                    body.extend(words(&[3]));
+                    3
+                } else {
+                    2
+                };
+                if relative && kind == 0x401b {
+                    body.extend([0x80, 1, 0x7f, 2, 3, 4, 5]);
+                    body.push(0xaa);
+                } else if compressed {
+                    body.extend(vec![0x80u8; count * 4]);
+                } else {
+                    body.extend(words(&vec![0x7fc12345; count * 2]));
+                }
+                let flags =
+                    0xa001 | if compressed { 0x4000 } else { 0 } | if relative { 0x800 } else { 0 };
+                let bytes = record(kind, flags, &body);
+                let mut stream = parse(&bytes);
+                assert_eq!(plus::serialize(&stream).unwrap(), bytes);
+                let RecordData::Drawing(d) = &mut stream.records[0].data else {
+                    panic!("image remains opaque")
+                };
+                let source = match d {
+                    Drawing::ImageRect {
+                        source,
+                        destination,
+                    } => {
+                        assert_eq!(matches!(destination, Rectangle::Integer(_)), compressed);
+                        source
+                    }
+                    Drawing::ImagePoints { source, points, .. } => {
+                        assert_eq!(points.count(), 3);
+                        assert_eq!(matches!(points, PointData::Relative(_)), relative);
+                        source
+                    }
+                    _ => panic!("wrong image shape"),
+                };
+                assert_eq!(source.attributes_id, u32::MAX);
+                assert_eq!(source.unit, 2);
+                assert_eq!(source.rectangle, [0x80000000, 0x7fc12345, 3, 4]);
+                source.rectangle[0] = 0x3f800000;
+                assert_eq!(parse(&plus::serialize(&stream).unwrap()), stream);
+            }
+        }
+    }
+    for count in [0, 2, 4, u32::MAX] {
+        let mut body = words(&[0, 2, 0, 0, 0, 0, count]);
+        body.extend([0u8; 32]);
+        assert!(plus::parse(&record(0x401b, 0x4800, &body), &ParseLimits::default()).is_err());
+    }
+}

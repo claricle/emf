@@ -79,7 +79,7 @@ fn check_limits(total: usize, work: u64, limits: &SerializeLimits) -> Result<(),
     Ok(())
 }
 
-fn plan(
+pub(super) fn plan(
     stream: &Stream,
     limits: &SerializeLimits,
     segmented: bool,
@@ -87,6 +87,10 @@ fn plan(
     let mut total = 0usize;
     let mut work = 0u64;
     for r in &stream.records {
+        work = work
+            .checked_add(r.data.element_work())
+            .ok_or(SerializeFailure::SizeOverflow)?;
+        check_limits(total, work, limits)?;
         r.validate(total)
             .map_err(|_| SerializeFailure::Inconsistent { offset: total })?;
         let size = 12usize

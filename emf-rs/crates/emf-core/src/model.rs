@@ -1127,6 +1127,26 @@ impl Document {
         Ok(())
     }
 
+    /// Decode EMF+ comments into a detached, source-checked typed snapshot.
+    pub fn structured_emf_plus(
+        &self,
+        limits: &crate::ParseLimits,
+    ) -> Result<crate::emf_plus::EmbeddedStream, crate::emf_plus::Error> {
+        crate::emf_plus::EmbeddedStream::extract(self, limits)
+    }
+
+    /// Apply a snapshot atomically using the existing selected comments.
+    /// Earlier comments retain their logical capacities (clamped on shrink);
+    /// the final comment receives the remainder. Empty comments stay selected.
+    /// A nonempty stream requires at least one original EMF+ comment.
+    pub fn apply_structured_emf_plus(
+        &mut self,
+        snapshot: &crate::emf_plus::EmbeddedStream,
+        limits: &crate::SerializeLimits,
+    ) -> Result<(), crate::emf_plus::EmbedError> {
+        snapshot.apply(self, limits)
+    }
+
     /// EMF+ streams carried in comments, without their four-byte identifier.
     pub fn emf_plus_chunks(&self) -> impl Iterator<Item = &[u8]> {
         self.records

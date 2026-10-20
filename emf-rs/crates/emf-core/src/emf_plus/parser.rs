@@ -16,6 +16,13 @@ pub fn parse(bytes: &[u8], limits: &ParseLimits) -> Result<Stream, Error> {
 /// Empty segments and boundaries inside records are retained.
 pub fn parse_segments(segments: &[&[u8]], limits: &ParseLimits) -> Result<Stream, Error> {
     let mut budget = Budget::new(limits);
+    parse_segments_budget(segments, &mut budget)
+}
+
+pub(crate) fn parse_segments_budget(
+    segments: &[&[u8]],
+    budget: &mut Budget<'_>,
+) -> Result<Stream, Error> {
     let len = segments.iter().try_fold(0usize, |n, b| {
         n.checked_add(b.len())
             .ok_or(ParseFailure::ArithmeticOverflow { offset: n })
@@ -80,12 +87,10 @@ pub fn parse_segments(segments: &[&[u8]], limits: &ParseLimits) -> Result<Stream
             decode_fixed(kind, data_bytes)
         } else if super::drawing::supported(kind) {
             RecordData::Drawing(super::drawing::decode(
-                kind,
-                flags,
-                data_bytes,
-                offset,
-                &mut budget,
+                kind, flags, data_bytes, offset, budget,
             )?)
+        } else if matches!(kind, 0x401c | 0x4036) {
+            RecordData::Text(super::text::decode(kind, data_bytes, offset, budget)?)
         } else if kind == 0x4008 {
             let (total_size, object_bytes) = if flags & 0x8000 != 0 {
                 if data_bytes.len() < 4 {
@@ -103,12 +108,12 @@ pub fn parse_segments(segments: &[&[u8]], limits: &ParseLimits) -> Result<Stream
             };
             RecordData::Object(super::ObjectFragment {
                 total_size,
-                bytes: copy(object_bytes, &mut budget)?,
+                bytes: copy(object_bytes, budget)?,
             })
         } else {
-            RecordData::Opaque(copy(data_bytes, &mut budget)?)
+            RecordData::Opaque(copy(data_bytes, budget)?)
         };
-        let padding = copy(&b[12 + data_len..size], &mut budget)?;
+        let padding = copy(&b[12 + data_len..size], budget)?;
         budget.reserve_one(&mut records)?;
         records.push(Record {
             record_type: kind,
@@ -122,7 +127,7 @@ pub fn parse_segments(segments: &[&[u8]], limits: &ParseLimits) -> Result<Stream
         records,
         segment_lengths: lengths,
     };
-    super::objects::visit_chains(&stream, &mut budget, |_, _, _, _| Ok(()))?;
+    super::objects::visit_chains(&stream, budget, |_, _, _, _| Ok(()))?;
     Ok(stream)
 }
 fn copy(bytes: &[u8], budget: &mut Budget<'_>) -> Result<Vec<u8>, ParseFailure> {

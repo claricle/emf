@@ -116,6 +116,19 @@ impl PointData {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImageSource {
+    pub attributes_id: u32,
+    pub unit: i32,
+    pub rectangle: [u32; 4],
+}
+impl ImageSource {
+    fn write(&self, out: &mut Vec<u8>) {
+        words(out, &[self.attributes_id, self.unit as u32]);
+        words(out, &self.rectangle);
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Drawing {
     /// FillRects includes a brush/color word; DrawRects uses a pen ID in flags.
     Rectangles {
@@ -139,10 +152,36 @@ pub enum Drawing {
         points: PointData,
         data_padding: Vec<u8>,
     },
+    /// Cardinal splines; only DrawCurve includes an offset/segment pair.
+    Curve {
+        brush: Option<u32>,
+        tension: u32,
+        range: Option<[u32; 2]>,
+        points: PointData,
+        data_padding: Vec<u8>,
+    },
+    ImageRect {
+        source: ImageSource,
+        destination: Rectangle,
+    },
+    ImagePoints {
+        source: ImageSource,
+        points: PointData,
+        data_padding: Vec<u8>,
+    },
     /// FillRegion/FillPath brush/color word or DrawPath pen ID.
     ObjectReference { value: u32 },
 }
 impl Drawing {
+    pub(crate) fn element_work(&self) -> u64 {
+        match self {
+            Self::Rectangles { rectangles, .. } => rectangles.len() as u64,
+            Self::Points { points, .. }
+            | Self::Curve { points, .. }
+            | Self::ImagePoints { points, .. } => points.count() as u64,
+            _ => 0,
+        }
+    }
     pub(crate) fn len(&self) -> usize {
         match self {
             Self::Rectangles { brush, rectangles } => {
@@ -157,6 +196,24 @@ impl Drawing {
                 points,
                 data_padding,
             } => 4 + brush.map_or(0, |_| 4) + points.len() + data_padding.len(),
+            Self::Curve {
+                brush,
+                range,
+                points,
+                data_padding,
+                ..
+            } => {
+                8 + brush.map_or(0, |_| 4)
+                    + range.map_or(0, |_| 8)
+                    + points.len()
+                    + data_padding.len()
+            }
+            Self::ImageRect { destination, .. } => 24 + destination.len(),
+            Self::ImagePoints {
+                points,
+                data_padding,
+                ..
+            } => 28 + points.len() + data_padding.len(),
             Self::ObjectReference { .. } => 4,
         }
     }
@@ -195,6 +252,41 @@ impl Drawing {
                     && data_padding.len() <= 3
                     && (data_padding.is_empty() || matches!(points, PointData::Relative(_)))
             }
+            Self::Curve {
+                brush,
+                range,
+                points,
+                data_padding,
+                ..
+            } => {
+                let point_flags = if kind == 0x4018 {
+                    flags & !0x0800
+                } else {
+                    flags
+                };
+                matches!(kind, 0x4016..=0x4018)
+                    && brush.is_some() == (kind == 0x4016)
+                    && range.is_some() == (kind == 0x4018)
+                    && points.count() >= minimum_points(kind)
+                    && points.count() <= u32::MAX as usize
+                    && points.valid(point_flags)
+                    && data_padding.len() <= 3
+                    && (data_padding.is_empty() || matches!(points, PointData::Relative(_)))
+            }
+            Self::ImageRect { destination, .. } => {
+                kind == 0x401a && destination.compressed() == compressed
+            }
+            Self::ImagePoints {
+                points,
+                data_padding,
+                ..
+            } => {
+                kind == 0x401b
+                    && points.count() == 3
+                    && points.valid(flags)
+                    && data_padding.len() <= 3
+                    && (data_padding.is_empty() || matches!(points, PointData::Relative(_)))
+            }
             Self::ObjectReference { .. } => matches!(kind, 0x4013..=0x4015),
         }
     }
@@ -203,7 +295,8 @@ impl Drawing {
             Self::Rectangles { brush, .. }
             | Self::Ellipse { brush, .. }
             | Self::Arc { brush, .. }
-            | Self::Points { brush, .. } => *brush,
+            | Self::Points { brush, .. }
+            | Self::Curve { brush, .. } => *brush,
             _ => None,
         };
         if let Some(n) = brush {
@@ -235,16 +328,48 @@ impl Drawing {
                 points.write(out);
                 out.extend_from_slice(data_padding);
             }
+            Self::Curve {
+                tension,
+                range,
+                points,
+                data_padding,
+                ..
+            } => {
+                words(out, &[*tension]);
+                if let Some(pair) = range {
+                    words(out, pair);
+                }
+                words(out, &[points.count() as u32]);
+                points.write(out);
+                out.extend_from_slice(data_padding);
+            }
+            Self::ImageRect {
+                source,
+                destination,
+            } => {
+                source.write(out);
+                destination.write(out);
+            }
+            Self::ImagePoints {
+                source,
+                points,
+                data_padding,
+            } => {
+                source.write(out);
+                words(out, &[points.count() as u32]);
+                points.write(out);
+                out.extend_from_slice(data_padding);
+            }
             Self::ObjectReference { value } => words(out, &[*value]),
         }
     }
 }
 pub(crate) fn supported(kind: u16) -> bool {
-    matches!(kind, 0x400a..=0x4015 | 0x4019)
+    matches!(kind, 0x400a..=0x401b)
 }
 fn minimum_points(kind: u16) -> usize {
     match kind {
-        0x400c => 3,
+        0x400c | 0x4016 | 0x4017 | 0x401b => 3,
         0x4019 => 4,
         _ => 2,
     }
@@ -328,8 +453,17 @@ pub(crate) fn decode(
         offset,
     };
     let compressed = flags & 0x4000 != 0;
-    let brush = if matches!(kind, 0x400a | 0x400c | 0x400e | 0x4010) {
+    let brush = if matches!(kind, 0x400a | 0x400c | 0x400e | 0x4010 | 0x4016) {
         Some(r.word()?)
+    } else {
+        None
+    };
+    let source = if matches!(kind, 0x401a | 0x401b) {
+        Some(ImageSource {
+            attributes_id: r.word()?,
+            unit: r.word()? as i32,
+            rectangle: [r.word()?, r.word()?, r.word()?, r.word()?],
+        })
     } else {
         None
     };
@@ -353,8 +487,19 @@ pub(crate) fn decode(
             rectangle: r.rectangle(compressed)?,
         },
         0x4013..=0x4015 => Drawing::ObjectReference { value: r.word()? },
-        0x400c | 0x400d | 0x4019 => {
-            let relative = flags & 0x0800 != 0;
+        0x401a => Drawing::ImageRect {
+            source: source.unwrap(),
+            destination: r.rectangle(compressed)?,
+        },
+        0x400c | 0x400d | 0x4016..=0x4019 | 0x401b => {
+            let curve = matches!(kind, 0x4016..=0x4018);
+            let tension = if curve { r.word()? } else { 0 };
+            let range = if kind == 0x4018 {
+                Some([r.word()?, r.word()?])
+            } else {
+                None
+            };
+            let relative = kind != 0x4018 && flags & 0x0800 != 0;
             let count = r.count(
                 minimum_points(kind),
                 if relative {
@@ -365,6 +510,9 @@ pub(crate) fn decode(
                     8
                 },
             )?;
+            if kind == 0x401b && count != 3 {
+                return Err(r.error());
+            }
             let points = if relative {
                 let mut points = vector(count, budget)?;
                 for _ in 0..count {
@@ -391,10 +539,26 @@ pub(crate) fn decode(
             budget.charge_alloc(tail)?;
             let mut data_padding = try_vec_with_capacity(tail)?;
             data_padding.extend_from_slice(r.take(tail)?);
-            Drawing::Points {
-                brush,
-                points,
-                data_padding,
+            if kind == 0x401b {
+                Drawing::ImagePoints {
+                    source: source.unwrap(),
+                    points,
+                    data_padding,
+                }
+            } else if curve {
+                Drawing::Curve {
+                    brush,
+                    tension,
+                    range,
+                    points,
+                    data_padding,
+                }
+            } else {
+                Drawing::Points {
+                    brush,
+                    points,
+                    data_padding,
+                }
             }
         }
         _ => unreachable!(),
