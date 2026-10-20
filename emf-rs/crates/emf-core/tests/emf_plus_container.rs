@@ -243,9 +243,9 @@ fn malformed_embedded_data_is_an_opt_in_error_and_empty_selection_is_exact() {
     assert_eq!(serialize(&parsed).unwrap(), bytes);
 }
 
-#[test]
-fn continued_object_edits_reach_enclosing_comments() {
-    use emf_core::emf_plus::ObjectData;
+// Split both the continuation record header and its final fragment across
+// enclosing EMR comments. Keep unrelated comments, an opaque EMR and the tail.
+fn continued_document(object_type: u16, body: &[u8]) -> Document {
     fn object_record(flags: u16, data: &[u8], padding: &[u8]) -> Vec<u8> {
         let mut b = 0x4008u16.to_le_bytes().to_vec();
         b.extend_from_slice(&flags.to_le_bytes());
@@ -255,23 +255,37 @@ fn continued_object_edits_reach_enclosing_comments() {
         b.extend_from_slice(padding);
         b
     }
-    let body: Vec<u8> = [0xdbc01002u32, 0, 0xff112233]
-        .iter()
-        .flat_map(|v| v.to_le_bytes())
-        .collect();
-    let mut first = 12u32.to_le_bytes().to_vec();
+    let mut first = (body.len() as u32).to_le_bytes().to_vec();
     first.extend_from_slice(&body[..5]);
-    let mut bytes = object_record(0x8103, &first, &[0xab, 0xcd, 0xef]);
-    bytes.extend(object_record(0x0103, &body[5..], &[0xfa]));
+    let mut bytes = object_record(0x8003 | (object_type << 8), &first, &[0xab, 0xcd, 0xef]);
+    bytes.extend(object_record(3 | (object_type << 8), &body[5..], &[0xfa]));
+    bytes.extend_from_slice(&plus()[16..]); // opaque EMF+ record and padding
     let mut d = doc(0);
-    for (index, part) in [(0, &bytes[..7]), (2, &bytes[7..7]), (4, &bytes[7..])] {
+    for (index, part) in [(0, &bytes[..7]), (2, &bytes[7..27]), (4, &bytes[27..])] {
         let mut data = b"EMF+".to_vec();
         data.extend_from_slice(part);
         d.edit_record(index, RecordData::Comment { data }).unwrap();
     }
+    parse(&serialize(&d).unwrap(), &ParseLimits::default()).unwrap()
+}
+
+#[test]
+fn continued_object_edits_reach_enclosing_comments() {
+    use emf_core::emf_plus::ObjectData;
+    let body: Vec<u8> = [0xdbc01002u32, 0, 0xff112233]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let d = continued_document(1, &body);
     let serialized = serialize(&d).unwrap();
     let mut d = parse(&serialized, &ParseLimits::default()).unwrap();
+    let original = d.clone();
     let mut typed = d.structured_emf_plus(&ParseLimits::default()).unwrap();
+    assert_eq!(typed.stream.segment_lengths(), [7, 20, 33]);
+    d.apply_structured_emf_plus(&typed, &SerializeLimits::default())
+        .unwrap();
+    assert_eq!(d, original);
+    assert_eq!(serialize(&d).unwrap(), serialized);
     let definition = typed
         .stream
         .object_definitions(&ParseLimits::default())
@@ -299,6 +313,23 @@ fn continued_object_edits_reach_enclosing_comments() {
         .unwrap()
         .stream;
     assert_eq!(stream, typed.stream);
+    assert_eq!(stream.segment_lengths(), [7, 20, 33]);
+    assert_eq!(stream.records[0].padding, [0xab, 0xcd, 0xef]);
+    assert_eq!(stream.records[1].padding, [0xfa]);
+    for index in [1, 3, 5, 6, 7] {
+        assert_eq!(
+            reparsed.record_bytes(&reparsed.records()[index]),
+            original.record_bytes(&original.records()[index])
+        );
+    }
+    assert_eq!(stream.records[2], typed.stream.records[2]);
+    assert!(output.ends_with(b"tail"));
+    let applied = d.clone();
+    assert_eq!(
+        d.apply_structured_emf_plus(&typed, &SerializeLimits::default()),
+        Err(EmbedError::StaleSource)
+    );
+    assert_eq!(d, applied);
     assert_eq!(
         stream.object_definitions(&ParseLimits::default()).unwrap()[0]
             .decode(&ParseLimits::default())
@@ -484,4 +515,230 @@ fn repacking_rejects_stale_growth_and_has_no_implicit_comment_insertion() {
         Err(EmbedError::Serialize(SerializeFailure::Inconsistent { .. }))
     ));
     assert_eq!(d, before);
+}
+
+#[test]
+fn continued_region_growth_and_shrink_repack_and_reparse_typed_objects() {
+    use emf_core::emf_plus::{ObjectData, RegionNode};
+    let body: Vec<u8> = [0xdbc01002u32, 0, 0x10000002]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let mut d = continued_document(4, &body);
+    let original = d.clone();
+    for nodes in [
+        vec![
+            RegionNode::Binary { operation: 1 },
+            RegionNode::Empty,
+            RegionNode::Infinite,
+        ],
+        vec![RegionNode::Infinite],
+    ] {
+        let mut typed = d.structured_emf_plus(&ParseLimits::default()).unwrap();
+        let definition = typed
+            .stream
+            .object_definitions(&ParseLimits::default())
+            .unwrap()
+            .remove(0);
+        let mut value = definition.decode(&ParseLimits::default()).unwrap();
+        let ObjectData::Region(region) = &mut value else {
+            panic!()
+        };
+        region.nodes = nodes;
+        let bytes = value.serialize(&SerializeLimits::default()).unwrap();
+        // The in-place API explicitly rejects length changes atomically. A
+        // caller can instead edit the fragments and use Document repacking.
+        let before = typed.stream.clone();
+        assert!(typed
+            .stream
+            .replace_object_bytes(0, &bytes, &ParseLimits::default())
+            .is_err());
+        assert_eq!(typed.stream, before);
+        for (index, range) in [(0, 0..5), (1, 5..bytes.len())] {
+            let PlusData::Object(fragment) = &mut typed.stream.records[index].data else {
+                panic!()
+            };
+            fragment.bytes = bytes[range].to_vec();
+            if index == 0 {
+                fragment.total_size = Some(bytes.len() as u32);
+            }
+        }
+        let untouched = d.clone();
+        assert!(matches!(
+            d.apply_structured_emf_plus(
+                &typed,
+                &SerializeLimits {
+                    max_output_bytes: 1,
+                    ..SerializeLimits::default()
+                }
+            ),
+            Err(EmbedError::Serialize(
+                SerializeFailure::LimitExceeded { .. }
+            ))
+        ));
+        assert_eq!(d, untouched);
+        d.apply_structured_emf_plus(&typed, &SerializeLimits::default())
+            .unwrap();
+        let output = serialize(&d).unwrap();
+        d = parse(&output, &ParseLimits::default()).unwrap();
+        let parsed = d.structured_emf_plus(&ParseLimits::default()).unwrap();
+        assert_eq!(parsed.stream.records, typed.stream.records);
+        assert_eq!(
+            parsed
+                .stream
+                .object_definitions(&ParseLimits::default())
+                .unwrap()[0]
+                .decode(&ParseLimits::default())
+                .unwrap(),
+            value
+        );
+        assert_eq!(parsed.stream.records[2], before.records[2]);
+        assert_eq!(parsed.stream.records[0].padding, [0xab, 0xcd, 0xef]);
+        assert_eq!(parsed.stream.records[1].padding, [0xfa]);
+        for index in [1, 3, 5, 6, 7] {
+            assert_eq!(
+                d.record_bytes(&d.records()[index]),
+                original.record_bytes(&original.records()[index])
+            );
+        }
+        assert!(output.ends_with(b"tail"));
+        let applied = d.clone();
+        assert_eq!(
+            d.apply_structured_emf_plus(&typed, &SerializeLimits::default()),
+            Err(EmbedError::StaleSource)
+        );
+        assert_eq!(d, applied);
+    }
+}
+
+#[test]
+fn continued_object_failures_leave_document_and_detached_stream_reusable() {
+    use emf_core::emf_plus::{Error, ObjectData, RegionNode};
+    let body: Vec<u8> = [0xdbc01002u32, 2, 1, 0x10000002, 0x10000003]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let mut d = continued_document(4, &body);
+    let original = d.clone();
+    let typed = d.structured_emf_plus(&ParseLimits::default()).unwrap();
+    // An incomplete chain and a fragment exceeding its declared total must
+    // fail before any enclosing comment is edited.
+    for total in [body.len() as u32 + 4, body.len() as u32 - 4, u32::MAX] {
+        let mut bad = typed.clone();
+        let PlusData::Object(fragment) = &mut bad.stream.records[0].data else {
+            panic!()
+        };
+        fragment.total_size = Some(total);
+        assert!(bad
+            .stream
+            .object_definitions(&ParseLimits::default())
+            .is_err());
+        assert!(matches!(
+            d.apply_structured_emf_plus(&bad, &SerializeLimits::default()),
+            Err(EmbedError::Serialize(SerializeFailure::Inconsistent { .. }))
+        ));
+        assert_eq!(d, original);
+        assert_eq!(serialize(&d).unwrap(), serialize(&original).unwrap());
+    }
+    for (limits, kind) in [
+        (
+            ParseLimits {
+                max_allocated_bytes: 0,
+                ..ParseLimits::default()
+            },
+            LimitKind::AllocatedBytes,
+        ),
+        (
+            ParseLimits {
+                max_work_units: 0,
+                ..ParseLimits::default()
+            },
+            LimitKind::WorkUnits,
+        ),
+        (
+            ParseLimits {
+                max_record_bytes: body.len() - 1,
+                ..ParseLimits::default()
+            },
+            LimitKind::RecordBytes,
+        ),
+    ] {
+        assert!(matches!(
+            d.structured_emf_plus(&limits),
+            Err(Error::Resource(ParseFailure::LimitExceeded { .. }))
+        ));
+        let definition = typed
+            .stream
+            .object_definitions(&ParseLimits::default())
+            .unwrap()
+            .remove(0);
+        assert!(matches!(definition.decode(&limits),
+            Err(Error::Resource(ParseFailure::LimitExceeded { kind: actual, .. })) if actual == kind));
+        let mut failed = typed.stream.clone();
+        assert!(failed.replace_object_bytes(0, &body, &limits).is_err());
+        assert_eq!(failed, typed.stream);
+        assert_eq!(d, original);
+    }
+    let definition = typed
+        .stream
+        .object_definitions(&ParseLimits::default())
+        .unwrap()
+        .remove(0);
+    let mut value = definition.decode(&ParseLimits::default()).unwrap();
+    let ObjectData::Region(region) = &mut value else {
+        panic!()
+    };
+    region.nodes[0] = RegionNode::Binary { operation: 2 };
+    let mut good = typed;
+    good.stream
+        .replace_object_bytes(
+            0,
+            &value.serialize(&SerializeLimits::default()).unwrap(),
+            &ParseLimits::default(),
+        )
+        .unwrap();
+    d.apply_structured_emf_plus(&good, &SerializeLimits::default())
+        .unwrap();
+    let reparsed = parse(&serialize(&d).unwrap(), &ParseLimits::default()).unwrap();
+    assert_eq!(
+        reparsed
+            .structured_emf_plus(&ParseLimits::default())
+            .unwrap()
+            .stream
+            .object_definitions(&ParseLimits::default())
+            .unwrap()[0]
+            .decode(&ParseLimits::default())
+            .unwrap(),
+        value
+    );
+}
+
+#[test]
+fn malformed_nested_objects_remain_raw_preserved_without_partial_typed_edits() {
+    for words in [
+        [0xdbc01002u32, 2, 1, 0x10000002], // binary node missing right child
+        [0xdbc01002u32, 0, 0x10000001, u32::MAX], // nested path exceeds object
+    ] {
+        let body: Vec<u8> = words.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let mut d = continued_document(4, &body);
+        let original = d.clone();
+        let wire = serialize(&d).unwrap();
+        // Extraction assembles object bytes; rich decoding is explicitly opt-in.
+        let typed = d.structured_emf_plus(&ParseLimits::default()).unwrap();
+        let definition = typed
+            .stream
+            .object_definitions(&ParseLimits::default())
+            .unwrap()
+            .remove(0);
+        assert!(definition.decode(&ParseLimits::default()).is_err());
+        assert_eq!(d, original);
+        d.apply_structured_emf_plus(&typed, &SerializeLimits::default())
+            .unwrap();
+        assert_eq!(d, original);
+        assert_eq!(serialize(&d).unwrap(), wire);
+        assert_eq!(
+            d.structured_emf_plus(&ParseLimits::default()).unwrap(),
+            typed
+        );
+    }
 }

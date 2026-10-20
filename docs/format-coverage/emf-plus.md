@@ -71,6 +71,20 @@ boundaries and rejects size-changing edits. `Document::structured_emf_plus` and
 atomic comment repacking; see `emf_plus_container.rs`. Raw chunks stay available.
 This is an editing API, not a full standalone playback-document validator.
 
+The continuation-to-Document acceptance in `emf_plus_container.rs` assembles a
+logical Object split across three EMR comments, retains exact unchanged bytes and
+segment lengths, mutates a decoded SolidBrush and repacks growing/shrinking Region
+objects. It checks continuation padding, opaque neighbors, unrelated EMR bytes,
+trailing bytes, stale-source rejection and failure atomicity before successful
+reuse. `replace_object_bytes` intentionally rejects size changes; explicit fragment
+edits update TotalObjectSize before Document repacking. Invalid/incomplete totals
+and allocation/work/record limits are rejected without a partial Document edit.
+Rich Region decoding remains opt-in: malformed trees/nested paths can be retained
+as raw object bytes but fail typed decoding. Region nesting is stored in flat
+preorder; the existing 20,000-level test proves nonrecursive parse/write/drop,
+while resource budgets bound expansion. This is not recursive rendering support.
+
+
 Ruby's separate optional `Metafile#emf_plus_stream` API retains the raw `emf_plus`
 String and supplies explicit apply/representation handling. Its inventory and tests
 are documented separately. Native typed core coverage does not imply every typed
@@ -101,3 +115,10 @@ layout accepted`). With named private data and strict layout validation, its fou
 new tests and the same 28 preservation tests pass (32 total). Add
 `--test emf_plus_comment` to the command above. Atomic enclosing edits, source
 staleness, ignored flags, private-byte edits and failed-limit recovery are included.
+
+The Object/continuation Document checkpoint passes 12 container tests, together
+with the unchanged seven base EMF+ and seven Region controls (26 total). The final
+changed container file was rerun after adding nested-decode rejection and passes
+without compiler warnings. The checks use the same one-job local debug target;
+no production repair or new platform/corpus claim accompanies these acceptance
+assertions.

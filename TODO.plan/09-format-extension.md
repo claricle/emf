@@ -51,7 +51,11 @@ They do not establish full WMF or native coverage.
 Historical commands below describe intended checks, not current passing evidence;
 verify actual spec paths before execution. Modules and family tests now exist.
 The focused native TSClip and Comment checkpoints (28/0 and 32/0, respectively) are tracked in the EMF+ inventory; full-format
-and cross-platform checks remain separate:
+and cross-platform checks remain separate. Structured Object/continuation
+Document acceptance additionally checks exact unchanged segmentation, typed
+SolidBrush mutation, explicit Region growth/shrink repacking, stale-source and
+failure atomicity, invalid totals, nested-object rejection and shared budgets;
+see `emf_plus_container.rs` and the bounded evidence in the native inventory:
 
 ```sh
 ruby script/fixture_manifest --check
