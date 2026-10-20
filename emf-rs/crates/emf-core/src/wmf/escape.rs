@@ -1,4 +1,4 @@
-//! Escape transport framing and fixed payload views. Escape data is never executed.
+//! Escape transport framing and borrowed or fixed payload views. Escape data is never executed.
 
 use super::DecodeError;
 use crate::limits::{try_vec_with_capacity, Budget};
@@ -109,7 +109,91 @@ pub enum EscapePayload {
     },
 }
 
+/// Borrowed counted escape bytes. These values never execute printer commands,
+/// interpret PostScript, decode images, or convert document names to text.
+/// The enclosing transport owns the byte count and any alignment byte.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CountedEscapePayload<'a> {
+    Passthrough(&'a [u8]),
+    PostScriptData(&'a [u8]),
+    PostScriptPassthrough(&'a [u8]),
+    /// Raw 8-bit document-name bytes, with no NUL or UTF-8 requirement.
+    StartDoc(&'a [u8]),
+    CheckJpegFormat(&'a [u8]),
+    CheckPngFormat(&'a [u8]),
+    SetColorTable(&'a [u8]),
+}
+
+impl<'a> CountedEscapePayload<'a> {
+    /// The exact counted bytes, excluding alignment and the record suffix.
+    pub fn data(self) -> &'a [u8] {
+        self.parts().1
+    }
+
+    fn parts(self) -> (u16, &'a [u8]) {
+        match self {
+            Self::Passthrough(data) => (0x0013, data),
+            Self::PostScriptData(data) => (0x0025, data),
+            Self::PostScriptPassthrough(data) => (0x1013, data),
+            Self::StartDoc(data) => (0x000a, data),
+            Self::CheckJpegFormat(data) => (0x1017, data),
+            Self::CheckPngFormat(data) => (0x1018, data),
+            Self::SetColorTable(data) => (0x0004, data),
+        }
+    }
+}
+
 impl EscapeRecord {
+    /// Borrows the complete counted payload without copying or interpreting it.
+    /// Invalid transport, oversized STARTDOC names, and other subtypes return `None`.
+    pub fn typed_counted_payload(&self) -> Option<CountedEscapePayload<'_>> {
+        if self.function & 0xff != 0x26
+            || self.padding.is_some() != (self.data.len() % 2 != 0)
+            || self.data.len() > usize::from(u16::MAX)
+        {
+            return None;
+        }
+        let data = self.data.as_slice();
+        Some(match self.escape_function {
+            0x0013 => CountedEscapePayload::Passthrough(data),
+            0x0025 => CountedEscapePayload::PostScriptData(data),
+            0x1013 => CountedEscapePayload::PostScriptPassthrough(data),
+            0x000a if data.len() < 260 => CountedEscapePayload::StartDoc(data),
+            0x1017 => CountedEscapePayload::CheckJpegFormat(data),
+            0x1018 => CountedEscapePayload::CheckPngFormat(data),
+            0x0004 => CountedEscapePayload::SetColorTable(data),
+            _ => return None,
+        })
+    }
+
+    /// Copies new counted bytes atomically, checking the u16 count and STARTDOC's
+    /// strict 260-byte bound before allocating. The full record function is retained.
+    /// Odd results retain an existing alignment byte, or use zero if none existed;
+    /// even results discard old alignment. Document replacement retains the suffix.
+    pub fn replace_counted_payload(
+        &mut self,
+        payload: CountedEscapePayload<'_>,
+    ) -> Result<(), EditFailure> {
+        let (code, bytes) = payload.parts();
+        if self.function & 0xff != 0x26 || (code == 0x000a && bytes.len() >= 260) {
+            return Err(EditFailure::RecordLayout { index: 0 });
+        }
+        u16::try_from(bytes.len()).map_err(|_| EditFailure::SizeOverflow)?;
+        let mut data = Vec::new();
+        data.try_reserve_exact(bytes.len())
+            .map_err(|_| EditFailure::SizeOverflow)?;
+        data.extend_from_slice(bytes);
+        let padding = if data.len() % 2 != 0 {
+            Some(self.padding.unwrap_or(0))
+        } else {
+            None
+        };
+        self.escape_function = code;
+        self.data = data;
+        self.padding = padding;
+        Ok(())
+    }
+
     /// Reads only the declared payload, without allocating or interpreting a driver call.
     /// Unknown subtypes, unexpected sizes, and invalid transport framing return `None`.
     pub fn typed_payload(&self) -> Option<EscapePayload> {

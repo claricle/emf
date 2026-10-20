@@ -339,3 +339,200 @@ fn clip_to_path_preserves_both_record_sizes_and_reserved_field() {
         );
     }
 }
+
+use wmf::escape::CountedEscapePayload;
+
+fn counted_fixtures(data: &[u8]) -> [(u16, CountedEscapePayload<'_>); 7] {
+    use CountedEscapePayload::*;
+    [
+        (0x0013, Passthrough(data)),
+        (0x0025, PostScriptData(data)),
+        (0x1013, PostScriptPassthrough(data)),
+        (0x000a, StartDoc(data)),
+        (0x1017, CheckJpegFormat(data)),
+        (0x1018, CheckPngFormat(data)),
+        (0x0004, SetColorTable(data)),
+    ]
+}
+
+#[test]
+fn counted_views_borrow_exact_bytes_without_text_or_image_interpretation() {
+    for len in [0, 1, 3, 256, 259] {
+        let data: Vec<u8> = (0..len).map(|index| index as u8).collect();
+        for (code, expected) in counted_fixtures(&data) {
+            let bytes = subtype_document(code, &data, &[0xca, 0xfe, 0xbe, 0xef]);
+            let doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+            let record = escape(&doc);
+            let view = record.typed_counted_payload().unwrap();
+            assert_eq!(view, expected);
+            assert_eq!(view.data().as_ptr(), record.data.as_ptr());
+            assert_eq!(record.padding, if len % 2 != 0 { Some(0xa5) } else { None });
+            assert_eq!(record.typed_payload(), None);
+            assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+            assert!(doc.has_eof());
+            assert_eq!(doc.tail(), &[0xde, 0xad]);
+        }
+    }
+}
+
+#[test]
+fn counted_edits_derive_count_and_preserve_domains_across_parity_changes() {
+    // These bytes deliberately are neither valid UTF-8 nor a JPEG/PNG stream.
+    let odd = [0xff, 0, 0xc0];
+    let even: Vec<u8> = (0..=255).collect();
+    for (code, _) in counted_fixtures(&[]) {
+        let bytes = subtype_document(code, &[0x80], &[0xca, 0xfe]);
+        let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+        for (data, expected_pad) in [
+            (&odd[..], Some(0xa5)),
+            (&even[..], None),
+            (&odd[..], Some(0)),
+        ] {
+            let payload = counted_fixtures(data)
+                .into_iter()
+                .find(|(c, _)| *c == code)
+                .unwrap()
+                .1;
+            let mut record = escape(&doc).clone();
+            record.replace_counted_payload(payload).unwrap();
+            assert_eq!(record.data, data);
+            assert_eq!(record.padding, expected_pad);
+            assert_eq!(record.escape_function, code);
+            doc.replace_typed(0, wmf::TypedRecord::Escape(record))
+                .unwrap();
+            let output = wmf::serialize(&doc).unwrap();
+            doc = wmf::parse(&output, &ParseLimits::default()).unwrap();
+            assert_eq!(escape(&doc).typed_counted_payload(), Some(payload));
+            assert_eq!(escape(&doc).function, 0xff26);
+            assert_eq!(escape(&doc).padding, expected_pad);
+            let body = doc.record_body(&doc.records()[0]).unwrap();
+            assert_eq!(
+                u16::from_le_bytes(body[2..4].try_into().unwrap()) as usize,
+                data.len()
+            );
+            assert_eq!(&body[4..4 + data.len()], data);
+            assert_eq!(
+                &body[4 + data.len() + usize::from(expected_pad.is_some())..],
+                &[0xca, 0xfe]
+            );
+            assert_eq!(doc.tail(), &[0xde, 0xad]);
+        }
+    }
+}
+
+#[test]
+fn counted_limits_reject_before_mutation_and_startdoc_bound_is_strict() {
+    let mut record = EscapeRecord {
+        function: 0xab26,
+        escape_function: 0xffff,
+        data: vec![0xfe],
+        padding: Some(0x97),
+    };
+    let max = vec![0xff; u16::MAX as usize];
+    for (code, payload) in counted_fixtures(&max) {
+        if code == 0x000a {
+            continue;
+        }
+        record.replace_counted_payload(payload).unwrap();
+        assert_eq!(record.typed_counted_payload(), Some(payload));
+        assert_eq!(record.function, 0xab26);
+        assert_eq!(record.padding, Some(0x97));
+        let bytes = subtype_document(code, &max, &[0xca, 0xfe]);
+        let doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+        assert_eq!(escape(&doc).typed_counted_payload(), Some(payload));
+        assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+    }
+    let too_long = vec![0; u16::MAX as usize + 1];
+    for (_, payload) in counted_fixtures(&too_long) {
+        let before = record.clone();
+        assert!(record.replace_counted_payload(payload).is_err());
+        assert_eq!(record, before);
+    }
+    let name = vec![0xff; 259];
+    record
+        .replace_counted_payload(CountedEscapePayload::StartDoc(&name))
+        .unwrap();
+    assert_eq!(
+        record.typed_counted_payload(),
+        Some(CountedEscapePayload::StartDoc(&name))
+    );
+    let name = vec![0; 260];
+    let before = record.clone();
+    assert!(record
+        .replace_counted_payload(CountedEscapePayload::StartDoc(&name))
+        .is_err());
+    assert_eq!(record, before);
+    let bytes = subtype_document(0x000a, &name, &[0xca, 0xfe]);
+    let doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+    assert_eq!(escape(&doc).typed_counted_payload(), None);
+    assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+}
+
+#[test]
+fn counted_malformed_transport_never_yields_partial_views() {
+    for (code, _) in counted_fixtures(&[]) {
+        for count in [3u16, u16::MAX] {
+            let mut body = code.to_le_bytes().to_vec();
+            body.extend_from_slice(&count.to_le_bytes());
+            body.extend_from_slice(&[0xff, 0]);
+            let bytes = document(&body);
+            let doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+            assert_eq!(doc.records()[0].typed(), None);
+            assert!(doc.has_eof());
+            assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+        }
+        let mut record = EscapeRecord {
+            function: 0x626,
+            escape_function: code,
+            data: vec![0xff],
+            padding: None,
+        };
+        assert_eq!(record.typed_counted_payload(), None);
+        record.data.clear();
+        record.padding = Some(0xa5);
+        assert_eq!(record.typed_counted_payload(), None);
+        record.padding = None;
+        record.data = vec![0; u16::MAX as usize + 1];
+        assert_eq!(record.typed_counted_payload(), None);
+        record.data.clear();
+        record.function = 0x1234;
+        assert_eq!(record.typed_counted_payload(), None);
+        let before = record.clone();
+        assert!(record
+            .replace_counted_payload(CountedEscapePayload::Passthrough(&[]))
+            .is_err());
+        assert_eq!(record, before);
+    }
+}
+
+#[test]
+fn counted_dispatch_keeps_deferred_codes_and_suffix_bytes_opaque() {
+    for code in [
+        0xffff, 0x0005, 0x000f, 0x1005, 0x1015, 0x1006, 0x1016, 0x1014, 0x11d8,
+    ] {
+        let bytes = subtype_document(code, &[0xff, 0, 0xc0], &[0xca, 0xfe]);
+        let doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+        assert_eq!(escape(&doc).typed_counted_payload(), None);
+        assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+    }
+    // ByteCount bounds only the data; extra bytes remain a record suffix.
+    let bytes = subtype_document(0x0013, &[0xff], &[0x99, 0x88, 0x77, 0x66]);
+    let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+    assert_eq!(
+        escape(&doc).typed_counted_payload(),
+        Some(CountedEscapePayload::Passthrough(&[0xff]))
+    );
+    let mut record = escape(&doc).clone();
+    record
+        .replace_counted_payload(CountedEscapePayload::StartDoc(&[0xc0, 0]))
+        .unwrap();
+    doc.replace_typed(0, wmf::TypedRecord::Escape(record))
+        .unwrap();
+    let output = wmf::serialize(&doc).unwrap();
+    let reparsed = wmf::parse(&output, &ParseLimits::default()).unwrap();
+    assert_eq!(
+        reparsed.record_body(&reparsed.records()[0]).unwrap(),
+        &[0x0a, 0, 2, 0, 0xc0, 0, 0x99, 0x88, 0x77, 0x66]
+    );
+    assert_eq!(reparsed.tail(), &[0xde, 0xad]);
+}
