@@ -1,10 +1,17 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "rbconfig"
 
 RSpec.describe "semantic flood fill and text justification" do
   let(:header) { Emf::Emr::Binary::Header.new(i_type: 1, n_size: 108, d_signature: 0x464D4520).to_binary_s }
   let(:eof) { [14, 20, 0, 0, 20].pack("V*") }
+  let(:library) do
+    ENV.fetch("EMF_TEST_NATIVE_LIBRARY") do
+      extension = RbConfig::CONFIG.fetch("host_os").include?("darwin") ? "dylib" : "so"
+      File.expand_path("../../../emf-rs/target/debug/libemf_ffi.#{extension}", __dir__)
+    end
+  end
   let(:cases) do
     [
       [53, 91, Emf::Emr::Binary::Records::ExtFloodFill, [0x80000000, 0x7FFFFFFF, 0xFEDCBA98, 0xFFFFFFFF].pack("V*"),
@@ -18,11 +25,13 @@ RSpec.describe "semantic flood fill and text justification" do
   around do |example|
     previous = ENV.to_h.slice("EMF_BACKEND", "EMF_NATIVE_LIBRARY")
     ENV["EMF_BACKEND"] = "native"
-    ENV["EMF_NATIVE_LIBRARY"] = ENV.fetch("EMF_TEST_NATIVE_LIBRARY")
+    ENV["EMF_NATIVE_LIBRARY"] = library
     example.run
   ensure
     %w[EMF_BACKEND EMF_NATIVE_LIBRARY].each { |key| ENV[key] = previous[key] }
   end
+
+  before { skip "build emf-ffi or set EMF_TEST_NATIVE_LIBRARY" unless File.file?(library) }
 
   it "decodes typed wire fields and preserves body assignment compatibility" do
     cases.each do |type, _family, klass, body, fields|
