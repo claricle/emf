@@ -1,0 +1,147 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: script/verify_release_artifacts --directory DIR --revision SHA --version X.Y.Z
+#          --platforms P1,P2,... --output DIR [--abi-version N]
+#
+# Fails closed on a release candidate set: DIR (searched recursively, so
+# actions/download-artifact subdirectories work) must hold exactly one emf gem
+# per expected platform plus exactly one source gem, all at --version. Each
+# platform gem must pass script/check_native_package --revision SHA (provenance
+# revision, gem_version, library_sha256 and manifest sha256 against the packaged
+# library) and declare the expected ABI version. Nothing is written unless every
+# check passes; then the gems and a SHA256SUMS file are written flat to --output.
+# The source gem carries no provenance, so its revision cannot be verified here.
+
+require "digest"
+require "fileutils"
+require "json"
+require "open3"
+require "optparse"
+require "rbconfig"
+require "rubygems/package"
+require "tmpdir"
+
+class ReleaseArtifactVerifier
+  ROOT = File.expand_path("..", __dir__)
+  GEM_NAME = "emf"
+  SOURCE = "ruby"
+
+  def initialize(directory:, revision:, version:, platforms:, abi_version:)
+    @directory = directory
+    @revision = revision
+    @version = version
+    @platforms = platforms
+    @abi_version = abi_version
+  end
+
+  def problems
+    @problems ||= begin
+      gems = Dir.glob(File.join(@directory, "**", "*.gem")).map { |path| [path, Gem::Package.new(path).spec] }
+      row_problems(gems) + gem_problems(gems) + package_problems(gems)
+    end
+  end
+
+  def publish(output)
+    FileUtils.mkdir_p(output)
+    paths = gem_paths
+    FileUtils.cp(paths, output)
+    sums = paths.map { |path| "#{Digest::SHA256.file(path).hexdigest}  #{File.basename(path)}\n" }.sort
+    File.write(File.join(output, "SHA256SUMS"), sums.join)
+  end
+
+  private
+
+  def gem_paths
+    Dir.glob(File.join(@directory, "**", "*.gem"))
+  end
+
+  def row_problems(gems)
+    seen = gems.group_by { |_path, spec| spec.platform.to_s }
+    problems = missing_rows(seen) + extra_rows(seen)
+    problems + seen.select { |_row, entries| entries.size > 1 }.map do |row, entries|
+      "duplicate #{row} gem: #{entries.map { |path, _spec| relative(path) }.join(', ')}"
+    end
+  end
+
+  def missing_rows(seen)
+    (expected_rows - seen.keys).map { |row| "missing #{row} gem" }
+  end
+
+  def extra_rows(seen)
+    (seen.keys - expected_rows).map { |row| "unexpected #{row} gem" }
+  end
+
+  def expected_rows
+    @platforms + [SOURCE]
+  end
+
+  def gem_problems(gems)
+    gems.flat_map do |path, spec|
+      problems = []
+      problems << "#{relative(path)}: gem name #{spec.name} != #{GEM_NAME}" unless spec.name == GEM_NAME
+      problems << "#{relative(path)}: version #{spec.version} != #{@version}" unless spec.version.to_s == @version
+      problems
+    end
+  end
+
+  def package_problems(gems)
+    return [] if gems.empty?
+
+    Dir.mktmpdir("emf-release-verify") do |dir|
+      gems.each_with_index { |(path, _spec), index| FileUtils.cp(path, File.join(dir, "#{index}-#{File.basename(path)}")) }
+      checker_problems(dir) + abi_problems(gems)
+    end
+  end
+
+  def checker_problems(dir)
+    _out, err, status = Open3.capture3(RbConfig.ruby, File.join(ROOT, "script/check_native_package"),
+                                       "--directory", dir, "--revision", @revision)
+    status.success? ? [] : err.lines.map { |line| "check_native_package: #{line.strip.sub(/\A\d+-/, '')}" }
+  end
+
+  def abi_problems(gems)
+    gems.reject { |_path, spec| spec.platform.to_s == SOURCE }.filter_map do |path, _spec|
+      abi = platform_manifest(path)["abi_version"]
+      "#{relative(path)}: abi_version #{abi.inspect} != #{@abi_version}" unless abi == @abi_version
+    end
+  end
+
+  def platform_manifest(path)
+    Dir.mktmpdir("emf-release-abi") do |dir|
+      Gem::Package.new(path).extract_files(dir)
+      JSON.parse(File.read(File.join(dir, "lib/emf/native/platforms.json")))
+    end
+  rescue Errno::ENOENT, JSON::ParserError
+    {}
+  end
+
+  def relative(path)
+    path.delete_prefix("#{@directory.chomp('/')}/")
+  end
+end
+
+options = { abi_version: 1 }
+OptionParser.new do |o|
+  o.on("--directory DIR", "downloaded artifacts, searched recursively") { |v| options[:directory] = v }
+  o.on("--revision SHA", "git revision every platform gem must record") { |v| options[:revision] = v }
+  o.on("--version X.Y.Z", "version every gem must carry") { |v| options[:version] = v }
+  o.on("--platforms LIST", "comma-separated platforms to release (the source gem is implied)") { |v| options[:platforms] = v.split(",") }
+  o.on("--abi-version N", Integer, "expected ABI version (default 1)") { |v| options[:abi_version] = v }
+  o.on("--output DIR", "receives the verified gems and SHA256SUMS") { |v| options[:output] = v }
+end.parse!
+
+missing = %i[directory revision version platforms output].reject { |key| options[key] }
+abort "missing #{missing.map { |key| "--#{key}" }.join(', ')}" unless missing.empty?
+abort "--platforms is empty" if options[:platforms].empty?
+
+output = options.delete(:output)
+verifier = ReleaseArtifactVerifier.new(**options)
+if verifier.problems.empty?
+  verifier.publish(output)
+  puts "release artifacts verified: #{options[:platforms].size} platform gems and the source gem at #{options[:version]}"
+else
+  warn verifier.problems
+  warn "release artifact verification failed (#{verifier.problems.size} problems)"
+  exit 1
+end
