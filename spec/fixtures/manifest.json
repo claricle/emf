@@ -1,16 +1,24 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "capture": {
+    "backend": "ruby",
+    "limits": {
+      "timeout_seconds": 15,
+      "output_limit_bytes": 16384
+    }
+  },
   "backend": {
     "name": "ruby",
     "ruby_version": "3.4.8",
     "bindata_version": "2.5.1",
-    "parser_source_sha256": "6f0650d1c96bc9c226a55f6ab3451a4e40d2cc542bd68dfec63d4d567018824f"
+    "parser_source_sha256": "b66993f798785b3d13f96b61220ad612b25f8d99c38c89ff43fe18bd572344f9"
   },
   "counts": {
     "emf": 186,
     "emf-corrupted": 21,
     "emf-ea": 21,
-    "simple": 1
+    "simple": 1,
+    "wmf": 2
   },
   "fixtures": [
     {
@@ -39,7 +47,7 @@
       "size_bytes": 53120,
       "expected_format": "emf",
       "detected_format": "emf",
-      "outcome": "parsed"
+      "outcome": "recovered"
     },
     {
       "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-02-215400.emf",
@@ -99,7 +107,7 @@
       "size_bytes": 106632,
       "expected_format": "emf",
       "detected_format": "emf",
-      "outcome": "parsed"
+      "outcome": "recovered"
     },
     {
       "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-09-002112.emf",
@@ -115,7 +123,7 @@
       "size_bytes": 144416,
       "expected_format": "emf",
       "detected_format": "emf",
-      "outcome": "parsed"
+      "outcome": "recovered"
     },
     {
       "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-13-132605.emf",
@@ -1851,6 +1859,24 @@
       "size_bytes": 92904,
       "expected_format": "emf",
       "detected_format": "emf",
+      "outcome": "parsed"
+    },
+    {
+      "path": "spec/fixtures/wmf/placeable-line.wmf",
+      "sha256": "72989db137560ed813c0ca0e0f7622bb91daf50a7ca914a8755b06c0e8ba27e3",
+      "size_bytes": 76,
+      "expected_format": "wmf",
+      "provenance": "synthetic",
+      "detected_format": "wmf",
+      "outcome": "parsed"
+    },
+    {
+      "path": "spec/fixtures/wmf/standard-line.wmf",
+      "sha256": "d5f8cb32910815e9c4a536f7fb9cf6b9332fbc81a9b9ca8d8e9fd673d6fcc7a3",
+      "size_bytes": 54,
+      "expected_format": "wmf",
+      "provenance": "synthetic",
+      "detected_format": "wmf",
       "outcome": "parsed"
     }
   ]

@@ -266,6 +266,30 @@ RSpec.describe ParserBenchmark::WarmWorker do
     expect(File.binread(path)).to eq(bytes)
   end
 
+  it "measures dump and serialization before any traversal of their models" do
+    traversed = []
+    dumped = []
+    serialized = []
+    allow(worker).to receive(:traverse).and_wrap_original do |original, metafile|
+      traversed << metafile
+      original.call(metafile)
+    end
+    allow_any_instance_of(Emf::Visitors::Dump).to receive(:visit_all).and_wrap_original do |original, metafile|
+      dumped << metafile
+      original.call(metafile)
+    end
+    allow(Emf).to receive(:serialize).and_wrap_original do |original, metafile|
+      serialized << metafile
+      original.call(metafile)
+    end
+
+    expect(worker.call.fetch("status")).to eq("ok")
+    expect(dumped.size).to eq(3)
+    expect(serialized.size).to be >= 3
+    expect(dumped.map(&:object_id) & traversed.map(&:object_id)).to be_empty
+    expect(serialized.map(&:object_id) & traversed.map(&:object_id)).to be_empty
+  end
+
   context "without a representative record" do
     let(:bytes) { header + eof }
 

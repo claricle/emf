@@ -111,6 +111,46 @@ RSpec.describe "Native WMF bridge" do
     expect(Emf.parse(Emf.serialize(parsed)).records[1].dx).to eq([13, 5])
   end
 
+  it "matches Ruby and native optional BitBlt bitmap forms through the public bridge" do
+    bitmap = "\xDE\xAD\xBE\xEF".b
+    suffix = "\xAA\xBB".b
+    cases = [
+      [0x0A22, [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xBEEF, 0xFFFF, 2, 0xFFFD, 4].pack("v*"),
+       nil, 0xBEEF, suffix],
+      [0x0922, [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xFFFF, 2, 0xFFFD, 4].pack("v*"),
+       bitmap, 0, "".b]
+    ]
+    fields = %i[type_id raster_operation source_y source_x height width destination_y destination_x reserved bitmap suffix]
+
+    inputs = cases.map do |type, body, expected_bitmap, _expected_reserved, expected_suffix|
+      native_wmf_bytes([native_wmf_record(type, body + (expected_bitmap || "".b) + expected_suffix)])
+    end
+    ENV["EMF_BACKEND"] = "ruby"
+    fallback_parses = inputs.map do |input|
+      parsed = Emf.parse(input)
+      [parsed, Emf.serialize(parsed)]
+    end
+
+    expect(Emf::Wmf::Parser).not_to receive(:call)
+    ENV["EMF_BACKEND"] = "native"
+    cases.zip(inputs, fallback_parses).each do |(_type, _body, expected_bitmap, expected_reserved, expected_suffix), input, fallback_data|
+      fallback, fallback_bytes = fallback_data
+      native = Emf.parse(input)
+      native_bytes = Emf.serialize(native)
+      fallback_record = fallback.records.first
+      native_record = native.records.first
+
+      expect(fallback_record).to be_a(Emf::Model::Wmf::Records::BitBlt)
+      expect(native_record).to be_a(Emf::Model::Wmf::Records::BitBlt)
+      expect(fields.map { |field| native_record.public_send(field) })
+        .to eq(fields.map { |field| fallback_record.public_send(field) })
+      expect(native_record.bitmap).to eq(expected_bitmap)
+      expect(native_record.reserved).to eq(expected_reserved)
+      expect(native_record.suffix).to eq(expected_suffix)
+      expect([fallback_bytes, native_bytes]).to eq([input, input])
+    end
+  end
+
   it "rejects malformed Ruby typed families and invalid object references without Ruby retry" do
     malformed = [
       native_wmf_record(0x0214, [1].pack("s<")),
@@ -124,19 +164,18 @@ RSpec.describe "Native WMF bridge" do
     end
   end
 
-  it "keeps Rust-only families unknown even when their native payload is malformed" do
-    # SetBkColor is understood by Rust but has no typed Ruby WMF model.
-    record = native_wmf_record(0x0201, [3].pack("v"))
-    input = native_wmf_bytes([record])
+  it "hydrates typed native DC state and preserves its source bytes" do
+    records = [native_wmf_record(0x001E, ""), native_wmf_record(0x0127, [-1].pack("s<"))]
+    input = native_wmf_bytes(records)
     expect(Emf::Wmf::Parser).not_to receive(:call)
     expect(Emf::Wmf::TextCodec).not_to receive(:decode)
     parsed = Emf.parse(input)
-    expect(parsed.records.first).to be_a(Emf::Model::Wmf::Records::UnknownRecord)
-    expect(parsed.records.first.raw_bytes).to eq(record)
+    expect(parsed.records.first(2).map(&:class)).to eq([Emf::Model::Wmf::Records::SaveDc, Emf::Model::Wmf::Records::RestoreDc])
+    expect(parsed.records[1].saved_dc).to eq(-1)
     expect(Emf.serialize(parsed)).to eq(input)
   end
 
-  it "preserves newly typed native escape records as opaque Ruby records" do
+  it "hydrates native Escape records while preserving inert driver data" do
     passthrough = [0xDEADBEEF, 1, 0x80].pack("VvC")
     color_table = [12, 0].pack("v2") + [0x11223344].pack("V")
     postscript = "#{[36, 1, -1, 2, -3, 4, -5, 6].pack('V2l<6')}EPS!"
@@ -149,13 +188,16 @@ RSpec.describe "Native WMF bridge" do
     expect(Emf::Wmf::Parser).not_to receive(:call)
     parsed = Emf.parse(input)
     expect(parsed.errors).to be_empty
-    expect(parsed.records.first(3).map(&:class)).to all(eq(Emf::Model::Wmf::Records::UnknownRecord))
-    expect(parsed.records.first(3).map(&:raw_bytes)).to eq(escapes)
+    expect(parsed.records.first(3)).to all(be_a(Emf::Model::Wmf::Records::Escape))
+    expect(parsed.records.first(3).map(&:data)).to eq([passthrough, color_table, postscript])
+    expect(parsed.records.first(3).map(&:escape_function)).to eq([0x11D8, 0x0005, 0x1014])
+    expect(parsed.records.first(3).map(&:padding)).to eq([0xF7, nil, nil])
     expect(parsed.records[3].raw_bytes).to eq(unknown)
     expect(Emf.serialize(parsed)).to eq(input)
 
     reparsed = Emf.parse(Emf.serialize(parsed))
-    expect(reparsed.records.first(3).map(&:raw_bytes)).to eq(escapes)
+    expect(reparsed.records.first(3).map(&:data)).to eq([passthrough, color_table, postscript])
+    expect(Emf.serialize(reparsed)).to eq(input)
     expect(reparsed.records[3].raw_bytes).to eq(unknown)
   end
 

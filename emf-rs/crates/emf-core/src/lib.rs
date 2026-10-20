@@ -18,7 +18,7 @@ pub mod wmf;
 
 pub use detect::{detect_format, Format};
 pub use error::{EditFailure, LimitKind, ParseFailure, SerializeFailure};
-pub use limits::{ParseLimits, SerializeLimits};
+pub use limits::{Budget as ParseBudget, ParseLimits, SerializeLimits};
 pub use model::{
     ColorRef, DesignVector, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord,
     ExtCreatePen, ExtTextOut, Float32, Font, FontRecord, LogFont, LogFontEx, LogFontExDv,

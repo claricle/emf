@@ -6,7 +6,15 @@
 mod container;
 pub use container::{EmbedError, EmbeddedStream};
 mod object_data;
-pub use object_data::{ObjectData, StringFormat};
+pub use object_data::{
+    ArrowLineCap, CustomLineCap, CustomLineCapData, DefaultLineCap, GradientBoundary,
+    LinearGradient, ObjectData, Path, PathGradient, PathPointRun, PathPointTypes, Pen, PenBrush,
+    PenBrushData, PixelBitmap, Region, RegionNode, StringFormat, Texture, TextureImage,
+};
+mod tsgraphics;
+pub use tsgraphics::{Palette, TSGraphics};
+mod effects;
+pub use effects::Effect;
 mod text;
 pub use text::Text;
 mod drawing;

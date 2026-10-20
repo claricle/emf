@@ -904,6 +904,34 @@ static int check_wmf(void) {
     return 0;
 }
 
+static int check_emf_plus_snapshot(void) {
+    emf_document *document = NULL;
+    emf_buffer *buffer = NULL;
+    emf_plus_snapshot_options options = {sizeof(options), EMF_PLUS_SNAPSHOT_VERSION, 4096};
+    const uint8_t *data = NULL;
+    uint64_t length = 0;
+    CHECK(sizeof(options) == 16);
+    make_fixture();
+    memset(input + HEADER_SIZE, 0, INPUT_CAPACITY - HEADER_SIZE);
+    put_u32(88, 70); put_u32(92, 32); put_u32(96, 20);
+    memcpy(input + 100, "EMF+", 4);
+    put_u16(104, 0x4009); put_u16(106, 0x8000);
+    put_u32(108, 16); put_u32(112, 4); put_u32(116, 0x80ff0033);
+    input_length = 120;
+    CHECK(emf_parse(input, input_length, NULL, &document, NULL) == EMF_OK);
+    CHECK(emf_document_emf_plus_snapshot_v1(document, &options, NULL, &buffer, NULL) == EMF_OK);
+    emf_document_free(document);
+    CHECK(emf_buffer_view(buffer, &data, &length) == EMF_OK);
+    CHECK(length == 156 && memcmp(data, "EPSN", 4) == 0);
+    CHECK(data[116] == 3 && data[152] == 0x33 && data[155] == 0x80);
+    emf_buffer_free(buffer);
+    buffer = NULL;
+    options.version++;
+    CHECK(emf_document_emf_plus_snapshot_v1(NULL, &options, NULL, &buffer, NULL) == EMF_INVALID_ARGUMENT);
+    CHECK(buffer == NULL);
+    return 0;
+}
+
 int main(void) {
     CHECK(check_layout() == 0);
     CHECK(check_snapshot() == 0);
@@ -1099,6 +1127,7 @@ int main(void) {
     emf_document_free(NULL);
     emf_buffer_free(NULL);
     CHECK(check_wmf() == 0);
+    CHECK(check_emf_plus_snapshot() == 0);
     puts("C ABI smoke: ok");
     return 0;
 }

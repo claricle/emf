@@ -5,6 +5,7 @@ module Emf
     # Typed views over framed EMF+ records. Types without a class decode to
     # Records::Unknown, which keeps the frame so nothing is dropped.
     module Records
+      autoload :Primitives, "emf/emf_plus/records/primitives"
       autoload :Base, "emf/emf_plus/records/base"
       autoload :Unknown, "emf/emf_plus/records/unknown"
       autoload :Header, "emf/emf_plus/records/header"

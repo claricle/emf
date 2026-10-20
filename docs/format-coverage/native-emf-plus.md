@@ -27,6 +27,9 @@ to validate a complete playback document.
 - DrawString raw UTF-16, layout and format ID; DrawDriverString glyphs, positions,
   realized-advance layout and optional transform.
 - Object fragment headers with object ID/type and optional TotalObjectSize.
+- SetTSGraphics raw rendering state and transform bits, with optional bounded palette.
+- SerializableObject image effects: all eleven standard GUID parameter layouts,
+  retaining ignored record flags, raw float/Boolean/enum words and signed fields.
 
 Floating-point fields expose their IEEE bits. Record flags, unknown record data,
 and bytes between DataSize and Size are retained exactly. Typed layout mismatches
@@ -47,16 +50,34 @@ Borrowed, allocation-free object views currently decode Solid/Hatch Brush, Font
 (including raw UTF-16 and suffix) and ImageAttributes. Other object subtypes remain
 explicitly opaque. Independently budgeted `ObjectDefinition::decode` additionally
 returns editable `ObjectData` for those four bodies, StringFormat (all header
-fields, counted tab stops and character ranges), and Image bitmap/metafile
-metadata. Bitmap bytes and nested metafiles remain raw, without decompression or
-recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
+fields, counted tab stops and character ranges), Path, Region, CustomLineCap, Pen, LinearGradient/PathGradient/Texture Brushes, and Image bitmap/metafile
+metadata and known-format pixel bitmap palettes. Path retains raw floating-point, signed integer and relative coordinate
+encodings, compressed point-type runs and alignment bytes. Relative coordinate
+widths and ignored flag bits survive typed edits; coordinate/type counts, run
+totals and alignment are validated before serialization. Region retains a flat preorder
+node sequence for binary operations, raw rectangle bits, nested Path, empty and
+infinite nodes. Counts, complete binary-tree shape and nested Path lengths are
+validated without recursive parsing or destruction; nested allocations share the
+object budget. Unknown node types retain the complete object as opaque because
+their payload has no generic length. CustomLineCap retains both default and adjustable-arrow
+fields, raw Boolean/float/enum words and optional fill/outline Paths. Nested signed
+Path lengths are checked on decode and derived on edit; both Paths share the
+object allocation and work budgets. Unknown cap types or optional-data flags
+retain the complete opaque body. Known flags must agree with optional Path presence
+on serialization. Pen retains all flag-selected fixed fields, counted dash/compound
+arrays, ordered optional custom caps and Solid/Hatch/LinearGradient/PathGradient/Texture nested brushes. Unknown Pen
+types, flags, nested cap types or brush types preserve the complete opaque body.
+Custom cap lengths and array counts are derived on edit; option presence must
+match flags and all nested allocations share the object budget. Floating-point
+and enum fields retain raw bits without rendering-domain validation. Pixel bytes and nested
+metafiles remain unexpanded, without decompression or recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
 serialization derives edited counts under shared SerializeLimits.
 Editing assembled bytes and replacing an object is supported;
 there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Deeper Pen/Path/Region/CustomLineCap objects and image pixel/palette structures, nested object structures and effects remain opaque. Playback object
+TSClip and unknown object/record variants remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
 it does not claim full native EMF+ format acceptance or add a Ruby public API.
@@ -73,6 +94,15 @@ invalid counts and matrix flags, padding and resource budgets.
 `tests/emf_plus_objects.rs` covers typed object fields, exact/mutable roundtrips,
 StringFormat count validation, all independent resource limits, unexpanded image
 payloads and typed edits through continuation/comment boundary preservation.
+`tests/emf_plus_path.rs` covers all Path coordinate encodings, raw bit/width and
+RLE preservation, counted edits, malformed layouts, shared budgets and typed
+continuation edits with exact fragment, padding and segment preservation.
+
+`tests/emf_plus_region.rs` covers typed preorder nodes, all binary operators, raw
+rectangle bits, nested Path edits, derived node counts/lengths, unknown-node opaque
+preservation, malformed trees, shared budgets and a 20,000-level tree without
+recursive parsing, writing or destruction. Continuation edits retain exact
+fragment headers, unknown records, padding and comment segment boundaries.
 
 ## Enclosing native Document API
 
@@ -121,3 +151,81 @@ budgets. Growth and shrink preserve unrelated wire records, retain original oute
 padding prefixes where they fit and zero new padding via the existing EMF writer.
 Custom segment policies, new EMR insertion, FFI/Ruby mapping, licensed embedded
 rendering fixtures and the remaining typed families above remain open.
+
+`emf_plus_linecap.rs` covers both cap types, every optional Path combination, raw
+field/padding identity, derived edited lengths, unknown opaque fallback, malformed
+signed lengths/truncation/suffixes, inconsistent edits, shared parse/serialize
+budgets and continuation/segment/unknown-record preservation.
+
+`emf_plus_pen.rs` covers every optional flag and both supported nested brushes,
+raw bits, edited array/cap lengths, unknown opaque fallback, malformed nested
+boundaries/counts, inconsistent flags, shared budgets and continuation/segment
+byte preservation.
+
+LinearGradient brushes expose flags, wrap mode, rectangle/color/reserved words,
+optional transform and counted blend arrays, both standalone and inside Pen.
+`LinearGradient::blends` stores pairs of position bits and ARGB/factor bits;
+wire ordering is preset colors, or vertical then horizontal factors as selected.
+Counts derive from edits. Known conflicting blend flags, fewer than two factor
+samples, inconsistent optional fields, truncated arrays and suffixes fail.
+Unknown flags preserve the complete enclosing object as opaque. Floating-point
+bits and enum words are retained without rendering-domain validation.
+`emf_plus_linear_brush.rs` covers all optional combinations, wire order,
+standalone/nested growth and shrink, malformed and unknown data, shared budgets,
+and exact continuation/segment/unknown-record/padding preservation.
+
+PathGradient brushes expose center/color words, surrounding colors, a typed Path
+or raw floating-point boundary points, optional transform, blend and focus scales,
+both standalone and inside Pen. Boundary lengths, point/color/blend counts and
+the fixed focus count derive on edit. Nested Path alignment bytes and all float
+bits survive unchanged. Signed boundary lengths/counts, conflicting blend flags,
+optional-field presence and factor counts are validated with shared resource
+budgets; unknown flags preserve the entire enclosing object as opaque.
+`emf_plus_path_brush.rs` covers all 48 optional combinations, typed boundary and
+nested Pen growth/shrink, malformed lengths/counts/truncations, inconsistent edits,
+shared budgets and exact continuation/segment/unknown-record/padding preservation.
+
+Texture brushes expose flags, wrap mode and an optional transform and image,
+both standalone and inside Pen. `TextureImage` retains bitmap metadata, or
+metafile metadata, counted bytes and suffix. Known pixel formats with BitmapType 0
+expose `PixelBitmap` for standalone images and nested textures, with an optional
+typed palette and unexpanded pixel bytes. Palette presence follows the indexed
+flag; its count derives on edit. Reserved pixel-format bits, signed dimensions,
+stride, pixel bytes and row padding are retained without raster validation.
+Compressed bitmaps, unknown bitmap types and unknown pixel formats retain the
+existing raw bitmap variant. Nested
+image data shares the object budget and is never decompressed or recursively
+parsed. Unknown brush flags or image types preserve the entire enclosing object
+as opaque; malformed known headers/counts and inconsistent transforms fail.
+`emf_plus_texture.rs` covers all eight flag combinations and three image forms,
+image growth/shrink/removal, nested Pen edits, unknown preservation, malformed
+headers/counts/suffixes, exact allocation thresholds, shared resource limits and
+continuation/segment/unknown-record/padding identity. `emf_plus_bitmap.rs`
+additionally covers all 14 defined pixel formats, palette edits through standalone
+images, texture brushes and pens, unknown formats/types, malformed palette counts,
+shared parse/serialize limits and atomic Document growth/shrink with explicit
+continuation edits, stale-source rejection and unrelated comment preservation.
+
+SerializableObject records expose `RecordData::Effect` with Blur, BrightnessContrast,
+ColorBalance, ColorCurve, ColorLookupTable, ColorMatrix, HueSaturationLightness,
+Levels, RedEyeCorrection, Sharpen and Tint parameters. Lookup tables retain blue,
+green, red, alpha wire order; matrix words retain column wire order. RedEye areas
+retain signed RectL coordinates and derive the signed count on edit. GUID and
+BufferSize derive from the selected variant. Known layouts require exact lengths;
+unknown GUIDs expose their exact aligned buffer without interpreting it. Raw
+numeric fields do not validate rendering ranges. Effect allocations and element
+work share the enclosing parse/serialize limits, with counted wire availability
+checked before reserve. `emf_plus_effects.rs` covers all GUIDs/fields, mutable and
+exact roundtrips, malformed counts/lengths, unknown buffers, split segments,
+ignored flags/padding preservation, growth/shrink and resource limits.
+
+SetTSGraphics exposes `RecordData::TSGraphics` and an optional `Palette` with raw
+style flags and ARGB entries. All rendering enums, ignored flags, V, signed render
+origins, text contrast and transform float bits survive unchanged. The T flag must
+agree with palette presence; edited palette counts and record sizes derive from
+the entries. Known layouts require exact lengths and count availability before
+allocation, with palette entries charged to shared allocation/work limits. Public
+`emf_plus_tsgraphics.rs` tests cover all flag combinations, exact fields/bytes,
+mutable state and palette growth/shrink/removal, malformed layouts, budget
+thresholds and Document repacking with atomic failures/stale-source protection.
+SetTSClip's compressed delta rectangles remain opaque pending interpretation.

@@ -6,8 +6,11 @@ module Emf
       # EmfPlusSetTSClip (2.3.8.1). Flag C selects 4-byte (compressed) or
       # 8-byte rectangles. Only the 8-byte form (four INT16: x, y, width,
       # height, the EmfPlusRect layout) is decoded into rectangles; the
-      # compressed byte stream stays raw in `rect_data` because the spec's
-      # compression text does not fix a per-rectangle layout.
+      # compressed byte stream stays raw in `rect_data`: the spec's scheme is
+      # 1-or-2 bytes per point, delta-coded against the previous rectangle,
+      # but it does not name the four coded values, the two-byte sign rule or
+      # the first rectangle's reference, and it contradicts itself by also
+      # fixing 4 bytes per rectangle.
       class SetTSClip < Base
         TYPE = 0x403A
         COMPRESSED_FLAG = 0x8000

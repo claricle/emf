@@ -1,0 +1,38 @@
+[package]
+name = "emf-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Isolated so production builds do not resolve libfuzzer-sys.
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "=0.4.10"
+emf-core = { path = "../crates/emf-core" }
+emf-ffi = { path = "../crates/emf-ffi" }
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "serialize"
+path = "fuzz_targets/serialize.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffi"
+path = "fuzz_targets/ffi.rs"
+test = false
+doc = false
+bench = false

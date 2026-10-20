@@ -1,0 +1,223 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: script/native_dependency_audit [--manifest-dir DIR] [--allow-list FILE]
+#
+# Without building: checks that Cargo.lock resolves unchanged (cargo metadata --locked --offline),
+# lists every normal-dependency crate in emf-ffi's closure with version, source and license, and
+# checks each license expression against the allow-list. Vulnerability checking runs only when
+# `cargo audit` is installed; otherwise it is reported as NOT RUN. JSON goes to stdout, a human
+# summary to stderr. Exits 1 on lock drift, a metadata failure, a disallowed or missing license,
+# or a reported vulnerability.
+#
+# The closure is not filtered by target, so it is a superset of every release target's closure.
+
+require "json"
+require "open3"
+require "optparse"
+require "set"
+
+class NativeDependencyAudit
+  ROOT = File.expand_path("..", __dir__)
+  ROOT_CRATE = "emf-ffi"
+
+  class LicensePolicy
+    class Malformed < StandardError; end
+
+    Verdict = Struct.new(:allowed, :malformed, keyword_init: true)
+
+    TOKEN = /\(|\)|[A-Za-z0-9.+-]+/
+    OPERATORS = %w[AND OR WITH ( )].freeze
+
+    def initialize(allowed)
+      @allowed = allowed.to_set
+    end
+
+    def verdict(expression)
+      Verdict.new(allowed: evaluate(expression), malformed: false)
+    rescue Malformed => e
+      Verdict.new(allowed: false, malformed: e.message)
+    end
+
+    private
+
+    def evaluate(expression)
+      text = expression.to_s.gsub("/", " OR ")
+      raise Malformed, "empty expression" if text.strip.empty?
+      raise Malformed, "unexpected characters" unless text.gsub(TOKEN, "").strip.empty?
+
+      tokens = text.scan(TOKEN)
+      result = parse_or(tokens)
+      raise Malformed, "unexpected #{tokens.first.inspect}" unless tokens.empty?
+
+      result
+    end
+
+    def parse_or(tokens)
+      result = parse_and(tokens)
+      while tokens.first == "OR"
+        tokens.shift
+        result |= parse_and(tokens)
+      end
+      result
+    end
+
+    def parse_and(tokens)
+      result = parse_term(tokens)
+      while tokens.first == "AND"
+        tokens.shift
+        result &= parse_term(tokens)
+      end
+      result
+    end
+
+    def parse_term(tokens)
+      return parse_group(tokens) if tokens.first == "("
+
+      id = identifier(tokens, "a license id")
+      return @allowed.include?(id) unless tokens.first == "WITH"
+
+      tokens.shift
+      @allowed.include?("#{id} WITH #{identifier(tokens, 'an exception id after WITH')}")
+    end
+
+    def parse_group(tokens)
+      tokens.shift
+      inner = parse_or(tokens)
+      raise Malformed, "missing close parenthesis" unless tokens.shift == ")"
+
+      inner
+    end
+
+    def identifier(tokens, wanted)
+      token = tokens.shift
+      raise Malformed, "expected #{wanted}, found #{token ? token.inspect : 'end of expression'}" if token.nil? || OPERATORS.include?(token)
+
+      token
+    end
+  end
+
+  Crate = Struct.new(:name, :version, :source, :license, keyword_init: true)
+
+  def initialize(manifest_dir:, allow_list:)
+    @manifest_dir = manifest_dir
+    @policy = LicensePolicy.new(JSON.parse(File.read(allow_list)).fetch("allowed"))
+  end
+
+  def report
+    lock_before = lock_digest
+    metadata, error = resolve
+    return { "ok" => false, "lock" => { "status" => "failed", "detail" => error } } unless metadata
+
+    crates = closure(metadata)
+    drift = lock_digest != lock_before
+    findings = license_findings(crates) + (drift ? ["Cargo.lock changed during resolution"] : [])
+    audit = vulnerability_check
+    build_report(crates, findings, audit, drift)
+  end
+
+  private
+
+  def build_report(crates, findings, audit, drift)
+    {
+      "ok" => findings.empty? && audit["status"] != "failed",
+      "lock" => { "status" => drift ? "drifted" : "ok" },
+      "crates" => crates.map { |c| c.to_h.transform_keys(&:to_s).merge("license_ok" => license_ok?(c.license)) },
+      "license_findings" => findings,
+      "vulnerability_check" => audit
+    }
+  end
+
+  def lock_digest
+    path = File.join(@manifest_dir, "Cargo.lock")
+    File.exist?(path) ? File.binread(path) : nil
+  end
+
+  def resolve
+    out, err, status = Open3.capture3("cargo", "metadata", "--locked", "--offline", "--format-version", "1",
+                                      chdir: @manifest_dir)
+    return [JSON.parse(out), nil] if status.success?
+
+    [nil, err.strip]
+  rescue Errno::ENOENT
+    [nil, "cargo is not on PATH"]
+  end
+
+  def closure(metadata)
+    packages = metadata.fetch("packages").to_h { |p| [p.fetch("id"), p] }
+    nodes = metadata.dig("resolve", "nodes").to_h { |n| [n.fetch("id"), n] }
+    seen = Set.new
+    queue = [packages.values.find { |p| p["name"] == ROOT_CRATE }.fetch("id")]
+    until queue.empty?
+      id = queue.shift
+      next unless seen.add?(id)
+
+      queue.concat(normal_dependencies(nodes.fetch(id)))
+    end
+    seen.map { |id| crate(packages.fetch(id)) }.sort_by { |c| [c.name, c.version] }
+  end
+
+  def normal_dependencies(node)
+    node.fetch("deps").select { |d| d.fetch("dep_kinds").any? { |k| k["kind"].nil? } }.map { |d| d.fetch("pkg") }
+  end
+
+  def crate(package)
+    Crate.new(name: package["name"], version: package["version"], source: package["source"] || "path",
+              license: package["license"])
+  end
+
+  def license_findings(crates)
+    crates.reject { |c| license_ok?(c.license) }.map { |c| finding(c) }
+  end
+
+  def finding(crate)
+    verdict = @policy.verdict(crate.license)
+    label = "#{crate.name} #{crate.version}"
+    return "#{label}: no license expression" if crate.license.to_s.strip.empty?
+    return "#{label}: malformed license expression #{crate.license.inspect} (#{verdict.malformed})" if verdict.malformed
+
+    "#{label}: license #{crate.license} is not allowed"
+  end
+
+  def license_ok?(expression)
+    @policy.verdict(expression).allowed
+  end
+
+  def vulnerability_check
+    out, status = Open3.capture2e("cargo", "audit", "--file", File.join(@manifest_dir, "Cargo.lock"))
+    return not_run if out.include?("no such command")
+
+    { "status" => status.success? ? "ok" : "failed", "detail" => out.lines.last(5).join.strip }
+  rescue Errno::ENOENT
+    not_run
+  end
+
+  def not_run
+    { "status" => "NOT RUN", "detail" => "cargo-audit is not installed; vulnerabilities were not checked" }
+  end
+end
+
+def human_summary(report)
+  lines = ["Cargo.lock: #{report.dig('lock', 'status')}#{" (#{report.dig('lock', 'detail')})" if report.dig('lock', 'detail')}"]
+  Array(report["crates"]).each do |c|
+    lines << "  #{c['name']} #{c['version']} #{c['source']} #{c['license'] || 'NO LICENSE'}#{' [DISALLOWED]' unless c['license_ok']}"
+  end
+  Array(report["license_findings"]).each { |f| lines << "FAIL #{f}" }
+  audit = report["vulnerability_check"]
+  lines << "vulnerability check: #{audit['status']} (#{audit['detail']})" if audit
+  lines << "result: #{report['ok'] ? 'PASS' : 'FAIL'}"
+  lines.join("\n")
+end
+
+if $PROGRAM_NAME == __FILE__
+  options = { manifest_dir: File.join(NativeDependencyAudit::ROOT, "emf-rs"),
+              allow_list: File.join(NativeDependencyAudit::ROOT, "script/native_licenses.json") }
+  OptionParser.new do |o|
+    o.on("--manifest-dir DIR") { |v| options[:manifest_dir] = v }
+    o.on("--allow-list FILE") { |v| options[:allow_list] = v }
+  end.parse!
+  report = NativeDependencyAudit.new(**options).report
+  puts JSON.pretty_generate(report)
+  warn human_summary(report)
+  exit(report["ok"] ? 0 : 1)
+end

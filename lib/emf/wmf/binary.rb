@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 require "emf/wmf/text_codec"
+require "emf/wmf/palette_codec"
+require "emf/wmf/region_codec"
+require "emf/wmf/brush_codec"
+require "emf/wmf/bitmap_codec"
+require "emf/wmf/geometry_codec"
+require "emf/wmf/dc_escape_codec"
 
 module Emf
   module Wmf
@@ -36,6 +42,25 @@ module Emf
       }.freeze
       POINT_ARRAY_FUNCTIONS = POINT_ARRAY_RECORDS.invert.freeze
 
+      STATE_RECORDS = {
+        0x01 => Model::Wmf::Records::SetBkColor,
+        0x02 => Model::Wmf::Records::SetBkMode,
+        0x03 => Model::Wmf::Records::SetMapMode,
+        0x31 => Model::Wmf::Records::SetMapperFlags,
+        0x06 => Model::Wmf::Records::SetPolyFillMode,
+        0x04 => Model::Wmf::Records::SetRop2,
+        0x07 => Model::Wmf::Records::SetStretchBltMode,
+        0x2E => Model::Wmf::Records::SetTextAlign,
+        0x08 => Model::Wmf::Records::SetTextCharExtra,
+        0x09 => Model::Wmf::Records::SetTextColor,
+        0x0A => Model::Wmf::Records::SetTextJustification,
+        0x49 => Model::Wmf::Records::SetLayout
+      }.freeze
+      STATE_FUNCTIONS = STATE_RECORDS.invert.freeze
+      PREFIX_FUNCTIONS = ([0xFB] + STATE_RECORDS.keys + PaletteCodec::RECORDS.keys + RegionCodec::RECORDS.keys +
+                          BrushCodec::RECORDS.keys + BitmapCodec::RECORDS.keys + GeometryCodec::RECORDS.keys +
+                          DcEscapeCodec::RECORDS.keys).freeze
+
       OBJECT_RECORDS = {
         0xFA => Model::Wmf::Records::CreatePenIndirect,
         0xFC => Model::Wmf::Records::CreateBrushIndirect,
@@ -46,8 +71,16 @@ module Emf
       # Opaque creators still consume the lowest available object-table slot.
       OBJECT_CREATORS = [0xFA, 0xFC, 0xFB, 0xF7, 0xF9, 0xFF, 0x42].freeze
       TEXT_FUNCTIONS = [0x21, 0x32].freeze
+      TYPED_FUNCTIONS = (FIXED_RECORDS.keys + POINT_ARRAY_RECORDS.keys + OBJECT_RECORDS.keys + STATE_RECORDS.keys +
+                         TEXT_FUNCTIONS + PaletteCodec::RECORDS.keys + RegionCodec::RECORDS.keys + BrushCodec::RECORDS.keys +
+                         BitmapCodec::RECORDS.keys + GeometryCodec::RECORDS.keys + DcEscapeCodec::RECORDS.keys + [0xFB]).freeze
 
       module_function
+
+      def prefix_codec(record)
+        [PaletteCodec, RegionCodec, BrushCodec, BitmapCodec, GeometryCodec, DcEscapeCodec]
+          .find { |codec| codec::FUNCTIONS.key?(record.class) }
+      end
 
       def checksum(bytes)
         bytes.unpack("v10").reduce(0, :^)
@@ -57,6 +90,10 @@ module Emf
         return value if value.is_a?(Integer) && range.cover?(value)
 
         raise SerializeError, "WMF #{name} out of range: #{value.inspect}"
+      end
+
+      def uint8(value, name)
+        integer(value, 0..0xFF, name)
       end
 
       def uint16(value, name)
@@ -74,16 +111,33 @@ module Emf
           if OBJECT_CREATORS.include?(function)
             index = slots.index(false)
             yield record, "object table capacity exceeded" unless index
-            slots[index] = true
+            slots[index] = function
+          elsif record.is_a?(Model::Wmf::Records::FillRegion)
+            validate_region_references(record, slots) { |message| yield record, message }
           elsif record.is_a?(Model::Wmf::Records::ObjectReference)
-            index = record.object_index
-            # Preserve high-bit stock selectors without interpreting their numeric ID.
-            next if record.is_a?(Model::Wmf::Records::SelectObject) && index.anybits?(0x8000)
-
-            yield record, "invalid object reference #{index}" unless index < capacity && slots[index]
-            slots[index] = false if record.is_a?(Model::Wmf::Records::DeleteObject)
+            validate_object_reference(record, capacity, slots) { |message| yield record, message }
           end
         end
+      end
+
+      def validate_object_reference(record, capacity, slots)
+        index = record.object_index
+        # Preserve high-bit stock selectors without interpreting their numeric ID.
+        return if record.is_a?(Model::Wmf::Records::SelectObject) && index.anybits?(0x8000)
+
+        yield "invalid object reference #{index}" unless index < capacity && slots[index]
+        yield "object reference #{index} is not a palette" if record.is_a?(Model::Wmf::Records::SelectPalette) && slots[index] != 0xF7
+        yield "object reference #{index} is not a region" if record.is_a?(Model::Wmf::Records::RegionReference) && slots[index] != 0xFF
+        slots[index] = false if record.is_a?(Model::Wmf::Records::DeleteObject)
+      end
+
+      def validate_region_references(record, slots)
+        region = record.region_index
+        brush = record.brush_index
+        yield "invalid region reference #{region}" unless region < slots.length && slots[region]
+        yield "object reference #{region} is not a region" unless slots[region] == 0xFF
+        yield "invalid brush reference #{brush}" unless brush < slots.length && slots[brush]
+        yield "object reference #{brush} is not a brush" unless [0xFC, 0xF9, 0x42].include?(slots[brush])
       end
 
       def int16(value, name)

@@ -83,6 +83,39 @@ RSpec.describe "EMF+ text and image records" do
       expect(driver.to_binary).to eq(record(0x4036, plain, flags: 0x0001))
     end
 
+    context "with DriverStringOptions" do
+      def driver_with(options, glyphs)
+        data = [0, options, 0, glyphs.size].pack("VVVV") + glyphs.pack("v*") +
+               Array.new(glyphs.size) { [1.0, 2.0] }.flatten.pack("e*")
+        decode(record(0x4036, data.ljust((data.bytesize + 3) & ~3, "\0"), flags: 0x0001, data_size: data.bytesize))
+      end
+
+      it "exposes each option flag independently" do
+        expect(driver_with(0x2, [0x41])).to be_vertical
+        expect(driver_with(0x4, [0x41])).to be_realized_advance
+        expect(driver_with(0x8, [0x41])).to be_limit_subpixel
+        cmap_only = driver_with(0x1, [0x41])
+        expect([cmap_only.vertical?, cmap_only.realized_advance?, cmap_only.limit_subpixel?]).to eq([false] * 3)
+        expect(driver_with(0xE, [0x41])).not_to be_cmap_lookup
+      end
+
+      it "decodes Glyphs as text, surrogate pairs included, under CmapLookup" do
+        expect(driver_with(0x1, [0x48, 0x69]).text).to eq("Hi")
+        expect(driver_with(0x1, [0xD83D, 0xDE00, 0x41]).text).to eq("\u{1F600}A")
+      end
+
+      it "returns nil text when Glyphs are font glyph indices" do
+        expect(driver_with(0x0, [0x48, 0x69]).text).to be_nil
+      end
+
+      it "re-serializes text edited through #with" do
+        edited = driver_with(0x1, [0x48, 0x69]).with(glyph_count: 1, glyphs: [0x7A], glyph_positions: [{ x: 5.0, y: 6.0 }])
+
+        expect(edited.text).to eq("z")
+        expect(decode(edited.to_binary)).to have_attributes(text: "z", glyph_positions: [[5.0, 6.0]])
+      end
+    end
+
     it_behaves_like "a lossless record"
     it_behaves_like "a record that rejects a truncated body", 0x4036
   end

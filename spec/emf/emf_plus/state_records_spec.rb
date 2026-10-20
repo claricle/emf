@@ -135,19 +135,75 @@ RSpec.describe "EMF+ state records" do
       expect(subject).to have_attributes(
         anti_alias_mode: 1, text_render_hint: 2, compositing_mode: 3, compositing_quality: 4,
         render_origin_x: -5, render_origin_y: 6, text_contrast: 7, filter_type: 8, pixel_offset: 9,
-        world_to_device: matrix, palette: ""
+        world_to_device: matrix, palette: "", palette_bytes: "", decoded_palette: nil
       )
       expect(subject).not_to be_palette
     end
 
-    it "keeps the palette bytes when T and V are set" do
-      palette = [0, 2, 0xFF0000FF, 0xFF00FF00].pack("V4")
-      with_palette = record(0x4039, fixed + palette, flags: 0x0003)
-      typed = decode(with_palette)
+    context "with a palette" do
+      let(:palette) { [0, 2, 0xFF0000FF, 0xFF00FF00].pack("V4") }
+      let(:with_palette) { record(0x4039, fixed + palette, flags: 0x0003) }
+      subject(:typed) { decode(with_palette) }
 
-      expect(typed).to be_palette.and be_vga_palette
-      expect(typed.palette).to eq(palette)
-      expect(typed.to_binary).to eq(with_palette)
+      it "keeps #palette as the raw String it returned before the typed decode" do
+        expect(typed.palette).to eq(palette)
+        expect(typed.palette).to be_a(String)
+        expect(typed.palette_bytes).to eq(palette)
+        expect(typed.to_binary).to eq(with_palette)
+      end
+
+      it "decodes #decoded_palette as an EmfPlusPalette" do
+        expect(typed).to be_palette.and be_vga_palette
+        expect(typed.decoded_palette).to be_a(Emf::EmfPlus::Records::Primitives::Palette)
+        expect(typed.decoded_palette.palette_count).to eq(2)
+        expect(typed.decoded_palette.palette_entries.map { |c| [c.alpha, c.red, c.green, c.blue] })
+          .to eq([[0xFF, 0, 0, 0xFF], [0xFF, 0, 0xFF, 0]])
+      end
+
+      it "keeps a short palette raw, with no decoded palette" do
+        short = record(0x4039, fixed + palette.byteslice(0, 12), flags: 0x0001)
+        rec = decode(short)
+
+        expect(rec.decoded_palette).to be_nil
+        expect(rec.palette).to eq(palette.byteslice(0, 12))
+        expect(rec.to_binary).to eq(short)
+      end
+
+      it "keeps a palette whose bytes are not exactly one palette raw" do
+        long = record(0x4039, fixed + palette + "\0\0\0\0".b, flags: 0x0001)
+
+        expect(decode(long).decoded_palette).to be_nil
+        expect(decode(long).palette).to eq(palette + "\0\0\0\0".b)
+        expect(decode(long).to_binary).to eq(long)
+      end
+
+      it "has no decoded palette when T is clear" do
+        expect(decode(record(0x4039, fixed, flags: 0x0002)).decoded_palette).to be_nil
+      end
+
+      it "still treats with(palette: true/false) as the T flag" do
+        expect(typed.with(palette: false)).not_to be_palette
+        expect(decode(bytes).with(palette: true)).to be_palette
+        expect { typed.with(palette: "raw") }.to raise_error(ArgumentError, /palette must fit/)
+      end
+
+      it "replaces the palette through with(decoded_palette: {...}), recomputing Size and DataSize" do
+        edited = decode(bytes).with(decoded_palette: { palette_style_flags: 0, palette_entries: [{ blue: 1, green: 2, red: 3, alpha: 4 }] })
+
+        expect(edited).to be_palette
+        expect(edited.decoded_palette.palette_entries.first).to have_attributes(blue: 1, green: 2, red: 3, alpha: 4)
+        expect(edited).to have_attributes(data_size: 36 + 8 + 4, size: 12 + 36 + 8 + 4)
+        expect(decode(edited.to_binary).decoded_palette.palette_count).to eq(1)
+      end
+
+      it "edits a decoded palette's colour and keeps the rest" do
+        edited = typed.with(decoded_palette: { palette_style_flags: 0, palette_entries: [{ blue: 4, green: 3, red: 2, alpha: 1 }] })
+
+        expect(edited).to be_vga_palette
+        expect(edited.decoded_palette.palette_entries.first).to have_attributes(blue: 4, alpha: 1)
+        expect(edited.data_size).to eq(36 + 12)
+        expect(edited.world_to_device).to eq(matrix)
+      end
     end
 
     it "raises ParseError on a truncated fixed part" do

@@ -1,45 +1,231 @@
 name: release
 
+# Manual release of the Ruby source gem and the seven platform gems.
+#
+# version -> build (one job per platform) + source -> verify -> publish
+#
+# Every gem is built from the one revision the version job reports, passes the
+# per-row acceptance in script/platform_probe/real_row.sh before it is uploaded,
+# and is then checked as a set by script/verify_release_artifacts. Only the
+# publish job holds credentials, and it pushes nothing but the verified set.
+# dry_run (the default) stops after verify; no gem is pushed and nothing is
+# bumped, committed or tagged.
+#
+# aarch64-pc-windows-gnullvm (Windows ARM64) is an open feasibility row in
+# native-platform-probe.yml and is deliberately not built or released here.
+#
+# OIDC Trusted Publishing (rubygems.org): no API key needed. The gem's
+# Trusted Publisher entry on rubygems.org must declare:
+#   owner=claricle, repo=emf, workflow=release.yml, environment=(empty)
+# so no job below may declare an `environment:`.
 on:
   workflow_dispatch:
     inputs:
       next_version:
         description: |
           Next release version. Possible values: x.y.z, major, minor, patch or pre|rc|etc.
-          Also, 'skip' to release the current version.rb as-is.
+          Also, 'skip' to release the current version.rb as-is. Must be 'skip' when dry_run is true.
         required: true
         default: 'skip'
+      dry_run:
+        description: Build and verify every gem but publish nothing.
+        type: boolean
+        required: true
+        default: true
 
-# OIDC Trusted Publishing (rubygems.org): no API key needed. The gem's
-# Trusted Publisher entry on rubygems.org must declare:
-#   owner=claricle, repo=emf, workflow=release.yml, environment=(empty)
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
+  version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      version: ${{ steps.release.outputs.version }}
     steps:
+      - name: A dry run does not bump
+        if: ${{ inputs.dry_run && inputs.next_version != 'skip' }}
+        run: |
+          echo "::error::dry_run builds the current version.rb; set next_version to 'skip' or dry_run to false"
+          exit 1
+
       - uses: actions/checkout@v6
 
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.3"
+          ruby-version: "3.4"
           bundler-cache: true
 
       - name: Bump version
-        if: github.event.inputs.next_version != 'skip'
+        if: ${{ inputs.next_version != 'skip' }}
+        env:
+          NEXT_VERSION: ${{ inputs.next_version }}
         run: |
           gem install gem-release --no-document
-          gem bump --version ${{ github.event.inputs.next_version }} --commit --tag --push
+          gem bump --version "$NEXT_VERSION" --commit --tag --push
 
-      - name: Build gem
-        run: gem build emf.gemspec
+      - name: Report the release revision
+        id: release
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=$(ruby -Ilib -e 'require "emf/version"; print Emf::VERSION')" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to rubygems.org (trusted publishing)
-        uses: rubygems/release-gem@v1
+  build:
+    name: build ${{ matrix.row.platform }}
+    needs: version
+    runs-on: ${{ matrix.row.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        row:
+          - { target: x86_64-unknown-linux-gnu, platform: x86_64-linux-gnu, runner: ubuntu-24.04, kind: setup-ruby }
+          - { target: aarch64-unknown-linux-gnu, platform: aarch64-linux-gnu, runner: ubuntu-24.04-arm, kind: setup-ruby }
+          - { target: x86_64-unknown-linux-musl, platform: x86_64-linux-musl, runner: ubuntu-24.04, kind: alpine }
+          - { target: aarch64-unknown-linux-musl, platform: aarch64-linux-musl, runner: ubuntu-24.04-arm, kind: alpine }
+          - { target: x86_64-apple-darwin, platform: x86_64-darwin, runner: macos-15-intel, kind: setup-ruby }
+          - { target: aarch64-apple-darwin, platform: arm64-darwin, runner: macos-latest, kind: setup-ruby }
+          - { target: x86_64-pc-windows-gnu, platform: x64-mingw-ucrt, runner: windows-2025, kind: setup-ruby }
+    env:
+      RELEASE_SHA: ${{ needs.version.outputs.sha }}
+      OUT_DIR: release-out/${{ matrix.row.target }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - name: Set up Ruby
+        if: ${{ matrix.row.kind == 'setup-ruby' }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      # real_row.sh builds the emf-ffi library, packages and checks the gems,
+      # install-smokes them with no compiler on PATH and runs the installed
+      # workload; it exits non-zero on any failure, which skips the upload.
+      # EMF_RELEASE_REVISION makes provenance record the release revision, which
+      # differs from the dispatch revision when the version was bumped.
+      - name: Build and accept (Rust runner)
+        if: ${{ matrix.row.kind == 'setup-ruby' }}
+        shell: bash
+        env:
+          EMF_RELEASE_REVISION: ${{ needs.version.outputs.sha }}
+        run: script/platform_probe/real_row.sh "${{ matrix.row.target }}" "${{ matrix.row.platform }}" "$OUT_DIR"
+
+      # musl rows run in Alpine through `docker run` because JS actions need the
+      # runner's glibc Node. alpine.sh runs the probe and then real_row.sh.
+      - name: Build and accept (Alpine container)
+        if: ${{ matrix.row.kind == 'alpine' }}
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work -e RUNNER_OS -e RUNNER_ARCH \
+            -e EXPECTED_RUBY=3.4 -e EMF_RELEASE_REVISION="$RELEASE_SHA" alpine:3.22 \
+            sh script/platform_probe/alpine.sh "${{ matrix.row.target }}" "${{ matrix.row.platform }}" "$OUT_DIR"
+
+      - name: Upload the platform gem
+        uses: actions/upload-artifact@v4
+        with:
+          name: gem-${{ matrix.row.platform }}
+          path: ${{ env.OUT_DIR }}/real/package/emf-*-${{ matrix.row.platform }}.gem
+          if-no-files-found: error
+
+      - name: Upload the row evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-${{ matrix.row.platform }}
+          path: ${{ env.OUT_DIR }}/real/summary.txt
+          if-no-files-found: warn
+
+  source:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - name: Build the source gem
+        run: script/build_native_gem --platform ruby --output source-out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gem-ruby
+          path: source-out/emf-*.gem
+          if-no-files-found: error
+
+  verify:
+    needs: [version, build, source]
+    runs-on: ubuntu-latest
+    env:
+      # Must equal the build matrix platforms; spec/scripts/verify_release_artifacts_spec.rb checks that.
+      PLATFORMS: x86_64-linux-gnu,aarch64-linux-gnu,x86_64-linux-musl,aarch64-linux-musl,x86_64-darwin,arm64-darwin,x64-mingw-ucrt
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gem-*
+          path: candidates
+
+      - name: Verify the release set
+        env:
+          RELEASE_SHA: ${{ needs.version.outputs.sha }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          script/verify_release_artifacts --directory candidates --revision "$RELEASE_SHA" \
+            --version "$RELEASE_VERSION" --platforms "$PLATFORMS" --abi-version 1 --output verified
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-gems
+          path: verified/
+          if-no-files-found: error
+
+  publish:
+    if: ${{ !inputs.dry_run }}
+    needs: [version, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-gems
+          path: verified
+
+      - name: Re-check the verified set
+        working-directory: verified
+        run: |
+          sha256sum --check --strict SHA256SUMS
+          diff <(find . -maxdepth 1 -name '*.gem' -printf '%f\n' | sort) <(awk '{print $2}' SHA256SUMS | sort)
+
+      - name: Configure RubyGems trusted publishing
+        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+
+      - name: Push the verified gems
+        run: script/publish_release_gems --directory verified

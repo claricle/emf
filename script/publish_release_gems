@@ -1,0 +1,98 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: script/publish_release_gems --directory DIR
+#
+# Pushes every *.gem in DIR (the verified, sha256-checked release set) with
+# `gem push`, one at a time, stopping at the first failure.
+#
+# A re-run after a mid-publish failure must fail closed. When a push is refused
+# because that version already exists, the gem is fetched back from the gem
+# server and the run continues only if the remote bytes are identical to the
+# local file. A different remote gem, a failed fetch and every other push error
+# fail the run. Exit 0 only when every gem is published, now or identically before.
+
+require "digest"
+require "open3"
+require "optparse"
+require "tmpdir"
+
+class ReleaseGemPublisher
+  GEM_NAME = "emf"
+  # The refusal text rubygems.org sends for an existing version; `gem push` prints
+  # the response body and exits non-zero. Anything else is treated as a failure.
+  EXISTING_VERSION = /Repushing of gem versions is not allowed/i
+  FILE_NAME = /\A#{GEM_NAME}-(?<version>\d[^-]*)(?:-(?<platform>.+))?\.gem\z/
+
+  class Failure < StandardError; end
+
+  def initialize(directory:, out: $stdout)
+    @directory = directory
+    @out = out
+    @published = []
+  end
+
+  def run
+    paths = Dir.glob(File.join(@directory, "*.gem"))
+    raise Failure, "no gems found in #{@directory}" if paths.empty?
+
+    paths.each { |path| publish(path) }
+    @out.puts "published #{@published.size} gems: #{@published.join(', ')}"
+  rescue Failure => e
+    done = @published.empty? ? "none" : @published.join(", ")
+    raise Failure, "#{e.message}\ngems published or already identical before the failure: #{done}"
+  end
+
+  private
+
+  def publish(path)
+    name = File.basename(path)
+    output, status = Open3.capture2e("gem", "push", path)
+    if status.success?
+      @out.puts "pushed #{name}"
+    elsif output.match?(EXISTING_VERSION)
+      confirm_identical(path)
+    else
+      raise Failure, "gem push #{name} failed:\n#{output}"
+    end
+    @published << name
+  end
+
+  def confirm_identical(path)
+    name = File.basename(path)
+    unless remote_sha256(path) == Digest::SHA256.file(path).hexdigest
+      raise Failure, "#{name} is already published with different bytes; refusing to continue"
+    end
+
+    @out.puts "already published, identical: #{name}"
+  end
+
+  def remote_sha256(path)
+    name = File.basename(path)
+    match = FILE_NAME.match(name) or raise Failure, "cannot read version and platform from #{name}"
+    Dir.mktmpdir("emf-publish-remote") do |dir|
+      args = ["gem", "fetch", GEM_NAME, "--version", match[:version], "--prerelease"]
+      args += ["--platform", match[:platform]] if match[:platform]
+      output, status = Open3.capture2e(*args, chdir: dir)
+      fetched = File.join(dir, name)
+      unless status.success? && File.file?(fetched)
+        raise Failure, "#{name} is already published but could not be fetched back to compare:\n#{output}"
+      end
+
+      Digest::SHA256.file(fetched).hexdigest
+    end
+  end
+end
+
+options = {}
+OptionParser.new do |o|
+  o.on("--directory DIR", "verified gems to publish") { |v| options[:directory] = v }
+end.parse!
+abort "missing --directory" unless options[:directory]
+
+begin
+  ReleaseGemPublisher.new(directory: options[:directory]).run
+rescue ReleaseGemPublisher::Failure => e
+  warn e.message
+  exit 1
+end

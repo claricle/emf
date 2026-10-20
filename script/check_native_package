@@ -4,7 +4,8 @@
 # Usage: script/check_native_package --directory DIR
 #
 # Opens every .gem in DIR and checks its contents against emf.gemspec and,
-# for platform gems, against the generated lib/emf/native/platforms.json.
+# for platform gems, against the generated lib/emf/native/platforms.json and
+# provenance.json. With --revision SHA the recorded git revision must equal it.
 # Prints one line per violation and exits 1 if there is any.
 
 require "digest"
@@ -19,8 +20,14 @@ class NativePackageChecker
   LIBRARY = /\.(so|dylib|dll)\z/
   RUST_FILE = %r{(\A|/)(Cargo\.(toml|lock)|[^/]+\.rs)\z}
 
-  def initialize(directory)
+  PROVENANCE_FIELDS = %w[platform target library_sha256 rustc cargo cargo_lock_sha256 crate_version revision
+                         gem_version].freeze
+  SHA256 = /\A\h{64}\z/
+  REVISION = /\A\h{40}\z/
+
+  def initialize(directory, revision: nil)
     @directory = directory
+    @revision = revision
     @source_files = Dir.chdir(ROOT) { Gem::Specification.load("emf.gemspec").files }
   end
 
@@ -68,7 +75,7 @@ class NativePackageChecker
     problems << "expected exactly one native library, found #{libraries.size}" unless libraries.size == 1
     problems += libraries.reject { |file| file.start_with?(expected_dir) }.map { |file| "library #{file} is outside #{expected_dir}" }
     problems << "extensions declared" unless spec.extensions.empty?
-    problems + manifest_problems(dir, platform, libraries)
+    problems + manifest_problems(dir, platform, libraries) + provenance_problems(dir, spec, libraries)
   end
 
   def manifest_problems(dir, platform, libraries)
@@ -84,6 +91,38 @@ class NativePackageChecker
     ["platforms.json is not valid JSON: #{e.message}"]
   end
 
+  def provenance_problems(dir, spec, libraries)
+    file = File.join(dir, NATIVE_DIR, "provenance.json")
+    return ["missing #{NATIVE_DIR}/provenance.json"] unless File.file?(file)
+
+    data = JSON.parse(File.read(file))
+    missing = PROVENANCE_FIELDS.reject { |key| data[key].is_a?(String) && !data[key].empty? }
+    return missing.map { |key| "provenance.json has no #{key}" } unless missing.empty?
+
+    provenance_binding_problems(dir, spec, libraries, data)
+  rescue JSON::ParserError => e
+    ["provenance.json is not valid JSON: #{e.message}"]
+  end
+
+  def provenance_binding_problems(dir, spec, libraries, data)
+    problems = []
+    problems << "provenance.json platform #{data['platform']} != #{spec.platform}" unless data["platform"] == spec.platform.to_s
+    problems << "provenance.json gem_version #{data['gem_version']} != #{spec.version}" unless data["gem_version"] == spec.version.to_s
+    problems << "provenance.json revision #{data['revision'].inspect} is not a git sha" unless data["revision"].match?(REVISION)
+    problems << "provenance.json revision #{data['revision']} != #{@revision}" if @revision && data["revision"] != @revision
+    problems << "provenance.json cargo_lock_sha256 is not a sha256" unless data["cargo_lock_sha256"].match?(SHA256)
+    problems + provenance_library_problems(dir, libraries, data)
+  end
+
+  def provenance_library_problems(dir, libraries, data)
+    return [] unless libraries.size == 1
+
+    actual = Digest::SHA256.file(File.join(dir, libraries.first)).hexdigest
+    return [] if data["library_sha256"] == actual
+
+    ["provenance.json library_sha256 #{data['library_sha256']} != actual #{actual}"]
+  end
+
   def library_problems(dir, data, platform, libraries)
     path = "#{NATIVE_DIR}/#{platform}/#{data['library']}"
     return ["platforms.json library #{data['library'].inspect} is not packaged at #{path}"] unless libraries.include?(path)
@@ -96,10 +135,11 @@ end
 options = {}
 OptionParser.new do |o|
   o.on("--directory DIR", "directory holding the .gem files") { |v| options[:directory] = v }
+  o.on("--revision SHA", "git revision the provenance must record") { |v| options[:revision] = v }
 end.parse!
 abort "--directory is required" unless options[:directory]
 
-problems = NativePackageChecker.new(options[:directory]).violations
+problems = NativePackageChecker.new(options[:directory], revision: options[:revision]).violations
 if problems.empty?
   puts "native package check passed"
 else

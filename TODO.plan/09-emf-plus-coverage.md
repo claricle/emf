@@ -1,8 +1,10 @@
 # 09 — EMF+ coverage inventory
 
-Status: **Inventory only. No EMF+ typed decoding exists.** Package: [09-format-extension.md](09-format-extension.md) steps 1, 4, 5 and 8 (EMF+ half). Measured 2026-10-19 on branch `feat/emf-plus-inventory` (base `origin/main` 8e3f083).
+Status: **Typed decoding exists for every defined record, object and image effect inside `Emf::EmfPlus`; none of it is exposed on `Metafile`, `Model` or the CLI, and the representation gate below is still a proposal.** Package: [09-format-extension.md](09-format-extension.md) steps 1, 4, 5 and 8 (EMF+ half). Ruby status re-measured against the code 2026-10-20 on branch `feat/emf-plus-conditional-rules` at 03f356a (`origin/main` d93bf89 plus one commit). Corpus counts are from the census run at 8e3f083 and were not re-run.
 
-Sources: `reference-docs/ms-emfplus/ch02-structures.md` (normative, [MS-EMFPLUS] 240423), `ch01` section 1.3.1, `ch03` examples, `ch05` product-behavior notes. Corpus numbers come from `bundle exec ruby script/emf_plus_census --out tmp/emf-plus-census.json` at `8e3f083` (not committed: the JSON goes stale whenever the parser changes). It parses one fixture at a time and prints `[n/229]` progress to stderr; the full corpus takes about 16 minutes because some corrupt fixtures take over a minute each.
+Reachability: `Records.decode`, `Objects.decode` and `Effects.decode` are called only from inside `lib/emf/emf_plus/`. `lib/emf.rb:19` autoloads `Emf::EmfPlus`, but `Metafile`, `Model` and the CLI do not use it, and `Metafile#emf_plus` is still the raw concatenated String. "typed" in the tables below means a class that decodes and re-encodes in `Emf::EmfPlus`, not that a caller of `Emf.parse` gets typed records.
+
+Sources: `reference-docs/ms-emfplus/ch02-structures.md` (normative, [MS-EMFPLUS] 240423), `ch01` section 1.3.1, `ch03` examples, `ch05` product-behavior notes. Corpus numbers come from `bundle exec ruby script/emf_plus_census --out tmp/emf-plus-census.json` at `8e3f083` (not re-run for this update; not committed: the JSON goes stale whenever the parser changes). It parses one fixture at a time and prints `[n/229]` progress to stderr; the full corpus takes about 16 minutes because some corrupt fixtures take over a minute each.
 
 ## Summary of measured facts
 
@@ -22,6 +24,12 @@ Sources: `reference-docs/ms-emfplus/ch02-structures.md` (normative, [MS-EMFPLUS]
 | Fixtures with `Size`/`DataSize` inconsistencies | 2, both in `emf-corrupted` | census |
 | Record types seen in no fixture (non-reserved) | 11 of 55: Clear, SetCompositingMode, Save, Restore, BeginContainer, BeginContainerNoParams, EndContainer, ScaleWorldTransform, StrokeFillPath, SetTSGraphics, SetTSClip | census |
 | Graphics object types seen in no fixture | 1 of 9: CustomLineCap | census |
+| Record types registered in `Records.registry` | 54 of 54 defined (58 enumerators minus 3 reserved minus `StrokeFillPath`) | `lib/emf/emf_plus/records.rb:81-93` |
+| Record types decoded as `Records::Unknown` | 4: reserved 0x4005 to 0x4007 and `StrokeFillPath` 0x4037 | `records.rb:97` (`registry.fetch(frame.type, Unknown)`) |
+| Graphics objects typed | 9 of 9 | `lib/emf/emf_plus/objects.rb:21-34` |
+| Image effects typed | 11 of 11 (unknown GUID or short block falls back to `Effects::Opaque`) | `lib/emf/emf_plus/effects.rb:29-41` |
+| Structure objects decoded | 47 of 47: 26 under `Records::Primitives`, 12 as named classes in `objects/*.rb`, 9 inside parent readers with no class of their own | structure table below |
+| Typed records with a field still kept raw or uninterpreted | 3: `SetTSGraphics` palette, `SetTSClip` compressed rects, `DrawDriverString` `CmapLookup` glyph meaning | rows below |
 
 How the 58 was counted: a script matched the `EmfPlus<Name> = 0x40..` enumerator lines inside the `RecordType` typedef (58 matches, values contiguous from 0x4001 to 0x403A). The 54 came from counting `#### EmfPlus<Name> Record` headings under `## EMF+ Records` (clipping 5, comment 1, control 3, drawing 21, object 2, property 8, state 5, terminal server 2, transform 7). 58 = 54 + 3 reserved + `StrokeFillPath`. Objects were counted from `#### ... Object` headings under `## EMF+ Objects` (graphics 9, structure 47, image effects 11).
 
@@ -37,34 +45,34 @@ How the 58 was counted: a script matched the `EmfPlus<Name> = 0x40..` enumerator
 
 Counted from `RecordType` (ch02 section 2.1.1.1): **58 enumerators** (0x4001 to 0x403A, contiguous). Of those, 54 have a dedicated record section in 2.3.x (counted from `#### EmfPlus* Record` headings), 3 are reserved (`MUST NOT be used`), and 1 has an enumerator but no record section (`EmfPlusStrokeFillPath`). Section 2.3 names the text record `EmfPlusDrawDriverString`; the enumerator is spelled `EmfPlusDrawDriverstring`.
 
-Columns: Variable data = the record has a variable-length field beyond the 12-byte header (yes/no, from the `(variable)` fields in its section). Ruby status: `typed, byte-identical round-trip` means a class in `Emf::EmfPlus::Records` decodes every spec field and re-encodes the original bytes (synthetic specs plus every corpus record of that type); `not started` rows decode as `Records::Unknown` and still round-trip as raw frames. Object bodies (pens, brushes, images and other structures) stay opaque inside `Records::Object`. `Metafile#emf_plus` is unchanged. Fixtures = number of the 27 EMF+-bearing corpus fixtures containing the type, from the census run above. Class = proposed under `Emf::EmfPlus::Records`.
+Columns: Variable data = the record has a variable-length field beyond the 12-byte header (yes/no, from the `(variable)` fields in its section). Ruby status: `typed, byte-identical round-trip` means a class in `Emf::EmfPlus::Records` decodes every spec field and re-encodes the original bytes (synthetic specs plus every corpus record of that type); `kept raw as Records::Unknown` rows have no class of their own and round-trip as raw frames. `Records::Object` keeps the object bytes; `Objects.decode` types them from an `ObjectChain` logical object (see Object inventory). `Metafile#emf_plus` is unchanged. Fixtures = number of the 27 EMF+-bearing corpus fixtures containing the type, from the census run above. Class = class under `Emf::EmfPlus::Records` (file `lib/emf/emf_plus/records/<snake_case>.rb`).
 
 ### Control (6)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusHeader | 0x4001 | 2.3.3.3 | Flags D=0x0001 (EMF+ Dual); EmfPlusFlags V=0x00000001 (video reference DC) | no | typed, byte-identical round-trip | 27 | `Records::Header` |
 | EmfPlusEndOfFile | 0x4002 | 2.3.3.1 | unused | no | typed, byte-identical round-trip | 24 | `Records::EndOfFile` |
 | EmfPlusGetDC | 0x4004 | 2.3.3.2 | unused | no | typed, byte-identical round-trip | 27 | `Records::GetDC` |
-| EmfPlusMultiFormatStart (reserved, MUST NOT be used; keep as raw) | 0x4005 | 2.1.1.1 (enum only) | reserved | n/a | not started | 0 | `Records::MultiFormatStart` |
-| EmfPlusMultiFormatSection (reserved, MUST NOT be used; keep as raw) | 0x4006 | 2.1.1.1 (enum only) | reserved | n/a | not started | 0 | `Records::MultiFormatSection` |
-| EmfPlusMultiFormatEnd (reserved, MUST NOT be used; keep as raw) | 0x4007 | 2.1.1.1 (enum only) | reserved | n/a | not started | 0 | `Records::MultiFormatEnd` |
+| EmfPlusMultiFormatStart (reserved, MUST NOT be used; keep as raw) | 0x4005 | 2.1.1.1 (enum only) | reserved | n/a | kept raw as `Records::Unknown` (`records.rb:97`); no conformance report | 0 | none |
+| EmfPlusMultiFormatSection (reserved, MUST NOT be used; keep as raw) | 0x4006 | 2.1.1.1 (enum only) | reserved | n/a | kept raw as `Records::Unknown` (`records.rb:97`); no conformance report | 0 | none |
+| EmfPlusMultiFormatEnd (reserved, MUST NOT be used; keep as raw) | 0x4007 | 2.1.1.1 (enum only) | reserved | n/a | kept raw as `Records::Unknown` (`records.rb:97`); no conformance report | 0 | none |
 
 ### Comment (1)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusComment | 0x4003 | 2.3.2.1 | unused (Windows writes 0-3) | yes | typed, byte-identical round-trip | 3 | `Records::Comment` |
 
 ### Object (1)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusObject | 0x4008 | 2.3.5.1 | C=0x8000 (continued), ObjectType=0x7F00, ObjectID=0x00FF | yes | typed, byte-identical round-trip | 22 | `Records::Object` |
 
 ### Drawing (11)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusClear | 0x4009 | 2.3.4.1 | unused | no | typed, byte-identical round-trip | 0 | `Records::Clear` |
 | EmfPlusDrawRects | 0x400B | 2.3.4.13 | C=0x4000, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 4 | `Records::DrawRects` |
@@ -76,11 +84,11 @@ Columns: Variable data = the record has a variable-length field beyond the 12-by
 | EmfPlusDrawClosedCurve | 0x4017 | 2.3.4.4 | C=0x4000, P=0x0800, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawClosedCurve` |
 | EmfPlusDrawCurve | 0x4018 | 2.3.4.5 | C=0x4000, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawCurve` |
 | EmfPlusDrawBeziers | 0x4019 | 2.3.4.3 | C=0x4000, P=0x0800, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawBeziers` |
-| EmfPlusStrokeFillPath (enum only; payload undefined in ch02; keep as raw) | 0x4037 | 2.1.1.1 (enum only) | see section | n/a | not started | 0 | `Records::StrokeFillPath` |
+| EmfPlusStrokeFillPath (enum only; payload undefined in ch02; keep as raw) | 0x4037 | 2.1.1.1 (enum only) | see section | n/a | kept raw as `Records::Unknown` (`records.rb:97`) | 0 | none |
 
 ### Fill (7)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusFillRects | 0x400A | 2.3.4.20 | S=0x8000, C=0x4000 | yes | typed, byte-identical round-trip | 19 | `Records::FillRects` |
 | EmfPlusFillPolygon | 0x400C | 2.3.4.19 | S=0x8000, C=0x4000, P=0x0800 | yes | typed, byte-identical round-trip | 2 | `Records::FillPolygon` |
@@ -92,14 +100,14 @@ Columns: Variable data = the record has a variable-length field beyond the 12-by
 
 ### Text (2)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusDrawString | 0x401C | 2.3.4.14 | S=0x8000 (BrushId is ARGB), ObjectID=0x00FF (font) | yes | typed, byte-identical round-trip | 3 | `Records::DrawString` |
-| EmfPlusDrawDriverString | 0x4036 | 2.3.4.6 | S=0x8000 (BrushId is ARGB), ObjectID=0x00FF (font) | yes | typed, byte-identical round-trip | 1 | `Records::DrawDriverString` |
+| EmfPlusDrawDriverString | 0x4036 | 2.3.4.6 | S=0x8000 (BrushId is ARGB), ObjectID=0x00FF (font) | yes | typed, byte-identical round-trip; option predicates (`cmap_lookup?`, `vertical?`, `realized_advance?`, `limit_subpixel?`) and `#text` (UTF-16 code units under `CmapLookup`, per GDI+/Wine behaviour; nil for glyph indices) | 1 | `Records::DrawDriverString` |
 
 ### Image (3)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusDrawImage | 0x401A | 2.3.4.8 | C=0x4000, ObjectID=0x00FF (image) | yes | typed, byte-identical round-trip | 2 | `Records::DrawImage` |
 | EmfPlusDrawImagePoints | 0x401B | 2.3.4.9 | C=0x4000, E=0x2000 (effect), P=0x0800, ObjectID=0x00FF (image) | yes | typed, byte-identical round-trip | 11 | `Records::DrawImagePoints` |
@@ -107,7 +115,7 @@ Columns: Variable data = the record has a variable-length field beyond the 12-by
 
 ### State (14)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusSetRenderingOrigin | 0x401D | 2.3.6.6 | unused | no | typed, byte-identical round-trip | 2 | `Records::SetRenderingOrigin` |
 | EmfPlusSetAntiAliasMode | 0x401E | 2.3.6.1 | SmoothingMode=0x00FE, A=0x0001 | no | typed, byte-identical round-trip | 27 | `Records::SetAntiAliasMode` |
@@ -122,22 +130,22 @@ Columns: Variable data = the record has a variable-length field beyond the 12-by
 | EmfPlusBeginContainer | 0x4027 | 2.3.7.1 | PageUnit=0x00FF (UnitType) | no | typed, byte-identical round-trip | 0 | `Records::BeginContainer` |
 | EmfPlusBeginContainerNoParams | 0x4028 | 2.3.7.2 | unused | no | typed, byte-identical round-trip | 0 | `Records::BeginContainerNoParams` |
 | EmfPlusEndContainer | 0x4029 | 2.3.7.3 | unused | no | typed, byte-identical round-trip | 0 | `Records::EndContainer` |
-| EmfPlusSetTSGraphics | 0x4039 | 2.3.8.2 | V=0x0002 (VGA palette), T=0x0001 (Palette present) | yes | typed, byte-identical round-trip | 0 | `Records::SetTSGraphics` |
+| EmfPlusSetTSGraphics | 0x4039 | 2.3.8.2 | V=0x0002 (VGA palette), T=0x0001 (Palette present) | yes | typed, byte-identical round-trip; `#palette` (alias `#palette_bytes`) stays the raw bytes String; `#decoded_palette` returns `Records::Primitives::Palette` when `T` is set, else nil (short or over-long palettes stay raw only) | 0 | `Records::SetTSGraphics` |
 
 ### Clipping (6)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusResetClip | 0x4031 | 2.3.1.2 | reserved | no | typed, byte-identical round-trip | 2 | `Records::ResetClip` |
 | EmfPlusSetClipRect | 0x4032 | 2.3.1.4 | CM=0x0F00 (CombineMode) | no | typed, byte-identical round-trip | 8 | `Records::SetClipRect` |
 | EmfPlusSetClipPath | 0x4033 | 2.3.1.3 | CM=0x0F00, ObjectID=0x00FF (path) | no | typed, byte-identical round-trip | 7 | `Records::SetClipPath` |
 | EmfPlusSetClipRegion | 0x4034 | 2.3.1.5 | CM=0x0F00, ObjectID=0x00FF (region) | no | typed, byte-identical round-trip | 11 | `Records::SetClipRegion` |
 | EmfPlusOffsetClip | 0x4035 | 2.3.1.1 | reserved | no | typed, byte-identical round-trip | 2 | `Records::OffsetClip` |
-| EmfPlusSetTSClip | 0x403A | 2.3.8.1 | C=0x8000 (4-byte rects), NumRects=0x7FFF | yes | typed, byte-identical round-trip | 0 | `Records::SetTSClip` |
+| EmfPlusSetTSClip | 0x403A | 2.3.8.1 | C=0x8000 (4-byte rects), NumRects=0x7FFF | yes | typed, byte-identical round-trip; uncompressed rects decoded by `#rects`, compressed rects stay raw in `rect_data` because 2.3.8.1 leaves their layout undefined (`records/set_ts_clip.rb:19`, `:30`) | 0 | `Records::SetTSClip` |
 
 ### Transform (7)
 
-| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
+| Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusSetWorldTransform | 0x402A | 2.3.9.6 | unused | no | typed, byte-identical round-trip | 27 | `Records::SetWorldTransform` |
 | EmfPlusResetWorldTransform | 0x402B | 2.3.9.2 | unused | no | typed, byte-identical round-trip | 14 | `Records::ResetWorldTransform` |
@@ -153,7 +161,7 @@ Variable data is derived from `(variable)` / array / optional fields in each obj
 
 ### Graphics object (ObjectType) (9)
 
-| Object | ObjectType | Spec | Variable data | Optional/conditional fields | Ruby status | Fixtures | Proposed class |
+| Object | ObjectType | Spec | Variable data | Optional/conditional fields | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusBrush | 1 | 2.2.1.1 | yes | Type (BrushType) selects BrushData: solid, hatch, texture, path gradient, linear gradient | typed, byte-identical round-trip | 5 | `Objects::Brush` |
 | EmfPlusCustomLineCap | 9 | 2.2.1.2 | yes | Type (CustomLineCapDataType) selects default vs arrow data | typed, byte-identical round-trip | 0 | `Objects::CustomLineCap` |
@@ -167,59 +175,61 @@ Variable data is derived from `(variable)` / array / optional fields in each obj
 
 ### Structure object (47)
 
-| Object | Spec | Variable data | Presence conditions | Ruby status | Fixtures | Proposed class |
+Class column = where the structure is decoded today: `Records::Primitives::*` (files under `lib/emf/emf_plus/records/primitives/`), a named class inside `lib/emf/emf_plus/objects/*.rb`, or "inline" for a structure read by a parent object's reader with no class of its own. The earlier `Structures::*` names were a proposal; no such module exists.
+
+| Object | Spec | Variable data | Presence conditions | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusARGB | 2.2.2.1 | no | - | not started | not measured | `Structures::ARGB` |
-| EmfPlusBitmap | 2.2.2.2 | yes | Type: raw pixel data (BitmapData) vs EmfPlusCompressedImage | typed, byte-identical round-trip | not measured | `Structures::Bitmap` |
-| EmfPlusBitmapData | 2.2.2.3 | yes | Colors (palette) MUST be present when PixelFormat I flag is set | typed, byte-identical round-trip | not measured | `Structures::BitmapData` |
-| EmfPlusBlendColors | 2.2.2.4 | yes | - | typed, byte-identical round-trip | not measured | `Structures::BlendColors` |
-| EmfPlusBlendFactors | 2.2.2.5 | yes | - | typed, byte-identical round-trip | not measured | `Structures::BlendFactors` |
-| EmfPlusBoundaryPathData | 2.2.2.6 | yes | - | typed, byte-identical round-trip (nested EmfPlusPath decoded as Objects::Path; raw bytes if it does not parse; corpus: 37 of 37 path boundaries decode) | not measured | `Structures::BoundaryPathData` |
-| EmfPlusBoundaryPointData | 2.2.2.7 | yes | - | typed, byte-identical round-trip | not measured | `Structures::BoundaryPointData` |
+| EmfPlusARGB | 2.2.2.1 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::ARGB` (`primitives/argb.rb:10`) |
+| EmfPlusBitmap | 2.2.2.2 | yes | Type: raw pixel data (BitmapData) vs EmfPlusCompressedImage | typed, byte-identical round-trip | not measured | `Records::Primitives::Bitmap` (`primitives/bitmap.rb:13`) |
+| EmfPlusBitmapData | 2.2.2.3 | yes | Colors (palette) MUST be present when PixelFormat I flag is set | typed, byte-identical round-trip | not measured | `Records::Primitives::BitmapData` (`primitives/bitmap_data.rb:12`) |
+| EmfPlusBlendColors | 2.2.2.4 | yes | - | typed, byte-identical round-trip | not measured | `Records::Primitives::BlendColors` (`primitives/blend_colors.rb:11`) |
+| EmfPlusBlendFactors | 2.2.2.5 | yes | - | typed, byte-identical round-trip | not measured | `Records::Primitives::BlendFactors` (`primitives/blend_factors.rb:10`) |
+| EmfPlusBoundaryPathData | 2.2.2.6 | yes | - | typed, byte-identical round-trip (nested EmfPlusPath decoded as Objects::Path; raw bytes if it does not parse; corpus: 37 of 37 path boundaries decode) | not measured | `Objects::Brush::BoundaryPathData` (`objects/brush.rb:95`) |
+| EmfPlusBoundaryPointData | 2.2.2.7 | yes | - | typed, byte-identical round-trip | not measured | `Objects::Brush::BoundaryPointData` (`objects/brush.rb:102`) |
 | EmfPlusCharacterRange | 2.2.2.8 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::CharacterRange` |
-| EmfPlusCompoundLineData | 2.2.2.9 | yes | - | typed, byte-identical round-trip | not measured | `Structures::CompoundLineData` |
-| EmfPlusCompressedImage | 2.2.2.10 | yes | - | typed, byte-identical round-trip | not measured | `Structures::CompressedImage` |
-| EmfPlusCustomEndCapData | 2.2.2.11 | yes | - | typed, byte-identical round-trip | not measured | `Structures::CustomEndCapData` |
-| EmfPlusCustomLineCapArrowData | 2.2.2.12 | no | - | typed, byte-identical round-trip | not measured | `Structures::CustomLineCapArrowData` |
-| EmfPlusCustomLineCapData | 2.2.2.13 | yes | OptionalData selected by CustomLineCapDataFlags | typed, byte-identical round-trip | not measured | `Structures::CustomLineCapData` |
-| EmfPlusCustomLineCapOptionalData | 2.2.2.14 | yes | FillData if FillPath flag; OutlineData if LinePath flag | typed, byte-identical round-trip | not measured | `Structures::CustomLineCapOptionalData` |
-| EmfPlusCustomStartCapData | 2.2.2.15 | yes | - | typed, byte-identical round-trip | not measured | `Structures::CustomStartCapData` |
-| EmfPlusDashedLineData | 2.2.2.16 | yes | - | typed, byte-identical round-trip | not measured | `Structures::DashedLineData` |
-| EmfPlusFillPath | 2.2.2.17 | yes | - | typed, byte-identical round-trip | not measured | `Structures::FillPath` |
-| EmfPlusFocusScaleData | 2.2.2.18 | no | - | typed, byte-identical round-trip | not measured | `Structures::FocusScaleData` |
+| EmfPlusCompoundLineData | 2.2.2.9 | yes | - | typed, byte-identical round-trip | not measured | `Objects::Pen::CompoundLineData` (`objects/pen.rb:48`) |
+| EmfPlusCompressedImage | 2.2.2.10 | yes | - | typed, byte-identical round-trip | not measured | `Records::Primitives::CompressedImage` (`primitives/compressed_image.rb:10`) |
+| EmfPlusCustomEndCapData | 2.2.2.11 | yes | - | typed, byte-identical round-trip | not measured | inline: `Objects::Pen#custom_end_cap` (`objects/pen.rb:115`) |
+| EmfPlusCustomLineCapArrowData | 2.2.2.12 | no | - | typed, byte-identical round-trip | not measured | `Objects::CustomLineCap::CustomLineCapArrowData` (`objects/custom_line_cap.rb:41`) |
+| EmfPlusCustomLineCapData | 2.2.2.13 | yes | OptionalData selected by CustomLineCapDataFlags | typed, byte-identical round-trip | not measured | `Objects::CustomLineCap::CustomLineCapDefaultData` (`objects/custom_line_cap.rb:26`) |
+| EmfPlusCustomLineCapOptionalData | 2.2.2.14 | yes | FillData if FillPath flag; OutlineData if LinePath flag | typed, byte-identical round-trip | not measured | inline: `Objects::CustomLineCap#fill_path`, `#line_path` (`objects/custom_line_cap.rb:91-92`) |
+| EmfPlusCustomStartCapData | 2.2.2.15 | yes | - | typed, byte-identical round-trip | not measured | inline: `Objects::Pen#custom_start_cap` (`objects/pen.rb:114`) |
+| EmfPlusDashedLineData | 2.2.2.16 | yes | - | typed, byte-identical round-trip | not measured | `Objects::Pen::DashedLineData` (`objects/pen.rb:41`) |
+| EmfPlusFillPath | 2.2.2.17 | yes | - | typed, byte-identical round-trip | not measured | inline: `Objects::CustomLineCap#fill_path` (`objects/custom_line_cap.rb:91`) |
+| EmfPlusFocusScaleData | 2.2.2.18 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::FocusScaleData` (`primitives/focus_scale_data.rb:10`) |
 | EmfPlusGraphicsVersion | 2.2.2.19 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::GraphicsVersion` |
-| EmfPlusHatchBrushData | 2.2.2.20 | no | - | typed, byte-identical round-trip | not measured | `Structures::HatchBrushData` |
-| EmfPlusInteger7 | 2.2.2.21 | no | - | not started | not measured | `Structures::Integer7` |
-| EmfPlusInteger15 | 2.2.2.22 | no | - | not started | not measured | `Structures::Integer15` |
+| EmfPlusHatchBrushData | 2.2.2.20 | no | - | typed, byte-identical round-trip | not measured | `Objects::Brush::HatchBrushData` (`objects/brush.rb:53`) |
+| EmfPlusInteger7 | 2.2.2.21 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::RelativeCoordinate` (`primitives/relative_coordinate.rb:12`) |
+| EmfPlusInteger15 | 2.2.2.22 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::RelativeCoordinate` (`primitives/relative_coordinate.rb:12`) |
 | EmfPlusLanguageIdentifier | 2.2.2.23 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::LanguageIdentifier` |
-| EmfPlusLinearGradientBrushData | 2.2.2.24 | yes | OptionalData selected by BrushDataFlags | typed, byte-identical round-trip | not measured | `Structures::LinearGradientBrushData` |
-| EmfPlusLinearGradientBrushOptionalData | 2.2.2.25 | yes | Transform if BrushDataTransform; blend colors (PresetColors) xor blend factors (H and/or V) | typed, byte-identical round-trip | not measured | `Structures::LinearGradientBrushOptionalData` |
-| EmfPlusLinePath | 2.2.2.26 | yes | - | typed, byte-identical round-trip | not measured | `Structures::LinePath` |
-| EmfPlusMetafile | 2.2.2.27 | yes | Type (MetafileDataType) selects EMF/WMF/EMF+ payload; MetafileDataSize | typed, byte-identical round-trip | not measured | `Structures::Metafile` |
-| EmfPlusPalette | 2.2.2.28 | yes | - | typed, byte-identical round-trip | not measured | `Structures::Palette` |
-| EmfPlusPathGradientBrushData | 2.2.2.29 | yes | BoundaryData is path if BrushDataPath else point list; OptionalData by BrushDataFlags | typed, byte-identical round-trip | not measured | `Structures::PathGradientBrushData` |
-| EmfPlusPathGradientBrushOptionalData | 2.2.2.30 | yes | Transform; blend colors xor blend factors H; FocusScaleData if BrushDataFocusScales | typed, byte-identical round-trip | not measured | `Structures::PathGradientBrushOptionalData` |
+| EmfPlusLinearGradientBrushData | 2.2.2.24 | yes | OptionalData selected by BrushDataFlags | typed, byte-identical round-trip | not measured | `Objects::Brush::LinearGradientBrushData` (`objects/brush.rb:68`) |
+| EmfPlusLinearGradientBrushOptionalData | 2.2.2.25 | yes | Transform if BrushDataTransform; blend colors (PresetColors) xor blend factors (H and/or V) | typed, byte-identical round-trip | not measured | inline: `Objects::Brush::Reader#read_linear_gradient` (`objects/brush.rb:205`) |
+| EmfPlusLinePath | 2.2.2.26 | yes | - | typed, byte-identical round-trip | not measured | inline: `Objects::CustomLineCap#line_path` (`objects/custom_line_cap.rb:92`) |
+| EmfPlusMetafile | 2.2.2.27 | yes | Type (MetafileDataType) selects EMF/WMF/EMF+ payload; MetafileDataSize | typed, byte-identical round-trip | not measured | `Records::Primitives::Metafile` (`primitives/metafile.rb:10`) |
+| EmfPlusPalette | 2.2.2.28 | yes | - | typed, byte-identical round-trip | not measured | `Records::Primitives::Palette` (`primitives/palette.rb:11`) |
+| EmfPlusPathGradientBrushData | 2.2.2.29 | yes | BoundaryData is path if BrushDataPath else point list; OptionalData by BrushDataFlags | typed, byte-identical round-trip | not measured | `Objects::Brush::PathGradientBrushData` (`objects/brush.rb:80`) |
+| EmfPlusPathGradientBrushOptionalData | 2.2.2.30 | yes | Transform; blend colors xor blend factors H; FocusScaleData if BrushDataFocusScales | typed, byte-identical round-trip | not measured | inline: `Objects::Brush::Reader#read_path_gradient_optional` (`objects/brush.rb:229`) |
 | EmfPlusPathPointType | 2.2.2.31 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::PathPointType` |
 | EmfPlusPathPointTypeRLE | 2.2.2.32 | no | used instead of EmfPlusPathPointType when Path R flag set | typed, byte-identical round-trip | not measured | `Records::Primitives::PathPointTypeRLE` |
-| EmfPlusPenData | 2.2.2.33 | yes | OptionalData selected by PenDataFlags | typed, byte-identical round-trip | not measured | `Structures::PenData` |
-| EmfPlusPenOptionalData | 2.2.2.34 | yes | each field present iff its PenData flag is set (Transform, StartCap, EndCap, Join, MiterLimit, LineStyle, DashedLineCap, DashOffset, DashedLine, NonCenter, CompoundLine, CustomStartCap, CustomEndCap) | typed, byte-identical round-trip | not measured | `Structures::PenOptionalData` |
-| EmfPlusPoint | 2.2.2.35 | no | - | not started | not measured | `Structures::Point` |
-| EmfPlusPointF | 2.2.2.36 | no | - | not started | not measured | `Structures::PointF` |
-| EmfPlusPointR | 2.2.2.37 | yes | used instead of Point/PointF when R/P flag set (relative coordinates, Integer7/Integer15 encoding) | not started | not measured | `Structures::PointR` |
-| EmfPlusRect | 2.2.2.38 | no | - | not started | not measured | `Structures::Rect` |
-| EmfPlusRectF | 2.2.2.39 | no | - | not started | not measured | `Structures::RectF` |
+| EmfPlusPenData | 2.2.2.33 | yes | OptionalData selected by PenDataFlags | typed, byte-identical round-trip | not measured | `Objects::Pen::PenHeader` (`objects/pen.rb:31`) |
+| EmfPlusPenOptionalData | 2.2.2.34 | yes | each field present iff its PenData flag is set (Transform, StartCap, EndCap, Join, MiterLimit, LineStyle, DashedLineCap, DashOffset, DashedLine, NonCenter, CompoundLine, CustomStartCap, CustomEndCap) | typed, byte-identical round-trip | not measured | inline: `Objects::Pen::Reader#read_optional` (`objects/pen.rb:82`) |
+| EmfPlusPoint | 2.2.2.35 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::Point` (`primitives/point.rb:10`) |
+| EmfPlusPointF | 2.2.2.36 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::PointF` (`primitives/point_f.rb:10`) |
+| EmfPlusPointR | 2.2.2.37 | yes | used instead of Point/PointF when R/P flag set (relative coordinates, Integer7/Integer15 encoding) | typed, byte-identical round-trip | not measured | `Records::Primitives::PointR` (`primitives/point_r.rb:11`) |
+| EmfPlusRect | 2.2.2.38 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::Rect` (`primitives/rect.rb:10`) |
+| EmfPlusRectF | 2.2.2.39 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::RectF` (`primitives/rect_f.rb:10`) |
 | EmfPlusRegionNode | 2.2.2.40 | yes | RegionNodeData absent for Empty/Infinite; children for combine types; path for Path type | typed, byte-identical round-trip | not measured | `Records::Primitives::RegionNode` |
 | EmfPlusRegionNodeChildNodes | 2.2.2.41 | yes | - | typed, byte-identical round-trip | not measured | `Records::Primitives::RegionNodeChildNodes` |
 | EmfPlusRegionNodePath | 2.2.2.42 | yes | - | typed, byte-identical round-trip | not measured | `Records::Primitives::RegionNodePath` |
-| EmfPlusSolidBrushData | 2.2.2.43 | no | - | typed, byte-identical round-trip | not measured | `Structures::SolidBrushData` |
+| EmfPlusSolidBrushData | 2.2.2.43 | no | - | typed, byte-identical round-trip | not measured | `Objects::Brush::SolidBrushData` (`objects/brush.rb:47`) |
 | EmfPlusStringFormatData | 2.2.2.44 | yes | both arrays optional; sizes from TabStopCount/RangeCount in the parent | typed, byte-identical round-trip | not measured | `Records::Primitives::StringFormatData` |
-| EmfPlusTextureBrushData | 2.2.2.45 | yes | OptionalData selected by BrushDataFlags | typed, byte-identical round-trip | not measured | `Structures::TextureBrushData` |
-| EmfPlusTextureBrushOptionalData | 2.2.2.46 | yes | Transform if BrushDataTransform; ImageObject present iff the record is large enough to hold it | typed, byte-identical round-trip (nested EmfPlusImage decoded as Objects::Image; raw bytes if it does not parse; corpus: 1 texture brush, decoded) | not measured | `Structures::TextureBrushOptionalData` |
-| EmfPlusTransformMatrix | 2.2.2.47 | no | - | not started | not measured | `Structures::TransformMatrix` |
+| EmfPlusTextureBrushData | 2.2.2.45 | yes | OptionalData selected by BrushDataFlags | typed, byte-identical round-trip | not measured | `Objects::Brush::TextureBrushData` (`objects/brush.rb:61`) |
+| EmfPlusTextureBrushOptionalData | 2.2.2.46 | yes | Transform if BrushDataTransform; ImageObject present iff the record is large enough to hold it | typed, byte-identical round-trip (nested EmfPlusImage decoded as Objects::Image; raw bytes if it does not parse; corpus: 1 texture brush, decoded) | not measured | inline: `Objects::Brush::Reader#read_texture` (`objects/brush.rb:191`) |
+| EmfPlusTransformMatrix | 2.2.2.47 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::TransformMatrix` (`primitives/transform_matrix.rb:10`) |
 
 ### Image effect parameter block (11)
 
-| Object | GUID | Spec | Ruby status | Fixtures | Proposed class |
+| Object | GUID | Spec | Ruby status | Fixtures | Class |
 | --- | --- | --- | --- | --- | --- |
 | BlurEffect | {633C80A4-1843-482B-9EF2-BE2834C5FDD4} | 2.2.3.1 | typed, byte-identical round-trip | not measured | `Effects::Blur` |
 | BrightnessContrastEffect | {D3A1DBE1-8EC4-4C17-9F4C-EA97AD1C343D} | 2.2.3.2 | typed, byte-identical round-trip | not measured | `Effects::BrightnessContrast` |
@@ -235,25 +245,25 @@ Variable data is derived from `(variable)` / array / optional fields in each obj
 
 ## Conditional and version rules
 
-Each rule needs a stated outcome before step 8 can close; "Outcome" is the intended Ruby behavior and is not implemented.
+Each rule needs a stated outcome before step 8 can close. "Outcome" is the intended Ruby behavior; "Tested outcome" is the spec that proves it today, or the gap or blocker (checked 2026-10-20 at 03f356a).
 
-| Rule | Spec | Outcome |
-| --- | --- | --- |
-| `EmfPlusGraphicsVersion`: 20-bit signature 0xDBC01 + 12-bit version; 1 = GDI+ 1.0, 2 = GDI+ 1.1; "vendor-extensible" | 2.2.2.19, 2.1.1.12, ch05 note 12 | Decode both known values; keep unknown versions as an integer and do not reject. Wrong signature: report, keep raw. |
-| Header `D` flag (EMF+ Dual) and `V` flag in `EmfPlusFlags`; EMF+ Only vs Dual playback differs by Windows version | 2.3.3.3, ch01 1.3.1, ch05 note 1 | Expose both flags. No semantic playback decision in the parser. Corpus has Dual only; EMF+ Only is a fixture gap. |
-| `EmfPlusGetDC` makes following EMF records drawable until the next EMF+ record | 2.3.3.2, ch01 1.3.1 | Record is order-significant; typed stream must keep its position relative to EMF records (see Representation gate). |
-| Reserved records 0x4005 to 0x4007 | 2.1.1.1 | Preserve as unknown raw record; report as non-conformant. |
-| `EmfPlusStrokeFillPath` 0x4037 has an enumerator but no record layout | 2.1.1.1, absent from 2.3 | Preserve as unknown raw record; layout is an open spec gap. |
-| Unknown record type | 2.3 | Preserve bytes (`Size` governs skipping). |
-| Object IDs 0 to 63; a new object with an existing ID replaces it | 2.3.5.1, ch03 3.1.2 | Object table of 64 slots; out-of-range IDs are errors at the boundary. |
-| `C` (compressed int16 vs float), `P` (relative `EmfPlusPointR`), `S` (BrushId is ARGB vs object index), `L`, `W`, `E` flags change the layout and the expected `Size`/`DataSize` | 2.3.4.x | Per-record rules in the tables; Windows clears `C` when `P` is set (ch05 notes 20 to 25) but readers must handle both. |
-| `DrawImagePoints` `E` flag: an `EmfPlusSerializableObject` effect precedes the draw | 2.3.4.9, 2.1.3.1 | Link effect to the following draw in the typed stream. |
-| `DrawDriverString`: `MatrixPresent` gates `TransformMatrix`; `DriverStringOptionsCmapLookup` changes the meaning of `Glyphs` | 2.3.4.6, 2.1.2.3 | Conditional fields in the typed record. |
-| `SetTSGraphics` `T` gates `Palette`; `SetTSClip` `C` selects 4 vs 8 byte rects | 2.3.8 | Conditional fields. Windows never writes these records (ch05 notes 29, 30). |
-| GDI+ 1.1 only: image effects, `SerializableObject`, `SetTSClip`, `SetTSGraphics` | 2.2.3, 2.3.5.2, 2.3.8, ch05 notes 17, 26, 31, 32 | Decode regardless of header version; do not reject on version. |
-| Brush, pen, custom line cap, path, bitmap, region, string format optional data selected by flags/counts | 2.1.2.x, 2.2.1.x, 2.2.2.x (see object tables) | Presence rule per object, tested positive and negative. |
-| `ColorCurveEffect` records written by Windows are corrupt | ch05 note 10 | Preserve bytes; typed decode must tolerate failure. |
-| Texture brush `ImageObject` present iff the record is large enough | 2.2.2.46 | Size-dependent presence; needs a boundary fixture. |
+| Rule | Spec | Outcome | Tested outcome |
+| --- | --- | --- | --- |
+| `EmfPlusGraphicsVersion`: 20-bit signature 0xDBC01 + 12-bit version; 1 = GDI+ 1.0, 2 = GDI+ 1.1; "vendor-extensible" | 2.2.2.19, 2.1.1.12, ch05 note 12 | Decode both known values; keep unknown versions as an integer and do not reject. Wrong signature: report, keep raw. | Tested: `spec/emf/emf_plus/conditional_rules_spec.rb:15` (versions 0, 1, 2, 3, 0xFFF kept as integers behind a valid signature, none rejected), `spec/emf/emf_plus_records_spec.rb:38` (known value 2), `:43` (known value 1), `:51` (wrong signature reported by `valid_signature?`, kept raw). Object-level `GraphicsVersion` fields are read as an opaque dword and never validated. |
+| Header `D` flag (EMF+ Dual) and `V` flag in `EmfPlusFlags`; EMF+ Only vs Dual playback differs by Windows version | 2.3.3.3, ch01 1.3.1, ch05 note 1 | Expose both flags. No semantic playback decision in the parser. Corpus has Dual only; EMF+ Only is a fixture gap. | Tested: `spec/emf/emf_plus_records_spec.rb:38` (D and V set), `:43` (both clear). No playback decision in the parser. Gap: no EMF+ Only fixture in the corpus (synthetic bytes only). |
+| `EmfPlusGetDC` makes following EMF records drawable until the next EMF+ record | 2.3.3.2, ch01 1.3.1 | Record is order-significant; typed stream must keep its position relative to EMF records (see Representation gate). | Blocked: representation gate. `Records::GetDC` decodes (`spec/emf/emf_plus_records_spec.rb:74`) but nothing yet links it to the EMF records that follow. |
+| Reserved records 0x4005 to 0x4007 | 2.1.1.1 | Preserve as unknown raw record; report as non-conformant. | Partly tested: kept as `Records::Unknown` and re-encoded (`spec/emf/emf_plus_records_spec.rb:22`). Gap: not reported as non-conformant (the registry has no entry for 0x4005 to 0x4007, so they take the `Unknown` fallback at `records.rb:97`); the parser has no conformance diagnostic list (its `errors:` array collects `ParseError` and stops framing, which would drop the rest of the stream). |
+| `EmfPlusStrokeFillPath` 0x4037 has an enumerator but no record layout | 2.1.1.1, absent from 2.3 | Preserve as unknown raw record; layout is an open spec gap. | Tested: kept as `Records::Unknown` (`spec/emf/emf_plus/draw_fill_records_spec.rb:50`). Layout stays an open spec gap, as stated. |
+| Unknown record type | 2.3 | Preserve bytes (`Size` governs skipping). | Tested: `spec/emf/emf_plus_spec.rb:14` (unknown type framed by `Size`, next offset correct), `spec/emf/emf_plus_records_spec.rb:14` (re-encoded identically). |
+| Object IDs 0 to 63; a new object with an existing ID replaces it | 2.3.5.1, ch03 3.1.2 | Object table of 64 slots; out-of-range IDs are errors at the boundary. | Gap: no object table exists. `Records::Object#emf_object_id` is the raw 8-bit field (0 to 255), so IDs above 63 are accepted without error and a re-used ID does not replace anything. Needs the object table from the representation gate. |
+| `C` (compressed int16 vs float), `P` (relative `EmfPlusPointR`), `S` (BrushId is ARGB vs object index), `L`, `W`, `E` flags change the layout and the expected `Size`/`DataSize` | 2.3.4.x | Per-record rules in the tables; Windows clears `C` when `P` is set (ch05 notes 20 to 25) but readers must handle both. | Tested: C `spec/emf/emf_plus/text_image_records_spec.rb:99` and `:149`; P `:170` and `:187`, `spec/emf/emf_plus/unproven_layouts_spec.rb:15`; S `text_image_records_spec.rb:47`; E `:161`; `SetTSClip` C `unproven_layouts_spec.rb:104` and `:113`. Readers handle P and C together (`text_image_records_spec.rb:170`, C ignored). |
+| `DrawImagePoints` `E` flag: an `EmfPlusSerializableObject` effect precedes the draw | 2.3.4.9, 2.1.3.1 | Link effect to the following draw in the typed stream. | Partly tested: `DrawImagePoints#effect?` reports the flag (`spec/emf/emf_plus/text_image_records_spec.rb:161`). Blocked: representation gate for linking the effect to the following draw. |
+| `DrawDriverString`: `MatrixPresent` gates `TransformMatrix`; `DriverStringOptionsCmapLookup` changes the meaning of `Glyphs` | 2.3.4.6, 2.1.2.3 | Conditional fields in the typed record. | Tested: `MatrixPresent` `spec/emf/emf_plus/text_image_records_spec.rb:69` and `:77`; odd glyph count `spec/emf/emf_plus/unproven_layouts_spec.rb:62`; `cmap_lookup?` is exposed (`text_image_records_spec.rb:74`, `:82`). Under `CmapLookup` `#text` decodes `Glyphs` as UTF-16 (incl. surrogate pairs); option predicates exposed (`text_image_records_spec.rb`, context "with DriverStringOptions"). |
+| `SetTSGraphics` `T` gates `Palette`; `SetTSClip` `C` selects 4 vs 8 byte rects | 2.3.8 | Conditional fields. Windows never writes these records (ch05 notes 29, 30). | Tested: `SetTSGraphics` `T` `spec/emf/emf_plus/state_records_spec.rb:134` (absent) and `:143` (present); `SetTSClip` `C` `spec/emf/emf_plus/unproven_layouts_spec.rb:104` and `:113`, flip at `:121`. Palette typed (`state_records_spec.rb`, typed decode / short / trailing / edit examples); compressed rects stay raw because 2.3.8.1 leaves the layout undefined. |
+| GDI+ 1.1 only: image effects, `SerializableObject`, `SetTSClip`, `SetTSGraphics` | 2.2.3, 2.3.5.2, 2.3.8, ch05 notes 17, 26, 31, 32 | Decode regardless of header version; do not reject on version. | Tested: `spec/emf/emf_plus/conditional_rules_spec.rb:27` (SerializableObject, SetTSClip and SetTSGraphics decode typed and re-encode after a GDI+ 1.0 header). Image effects decode from the record's own GUID, not the header (`spec/emf/emf_plus/objects_image_spec.rb:142`). |
+| Brush, pen, custom line cap, path, bitmap, region, string format optional data selected by flags/counts | 2.1.2.x, 2.2.1.x, 2.2.2.x (see object tables) | Presence rule per object, tested positive and negative. | Tested per object, positive and negative: Pen `spec/emf/emf_plus/objects_pen_spec.rb:43` to `:185`; Brush `objects_brush_spec.rb:44` to `:253`; Path `objects_path_region_spec.rb:31` to `:113`; Region `:115` to `:218`; Image `objects_image_spec.rb:30` to `:140`; StringFormat `objects_spec.rb:62` to `:93`. Custom line cap and ImageAttributes optional data covered in `objects_pen_spec.rb` and `objects_spec.rb:95`. |
+| `ColorCurveEffect` records written by Windows are corrupt | ch05 note 10 | Preserve bytes; typed decode must tolerate failure. | Tested: short block falls back to `Effects::Opaque` with the bytes kept (`spec/emf/emf_plus/objects_image_spec.rb:184`). Gap: only the short-block form is pinned; the actual Windows corruption is not characterised. |
+| Texture brush `ImageObject` present iff the record is large enough | 2.2.2.46 | Size-dependent presence; needs a boundary fixture. | Tested: no remaining bytes means no image, remaining bytes mean an image (`Brush::Reader#read_texture`, `objects/brush.rb:191`, takes the rest after the optional transform): `spec/emf/emf_plus/objects_brush_spec.rb:61` to `:85`; nested bitmap and metafile image decode, edit and raw fallback `spec/emf/emf_plus/objects_brush_nested_spec.rb:61` to `:90` (PR #30, merged in d93bf89). Gap: the corpus has 1 texture brush; no fixture sits on the boundary. |
 
 ## Continuation (multi-record object) rule
 
@@ -286,4 +296,19 @@ Compatibility tests to write with the implementation (not written yet): `emf_plu
 
 ## Step 8 close criteria (not met)
 
-The inventory may close only when: every one of the 55 non-reserved record types and 67 objects has a typed implementation and tests; each conditional/version row above has a tested outcome; the 11 record types and 1 object type with no fixture have a licensed example or a generated minimal fixture; EMF+ Only and records spanning comments have fixtures; the two spec/corpus disagreements in the continuation section are settled; and the representation gate is decided. Today: 0 of 55 record types and 0 of 67 objects are implemented.
+The inventory may close only when each item below is done. Measured 2026-10-20 at 03f356a.
+
+Already met in code (typed class, round-trip spec; corpus and census figures not re-run):
+
+- All 54 defined record types are registered (`records.rb:81-93`); the 3 reserved types and `StrokeFillPath` are kept raw as `Records::Unknown`.
+- All 9 graphics objects (`objects.rb:21-34`), all 47 structure objects and all 11 image effects are decoded.
+
+Still open:
+
+1. Representation gate decided and implemented (Representation gate section): `EmfPlusGetDC` ordering against the following EMF records, linking a `DrawImagePoints` `E`-flag effect to its draw, and the 64-slot object table (IDs above 63 are accepted today; a re-used ID replaces nothing).
+2. A conformance-diagnostic channel, so reserved records 0x4005 to 0x4007 can be reported as non-conformant without dropping the rest of the stream.
+3. `SetTSClip` compressed rects stay raw in `rect_data`: 2.3.8.1 describes a 1-or-2-byte delta scheme but does not name the four values per rectangle, the sign rule, the first rectangle's reference, or how the variable encoding fits its fixed `NumRects*4` size formula (`records/set_ts_clip.rb` comment). No reader (LibreOffice, Wine) implements it and the corpus has no `SetTSClip` record.
+4. Fixtures: an EMF+ Only (`D` clear) file — the corpus has none (2026-10-20 scan: 229 files, 27 with EMF+, 32 headers, all Dual: 16 v2 with V clear, 14 v2 with V set, 2 v1 with V set; two real headers pinned in `spec/emf/emf_plus/header_fixture_spec.rb`); a record spanning two comments; and a licensed or generated example for each of the 11 record types and 1 graphics object (CustomLineCap) seen in no fixture.
+5. `ColorCurveEffect` as Windows writes it: ch05 note 10 (`reference-docs/ms-emfplus/ch05-appendix-a-product-behavior.md:77`) only says Windows "produces corrupt records" and gives no shape. The decoder keeps any block shorter than the documented 12 bytes as `Effects::Opaque` and decodes longer blocks with the rest in `trailing`; out-of-range enum/intensity values decode without error (`spec/emf/emf_plus/color_curve_spec.rb`). Real Windows bytes are needed to go further; no fixture contains a ColorCurve effect.
+6. The two spec/corpus disagreements in the continuation section settled with a second independent source.
+7. `Metafile` / `Model` / CLI exposure of the typed view, which is the representation gate's public API decision (Hassan).

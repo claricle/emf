@@ -4,6 +4,22 @@ use crate::{
     limits::{try_vec_with_capacity, Budget},
     LimitKind, ParseLimits, SerializeFailure, SerializeLimits,
 };
+mod bitmap;
+pub use bitmap::PixelBitmap;
+mod line_cap;
+mod linear_brush;
+mod path;
+mod path_brush;
+mod pen;
+mod region;
+mod texture;
+pub use line_cap::{ArrowLineCap, CustomLineCap, CustomLineCapData, DefaultLineCap};
+pub use linear_brush::LinearGradient;
+pub use path::{Path, PathPointRun, PathPointTypes};
+pub use path_brush::{GradientBoundary, PathGradient};
+pub use pen::{Pen, PenBrush, PenBrushData};
+pub use region::{Region, RegionNode};
+pub use texture::{Texture, TextureImage};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StringFormat {
@@ -26,6 +42,22 @@ pub struct StringFormat {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObjectData {
+    Pen(Pen),
+    TextureBrush {
+        version: u32,
+        data: Texture,
+    },
+    PathGradientBrush {
+        version: u32,
+        data: PathGradient,
+    },
+    LinearGradientBrush {
+        version: u32,
+        data: LinearGradient,
+    },
+    CustomLineCap(CustomLineCap),
+    Path(Path),
+    Region(Region),
     SolidBrush {
         version: u32,
         argb: u32,
@@ -54,7 +86,9 @@ pub enum ObjectData {
         reserved2: u32,
     },
     StringFormat(StringFormat),
-    /// BitmapData is preserved without pixel expansion or image decompression.
+    /// Known pixel formats expose palette entries and unexpanded pixel bytes.
+    PixelBitmap(PixelBitmap),
+    /// Compressed and unknown bitmap formats retain their raw data.
     BitmapImage {
         version: u32,
         width: i32,
@@ -84,13 +118,38 @@ impl ObjectDefinition {
         budget.check_input(self.bytes.len())?;
         budget.check_record_bytes(self.bytes.len())?;
         budget.charge_record(self.bytes.len())?;
+        self.decode_body(&mut budget)
+    }
+
+    /// Decode using cumulative accounting; the definition was already framed.
+    pub fn decode_with_budget(&self, budget: &mut Budget<'_>) -> Result<ObjectData, Error> {
+        budget.check_input(self.bytes.len())?;
+        budget.check_record_bytes(self.bytes.len())?;
+        budget.charge_work(1 + (self.bytes.len() as u64).div_ceil(16))?;
+        self.decode_body(budget)
+    }
+
+    fn decode_body(&self, budget: &mut Budget<'_>) -> Result<ObjectData, Error> {
         let mut r = Reader {
             bytes: &self.bytes,
             pos: 0,
             index: self.first_record,
-            budget: &mut budget,
+            budget,
         };
         let value = match self.object_type {
+            2 => match pen::read(&mut r)? {
+                Some(v) => ObjectData::Pen(v),
+                None => return opaque(self, r.budget),
+            },
+            9 => match line_cap::read(&mut r)? {
+                Some(v) => ObjectData::CustomLineCap(v),
+                None => return opaque(self, r.budget),
+            },
+            3 => ObjectData::Path(path::read(&mut r)?),
+            4 => match region::read(&mut r)? {
+                Some(v) => ObjectData::Region(v),
+                None => return opaque(self, r.budget),
+            },
             1 => {
                 let version = r.word()?;
                 match r.word()? {
@@ -104,20 +163,44 @@ impl ObjectDefinition {
                         foreground: r.word()?,
                         background: r.word()?,
                     },
-                    _ => return opaque(self, &mut budget),
+                    2 => match texture::read(&mut r)? {
+                        Some(data) => ObjectData::TextureBrush { version, data },
+                        None => return opaque(self, r.budget),
+                    },
+                    3 => match path_brush::read(&mut r)? {
+                        Some(data) => ObjectData::PathGradientBrush { version, data },
+                        None => return opaque(self, r.budget),
+                    },
+                    4 => match linear_brush::read(&mut r)? {
+                        Some(data) => ObjectData::LinearGradientBrush { version, data },
+                        None => return opaque(self, r.budget),
+                    },
+                    _ => return opaque(self, r.budget),
                 }
             }
             5 => {
                 let version = r.word()?;
                 match r.word()? {
-                    1 => ObjectData::BitmapImage {
-                        version,
-                        width: r.word()? as i32,
-                        height: r.word()? as i32,
-                        stride: r.word()? as i32,
-                        pixel_format: r.word()?,
-                        bitmap_type: r.word()?,
-                        data: r.rest()?,
+                    1 => match bitmap::read(&mut r, version)? {
+                        texture::TextureImage::PixelBitmap(v) => ObjectData::PixelBitmap(v),
+                        texture::TextureImage::Bitmap {
+                            version,
+                            width,
+                            height,
+                            stride,
+                            pixel_format,
+                            bitmap_type,
+                            data,
+                        } => ObjectData::BitmapImage {
+                            version,
+                            width,
+                            height,
+                            stride,
+                            pixel_format,
+                            bitmap_type,
+                            data,
+                        },
+                        texture::TextureImage::Metafile { .. } => unreachable!(),
                     },
                     2 => {
                         let metafile_type = r.word()?;
@@ -133,7 +216,7 @@ impl ObjectDefinition {
                             suffix: r.rest()?,
                         }
                     }
-                    _ => return opaque(self, &mut budget),
+                    _ => return opaque(self, r.budget),
                 }
             }
             6 => {
@@ -207,7 +290,7 @@ impl ObjectDefinition {
                 object_clamp: r.word()? as i32,
                 reserved2: r.word()?,
             },
-            _ => return opaque(self, &mut budget),
+            _ => return opaque(self, r.budget),
         };
         if r.remaining() != 0 {
             return Err(r.error());
@@ -230,8 +313,16 @@ fn opaque(def: &ObjectDefinition, budget: &mut Budget<'_>) -> Result<ObjectData,
 impl ObjectData {
     pub fn object_type(&self) -> u8 {
         match self {
-            Self::SolidBrush { .. } | Self::HatchBrush { .. } => 1,
-            Self::BitmapImage { .. } | Self::MetafileImage { .. } => 5,
+            Self::Pen(_) => 2,
+            Self::CustomLineCap(_) => 9,
+            Self::Path(_) => 3,
+            Self::Region(_) => 4,
+            Self::SolidBrush { .. }
+            | Self::HatchBrush { .. }
+            | Self::LinearGradientBrush { .. }
+            | Self::PathGradientBrush { .. }
+            | Self::TextureBrush { .. } => 1,
+            Self::PixelBitmap(_) | Self::BitmapImage { .. } | Self::MetafileImage { .. } => 5,
             Self::Font { .. } => 6,
             Self::StringFormat(_) => 7,
             Self::ImageAttributes { .. } => 8,
@@ -243,6 +334,34 @@ impl ObjectData {
     pub fn serialize(&self, limits: &SerializeLimits) -> Result<Vec<u8>, SerializeFailure> {
         let overflow = || SerializeFailure::SizeOverflow;
         let (base, parts, elements): (usize, [usize; 3], u64) = match self {
+            Self::Pen(v) => {
+                let (size, work) = v.layout()?;
+                (size, [0; 3], work)
+            }
+            Self::CustomLineCap(v) => {
+                let (size, work) = v.layout()?;
+                (size, [0; 3], work)
+            }
+            Self::Region(v) => {
+                let (size, work) = v.layout()?;
+                (size, [0; 3], work)
+            }
+            Self::Path(v) => {
+                let (size, work) = v.layout()?;
+                (size, [0; 3], work)
+            }
+            Self::TextureBrush { data, .. } => {
+                let (size, work) = data.layout()?;
+                (size.checked_add(8).ok_or_else(overflow)?, [0; 3], work)
+            }
+            Self::PathGradientBrush { data, .. } => {
+                let (size, work) = data.layout()?;
+                (size.checked_add(8).ok_or_else(overflow)?, [0; 3], work)
+            }
+            Self::LinearGradientBrush { data, .. } => {
+                let (size, work) = data.layout()?;
+                (size.checked_add(8).ok_or_else(overflow)?, [0; 3], work)
+            }
             Self::SolidBrush { .. } => (12, [0; 3], 0),
             Self::HatchBrush { .. } => (20, [0; 3], 0),
             Self::ImageAttributes { .. } => (24, [0; 3], 0),
@@ -283,6 +402,10 @@ impl ObjectData {
                     (v.tab_stops.len() as u64).saturating_add(v.character_ranges.len() as u64),
                 )
             }
+            Self::PixelBitmap(v) => {
+                let (size, work) = v.layout()?;
+                (size, [0; 3], work)
+            }
             Self::BitmapImage { data, .. } => (28, [data.len(), 0, 0], 0),
             Self::MetafileImage { data, suffix, .. } => {
                 if data.len() > u32::MAX as usize || suffix.len() > 3 {
@@ -319,6 +442,22 @@ impl ObjectData {
         out.try_reserve_exact(size)
             .map_err(|_| SerializeFailure::AllocationFailed { bytes: size })?;
         match self {
+            Self::TextureBrush { version, data } => {
+                words(&mut out, &[*version, 2]);
+                data.write(&mut out);
+            }
+            Self::PathGradientBrush { version, data } => {
+                words(&mut out, &[*version, 3]);
+                data.write(&mut out);
+            }
+            Self::LinearGradientBrush { version, data } => {
+                words(&mut out, &[*version, 4]);
+                data.write(&mut out);
+            }
+            Self::Pen(v) => v.write(&mut out),
+            Self::CustomLineCap(v) => v.write(&mut out),
+            Self::Path(v) => v.write(&mut out),
+            Self::Region(v) => v.write(&mut out),
             Self::SolidBrush { version, argb } => words(&mut out, &[*version, 0, *argb]),
             Self::HatchBrush {
                 version,
@@ -395,6 +534,7 @@ impl ObjectData {
                     words(&mut out, &[range[0] as u32, range[1] as u32]);
                 }
             }
+            Self::PixelBitmap(v) => v.write(&mut out),
             Self::BitmapImage {
                 version,
                 width,

@@ -22,6 +22,7 @@ module Emf
       def materialize
         wire = @klass.new(**@fields)
         Fields.preserve_text_scales(wire, @text_payload) if @text_payload
+        Fields.preserve_small_text_scales(wire, @bytes) if @klass == Emr::Binary::Records::SmallTextOut
         wire
       end
     end

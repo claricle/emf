@@ -3,9 +3,9 @@
 //! their source spans and remain opaque, even when the native core knows more.
 use super::*;
 use emf_core::wmf::{
-    geometry::GeometryRecord as G, objects::ObjectIssue, objects::ObjectKind,
-    state::StateRecord as S, text::TextRecord as T, DiagnosticKind as D, Document, Record,
-    TypedRecord,
+    bitmap::BitmapRecord as M, brush::BrushRecord as B, geometry::GeometryRecord as G,
+    objects::ObjectIssue, objects::ObjectKind, region::RegionRecord as R, state::StateRecord as S,
+    text::TextRecord as T, DiagnosticKind as D, Document, Record, TypedRecord,
 };
 
 const MAX_BYTES: usize = 200 * 1024 * 1024;
@@ -109,6 +109,24 @@ fn fixed(value: &G) -> Option<([i16; 8], usize)> {
         _ => None,
     }
 }
+fn scalar_state(value: &S) -> Option<([u32; 2], usize)> {
+    match *value {
+        S::SetBkColor(n) | S::SetMapperFlags(n) | S::SetTextColor(n) => Some(([n, 0], 1)),
+        S::SetBkMode(n)
+        | S::SetMapMode(n)
+        | S::SetPolyFillMode(n)
+        | S::SetRop2(n)
+        | S::SetStretchBltMode(n)
+        | S::SetTextAlign(n)
+        | S::SetTextCharExtra(n) => Some(([u32::from(n), 0], 1)),
+        S::SetTextJustification {
+            break_count,
+            break_extra,
+        } => Some(([u32::from(break_count), u32::from(break_extra)], 2)),
+        S::SetLayout { layout, reserved } => Some(([u32::from(layout), u32::from(reserved)], 2)),
+        _ => None,
+    }
+}
 fn family(record: &Record) -> u32 {
     if record.is_eof() {
         return 1;
@@ -125,6 +143,33 @@ fn family(record: &Record) -> u32 {
             | S::DeleteObject(_),
         )) => 4,
         Some(TypedRecord::Text(_)) => 5,
+        Some(TypedRecord::State(s)) if scalar_state(s).is_some() => 6,
+        Some(TypedRecord::State(S::CreateFontIndirect(_))) => 7,
+        Some(TypedRecord::State(
+            S::CreatePalette(_)
+            | S::SetPalEntries(_)
+            | S::AnimatePalette(_)
+            | S::SelectPalette(_)
+            | S::RealizePalette
+            | S::ResizePalette(_),
+        )) => 8,
+        Some(TypedRecord::Region(_))
+        | Some(TypedRecord::State(S::SelectClipRegion(_)))
+        | Some(TypedRecord::Geometry(
+            G::OffsetClipRgn { .. } | G::ExcludeClipRect { .. } | G::IntersectClipRect { .. },
+        )) => 9,
+        Some(TypedRecord::Brush(_)) => 10,
+        Some(TypedRecord::Bitmap(_)) => 11,
+        Some(TypedRecord::Geometry(
+            G::ScaleWindowExt { .. }
+            | G::ScaleViewportExt { .. }
+            | G::FloodFill { .. }
+            | G::SetPixel { .. }
+            | G::ExtFloodFill { .. }
+            | G::PatBlt { .. },
+        )) => 12,
+        Some(TypedRecord::State(S::SaveDc | S::RestoreDc(_) | S::SetRelAbs))
+        | Some(TypedRecord::Escape(_)) => 13,
         _ => 0,
     }
 }
@@ -175,6 +220,259 @@ fn payload(
             S::SelectObject(i) | S::DeleteObject(i) => out.u32(u32::from(*i))?,
             _ => unreachable!(),
         },
+        (6, Some(TypedRecord::State(s))) => {
+            let (values, len) = scalar_state(s).expect("scalar state family");
+            for value in &values[..len] {
+                out.u32(*value)?;
+            }
+        }
+        (7, Some(TypedRecord::State(S::CreateFontIndirect(font)))) => {
+            for value in [
+                font.height,
+                font.width,
+                font.escapement,
+                font.orientation,
+                font.weight,
+            ] {
+                out.i32(value)?;
+            }
+            for value in [
+                font.italic,
+                font.underline,
+                font.strike_out,
+                font.char_set,
+                font.out_precision,
+                font.clip_precision,
+                font.quality,
+                font.pitch_and_family,
+            ] {
+                out.u32(u32::from(value))?;
+            }
+            out.raw(&font.face_name)?;
+        }
+        (8, Some(TypedRecord::State(s))) => match s {
+            S::CreatePalette(p) | S::SetPalEntries(p) | S::AnimatePalette(p) => {
+                out.u32(u32::from(p.start))?;
+                out.u32(p.entries.len() as u32)?;
+                for entry in &p.entries {
+                    for value in [entry.red, entry.green, entry.blue, entry.flags] {
+                        out.u32(u32::from(value))?;
+                    }
+                }
+            }
+            S::SelectPalette(index) | S::ResizePalette(index) => out.u32(u32::from(*index))?,
+            S::RealizePalette => (),
+            _ => unreachable!(),
+        },
+        (9, Some(TypedRecord::Region(r))) => match r {
+            R::CreateRegion(region) => {
+                out.u32(u32::from(region.next_in_chain))?;
+                out.u32(region.object_count)?;
+                for value in [
+                    region.bounds.left,
+                    region.bounds.top,
+                    region.bounds.right,
+                    region.bounds.bottom,
+                ] {
+                    out.i32(value)?;
+                }
+                out.u32(region.scans.len() as u32)?;
+                for scan in &region.scans {
+                    out.u32(u32::from(scan.top))?;
+                    out.u32(u32::from(scan.bottom))?;
+                    out.u32(scan.lines.len() as u32)?;
+                    for line in &scan.lines {
+                        out.u32(u32::from(line.left))?;
+                        out.u32(u32::from(line.right))?;
+                    }
+                }
+            }
+            R::FillRegion { region, brush } => {
+                out.u32(u32::from(*region))?;
+                out.u32(u32::from(*brush))?;
+            }
+            R::FrameRegion {
+                region,
+                brush,
+                height,
+                width,
+            } => {
+                out.u32(u32::from(*region))?;
+                out.u32(u32::from(*brush))?;
+                out.i32(*height)?;
+                out.i32(*width)?;
+            }
+            R::InvertRegion(index) | R::PaintRegion(index) => out.u32(u32::from(*index))?,
+        },
+        (9, Some(TypedRecord::State(S::SelectClipRegion(index)))) => out.u32(u32::from(*index))?,
+        (9, Some(TypedRecord::Geometry(g))) => match g {
+            G::OffsetClipRgn { y, x } => {
+                out.i32(*y)?;
+                out.i32(*x)?;
+            }
+            G::ExcludeClipRect {
+                bottom,
+                right,
+                top,
+                left,
+            }
+            | G::IntersectClipRect {
+                bottom,
+                right,
+                top,
+                left,
+            } => {
+                for value in [bottom, right, top, left] {
+                    out.i32(*value)?;
+                }
+            }
+            _ => unreachable!(),
+        },
+        (10, Some(TypedRecord::Brush(b))) => match b {
+            B::CreatePatternBrush(b) => {
+                for value in [b.bitmap_type, b.width, b.height, b.width_bytes] {
+                    out.i32(value)?;
+                }
+                out.u32(u32::from(b.planes))?;
+                out.u32(u32::from(b.bits_pixel))?;
+                out.raw(&b.bits)?;
+                out.raw(&b.reserved)?;
+                out.u32(b.pattern.len() as u32)?;
+                out.raw(&b.pattern)?;
+            }
+            B::DibCreatePatternBrush(b) => {
+                out.u32(u32::from(b.style))?;
+                out.u32(u32::from(b.color_usage))?;
+                out.u32(b.target.len() as u32)?;
+                out.raw(&b.target)?;
+            }
+        },
+        (11, Some(TypedRecord::Bitmap(bitmap))) => {
+            let image = match bitmap {
+                M::BitBlt(b) | M::DibBitBlt(b) => {
+                    out.u32(b.raster_operation)?;
+                    for value in [
+                        b.source_y,
+                        b.source_x,
+                        b.height,
+                        b.width,
+                        b.destination_y,
+                        b.destination_x,
+                    ] {
+                        out.i32(value)?;
+                    }
+                    out.u32(u32::from(b.reserved))?;
+                    b.bitmap.as_deref()
+                }
+                M::StretchBlt(b) | M::DibStretchBlt(b) => {
+                    out.u32(b.raster_operation)?;
+                    for value in [
+                        b.source_height,
+                        b.source_width,
+                        b.source_y,
+                        b.source_x,
+                        b.destination_height,
+                        b.destination_width,
+                        b.destination_y,
+                        b.destination_x,
+                    ] {
+                        out.i32(value)?;
+                    }
+                    out.u32(u32::from(b.reserved))?;
+                    b.bitmap.as_deref()
+                }
+                M::SetDibToDev(b) => {
+                    for value in [
+                        b.color_usage,
+                        b.scan_count,
+                        b.start_scan,
+                        b.source_y,
+                        b.source_x,
+                        b.height,
+                        b.width,
+                        b.destination_y,
+                        b.destination_x,
+                    ] {
+                        out.u32(u32::from(value))?;
+                    }
+                    Some(b.bitmap.as_slice())
+                }
+                M::StretchDib(b) => {
+                    out.u32(b.raster_operation)?;
+                    out.u32(u32::from(b.color_usage))?;
+                    for value in [
+                        b.source_height,
+                        b.source_width,
+                        b.source_y,
+                        b.source_x,
+                        b.destination_height,
+                        b.destination_width,
+                        b.destination_y,
+                        b.destination_x,
+                    ] {
+                        out.i32(value)?;
+                    }
+                    Some(b.bitmap.as_slice())
+                }
+            };
+            out.u32(u32::from(image.is_some()))?;
+            out.u32(image.map_or(0, |bytes| bytes.len() as u32))?;
+            if let Some(bytes) = image {
+                out.raw(bytes)?;
+            }
+        }
+        (12, Some(TypedRecord::Geometry(g))) => match g {
+            G::ScaleWindowExt {
+                y_denom,
+                y_num,
+                x_denom,
+                x_num,
+            }
+            | G::ScaleViewportExt {
+                y_denom,
+                y_num,
+                x_denom,
+                x_num,
+            } => {
+                for value in [y_denom, y_num, x_denom, x_num] {
+                    out.i32(*value)?;
+                }
+            }
+            G::FloodFill { color, y, x } | G::SetPixel { color, y, x } => {
+                out.u32(*color)?;
+                out.i32(*y)?;
+                out.i32(*x)?;
+            }
+            G::ExtFloodFill { mode, color, y, x } => {
+                out.u32(u32::from(*mode))?;
+                out.u32(*color)?;
+                out.i32(*y)?;
+                out.i32(*x)?;
+            }
+            G::PatBlt {
+                raster_operation,
+                height,
+                width,
+                y_left,
+                x_left,
+            } => {
+                out.u32(*raster_operation)?;
+                for value in [height, width, y_left, x_left] {
+                    out.i32(*value)?;
+                }
+            }
+            _ => unreachable!(),
+        },
+        (13, Some(TypedRecord::State(s))) => match s {
+            S::SaveDc | S::SetRelAbs => (),
+            S::RestoreDc(saved_dc) => out.i32(*saved_dc)?,
+            _ => unreachable!(),
+        },
+        (13, Some(TypedRecord::Escape(escape))) => {
+            out.u32(u32::from(escape.escape_function))?;
+            out.u64(escape.data.len() as u64)?;
+            out.raw(&escape.data)?;
+        }
         (5, Some(TypedRecord::Text(t))) => {
             let (x, y, text, padding, options, rectangle, dx, suffix) = match t {
                 T::TextOut {
@@ -463,6 +761,62 @@ pub unsafe extern "C" fn emf_wmf_document_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn remaining_payload_expansion_is_charged_at_exact_output_boundary() {
+        // ScaleWindowExt contributes 16 bytes, SaveDC 0, RestoreDC 4,
+        // SetRelAbs 0, Escape 15; six descriptors including EOF cost 240.
+        let mut source = vec![1, 0, 9, 0, 0, 3, 38, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0];
+        for (function, body) in [
+            (0x0410u16, vec![0; 8]),
+            (0x001e, vec![]),
+            (0x0127, vec![0xff, 0xff]),
+            (0x0105, vec![]),
+            (0xab26, vec![0xff, 0xff, 3, 0, 0, 0xff, 0x80, 0xa7]),
+            (0, vec![]),
+        ] {
+            source.extend_from_slice(&((6 + body.len()) as u32 / 2).to_le_bytes());
+            source.extend_from_slice(&function.to_le_bytes());
+            source.extend_from_slice(&body);
+        }
+        let size = source.len() as u32 / 2;
+        source[6..10].copy_from_slice(&size.to_le_bytes());
+        let doc = emf_core::wmf::parse(&source, &emf_core::ParseLimits::default()).unwrap();
+        let bytes = encode(&doc, 395, doc.source()).unwrap_or_else(|e| panic!("{:?}", e.message));
+        assert_eq!(bytes.len(), 395);
+        assert_eq!(
+            encode(&doc, 394, doc.source()).unwrap_err().status,
+            EMF_LIMIT_EXCEEDED
+        );
+    }
+    #[test]
+    fn checks_brush_data_output_budget_before_allocating() {
+        let source = [
+            1, 0, 9, 0, 0, 3, 18, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0x42, 1, 3, 0, 0xff,
+            0xff, 0x80, 0, 3, 0, 0, 0, 0, 0,
+        ];
+        let doc = emf_core::wmf::parse(&source, &emf_core::ParseLimits::default()).unwrap();
+        let bytes = encode(&doc, 214, doc.source()).unwrap_or_else(|e| panic!("{:?}", e.message));
+        assert_eq!(bytes.len(), 214);
+        assert_eq!(
+            encode(&doc, 213, doc.source()).unwrap_err().status,
+            EMF_LIMIT_EXCEEDED
+        );
+    }
+    #[test]
+    fn checks_bitmap_data_output_budget_before_allocating() {
+        let mut source = vec![
+            1, 0, 9, 0, 0, 3, 25, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0x33, 0x0d,
+        ];
+        source.extend_from_slice(&[0; 18]);
+        source.extend_from_slice(&[0x80, 0xff, 3, 0, 0, 0, 0, 0]);
+        let doc = emf_core::wmf::parse(&source, &emf_core::ParseLimits::default()).unwrap();
+        let bytes = encode(&doc, 246, doc.source()).unwrap_or_else(|e| panic!("{:?}", e.message));
+        assert_eq!(bytes.len(), 246);
+        assert_eq!(
+            encode(&doc, 245, doc.source()).unwrap_err().status,
+            EMF_LIMIT_EXCEEDED
+        );
+    }
     #[test]
     fn checks_exact_output_budget_before_allocating() {
         let source = [

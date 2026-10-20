@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
+require "emf/emf_plus/records/primitives/palette"
+
 module Emf
   module EmfPlus
     module Records
       # EmfPlusSetTSGraphics (2.3.8.2). Flags bit T says an EmfPlusPalette
       # follows the fixed part, bit V that it holds only basic VGA colours.
-      # The palette stays opaque bytes.
+      # `palette` is the raw palette bytes so any record re-encodes exactly;
+      # `decoded_palette` reads them as an EmfPlusPalette, or is nil when T is
+      # clear or the bytes are not exactly one palette.
       class SetTSGraphics < Base
         TYPE = 0x4039
         PALETTE_FLAG = 0x0001
@@ -45,6 +49,38 @@ module Emf
         def pixel_offset = body.pixel_offset.to_i
         def world_to_device = body.world_to_device.to_a
         def palette = body.palette.to_s
+        alias palette_bytes palette
+
+        def decoded_palette
+          return unless palette?
+
+          decoded = Primitives::Palette.read(palette)
+          decoded if decoded.num_bytes == palette.bytesize
+        rescue IOError
+          nil
+        end
+
+        # Besides the base edits, `with(decoded_palette: {...})` takes a Hash of
+        # EmfPlusPalette fields: it sets T and replaces the palette bytes.
+        # PaletteCount defaults to the number of entries given.
+        private
+
+        def edited_flags(edits)
+          super(edits.key?(:decoded_palette) ? edits.merge(palette: true) : edits)
+        end
+
+        def edited_body(new_flags, edits)
+          return super unless edits.key?(:decoded_palette)
+
+          super(new_flags, edits.except(:decoded_palette)).tap do |fresh|
+            fresh.palette = palette_bytes_for(edits[:decoded_palette])
+          end
+        end
+
+        def palette_bytes_for(fields)
+          count = fields.fetch(:palette_count) { Array(fields[:palette_entries]).size }
+          Primitives::Palette.new(fields.merge(palette_count: count)).to_binary_s
+        end
       end
     end
   end

@@ -207,7 +207,11 @@ fn chain_error(offset: usize, reason: &'static str) -> Error {
     }
 }
 
-fn check_stream(stream: &Stream, budget: &mut Budget<'_>) -> Result<(), Error> {
+fn check_stream(
+    stream: &Stream,
+    budget: &mut Budget<'_>,
+    count_records: bool,
+) -> Result<(), Error> {
     let mut input = 0usize;
     for r in &stream.records {
         let size = 12usize
@@ -219,7 +223,11 @@ fn check_stream(stream: &Stream, budget: &mut Budget<'_>) -> Result<(), Error> {
             .ok_or(ParseFailure::ArithmeticOverflow { offset: input })?;
         budget.check_input(input)?;
         budget.check_record_bytes(size)?;
-        budget.charge_record(size)?;
+        if count_records {
+            budget.charge_record(size)?;
+        } else {
+            budget.charge_work(1 + (size as u64).div_ceil(16))?;
+        }
     }
     Ok(())
 }
@@ -229,9 +237,23 @@ impl Stream {
     /// solely on TotalObjectSize before all fragment lengths have been checked.
     pub fn object_definitions(&self, limits: &ParseLimits) -> Result<Vec<ObjectDefinition>, Error> {
         let mut budget = Budget::new(limits);
+        check_stream(self, &mut budget, true)?;
+        self.assemble_budget(&mut budget)
+    }
+
+    /// Assemble using the extraction budget; records are already framed, so only
+    /// the additional scan work is charged (not the record count a second time).
+    pub fn object_definitions_with_budget(
+        &self,
+        budget: &mut Budget<'_>,
+    ) -> Result<Vec<ObjectDefinition>, Error> {
+        check_stream(self, budget, false)?;
+        self.assemble_budget(budget)
+    }
+
+    fn assemble_budget(&self, budget: &mut Budget<'_>) -> Result<Vec<ObjectDefinition>, Error> {
         let mut output = Vec::new();
-        check_stream(self, &mut budget)?;
-        visit_chains(self, &mut budget, |first, last, len, budget| {
+        visit_chains(self, budget, |first, last, len, budget| {
             budget.charge_alloc(len)?;
             budget.charge_work((len as u64).div_ceil(16))?;
             let mut bytes = try_vec_with_capacity(len)?;
@@ -267,7 +289,7 @@ impl Stream {
     ) -> Result<(), Error> {
         let mut budget = Budget::new(limits);
         budget.check_input(bytes.len())?;
-        check_stream(self, &mut budget)?;
+        check_stream(self, &mut budget, true)?;
         let mut range = None;
         visit_chains(self, &mut budget, |first, last, len, _| {
             if first == first_record {

@@ -5,7 +5,8 @@ module Emf
     class Unavailable < Error; end
 
     def self.backend
-      path = ENV.fetch("EMF_NATIVE_LIBRARY", nil)
+      require_relative "native/library_path"
+      path = LibraryPath.new.call
       raise Unavailable, "native backend is not installed (set EMF_NATIVE_LIBRARY)" if path.nil? || path.empty?
 
       require_relative "native/loader"

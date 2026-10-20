@@ -1,0 +1,115 @@
+name: Parser benchmark
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/parser-benchmark.yml
+      - bench/parser.rb
+      - bench/support/parser_benchmark.rb
+      - lib/**
+      - spec/support/fixture_manifest.rb
+      - spec/support/process_supervisor.rb
+      - spec/fixtures/manifest.json
+      - spec/fixtures/simple/image1.emf
+      - Gemfile
+      - Gemfile.lock
+      - emf.gemspec
+      - emf-rs/**
+  pull_request:
+    paths:
+      - .github/workflows/parser-benchmark.yml
+      - bench/parser.rb
+      - bench/support/parser_benchmark.rb
+      - lib/**
+      - spec/support/fixture_manifest.rb
+      - spec/support/process_supervisor.rb
+      - spec/fixtures/manifest.json
+      - spec/fixtures/simple/image1.emf
+      - Gemfile
+      - Gemfile.lock
+      - emf.gemspec
+      - emf-rs/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parser-benchmark:
+    name: Ruby and native parser smoke benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby 3.4
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Install stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Build release native library
+        timeout-minutes: 15
+        run: timeout 900s cargo build --release --locked -p emf-ffi --manifest-path emf-rs/Cargo.toml
+
+      - name: Run forced Ruby and native parser benchmarks
+        timeout-minutes: 22
+        run: |
+          mkdir -p tmp/bench
+          bundle exec ruby -Ilib <<'RUBY'
+            require "json"
+            require_relative "spec/support/fixture_manifest"
+            root = Dir.pwd
+            path = "spec/fixtures/simple/image1.emf"
+            entry = FixtureManifest.fixtures(root).find { |fixture| fixture.fetch("path") == path }
+            abort "fixture missing from manifest" unless entry
+            runner = FixtureManifest::Runner.new(timeout: 15, rss_limit_bytes: 2048 * 1024 * 1024)
+            observation = runner.call(File.join(root, path))
+            abort "fixture observation failed: #{observation.inspect}" if observation["safety_failure"]
+            manifest = {
+              "schema_version" => FixtureManifest::SCHEMA_VERSION,
+              "capture" => FixtureManifest::CAPTURE_METADATA,
+              "backend" => {
+                "name" => "ruby",
+                "ruby_version" => RUBY_VERSION,
+                "bindata_version" => Gem.loaded_specs.fetch("bindata").version.to_s,
+                "parser_source_sha256" => FixtureManifest.source_sha256(root)
+              },
+              "counts" => FixtureManifest.counts([entry]),
+              "fixtures" => [entry.merge(observation)]
+            }
+            File.write("tmp/bench/manifest-v2.json", JSON.pretty_generate(manifest))
+          RUBY
+          set +e
+          timeout 600s bundle exec ruby bench/parser.rb \
+            --manifest tmp/bench/manifest-v2.json --backend ruby \
+            --fixture spec/fixtures/simple/image1.emf --iterations 3 \
+            --warmups 1 --cold-runs 1 --timeout 60 --rss-limit-mb 2048 \
+            --output tmp/bench/parser-ruby.json
+          ruby_status=$?
+          EMF_NATIVE_LIBRARY="$GITHUB_WORKSPACE/emf-rs/target/release/libemf_ffi.so" \
+            timeout 600s bundle exec ruby bench/parser.rb \
+            --manifest tmp/bench/manifest-v2.json --backend native \
+            --fixture spec/fixtures/simple/image1.emf --iterations 3 \
+            --warmups 1 --cold-runs 1 --timeout 60 --rss-limit-mb 2048 \
+            --output tmp/bench/parser-native.json
+          native_status=$?
+          if [ "$ruby_status" -ne 0 ] || [ "$native_status" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload parser benchmark reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parser-benchmark-reports
+          path: |
+            tmp/bench/manifest-v2.json
+            tmp/bench/parser-*.json
+          if-no-files-found: warn

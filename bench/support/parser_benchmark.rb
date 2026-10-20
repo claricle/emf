@@ -26,8 +26,8 @@ module ParserBenchmark
     "parse" => "Emf.parse(bytes): detection, header wire read, per-record wire reads, WireAdapter creation, Metafile construction",
     "wire_first_traversal" => "snapshot of every record wire on a freshly parsed metafile",
     "wire_repeated_traversal" => "the same snapshot traversal repeated on the same metafile",
-    "dump" => "Emf::Visitors::Dump over the parsed metafile, rendered to a string",
-    "serialize" => "Emf.serialize(metafile) of the parsed metafile",
+    "dump" => "Emf::Visitors::Dump over a freshly parsed, untraversed metafile, rendered to a string",
+    "serialize" => "Emf.serialize(metafile) of a freshly parsed, untraversed metafile",
     "mutation_to_serialize" => "SetMapMode wire.map_mode assignment and Emf.serialize on a fresh model; " \
                                "parsing, candidate selection and output/reparse verification are outside timing",
     "parse_to_serialize" => "Emf.serialize(Emf.parse(bytes)) as one region",
@@ -182,8 +182,10 @@ module ParserBenchmark
       measure(results, "detect_format") { Emf.detect_format(@bytes) }
       metafile = measure(results, "parse") { Emf.parse(@bytes) }
       2.times { |pass| measure(results, pass.zero? ? "wire_first_traversal" : "wire_repeated_traversal") { traverse(metafile) } }
-      measure(results, "dump") { Emf::Visitors::Dump.new.visit_all(metafile).to_s }
-      measure(results, "serialize") { Emf.serialize(metafile) }
+      dump_model = Emf.parse(@bytes)
+      measure(results, "dump") { Emf::Visitors::Dump.new.visit_all(dump_model).to_s }
+      serialize_model = Emf.parse(@bytes)
+      measure(results, "serialize") { Emf.serialize(serialize_model) }
       measure(results, "parse_to_serialize") { Emf.serialize(Emf.parse(@bytes)) }
       measure(results, "parse_file") { Emf.parse_file(@path) }
       measure_mutation(results) if @mutation.supported?
@@ -442,7 +444,7 @@ module ParserBenchmark
       return STAGES if @backend == "ruby"
 
       STAGES.merge("parse" => "Emf.parse(bytes): backend selection/loading, native parse, " \
-                              "ABI snapshot transfer and Ruby model/wire hydration",
+                              "ABI snapshot transfer and Ruby model hydration with deferred wires",
                    "serialize" => "Emf.serialize(metafile): native adapter selection/loading and Ruby Emr::Serializer",
                    "parse_to_serialize" => "Emf.serialize(Emf.parse(bytes)) through the forced native adapter as one region")
     end
@@ -450,11 +452,11 @@ module ParserBenchmark
     def inseparable_boundaries
       return INSEPARABLE_BOUNDARIES if @backend == "ruby"
 
-      ["Native parse, ABI snapshot transfer and Ruby model/wire hydration share the public Emf.parse region; " \
+      ["Native parse, ABI snapshot transfer and Ruby model hydration with deferred wires share the public Emf.parse region; " \
        "raw Rust parse, ABI transfer and hydration are not measured separately.",
        "Backend selection currently loads the native adapter on each parse and serialize call; that cost is included. " \
        "Native serialization currently delegates to the Ruby Emr::Serializer.",
-       "Traversal snapshots already-hydrated BinData wires; it does not measure native byte decoding. " \
+       "First traversal includes deferred BinData wire materialization and snapshots; repeated traversal reuses those wires. " \
        "Ruby allocated_objects excludes Rust allocations."]
     end
   end

@@ -28,4 +28,8 @@ if ! command -v bash >/dev/null 2>&1; then
   echo "result=BLOCKED" >>"$out/summary.txt"
   exit 1
 fi
-exec bash "$here/run_row.sh" "$@"
+bash "$here/run_row.sh" "$@"
+probe=$?
+bash "$here/real_row.sh" "$@"
+real=$?
+[ "$probe" -eq 0 ] && [ "$real" -eq 0 ]

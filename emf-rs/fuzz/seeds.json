@@ -1,0 +1,3041 @@
+{
+  "schema_version": 1,
+  "seeds": [
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-02-215338.emf",
+      "sha256": "88a0066eaa5b30b96137f69312963891154efc13ab0922b7073532aadc7b673a",
+      "size_bytes": 1444,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-02-215339.emf",
+      "sha256": "4817e49ba45ad8009926e3c8831fca360731b7cee8524db892db34e1190fc884",
+      "size_bytes": 144416,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-02-215358.emf",
+      "sha256": "b84b4c73527374fa3520da01b394edf4be1dfc87d10e2d1f8a41d9353e3919b4",
+      "size_bytes": 53120,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-02-215400.emf",
+      "sha256": "1595c39c22bb9ab0855d99d74da04644d057a20dd7dcd391c1c616ef8bfa846a",
+      "size_bytes": 912,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-02-215425.emf",
+      "sha256": "cd22c1eff37105c233c145de4806cb0a960b66986b3e9975e56e68f58bea0433",
+      "size_bytes": 1880,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-02-215428.emf",
+      "sha256": "fb2171310a7537165be53ee73a32050c925343bdca7e338ba1fa3337c994cf98",
+      "size_bytes": 1460,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-07-140817.emf",
+      "sha256": "a13446c89e802378dc3fe4dc78ab500090aa70b861544ecb7d1e50be72dbfaff",
+      "size_bytes": 11112,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-07-160856.emf",
+      "sha256": "63897c62eb3d534d1e2b0848aae6cef65812199076f3e2a6c40173f34bee31ca",
+      "size_bytes": 144416,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-07-163010.emf",
+      "sha256": "c3ad5a70c9e4a4c8ac1641c711be752a7237d031fa056171c640c997b57d358c",
+      "size_bytes": 201616,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-07-235709.emf",
+      "sha256": "c96400d49fa0255a077d839b5c90f845a80e3e7a234ffdc25706d13ebd253d78",
+      "size_bytes": 106632,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-09-002112.emf",
+      "sha256": "8271bd3008d65eb540602a2cb2df018882c40efc58abfcc80692e6a8f8b3610b",
+      "size_bytes": 1512544,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-13-105759.emf",
+      "sha256": "d49e10c7247e364f2f2d87d105c3c34dcc972f15b15ba64ca172538ee96c5e8d",
+      "size_bytes": 144416,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-13-132605.emf",
+      "sha256": "c4c979dd4701688e0f4fda68d0b9b4acd1b553c47b2e0dd0177256329107bca8",
+      "size_bytes": 95060,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-13-133727.emf",
+      "sha256": "c78af3ebed5e88bb83e48e89351a2d47c02da6012bde273c3342e13fda1f63be",
+      "size_bytes": 154032,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-14-080539.emf",
+      "sha256": "9120352cdaba9cb96cba369d7c57d5f0bba1c36613fff6446105d609ccf9e2d5",
+      "size_bytes": 2552,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2016-02-02-210039.emf",
+      "sha256": "16c021181a16e43210c49a4e9ff727fcfbb6f1ab1c272947ea49c61740ae8698",
+      "size_bytes": 75244,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2016-02-02-220639.emf",
+      "sha256": "6f7af06abc1198554f1b1f0417ef856e427702dd1631496374f4ca7fed074921",
+      "size_bytes": 143870,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2016-02-02-225639.emf",
+      "sha256": "9b9070408fe776db984f19bea1a3f86997a53c1176a2eb1cf8626067d54d15ff",
+      "size_bytes": 143847,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2017-02-11-230400.emf",
+      "sha256": "0337d4a5c054e6a98e29218dcecfd3e330610556620b05a31d1d451e55041ee4",
+      "size_bytes": 193464,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2017-02-12-010400.emf",
+      "sha256": "0f025b558bab835a0484d1ee88ef22b8f84223fdff0e68fd27e8de3c4438c175",
+      "size_bytes": 82452,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-corrupted/bad_corrupted_2017-05-12-074000.emf",
+      "sha256": "53533b29375da44ee3861b76eada7a68978778db13a31357b685b1736fffc780",
+      "size_bytes": 13944,
+      "kind": "original-corrupt",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-001.emf",
+      "sha256": "2e777df95a2d730ce597c8240b3f2f522edd66f1c08eba767b4a66529148de25",
+      "size_bytes": 18884,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-002.emf",
+      "sha256": "2dbbbcbd83bc556c31210cace11a3fc08c159ddcc963ed08e59e905058d8e1a0",
+      "size_bytes": 89048,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-003.emf",
+      "sha256": "03409bd53aa49b4d6c5f30894ab73a9ff384b9e5c54768909563aece2bb888c7",
+      "size_bytes": 14752,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-004.emf",
+      "sha256": "9a85ac16eb4e7b3f3aaa0052dc279c541de153cb0a7002f9a6b5363280459a45",
+      "size_bytes": 124772,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-005.emf",
+      "sha256": "5c4b8e924a75739ddd8b6dc414284aec12263a9e342b5329cbfccd837170e703",
+      "size_bytes": 53144,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-006.emf",
+      "sha256": "0e94cfc2c956e8f2017a160d5c2d7f91d5656bca8c2c982495338cbcda1ef7e3",
+      "size_bytes": 36696,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-007.emf",
+      "sha256": "00a6ad4863b5ee018e44d6c2db341c76771ca15ef0e6194a258a3aa60ee178a4",
+      "size_bytes": 78616,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-008.emf",
+      "sha256": "eea72c60acc110343a8c454d4ab294e705c7714ff9b95d690fdab0673894f402",
+      "size_bytes": 38608,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-009.emf",
+      "sha256": "ce45949426e4343b73e6370f2d658e848efc50a6400c4088271a82e31f57435b",
+      "size_bytes": 95928,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-010.emf",
+      "sha256": "4b68b26491fcbd23fcc0aadc0fb5c1e3bb6f7b9975aa26545269d1e9fb5f5284",
+      "size_bytes": 17988,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-011.emf",
+      "sha256": "a9d676c9668de0577728a30226d6d93728a3e3115217425087522adbf84922d3",
+      "size_bytes": 136576,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-012.emf",
+      "sha256": "0a265d4537adeb552be63aec0db6f1ff49ec4504456f1c41ac07afaa36689690",
+      "size_bytes": 15960,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-013.emf",
+      "sha256": "0fc308c4e525579441c6f6fde24f043269e1ffdd833c1261318b7048a525fe93",
+      "size_bytes": 15220,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-014.emf",
+      "sha256": "0e1e5d1ee8c838009a13f47010186296962399b1959ac21b3d73093f91f2d0e8",
+      "size_bytes": 16312,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-015.emf",
+      "sha256": "1bfc92093acf60c11339bdb69e7c975d7b8ba9ea182ecb0e6a2909655ee269c2",
+      "size_bytes": 48612,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-020.emf",
+      "sha256": "64f44502f49ad9bc40cc9bb3061b0e7697cbd8f382ec1dbc92a2dcc5db53bdc0",
+      "size_bytes": 92904,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-030.emf",
+      "sha256": "f295ae06a796a2f35132d7416e08d59673fada5bcfee34e92abecb772c23c03e",
+      "size_bytes": 155308,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-031.emf",
+      "sha256": "82ec63131ef40b6b066c9c20118502b46dec2f0f3c88d5ed647b4b9a3baf3831",
+      "size_bytes": 33056,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-032.emf",
+      "sha256": "6c64655fac3b4489f66a2d44153647857ef30470a98605b47fc153ad35cde641",
+      "size_bytes": 26420,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-101.emf",
+      "sha256": "e7f19b1ca2d88ebf5e9d1195d43023cd60fce45882d706cabb9e60c8c0d6aec1",
+      "size_bytes": 54684,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf-ea/EA-test-file-102.emf",
+      "sha256": "505ad9e2dd85262708998e823cf310d602743eb88d91c9b380227dfbe6c13eb8",
+      "size_bytes": 82944,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-000.emf",
+      "sha256": "8308afe932ec53c563f4cb109d69375b9f083e72db85f8e62d6d19618adf2581",
+      "size_bytes": 95060,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-001.emf",
+      "sha256": "96c3b6bacf8850d3b677cae727efb429f67379e1e6a3810edf4db31bd4b233f4",
+      "size_bytes": 46916,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-002.emf",
+      "sha256": "ae419e078584c14a701b0b9f64877973b99af05b73ac3307b41a9ec1e855cabe",
+      "size_bytes": 52416,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-003.emf",
+      "sha256": "eaaa7cb96fe3be84e549a5de76e07e0c851ca5d5d57e9b044a49cd643d059884",
+      "size_bytes": 52668,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-004.emf",
+      "sha256": "b393af0438c8d29c622ea228b087978f9fe0bb9237fc636c840acc5d474d5477",
+      "size_bytes": 92840,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-005.emf",
+      "sha256": "19b1f70cbb4a225850741e4bbcc87c401af680a26cf9cf259bab4a3a1d37e694",
+      "size_bytes": 75244,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-006.emf",
+      "sha256": "c77ce2de0bd710708174e51e18b3e98e3062eddd53c5badae9fd699cc61511a2",
+      "size_bytes": 96064,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-007.emf",
+      "sha256": "42eaa88b106c4377e6314b3fa2e798a32de6b1fb5f8c8551621a57f2b0b23988",
+      "size_bytes": 3088,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-008.emf",
+      "sha256": "9d8eeabd16346932e686a1f1a7dcc4b537916e8726763232d4acade5a62d5133",
+      "size_bytes": 2552,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-009.emf",
+      "sha256": "1cf2a6a7b62cac3cffefebcfd4e8ef15d92443171cce69aabf47fa78834feede",
+      "size_bytes": 1772,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-010.emf",
+      "sha256": "65c7fcf6d49343fe2776d5c81a2eea6e3d2b7112594ff35dcc6c7a3090d5d8b1",
+      "size_bytes": 2404,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-011.emf",
+      "sha256": "7ca27d92ce3d7a8e17a84cfbbfb88a42e5f708afe5c6e08862de1b24ab4f1d40",
+      "size_bytes": 93792,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-012.emf",
+      "sha256": "21b0e715cf3ba087880ecc6c5019dfd6e34bf5590dfb22b80311f6b9599db90b",
+      "size_bytes": 1488,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-013.emf",
+      "sha256": "1b40dec976f5ed7a7b499469da7be956b4643cc0fb98d15e0b397428a94140b6",
+      "size_bytes": 20896,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-014.emf",
+      "sha256": "4d5d1132d7fb4b653df23ccd12bc3897a30023fac822c0fb48e76450248d2349",
+      "size_bytes": 13944,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-015.emf",
+      "sha256": "eef056e81748ae9d3a04e28a10225b9591420d8d1a55025d4348c510f4a24193",
+      "size_bytes": 19140,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-016.emf",
+      "sha256": "df5550eef6698bf342a9aadd914e361be384a600ed7fe233e321883533908e01",
+      "size_bytes": 19484,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-017.emf",
+      "sha256": "cd96c82a55f035ef85c261c3c1edbcc46d5d79ba5a034e6c6fcd258474b21549",
+      "size_bytes": 15764,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-018.emf",
+      "sha256": "423d5e9c84c8514d593e764bdb5306fc7065648c45d93941ff04c2302183bdeb",
+      "size_bytes": 52608,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-019.emf",
+      "sha256": "1db4bbe6734b9038e7860fd08214acce88e780df1b0bbd0ccd79ee4003d2e70f",
+      "size_bytes": 100308,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-020.emf",
+      "sha256": "b75893a93c34b2b0e2ae36c83c85aa3d97b3e708c7a93cf1e31dd7b0aa8ca897",
+      "size_bytes": 113320,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-021.emf",
+      "sha256": "fcd7a628c6b40b38e9e2bcc88d332914de29c1b61c80d8388fca2c2a0f164455",
+      "size_bytes": 126584,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-022.emf",
+      "sha256": "3a0e221f0776d2bd618d8994e58d888eea261120ecc7a7b64d955f1fe296ff69",
+      "size_bytes": 12656,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-023.emf",
+      "sha256": "0808af0dc0b25ba2568155f62d13c1f95eed1d72f8df642d6eb5ed938a9374fb",
+      "size_bytes": 656,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-024.emf",
+      "sha256": "2e010ceb87694a86a2eca69a620009bc7c9468581fe6c30556ddef02b63b0ffd",
+      "size_bytes": 139268,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-025.emf",
+      "sha256": "c1fa93d1bbf34deb643c553098a750fab062d61fe309028618d2b4181cecc71d",
+      "size_bytes": 1880,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-026.emf",
+      "sha256": "c0d4bb950325cad49f5fe260ca3cab5109c8e55b2377a1642f8497e23f0584e8",
+      "size_bytes": 1444,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-027.emf",
+      "sha256": "8fe307c01224a5c0b81cb5f798cfd9e0884c58e38d045ac8dda320cc03bfdec9",
+      "size_bytes": 912,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-028.emf",
+      "sha256": "823f120d9d19505380906657c53d5a929a5b6a20cd852a2ddacd111286592322",
+      "size_bytes": 1148,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-029.emf",
+      "sha256": "f5bb2d263cf11683dde6c2d0a40b055e70a4ee092bd32249c3e04200548cfc88",
+      "size_bytes": 1112,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-030.emf",
+      "sha256": "4b6db6002bda38b62d44316772f7f588a618c8a1a8f5c0fe8ffc8f279404a36a",
+      "size_bytes": 268,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-031.emf",
+      "sha256": "6aae9ce8e470261936ffe8ce3923308c1f7172148a15cbc239a891edfd5f8597",
+      "size_bytes": 1512544,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-032.emf",
+      "sha256": "3f69ca8e880a20453935035d2f552bb34277acf9e6220e481ceb45fefdfd4fae",
+      "size_bytes": 327704,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-033.emf",
+      "sha256": "6393b69b2e6788fd0e7a68e955f5a59305b3ca17dd20f7bc5a7e958dfe05f640",
+      "size_bytes": 85524,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-034.emf",
+      "sha256": "d870ee45424e42ced82a8503ad890f58e20c6137c6f6bd7a6fdb710bfddce169",
+      "size_bytes": 1460,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-035.emf",
+      "sha256": "3a6cb21d4b76a58237f045b43320f11b7d541f88a1191752e0e17741fc841e6d",
+      "size_bytes": 141024,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-036.emf",
+      "sha256": "bfe590174d0e0ef6203123adc653d52ea20da3f60bb324c567a4902ca5409fbb",
+      "size_bytes": 135484,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-037.emf",
+      "sha256": "d2855fc380fc3f791da58a78937af60c77ea437b749702a90652615019a5abdf",
+      "size_bytes": 95180,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-038.emf",
+      "sha256": "86bb20c1cb55b712f6d7d5ff2e83a4d146541cb272b383b0f5846d551fe56ebe",
+      "size_bytes": 201616,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-039.emf",
+      "sha256": "4f3c1f548dcc9fbe5abc5bfcfa07847a07e3bd12def018cc395a3e84131b8922",
+      "size_bytes": 144416,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-040.emf",
+      "sha256": "f0ac37dc73fc28f9fb8b309351b3d2c9557e3b18953269adee9f9e5461aea4d0",
+      "size_bytes": 144416,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-041.emf",
+      "sha256": "76228b198d0aa275f5a283044982363dff611b85ef0943d7941432e7541e943f",
+      "size_bytes": 3212,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-042.emf",
+      "sha256": "c82c823625bf5642cb5956b19bd232af367a1545c9aef28b63f2c1be95af6230",
+      "size_bytes": 3212,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-043.emf",
+      "sha256": "80915d9002cfc453aadcd457dd664eb7d32ebaa3899e959e74a49d80570e9d7c",
+      "size_bytes": 3212,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-044.emf",
+      "sha256": "badb7af8bcca822d7e7728fefabae20434dd16c12cb309207cbcd017ac661058",
+      "size_bytes": 51140,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-045.emf",
+      "sha256": "99d531bae3eadcda61af0272577a73393cf8acd4c95197792c31d0badbc5ba57",
+      "size_bytes": 3212,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-046.emf",
+      "sha256": "9e6b028878523b7b4d4cba94ea2b66e7e02ebab74271f94d6e2060dc82e43db0",
+      "size_bytes": 3212,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-047.emf",
+      "sha256": "492d39f90da4aeb213fb8fda15b29cd6e2f7c8b007b8d679466ea8f6f868971e",
+      "size_bytes": 3212,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-048.emf",
+      "sha256": "ec509b3608c34f4f04aa81e8c319923086d6f4e0b32301c1e3a7133d7d662071",
+      "size_bytes": 3212,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-049.emf",
+      "sha256": "edd8d6045cbc8d369426a47aa72ccd7f30afc6083b92fb0f2c4679f47ee61496",
+      "size_bytes": 3212,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-050.emf",
+      "sha256": "382626837a9f11d6307f9bafc8cf689022f52eaa09df152a510cb1334ada3b64",
+      "size_bytes": 71064,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-051.emf",
+      "sha256": "8d5ec560965a2943b04c90a1ff9584181c5c2288a1d1cf01bb5d019d11f6cd79",
+      "size_bytes": 20464,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-052.emf",
+      "sha256": "e409be9817b5424159f006c99b6404dcdff625c8a1e104ac604f8b45c3f485a0",
+      "size_bytes": 129788,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-053.emf",
+      "sha256": "cb9ab5a24860e29781d55c46d15ca59d944eb509e24a0ab3a378999a1d3b2084",
+      "size_bytes": 323508,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-054.emf",
+      "sha256": "882f4429ddf2a8770409391d5319479412aea16790ffe0a6bbf5b787be13d6f4",
+      "size_bytes": 48344,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-055.emf",
+      "sha256": "72e37b833043a09622e3c92368cb27aa6a3a3f147fd6e760e2ea7528df78eb58",
+      "size_bytes": 51260,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-056.emf",
+      "sha256": "c02f93b8dfaebc5cae3b6a4b1e5acd9584ecace5fabf6de2f913525c2dfd1823",
+      "size_bytes": 278644,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-057.emf",
+      "sha256": "c7f7d6e60ea3c14f7cb0a45632cee61c117d4a65ad023c50d9c870ec73fc2ab0",
+      "size_bytes": 24376,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-058.emf",
+      "sha256": "cc431d3c80f94eb866f9f1ff7cea132f68c02cc415e78a4d992c587cab0ba4fc",
+      "size_bytes": 56440,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-059.emf",
+      "sha256": "52600fd499a4e07d95efdc5f351a75f71786032cd5f4d4ab35c7728c95e28662",
+      "size_bytes": 54128,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-060.emf",
+      "sha256": "c92ad1324e017fc9921ec9398277ad4e08ff6b1366989ce0f3ebf59982e1ef46",
+      "size_bytes": 167956,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-061.emf",
+      "sha256": "3c9cb14c5c5622b3e18dd7f4f95135ef7a003fe468a99c1007ddc6a16b6adce9",
+      "size_bytes": 38068,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-062.emf",
+      "sha256": "dedd2309c291dec0eb6fd985b52bb28d240c21a1799d5ee8190e9044ad876159",
+      "size_bytes": 12656,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-063.emf",
+      "sha256": "f56afe9cb42360c8164bc9498902290c45ebc06bc35b27962743a8354c482f74",
+      "size_bytes": 56440,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-064.emf",
+      "sha256": "066d3f2fb3ddfa913e8ade349f28aaad3b5baa23ed0bd1f16683dd677aac6db4",
+      "size_bytes": 15408,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-065.emf",
+      "sha256": "782072e59dbe88893b0e143e28d7ab7e2d1f35effecf7266c07ef79c0a7cc16f",
+      "size_bytes": 480,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-066.emf",
+      "sha256": "1e2765c7364e3b9687af981fad0e9486e0f1d2ca72e77b81b06b7dfe63ac0fad",
+      "size_bytes": 56956,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-067.emf",
+      "sha256": "b2496f2a542e6178f595ef4efa038acf0ce46a381a3a5c098d61d4cf2ebf058f",
+      "size_bytes": 11112,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-068.emf",
+      "sha256": "dae83b65fe950d63ce17d99f4312952e328be87e821647d463f213fff474566f",
+      "size_bytes": 74592,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-069.emf",
+      "sha256": "717b3a6b2ce57f3f45d812eaacb2cc30491cf76e78e809db7205bf17fe182eab",
+      "size_bytes": 399552,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-070.emf",
+      "sha256": "15d29cdaa9a8ebd86c6a649dc1cb275b4e655ecb46b0747bc14805639b23869c",
+      "size_bytes": 12668,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-071.emf",
+      "sha256": "99bdb224e6db990f3dcd933a30f3619e166afd859864ab4b6659d604f5ede683",
+      "size_bytes": 175500,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-072.emf",
+      "sha256": "aa2530fc0f00f94f3960ee19d8ca7e5863bb5b18340a25de6d3aa5ba03b90233",
+      "size_bytes": 70608,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-073.emf",
+      "sha256": "1a17a51b1e3a80d7b8bd7260c472cb67bfb42786aebdc61df93a011174ed9645",
+      "size_bytes": 11152,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-074.emf",
+      "sha256": "16d31bd7cf975ca6bb7abc83b2670ce01381dd8bed69a8da4a73a52f31126c88",
+      "size_bytes": 80656,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-075.emf",
+      "sha256": "67ff95e409515b2a2ddf18a659261bfea2fee0fea96c2d32e7c919a3821e7121",
+      "size_bytes": 95096,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-076.emf",
+      "sha256": "ae8341bea6ca157ebe2c86b9706a41b6366097912ff296fbc82951cadf68feb5",
+      "size_bytes": 111776,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-077.emf",
+      "sha256": "984d4a62ab81785a13db4e5eab761f25ac90292d3fe0e581417157001f86e4a7",
+      "size_bytes": 134352,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-078.emf",
+      "sha256": "33b95efbc445fd00d1acf43a42fabc671fb44cd2d9f1f883acaf98fa544de0d8",
+      "size_bytes": 81896,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-079.emf",
+      "sha256": "3559c5205b0e09edce48ac0a661cd72481f242274433cfbfd3aee2cf1829cd4c",
+      "size_bytes": 166908,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-080.emf",
+      "sha256": "cdf198d6236cc2cff87cd6e725509297e4692ef0a2ff8bec30a1a4707197be5a",
+      "size_bytes": 255852,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-081.emf",
+      "sha256": "fdde404dba6f3f14820adba53e86fb49ec848eccfcd0fcf86e22cc9e172c036f",
+      "size_bytes": 56376,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-082.emf",
+      "sha256": "7f0dfd0a0f9b5624d444649a12f373beeba14f73ce4d2d6b38afd468460bf593",
+      "size_bytes": 102788,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-083.emf",
+      "sha256": "445d92b6134d90389da7648a834371cc508e065f1445e690e97faba4c620a311",
+      "size_bytes": 68772,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-084.emf",
+      "sha256": "f964d76a3d3f8381d4711d5fe7f599334c8835b7b4511e134459845983d482ad",
+      "size_bytes": 14484,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-085.emf",
+      "sha256": "0817dda1250bab7871df1f5d4cbe5d4858b5278687b5128ab7bdf6f954678b0d",
+      "size_bytes": 25400,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-086.emf",
+      "sha256": "c2ff04b7fe5755872142614163ac7d85d0ee6f134042978f043a62aa2f06b30c",
+      "size_bytes": 145072,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-087.emf",
+      "sha256": "6d37bb1b4b0c59add5267d7ca0167620ea6d3676c38b55f27b9fe76956acb7cf",
+      "size_bytes": 151020,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-088.emf",
+      "sha256": "aec0aea9d5b80613e5606d805a47c71e5af99b16b2a20f1d5faf8ce21ba4298e",
+      "size_bytes": 122236,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-089.emf",
+      "sha256": "ab8203cb4936d03e444c2a4b3cf1ebb1c4df7a584719861b29942181e3322f0e",
+      "size_bytes": 323732,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-090.emf",
+      "sha256": "a5a7ad9ed510e7358578f961be3f22da4b27b5b56c9e778f3a0c6175beec68ae",
+      "size_bytes": 320148,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-091.emf",
+      "sha256": "6682eb530093942d06f3619ce8891c80363242ad28a36fbf1cc7b1866de30754",
+      "size_bytes": 56440,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-092.emf",
+      "sha256": "d044489cc0451daec66d101b6cee8f59768f58f77a6ca0d0c70c7b391ee9acfa",
+      "size_bytes": 684,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-093.emf",
+      "sha256": "af9b45b1676da8da6a090af11a9a2263165aadd2a285fb7a8971aa9584c87715",
+      "size_bytes": 11112,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-094.emf",
+      "sha256": "9787b88274436ff437ba046eca65c5a534c1f7925634868cb1a44a657098f0e3",
+      "size_bytes": 51260,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-095.emf",
+      "sha256": "f1d0872b5e592f2345bf329559f78222aec18f5a8622bc5b310b2093491c8d08",
+      "size_bytes": 11152,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-096.emf",
+      "sha256": "cf5d117919ba76f31c1b18d2f70480d38dc0b484d08f1139ca8e2f724306a792",
+      "size_bytes": 32512,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-097.emf",
+      "sha256": "c86bc44b59afde942216f0e65330f4f4b62d719db4eb8183233a6ce8c72e6af8",
+      "size_bytes": 42992,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-098.emf",
+      "sha256": "95bfee1b8ecf6919599b623d80203c92fef8905cc5d28da69d195c32d1e7d887",
+      "size_bytes": 29856,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-099.emf",
+      "sha256": "3493ee6cd21c981a1f928f2e588ec292da036e09458c9bc4adddf099e4aa48e8",
+      "size_bytes": 41328,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-100.emf",
+      "sha256": "6ae22000e36e477e27ed676e8afc7a6a19872a496e2f1e7f69d6c03e812f0e5f",
+      "size_bytes": 24772,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-101.emf",
+      "sha256": "6a0a3e14f1e7a9fd2c3e1af2682cb0702d15c94a2402a7a1666ea696b1cf105c",
+      "size_bytes": 36280,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-102.emf",
+      "sha256": "005cd1c0b9d858a9bdc30ddaecb3b9dda165d3166242d78b9a8c727974aaa71b",
+      "size_bytes": 30384,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-103.emf",
+      "sha256": "5c48729e4d2b1c4a3cc4e381ef5637da4bdd6f328a006f3a21aea6d1641c9a3b",
+      "size_bytes": 11508,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-104.emf",
+      "sha256": "c6fed75b910c2c1a78838abc14d9b149866394238cde373194e237de28151e70",
+      "size_bytes": 2480,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-105.emf",
+      "sha256": "69f792fa07775b229715b036fdcbd1272bacce4dc6857005e5072ca253d72aac",
+      "size_bytes": 1124756,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-106.emf",
+      "sha256": "2e8fd8a60defe1ced1c81640cb5ecb07f942a56c4c8658485f71565a8adca861",
+      "size_bytes": 120424,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-107.emf",
+      "sha256": "ea29c184ae751e8bb2f95f65eeda3a9f37f64f79fc2a97114f502eca3ca20037",
+      "size_bytes": 306484,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-108.emf",
+      "sha256": "9bcce68e823f31ede97f62c6cbc4d099dff293415a94de3434070cea4deae1e7",
+      "size_bytes": 497228,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-109.emf",
+      "sha256": "4d11e40acb88ac2886858486473e13cf9943fb443a77d715b342527adf956b25",
+      "size_bytes": 215352,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-110.emf",
+      "sha256": "8b966af09c6c9953b5ed90d4fb1bef26d6416808b00413559131af711974d955",
+      "size_bytes": 32512,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-111.emf",
+      "sha256": "4abcb9e68a954056c991abbf321a084640011a0a934f7bc21f2ac7f36d4f9baf",
+      "size_bytes": 44644,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-112.emf",
+      "sha256": "535e854f371d29d0044266a0a8531baa1e34e523956fea3e144ce88f1d0957c7",
+      "size_bytes": 79420,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-113.emf",
+      "sha256": "7d44f451f0b6162056c8d4962f753fdc60d2291a6460266f759ad4b0d36b1087",
+      "size_bytes": 27072,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-114.emf",
+      "sha256": "4d0a5f79ddb0d3aebdffbc62828345d591cc3243e6adbe158d336b1e9db38715",
+      "size_bytes": 130460,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-115.emf",
+      "sha256": "aeb26a55f77e6cfa9353bed4c0cab033589a9e40dd693d2c551b24453e756718",
+      "size_bytes": 324108,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-116.emf",
+      "sha256": "f5355322f6dca6f69445bddfc63b9afcd4c35d45e44524dff2b799cce6021f01",
+      "size_bytes": 53860,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-117.emf",
+      "sha256": "3a50c2ec8f804fca4ed4f672a1651f1be15de73e7793295af8a795ecff416d04",
+      "size_bytes": 85620,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-118.emf",
+      "sha256": "430bf3335161ce404e6ad294c33ab6c568000544179d5e77de3b4fde39e52512",
+      "size_bytes": 198792,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-119.emf",
+      "sha256": "a38fd322f1293771b8381e14404fe1c5c08220070354dc898ec69bd56dba6afe",
+      "size_bytes": 58900,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-120.emf",
+      "sha256": "2baf6b86c2ef1fc34eefdfc34cf840ec180ee89a5009b3c4126cbb6235421edc",
+      "size_bytes": 82452,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-121.emf",
+      "sha256": "1ff17841b9d8d56d1ed3338ad08930edbaa00021933b4075c87a778ddcf712f2",
+      "size_bytes": 76996,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-122.emf",
+      "sha256": "006b550616c59a6e726a43595dd452a9d9eedee0f5550dd976ec08d1bce44057",
+      "size_bytes": 136124,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-123.emf",
+      "sha256": "83c0d7211f4d753d2b26b1cdc58fadd9f76ec8553435ad702f8ae7936c558172",
+      "size_bytes": 5096,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-124.emf",
+      "sha256": "6808bd01cce9facd0a32f828bfb41ea67be222aa6891497bdd67933d2d802e3b",
+      "size_bytes": 688,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-125.emf",
+      "sha256": "23503facb82b39c83059ee94b664ee2a31912dde88d7406b4569c54e494668b3",
+      "size_bytes": 16596,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-126.emf",
+      "sha256": "9ad79c37d00ee77164f09602c70cba16ff9c17a059795fd4708681c811d6d5b3",
+      "size_bytes": 14240,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-127.emf",
+      "sha256": "79c2c465c41b396ed456b75b168ef2c6f51146c51b3141800a5ebe00e6327334",
+      "size_bytes": 13648,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-128.emf",
+      "sha256": "bca5c20d984b7bbbaddc3c0ab04e3c430f67e56094fab970ca8d4b59dd04ff5b",
+      "size_bytes": 53120,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-129.emf",
+      "sha256": "d6915ebd4d1015794f49722948809ede3bbf2a82a774718de4d8eb6b3ae95f32",
+      "size_bytes": 52572,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-130.emf",
+      "sha256": "7e82f3827fc5f74654c00b8474ed7fa2e9a7bfa0cab14690b7b6174eb683affe",
+      "size_bytes": 328316,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-131.emf",
+      "sha256": "5b70f11fe861b1213ddbee64cebaf7199c2086f63898ef6aef9cd46eb47d7bff",
+      "size_bytes": 17316,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-132.emf",
+      "sha256": "337e81faa0f757972bf7557b1739d12c96ab78be3dd57f19c0f9b75a07d1219c",
+      "size_bytes": 3848,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-133.emf",
+      "sha256": "01be235b1a897d6d54e03c3e36cd3d767d7ae8fda18a81221d908225f5aaab9e",
+      "size_bytes": 3880,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-134.emf",
+      "sha256": "b974672f223ccd00fb65e33afa2f7e4bc36147cc7f32693b42752afea25060af",
+      "size_bytes": 3872,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-135.emf",
+      "sha256": "a498e2f59f9c9177cfc3eeeef51132d25cd07b9eb6ab0ad60f504190c34bee1c",
+      "size_bytes": 90392,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-136.emf",
+      "sha256": "a9274ce971addd8067348fde82d5e3691f5d937d8819da804c0727d3119cd5ec",
+      "size_bytes": 105776,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-137.emf",
+      "sha256": "c42ad03e982569dc17dd7b6b69c8cfe81dc8ad89881723ae7bea21e2885b00b1",
+      "size_bytes": 115712,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-138.emf",
+      "sha256": "901017a12b56c96ccfa33fd117bfcf704776248cf548d1845d0e0ebab672e46d",
+      "size_bytes": 209492,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-139.emf",
+      "sha256": "b8267e1a967cc86f042a8ae7cf754898ab0aa6ff60ab82a66d220b551bc9e857",
+      "size_bytes": 98644,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-140.emf",
+      "sha256": "285c53cacf73df21aaf893e1077b1c0379e72752f8b1e96498c39d1857211ac5",
+      "size_bytes": 106632,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-141.emf",
+      "sha256": "162ea17ebce57229ce7ff03c568fc1a775e1c1551d156917d62730f51bda4a76",
+      "size_bytes": 103740,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-142.emf",
+      "sha256": "698c5181a818125c232caa04be0cbfa6f1730cd3f017c99a52e48bdcc0fcaded",
+      "size_bytes": 154032,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-143.emf",
+      "sha256": "09e6db876fe1c22d25d703a85aabc4716b4475be4a83e19231f37f02e5d83202",
+      "size_bytes": 90120,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-144.emf",
+      "sha256": "b951d3a63473deef35c9914bacd829e4ee0d510d5f809a19760b050702f2a76f",
+      "size_bytes": 64880,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-145.emf",
+      "sha256": "713c5c0ecdec4c9fda18aeae7bac97b991840dc9e5e40140f48152fd0dbfa563",
+      "size_bytes": 61256,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-146.emf",
+      "sha256": "1d61a0170f2feff84b952ce4b158ec8a0695e83e4fb1b4a3200f789af3090b6e",
+      "size_bytes": 63984,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-147.emf",
+      "sha256": "31adfe95e3c68577653964a86c1ac1eb6f4155668ea246eff6c1498e376d0ae5",
+      "size_bytes": 43936,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-148.emf",
+      "sha256": "cc66a96c58081a98a0893d22e2fd3fd9c04bf5e699a4533d6b5d62914d42aab3",
+      "size_bytes": 44188,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-149.emf",
+      "sha256": "b23504618d42346075b0d1b8dfac493b618bddeccb1cdf3bc646f85fcbcc2f6b",
+      "size_bytes": 196276,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-150.emf",
+      "sha256": "d39599429b98eeece221c3430d4ae604083c2acc6906afa73d77ef2b8f399753",
+      "size_bytes": 445676,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-152.emf",
+      "sha256": "856fccc9e8ade11076fdf013e64dac1e4ee0550c12d6109633df245c04addc52",
+      "size_bytes": 584,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-153.emf",
+      "sha256": "a082fa2ba3518b18d49f9322d9e0d12e1b8565badb301c3d1901745975f5127d",
+      "size_bytes": 612,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-154.emf",
+      "sha256": "cfebc69e5ecd63ac87b76d54a42c5a1057e1b4e855c0cf6836348872dc7ee1f5",
+      "size_bytes": 1008,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-155.emf",
+      "sha256": "c5053ffab23f1e7577af193b5a1a4d9d3d26a332da2bf1390ae3534a104f0855",
+      "size_bytes": 5723552,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-156.emf",
+      "sha256": "f817c6ce3466fb39c496cba8e5cfd95789c417f4afac722aa4be299b2b313b0c",
+      "size_bytes": 47204,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-157.emf",
+      "sha256": "5f9e8f92e5b5ffa0da69740009513640ab952263de11bf4663bd5e17f176ee0f",
+      "size_bytes": 46884,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-158.emf",
+      "sha256": "30b1ccf881d9b496bafdcdcc6fe1e8cedc5c9c44c2de191569292db40ea23464",
+      "size_bytes": 47212,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-159.emf",
+      "sha256": "98be7f54eab4f86f9e3ab48a178fc6e200f0c5cf57dc85b8829060830b908521",
+      "size_bytes": 47204,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-160.emf",
+      "sha256": "bab47a345fd531adb3ecddb3e98e0744cd677295379f54864c19d13342f50aa1",
+      "size_bytes": 75024,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-161.emf",
+      "sha256": "02665f0c0ca5e510d6ae6a54c59b87d14200fadc30c736910b427d863a0811f9",
+      "size_bytes": 306248,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-162.emf",
+      "sha256": "85473a155a882e5b8a73f5f6b01d07fafa8f57cac2abb9c051be5f4ac2251c32",
+      "size_bytes": 119868,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-163.emf",
+      "sha256": "cedacf615644016260df61cac8f82f6e8e5b992bb85146e33d967778050be406",
+      "size_bytes": 155884,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-164.emf",
+      "sha256": "36b95400bf7b18d33ee56ede051c494cd9e6f68deab9a2c394bc342fe2728469",
+      "size_bytes": 3511304,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-165.emf",
+      "sha256": "1dbe30bddbe3125c13a1bfa8e3062c7267f61699b6d7db5bd8fe374901876950",
+      "size_bytes": 116916,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-166.emf",
+      "sha256": "e52b6f27747bc67cf30baec94c11d9d0bed53e600acb6ea673cd70e50294cfae",
+      "size_bytes": 1428,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-167.emf",
+      "sha256": "d93d9527450e57aec9025f8bd38e05c608e2451faedfcca83f152515d0e6e8a1",
+      "size_bytes": 2140,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-168.emf",
+      "sha256": "1445ec204b51751ae603f86d97e3ae1f09504e2cc24728db8e035dde6fb56929",
+      "size_bytes": 30996,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-169.emf",
+      "sha256": "7aeb1872110dab2a1e9c99820fa5848be1e78fa19bd23c94a877f33265a5b8a5",
+      "size_bytes": 114892,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-170.emf",
+      "sha256": "09a53a1dd6ecc2ff00bd0f8967e2c8f8409af02442163d8817af0ad150840ec0",
+      "size_bytes": 200436,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-171.emf",
+      "sha256": "df0ac2f75c0e141510df00cfc1205b33d9ddf6be87598b4e67c6413a8583211a",
+      "size_bytes": 16432,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-172.emf",
+      "sha256": "c9bb3eb16cb431513db409fc5c717e48f15121af5aa3294db22fa0b75ba8fd25",
+      "size_bytes": 554192,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-173.emf",
+      "sha256": "aa6470a981e75da538e2df966fa0e03e55fa36ee5de2393084425971ca8aabab",
+      "size_bytes": 24612,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-174.emf",
+      "sha256": "ade5d2c3b23effa352d6cc7a8ac1a45d4b54c496d21d8074214c293740651f34",
+      "size_bytes": 37820,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-175.emf",
+      "sha256": "fc32d027f2ddcf45634047023341715b5ee3ffe8e1fd200a84078386d5660898",
+      "size_bytes": 39976,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-176.emf",
+      "sha256": "c73e79b7cf3212f0700c7b6f1352799f3c5fb336aa31138b3a1b88478f5a183d",
+      "size_bytes": 507968,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-177.emf",
+      "sha256": "d6327391702e4e5a26c96b2efdc3ece86f949984bb7f46343f920650c7735669",
+      "size_bytes": 3332,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-178.emf",
+      "sha256": "f6d603344821023f3394931197f6c2067cf18d0d05d0ac3ae8e9b72eb4e219a8",
+      "size_bytes": 1860368,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-179.emf",
+      "sha256": "0e7a761ee215adbf4024992e87b93039eec7e174234c0c6d0925aed090074d49",
+      "size_bytes": 99208,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-180.emf",
+      "sha256": "1052457d57672b084e87debeac0e9dfc40cc52f2c38743bae53b56f4ed0f1491",
+      "size_bytes": 38516,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-181.emf",
+      "sha256": "4996cc33bfd49db01006b180a6fea83bf1f196022f53b3d32e197933e1212cb5",
+      "size_bytes": 3229928,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-182.emf",
+      "sha256": "ec21e3d00418466fa7cb351c7bc1fa025eb9a65b9970f008ec98166c7a65ea30",
+      "size_bytes": 44956,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-183.emf",
+      "sha256": "90476c03c382aedb20453f95ccc0468da89d8a1a74fe96a59060345395951624",
+      "size_bytes": 2868,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-184.emf",
+      "sha256": "61cf5265e7815261b33a62452c905bba8a9524b732c684fcf7afd645d2c5eaa0",
+      "size_bytes": 2368,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-185.emf",
+      "sha256": "8ad170d3ea79a177e45ae853ef9f60acf4cf7ee9646f87eafb33d706c08c9d50",
+      "size_bytes": 4684,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/emf/test-186.emf",
+      "sha256": "61cc308273d2cbccf41b4042bae24e08abc891b001f905463fb61f6c4ad2bbf7",
+      "size_bytes": 15760,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/simple/image1.emf",
+      "sha256": "64f44502f49ad9bc40cc9bb3061b0e7697cbd8f382ec1dbc92a2dcc5db53bdc0",
+      "size_bytes": 92904,
+      "kind": "original-valid",
+      "provenance": "Existing repository fixture; identity recorded in spec/fixtures/manifest.json (original corpus).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/emfplus-eof.bin",
+      "sha256": "12f8fd2fc6fd740880403eb0b3b9e69f4c40815d567b0fbae46c0cf1f86e70ff",
+      "size_bytes": 12,
+      "kind": "synthetic",
+      "provenance": "Project-authored public-safe synthetic framing boundary; BSD-2-Clause; malformed outcomes may reject or recover.",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/emfplus-extreme-count.bin",
+      "sha256": "a2d4b3208e29fc1f967fbc30d1d98dcb9282e0ee5102c9f3a8dcc87a1e720d1f",
+      "size_bytes": 20,
+      "kind": "synthetic",
+      "provenance": "Project-authored public-safe synthetic framing boundary; BSD-2-Clause; malformed outcomes may reject or recover.",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/extreme-record-size.bin",
+      "sha256": "87ac47be0ab10a8fa5718f77e0c1e8f6f82adaf6960e90d9535956dd424f334e",
+      "size_bytes": 96,
+      "kind": "synthetic",
+      "provenance": "Project-authored public-safe synthetic framing boundary; BSD-2-Clause; malformed outcomes may reject or recover.",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/overlapping-comment.bin",
+      "sha256": "218cc2e2579a5e2fab8a0c1dd90c7e6fc2e849f35bf0848001d7e3f8eef2b977",
+      "size_bytes": 104,
+      "kind": "synthetic",
+      "provenance": "Project-authored public-safe synthetic framing boundary; BSD-2-Clause; malformed outcomes may reject or recover.",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/truncated-header.bin",
+      "sha256": "67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450",
+      "size_bytes": 4,
+      "kind": "synthetic",
+      "provenance": "Project-authored public-safe synthetic framing boundary; BSD-2-Clause; malformed outcomes may reject or recover.",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/zero-record-size.bin",
+      "sha256": "1701bc7501e70e6513b6429423f8678c824646b3612017e62e20c751e63de348",
+      "size_bytes": 96,
+      "kind": "synthetic",
+      "provenance": "Project-authored public-safe synthetic framing boundary; BSD-2-Clause; malformed outcomes may reject or recover.",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/wmf/placeable-line.wmf",
+      "sha256": "72989db137560ed813c0ca0e0f7622bb91daf50a7ca914a8755b06c0e8ba27e3",
+      "size_bytes": 76,
+      "kind": "wmf",
+      "provenance": "Existing repository WMF fixture.",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "spec/fixtures/wmf/standard-line.wmf",
+      "sha256": "d5f8cb32910815e9c4a536f7fb9cf6b9332fbc81a9b9ca8d8e9fd673d6fcc7a3",
+      "size_bytes": 54,
+      "kind": "wmf",
+      "provenance": "Existing repository WMF fixture.",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-geometry-standard.wmf",
+      "sha256": "dc817a68e8b93c0884333625fc56c454fb5f6d46dcdd490eca6fc339a117a1ba",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-geometry-placeable.wmf",
+      "sha256": "0d9cd821e20cf6bee2b08bb8ce402356cb47f218433933ba5185e51db49e33d7",
+      "size_bytes": 66,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-text-standard.wmf",
+      "sha256": "7544db4c3eab9513570e4b41af416ad63c84c72434a3ccff2e0302605c532873",
+      "size_bytes": 46,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-text-placeable.wmf",
+      "sha256": "f732fd597610820089cd430f65318dfd4d08ee8dcd0ae6d08d5faaf7134f3442",
+      "size_bytes": 68,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-bitmap-standard.wmf",
+      "sha256": "9c379300cc4d9456786708e63dfab0533978e53abe70ab7b1238e1c46e122399",
+      "size_bytes": 94,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-bitmap-placeable.wmf",
+      "sha256": "74349deb27bd0f0665279e0fd70b42c6f005ac76f4b09db59e656bf5cd17fd22",
+      "size_bytes": 116,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-unknown-standard.wmf",
+      "sha256": "ed56343bfee3f0df7304e690768f981133f5a399f275719cca38a98d37d98548",
+      "size_bytes": 38,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-unknown-placeable.wmf",
+      "sha256": "ac77dce7597c24aef9b12f99163d82cee587914b9e46bc7276f79295e8c7ddbf",
+      "size_bytes": 60,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/header-size.wmf",
+      "sha256": "f0d8090c44d7882a43aa921416afe58ce5c49fb5b88379a0a325ce920b7757e0",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set standard header size at byte 2 to 8 words; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/file-size.wmf",
+      "sha256": "7662db66c627bc4892099295e2f978efb6d590678c70604f3a5fdf69d4cd6e69",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set standard file size at byte 6 to 8 words; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/max-record.wmf",
+      "sha256": "b42d4321621f5b0de5e816d38980075725ea4f59dc87c16ca6c2583d58bdb067",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set maximum record size at byte 12 to zero; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/zero-record.wmf",
+      "sha256": "35d4d0426e103321f9145997b992c92000d72fe600c01b585cc22b02bf7723b9",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set first record size at byte 18 to zero; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/missing-eof.wmf",
+      "sha256": "44bd1f0c32f91a8a1aed56a1651e5a2bec1d6b0062a7bd782736aafa10a09daa",
+      "size_bytes": 38,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: remove final 6-byte EOF record and repair standard file size; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/negative-text-count.wmf",
+      "sha256": "004b084ceb1deaecc54f79ea6960cec08f6a5a6c59b58c193fd07d6182af31ea",
+      "size_bytes": 46,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set text count at byte 24 to signed -1; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/placeable-checksum.wmf",
+      "sha256": "add409bf94d49a7353acf99d2e63e32e3d083a34aa155a9d1b15497287bdbef9",
+      "size_bytes": 66,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: XOR placeable checksum byte 20 with 1; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/bitmap-short-record.wmf",
+      "sha256": "722f8176d6c3704d9d9025db5e5e9347c34f68b579d999754890ca6627ed3b94",
+      "size_bytes": 94,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set first bitmap record size at byte 18 to 3 words; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    }
+  ]
+}

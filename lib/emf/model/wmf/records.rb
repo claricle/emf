@@ -225,4 +225,12 @@ module Emf
 end
 
 require "emf/model/wmf/object_records"
+require "emf/model/wmf/font_record"
 require "emf/model/wmf/text_records"
+require "emf/model/wmf/state_records"
+require "emf/model/wmf/palette_records"
+require "emf/model/wmf/region_records"
+require "emf/model/wmf/brush_records"
+require "emf/model/wmf/bitmap_records"
+require "emf/model/wmf/geometry_records"
+require "emf/model/wmf/dc_escape_records"
