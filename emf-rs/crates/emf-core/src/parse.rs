@@ -4,9 +4,10 @@ use crate::detect::{detect_format, Format, EMF_MAGIC};
 use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
-    ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, ExtCreatePen, ExtTextOut,
-    Float32, PaletteEntry, PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect,
-    RegionData, ScaleFactors, Size, XForm, EMR_HEADER, HEADER_FIXED_BYTES,
+    ColorRef, DesignVector, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord,
+    ExtCreatePen, ExtTextOut, Float32, Font, FontRecord, LogFont, LogFontEx, LogFontExDv,
+    LogFontPanose, PaletteEntry, PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect, RegionData,
+    ScaleFactors, Size, XForm, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 use crate::reader::{u32_at, Reader};
 
@@ -84,7 +85,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=22 | 24..=68 | 70..=75 | 83..=92 | 95 | 98 | 115 | 120
+                2..=22 | 24..=68 | 70..=75 | 82..=92 | 95 | 98 | 115 | 120
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -240,6 +241,7 @@ fn decode_record(
             8,
         )),
         49 | 50 => decode_palette(kind, payload, budget),
+        82 => decode_font(payload, budget),
         83 => decode_text::<u8>(payload, budget),
         84 => decode_text::<u16>(payload, budget),
         31 | 32 if payload.len() >= 16 => {
@@ -1326,5 +1328,97 @@ fn decode_palette(
             }
         },
         fixed + bytes,
+    ))
+}
+
+fn read_font_units<const N: usize>(r: &mut Reader<'_>) -> Result<[u16; N], ParseFailure> {
+    let mut units = [0; N];
+    for unit in &mut units {
+        *unit = r.u16()?;
+    }
+    Ok(units)
+}
+fn read_log_font(r: &mut Reader<'_>) -> Result<LogFont, ParseFailure> {
+    Ok(LogFont {
+        height: r.i32()?,
+        width: r.i32()?,
+        escapement: r.i32()?,
+        orientation: r.i32()?,
+        weight: r.i32()?,
+        italic: r.take(1)?[0],
+        underline: r.take(1)?[0],
+        strike_out: r.take(1)?[0],
+        char_set: r.take(1)?[0],
+        out_precision: r.take(1)?[0],
+        clip_precision: r.take(1)?[0],
+        quality: r.take(1)?[0],
+        pitch_and_family: r.take(1)?[0],
+        face_name: read_font_units(r)?,
+    })
+}
+fn decode_font(
+    payload: &[u8],
+    budget: &mut Budget<'_>,
+) -> Result<(RecordData, usize), ParseFailure> {
+    let raw = || Ok((RecordData::Raw, 0));
+    if payload.len() < 96 {
+        return raw();
+    }
+    let mut r = Reader::new(payload);
+    let ih_object = r.u32()?;
+    let size = payload.len() - 4;
+    let font = if size == 92 {
+        Font::LogFont(read_log_font(&mut r)?)
+    } else if size <= 320 {
+        // Windows copies short Panose data into a zero-initialized structure.
+        let mut padded = [0; 320];
+        padded[..size].copy_from_slice(&payload[4..]);
+        let mut p = Reader::new(&padded);
+        let font = LogFontPanose {
+            encoded_size: size,
+            log_font: read_log_font(&mut p)?,
+            full_name: read_font_units(&mut p)?,
+            style: read_font_units(&mut p)?,
+            version: p.u32()?,
+            style_size: p.u32()?,
+            match_value: p.u32()?,
+            reserved: p.u32()?,
+            vendor_id: p.take(4)?.try_into().unwrap(),
+            culture: p.u32()?,
+            panose: p.take(10)?.try_into().unwrap(),
+            padding: p.take(2)?.try_into().unwrap(),
+        };
+        r.skip(size)?;
+        Font::Panose(font)
+    } else {
+        if size < 356 {
+            return raw();
+        }
+        let log_font_ex = LogFontEx {
+            log_font: read_log_font(&mut r)?,
+            full_name: read_font_units(&mut r)?,
+            style: read_font_units(&mut r)?,
+            script: read_font_units(&mut r)?,
+        };
+        let signature = r.u32()?;
+        let count = r.u32()? as usize;
+        if signature != 0x08007664 || count > 16 || count * 4 > r.remaining() {
+            return raw();
+        }
+        budget.charge_alloc(count * 4)?;
+        budget.charge_work(count as u64)?;
+        let mut values = try_vec_with_capacity(count)?;
+        for _ in 0..count {
+            values.push(r.i32()?);
+        }
+        Font::ExDv(LogFontExDv {
+            log_font_ex,
+            design_vector: DesignVector { signature, values },
+        })
+    };
+    budget.charge_alloc(std::mem::size_of::<FontRecord>())?;
+    Ok((
+        RecordData::CreateFontIndirectW(Box::new(FontRecord { ih_object, font })),
+        r.position(),
     ))
 }

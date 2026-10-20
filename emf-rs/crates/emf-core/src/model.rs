@@ -313,10 +313,99 @@ pub struct PaletteEntry {
     pub flags: u8,
 }
 
+/// Logical font fields retain all UTF-16 code units, including data after a NUL.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LogFont {
+    pub height: i32,
+    pub width: i32,
+    pub escapement: i32,
+    pub orientation: i32,
+    pub weight: i32,
+    pub italic: u8,
+    pub underline: u8,
+    pub strike_out: u8,
+    pub char_set: u8,
+    pub out_precision: u8,
+    pub clip_precision: u8,
+    pub quality: u8,
+    pub pitch_and_family: u8,
+    pub face_name: [u16; 32],
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LogFontEx {
+    pub log_font: LogFont,
+    pub full_name: [u16; 64],
+    pub style: [u16; 32],
+    pub script: [u16; 32],
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LogFontPanose {
+    /// Original field length, including compatibility records shorter than 320 bytes.
+    pub encoded_size: usize,
+    pub log_font: LogFont,
+    pub full_name: [u16; 64],
+    pub style: [u16; 32],
+    pub version: u32,
+    pub style_size: u32,
+    pub match_value: u32,
+    pub reserved: u32,
+    pub vendor_id: [u8; 4],
+    pub culture: u32,
+    pub panose: [u8; 10],
+    pub padding: [u8; 2],
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DesignVector {
+    pub signature: u32,
+    pub values: Vec<i32>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LogFontExDv {
+    pub log_font_ex: LogFontEx,
+    pub design_vector: DesignVector,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Font {
+    LogFont(LogFont),
+    Panose(LogFontPanose),
+    ExDv(LogFontExDv),
+}
+impl Font {
+    pub(crate) fn encoded_len(&self) -> Option<usize> {
+        match self {
+            Self::LogFont(_) => Some(92),
+            Self::Panose(font) => Some(font.encoded_size),
+            Self::ExDv(font) => {
+                356usize.checked_add(font.design_vector.values.len().checked_mul(4)?)
+            }
+        }
+    }
+    pub(crate) fn valid(&self) -> bool {
+        match self {
+            Self::ExDv(font) => {
+                font.design_vector.signature == 0x08007664 && font.design_vector.values.len() <= 16
+            }
+            Self::Panose(font) => {
+                (93..=320).contains(&font.encoded_size)
+                    && crate::serialize::panose_bytes(font)[font.encoded_size..]
+                        .iter()
+                        .all(|b| *b == 0)
+            }
+            _ => true,
+        }
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FontRecord {
+    pub ih_object: u32,
+    pub font: Font,
+}
+
 /// Supported payloads. Raw records retain all their original bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordData {
     Raw,
+    CreateFontIndirectW(Box<FontRecord>),
     ExtCreatePen(ExtCreatePen),
     RealizePalette,
     SelectPalette {
@@ -621,6 +710,7 @@ impl RecordData {
             Self::CreatePalette { .. } => Some(49),
             Self::SetPaletteEntries { .. } => Some(50),
             Self::ResizePalette { .. } => Some(51),
+            Self::CreateFontIndirectW(_) => Some(82),
             Self::ExtCreatePen(_) => Some(95),
             Self::ExtTextOutA(_) => Some(83),
             Self::ExtTextOutW(_) => Some(84),
@@ -718,6 +808,7 @@ impl RecordData {
                 u32::try_from(entries.len()).ok()?;
                 12usize.checked_add(entries.len().checked_mul(4)?)
             }
+            Self::CreateFontIndirectW(font) => font.font.encoded_len()?.checked_add(4),
             Self::ExtCreatePen(pen) => pen.layout()?.2.checked_sub(8),
             Self::ExtTextOutA(text) => text.layout()?.2.checked_sub(8),
             Self::ExtTextOutW(text) => text.layout()?.2.checked_sub(8),
@@ -970,6 +1061,7 @@ impl Document {
             return Err(EditFailure::RecordFamily { index });
         }
         let invalid_layout = match &data {
+            RecordData::CreateFontIndirectW(font) => !font.font.valid(),
             RecordData::ExtCreatePen(pen) => !pen.valid(),
             RecordData::ExtTextOutA(text) => !text.valid(),
             RecordData::ExtTextOutW(text) => !text.valid(),
@@ -1007,6 +1099,17 @@ impl Document {
             }
         }
         let len = record.edited_size(&data).ok_or(EditFailure::SizeOverflow)?;
+        if let RecordData::CreateFontIndirectW(font) = &data {
+            let field_len = len - 12;
+            let valid_variant = match &font.font {
+                Font::LogFont(_) => field_len == 92,
+                Font::Panose(font) => field_len == font.encoded_size,
+                Font::ExDv(_) => field_len > 320,
+            };
+            if !valid_variant {
+                return Err(EditFailure::RecordLayout { index });
+            }
+        }
         u32::try_from(len).map_err(|_| EditFailure::SizeOverflow)?;
         record.data = data;
         record.edited = true;

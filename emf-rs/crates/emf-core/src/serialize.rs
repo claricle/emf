@@ -2,7 +2,10 @@
 
 use crate::error::{LimitKind, SerializeFailure};
 use crate::limits::SerializeLimits;
-use crate::model::{Document, EmfHeader, ExtCreatePen, ExtTextOut, RecordData, Rect, RegionData};
+use crate::model::{
+    Document, EmfHeader, ExtCreatePen, ExtTextOut, Font, FontRecord, LogFont, LogFontPanose,
+    RecordData, Rect, RegionData,
+};
 
 /// Write unchanged bytes exactly; encode edited fields and preserve opaque suffixes.
 /// Comment padding is resized; EOF palette bytes stay before the final SizeLast.
@@ -39,6 +42,10 @@ pub fn serialize_with_limits(
             let element_count = match &record.data {
                 RecordData::CreatePalette { entries, .. }
                 | RecordData::SetPaletteEntries { entries, .. } => entries.len(),
+                RecordData::CreateFontIndirectW(font) => match &font.font {
+                    Font::ExDv(font) => font.design_vector.values.len(),
+                    _ => 0,
+                },
                 RecordData::ExtCreatePen(pen) => {
                     pen.work_len().ok_or(SerializeFailure::SizeOverflow)?
                 }
@@ -414,6 +421,7 @@ pub fn serialize_with_limits(
                     out.extend_from_slice(&[entry.red, entry.green, entry.blue, entry.flags]);
                 }
             }
+            RecordData::CreateFontIndirectW(font) => append_font(&mut out, font),
             RecordData::ExtCreatePen(pen) => append_extended_pen(&mut out, start, pen)?,
             RecordData::CreatePen {
                 ih_pen,
@@ -736,4 +744,70 @@ fn append_extended_pen(
         }
     }
     Ok(())
+}
+
+fn append_font_units(out: &mut Vec<u8>, units: &[u16]) {
+    for unit in units {
+        out.extend_from_slice(&unit.to_le_bytes());
+    }
+}
+fn append_log_font(out: &mut Vec<u8>, font: &LogFont) {
+    for value in [
+        font.height,
+        font.width,
+        font.escapement,
+        font.orientation,
+        font.weight,
+    ] {
+        append(out, value as u32);
+    }
+    out.extend_from_slice(&[
+        font.italic,
+        font.underline,
+        font.strike_out,
+        font.char_set,
+        font.out_precision,
+        font.clip_precision,
+        font.quality,
+        font.pitch_and_family,
+    ]);
+    append_font_units(out, &font.face_name);
+}
+pub(crate) fn panose_bytes(font: &LogFontPanose) -> Vec<u8> {
+    let mut out = Vec::with_capacity(320);
+    append_log_font(&mut out, &font.log_font);
+    append_font_units(&mut out, &font.full_name);
+    append_font_units(&mut out, &font.style);
+    for value in [
+        font.version,
+        font.style_size,
+        font.match_value,
+        font.reserved,
+    ] {
+        append(&mut out, value);
+    }
+    out.extend_from_slice(&font.vendor_id);
+    append(&mut out, font.culture);
+    out.extend_from_slice(&font.panose);
+    out.extend_from_slice(&font.padding);
+    out
+}
+fn append_font(out: &mut Vec<u8>, record: &FontRecord) {
+    append(out, record.ih_object);
+    match &record.font {
+        Font::LogFont(font) => append_log_font(out, font),
+        Font::Panose(font) => out.extend_from_slice(&panose_bytes(font)[..font.encoded_size]),
+        Font::ExDv(font) => {
+            let ex = &font.log_font_ex;
+            append_log_font(out, &ex.log_font);
+            append_font_units(out, &ex.full_name);
+            append_font_units(out, &ex.style);
+            append_font_units(out, &ex.script);
+            append(out, font.design_vector.signature);
+            append(out, font.design_vector.values.len() as u32);
+            for value in &font.design_vector.values {
+                append(out, *value as u32);
+            }
+        }
+    }
 }

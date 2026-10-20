@@ -1,8 +1,8 @@
 //! Version 2 owned snapshot encoding. All fields are explicitly little-endian.
 
 use emf_core::{
-    DiagnosticKind, Document, EmfHeader, ExtCreatePen, ExtTextOut, Point, RecordData, Rect,
-    RegionData, Size, XForm,
+    DiagnosticKind, Document, EmfHeader, ExtCreatePen, ExtTextOut, Font, FontRecord, LogFont,
+    Point, RecordData, Rect, RegionData, Size, XForm,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,6 +19,7 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::ResizePalette { .. } => 85,
         RecordData::RealizePalette => 86,
         RecordData::ExtCreatePen(_) => 81,
+        RecordData::CreateFontIndirectW(_) => 90,
         RecordData::ExtTextOutA(_) => 74,
         RecordData::ExtTextOutW(_) => 75,
         RecordData::SetMapperFlags { .. } => 66,
@@ -275,6 +276,98 @@ fn text_payload<T>(
     Ok(())
 }
 
+// Family 90: handle, variant, encoded font length, then complete semantic fields.
+fn font_payload_len(font: &Font) -> Result<usize, Error> {
+    let len = match font {
+        Font::LogFont(_) => 92,
+        Font::Panose(_) => 320,
+        Font::ExDv(font) => font
+            .design_vector
+            .values
+            .len()
+            .checked_mul(4)
+            .and_then(|len| len.checked_add(356))
+            .ok_or(Error::SizeOverflow)?,
+    };
+    len.checked_add(16).ok_or(Error::SizeOverflow)
+}
+
+fn font_units(out: &mut Vec<u8>, units: &[u16]) {
+    for unit in units {
+        out.extend_from_slice(&unit.to_le_bytes());
+    }
+}
+
+fn log_font_payload(out: &mut Vec<u8>, font: &LogFont) {
+    for value in [
+        font.height,
+        font.width,
+        font.escapement,
+        font.orientation,
+        font.weight,
+    ] {
+        i32_field(out, value);
+    }
+    out.extend_from_slice(&[
+        font.italic,
+        font.underline,
+        font.strike_out,
+        font.char_set,
+        font.out_precision,
+        font.clip_precision,
+        font.quality,
+        font.pitch_and_family,
+    ]);
+    font_units(out, &font.face_name);
+}
+
+fn font_payload(out: &mut Vec<u8>, record: &FontRecord) -> Result<(), Error> {
+    let (kind, encoded_size) = match &record.font {
+        Font::LogFont(_) => (0, 92),
+        Font::Panose(font) => (1, font.encoded_size),
+        Font::ExDv(_) => (2, font_payload_len(&record.font)? - 16),
+    };
+    u32_field(out, record.ih_object);
+    u32_field(out, kind);
+    u64_field(out, wire_len(encoded_size)?);
+    match &record.font {
+        Font::LogFont(font) => log_font_payload(out, font),
+        Font::Panose(font) => {
+            log_font_payload(out, &font.log_font);
+            font_units(out, &font.full_name);
+            font_units(out, &font.style);
+            for value in [
+                font.version,
+                font.style_size,
+                font.match_value,
+                font.reserved,
+            ] {
+                u32_field(out, value);
+            }
+            out.extend_from_slice(&font.vendor_id);
+            u32_field(out, font.culture);
+            out.extend_from_slice(&font.panose);
+            out.extend_from_slice(&font.padding);
+        }
+        Font::ExDv(font) => {
+            let ex = &font.log_font_ex;
+            log_font_payload(out, &ex.log_font);
+            font_units(out, &ex.full_name);
+            font_units(out, &ex.style);
+            font_units(out, &ex.script);
+            u32_field(out, font.design_vector.signature);
+            u32_field(
+                out,
+                u32::try_from(font.design_vector.values.len()).map_err(|_| Error::SizeOverflow)?,
+            );
+            for value in &font.design_vector.values {
+                i32_field(out, *value);
+            }
+        }
+    }
+    Ok(())
+}
+
 fn payload_len(data: &RecordData) -> Result<usize, Error> {
     match data {
         RecordData::RealizePalette => Ok(0),
@@ -287,6 +380,7 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
             .and_then(|len| len.checked_add(16))
             .ok_or(Error::SizeOverflow),
         RecordData::ExtCreatePen(pen) => pen_len(pen),
+        RecordData::CreateFontIndirectW(font) => font_payload_len(&font.font),
         RecordData::ExtTextOutA(text) => text_len(text),
         RecordData::ExtTextOutW(text) => text_len(text),
         RecordData::SetMapperFlags { .. }
@@ -478,6 +572,7 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                 palette_entries(&mut out, entries)?;
             }
             RecordData::ExtCreatePen(pen) => pen_payload(&mut out, pen)?,
+            RecordData::CreateFontIndirectW(font) => font_payload(&mut out, font)?,
             RecordData::ExtTextOutA(text) => {
                 text_payload(&mut out, text, |out, value| out.push(*value))?
             }
