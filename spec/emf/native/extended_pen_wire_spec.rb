@@ -44,4 +44,38 @@ RSpec.describe "extended pen wire layout" do
       expect(wire.to_binary_s).to eq(bytes)
     end
   end
+
+  it "applies legacy body writes to the typed fields" do
+    bytes = extended_pen_record
+    wire = Emf::Emr::Binary::Records::ExtCreatePen.read(bytes)
+    replacement = bytes.byteslice(12..)
+    replacement[16, 4] = [123].pack("V")
+    wire.body = replacement
+    expect(wire.pen_style.to_i).to eq(123)
+    replacement[20, 4] = [42].pack("V")
+    wire.body.assign(replacement)
+    expect(wire.width.to_i).to eq(42)
+    expect(wire.style_entries.snapshot).to eq([0, 0xFFFFFFFF, 7])
+    expect(wire.bitmap_info.to_s).to eq("INFO")
+    expect(wire.to_binary_s).to eq(bytes.byteslice(0, 12) + replacement)
+    expect { wire.body = ("\0" * 36) + [0xFFFFFFFF].pack("V") }.to raise_error(ArgumentError)
+    expect(wire.to_binary_s).to eq(bytes.byteslice(0, 12) + replacement)
+  end
+
+  it "guards invalid style counts before typed allocation and preserves the following record" do
+    header = Emf::Emr::Binary::Header.new(i_type: 1, n_size: 108, d_signature: 0x464D4520).to_binary_s
+    following = "#{[0xFFFF, 12].pack('V2')}NEXT"
+    expect(Emf::Emr::Binary::Records::ExtCreatePen).not_to receive(:read)
+    [500, 0xFFFFFFFF].each do |count|
+      record = extended_pen_record
+      record[48, 4] = [count].pack("V")
+      input = header + record + following
+      parsed = Emf::Emr::Parser.call(input)
+      expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records::Raw)
+      expect(parsed.errors.length).to eq(1)
+      expect(parsed.errors.first.message).to include("more entries than nSize allows")
+      expect(parsed.records[1].wire.to_binary_s).to eq(following)
+      expect(Emf::Emr::Serializer.call(parsed)).to eq(input)
+    end
+  end
 end

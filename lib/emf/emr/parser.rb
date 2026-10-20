@@ -67,6 +67,7 @@ module Emf
       # corrupt and we should preserve them as Raw rather than letting bindata
       # allocate a giant array. The element size is bytes per array entry.
       VARIABLE_ARRAY_RECORDS = {
+        Binary::TypeCodes::EXTCREATEPEN => { count_offset: 48, element_size: 4 },
         Binary::TypeCodes::POLYGON => { count_offset: 24, element_size: 8 },
         Binary::TypeCodes::POLYLINE => { count_offset: 24, element_size: 8 },
         Binary::TypeCodes::POLYBEZIER => { count_offset: 24, element_size: 8 },
