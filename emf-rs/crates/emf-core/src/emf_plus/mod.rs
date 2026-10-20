@@ -11,6 +11,8 @@ pub use object_data::{
     LinearGradient, ObjectData, Path, PathGradient, PathPointRun, PathPointTypes, Pen, PenBrush,
     PenBrushData, Region, RegionNode, StringFormat, Texture, TextureImage,
 };
+mod effects;
+pub use effects::Effect;
 mod text;
 pub use text::Text;
 mod drawing;

@@ -27,6 +27,8 @@ to validate a complete playback document.
 - DrawString raw UTF-16, layout and format ID; DrawDriverString glyphs, positions,
   realized-advance layout and optional transform.
 - Object fragment headers with object ID/type and optional TotalObjectSize.
+- SerializableObject image effects: all eleven standard GUID parameter layouts,
+  retaining ignored record flags, raw float/Boolean/enum words and signed fields.
 
 Floating-point fields expose their IEEE bits. Record flags, unknown record data,
 and bytes between DataSize and Size are retained exactly. Typed layout mismatches
@@ -74,8 +76,8 @@ there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Image pixel/palette structures, remaining nested
-object structures and effects remain opaque. Playback object
+Image pixel/palette structures and remaining nested
+object structures remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
 it does not claim full native EMF+ format acceptance or add a Ruby public API.
@@ -193,3 +195,16 @@ as opaque; malformed known headers/counts and inconsistent transforms fail.
 image growth/shrink/removal, nested Pen edits, unknown preservation, malformed
 headers/counts/suffixes, exact allocation thresholds, shared resource limits and
 continuation/segment/unknown-record/padding identity.
+
+SerializableObject records expose `RecordData::Effect` with Blur, BrightnessContrast,
+ColorBalance, ColorCurve, ColorLookupTable, ColorMatrix, HueSaturationLightness,
+Levels, RedEyeCorrection, Sharpen and Tint parameters. Lookup tables retain blue,
+green, red, alpha wire order; matrix words retain column wire order. RedEye areas
+retain signed RectL coordinates and derive the signed count on edit. GUID and
+BufferSize derive from the selected variant. Known layouts require exact lengths;
+unknown GUIDs expose their exact aligned buffer without interpreting it. Raw
+numeric fields do not validate rendering ranges. Effect allocations and element
+work share the enclosing parse/serialize limits, with counted wire availability
+checked before reserve. `emf_plus_effects.rs` covers all GUIDs/fields, mutable and
+exact roundtrips, malformed counts/lengths, unknown buffers, split segments,
+ignored flags/padding preservation, growth/shrink and resource limits.
