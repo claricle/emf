@@ -11,13 +11,14 @@ The roughly 12-second fixture mentioned in [issue #15](https://github.com/claric
 ## Implemented measurement surface
 
 - `bench/parser.rb` and [its guide](../bench/README.md) measure format detection, public parse, first/repeated wire traversal, dump, serialization, representative EMF wire mutation/serialization, parse-to-serialize and parse-file. Unsupported mutation workloads are explicit rather than successful timings.
+- The dependency-free `emf-core` native kernel CLI (`emf-rs/crates/emf-core/benches/parser.rs`, [guide](../bench/native-kernels.md)) measures isolated in-memory parse, unchanged serialize, parse/serialize and guarded typed-edit serialization. It records exact round-trip guards, input SHA-256 and median/p95 distributions; unsupported edits are explicit. Implementation is present; compilation, CLI controls and runtime measurement validation remain pending the explicit build pause. No native kernel timing result is claimed.
 - `bench/native_components.rb` separates the available native adapter boundaries: parse handle, snapshot copy/decode, hydration and cleanup, with separate public parse samples. It is an EMF/EMF+ diagnostic; it does not isolate a Rust serialization kernel or support WMF.
 - `bench/emfsvg.rb` and [its guide](../bench/emfsvg.md) force Ruby/native conversion against a pinned clean consumer and exact golden SVGs. Cold loading and first calls are separate from warm conversion distributions.
 - `bench/compare_emfsvg.rb` validates saved downstream identities, method, samples and golden results before emitting informational native-over-Ruby ratios. See [the saved evidence and reproduction commands](../docs/performance/downstream-comparison.md).
 - `.github/workflows/parser-benchmark.yml` builds a locked release native library and retains schema-v2 input manifest plus forced Ruby/native reports for `simple/image1.emf`; it uses bounded children and three samples after one warmup. Its floating Ubuntu/Ruby/Rust setup is a smoke environment, not the dedicated calibrated runner proposed below.
 - Focused coverage lives under `spec/bench/`, with wire/model and downstream golden preservation checks accompanying optimizations.
 
-Still proposed: isolated Criterion parse/serialize kernels at `emf-rs/crates/emf-core/benches/parser.rs`; a controlled, representative `bench/baseline.json`; calibrated `bench/performance-policy.json`; and a pinned runner regression gate. These artifacts are not present and must not be inferred from the smoke workflow.
+Still proposed: a controlled, representative `bench/baseline.json`; calibrated `bench/performance-policy.json`; and a pinned runner regression gate. These artifacts are not present and must not be inferred from the smoke workflow. The isolated native kernel target uses the standard library rather than adding Criterion dependencies.
 
 ## Execution order and dependencies
 
@@ -42,7 +43,7 @@ EMFSVG_PATH=/path/to/emfsvg EMF_NATIVE_LIBRARY=/path/to/libemf_ffi.dylib bundle 
 bundle exec ruby bench/compare_emfsvg.rb --ruby tmp/bench/emfsvg-ruby.json --native tmp/bench/emfsvg-native.json --output tmp/bench/emfsvg-comparison.json
 ```
 
-Run measurements sequentially on an otherwise idle recorded runner for performance conclusions. The default consumer pin is `101356dcf673841fda0693076131bca7a0f34948`; exact golden checks and command exit status accompany timings. The saved historical smoke reports can be compared without rerendering, as documented in the evidence guide. Criterion commands remain unavailable until their proposed target is implemented.
+Run measurements sequentially on an otherwise idle recorded runner for performance conclusions. The default consumer pin is `101356dcf673841fda0693076131bca7a0f34948`; exact golden checks and command exit status accompany timings. The saved historical smoke reports can be compared without rerendering, as documented in the evidence guide. The native kernel command and timing boundaries are documented in [the kernel guide](../bench/native-kernels.md); a development-profile smoke would verify execution only and would not establish release performance.
 
 ## Acceptance
 
