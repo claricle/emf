@@ -39,6 +39,8 @@ fn typed_len(data: &RecordData) -> Result<usize, Failure> {
     match data {
         RecordData::Drawing(value) => sink.drawing(value)?,
         RecordData::Text(value) => sink.text(value)?,
+        RecordData::Effect(value) => sink.effect(value)?,
+        RecordData::TSGraphics(value) => sink.ts_graphics(value)?,
         _ => return Ok(family(data).1),
     }
     Ok(sink.len)
@@ -216,6 +218,16 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
                     out: Some(&mut bytes),
                 }
                 .text(value)?,
+                RecordData::Effect(value) => Sink {
+                    len: 0,
+                    out: Some(&mut bytes),
+                }
+                .effect(value)?,
+                RecordData::TSGraphics(value) => Sink {
+                    len: 0,
+                    out: Some(&mut bytes),
+                }
+                .ts_graphics(value)?,
                 _ => bytes.extend_from_within(raw_start + 12..raw_start + 12 + typed_len),
             }
             offset += size;

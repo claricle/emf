@@ -95,18 +95,19 @@ record Type/Flags distinguish operations sharing a layout (e.g. Pair).
 | 10 | ClipRect | rectangle[4] (float bits) |
 | 0x101 | Drawing | normalized subtype and values below |
 | 0x102 | Text | normalized subtype and values below |
-| 0x103 | Effect | none; core typed, ABI typed encoding pending |
-| 0x104 | TSGraphics | none; core typed, ABI typed encoding pending |
+| 0x103 | Effect | normalized subtype, GUID and values below |
+| 0x104 | TSGraphics | normalized state and optional palette below |
 | 0x105 | Object | none; core typed, ABI typed encoding pending |
 
-Consumers must distinguish typed Empty from opaque/pending families. Effect,
-TSGraphics and Object remain explicitly unsupported typed families, with their
-complete raw frames preserved. This unpublished version 1 describes the current
+Consumers must distinguish typed Empty from opaque/pending families. Object
+remains an explicitly unsupported typed family with its complete raw frame
+preserved. Unknown effect GUIDs have a normalized opaque effect buffer as below;
+unknown/unsupported record types remain family 0. This unpublished version 1 describes the current
 read-only increment; it does not claim complete structured EMF+ coverage.
 
 ### Shared normalized values
 
-Drawing and Text are encoded from the extracted core values, rather than copying
+Drawing, Text, Effect and TSGraphics are encoded from the extracted core values, rather than copying
 their wire bodies. Every field below is concatenated without alignment. `u32`
 means an unsigned 32-bit word; `i32` is its two's-complement signed interpretation.
 `f32bits` is a u32 containing the original IEEE-754 bits, without floating-point
@@ -176,6 +177,53 @@ explicit: with options bit 0x4 and nonempty glyphs core represents one position;
 otherwise it represents one position per glyph (zero for empty glyphs). Matrix
 presence is 0 or 1; its six words exist only when present, in core/wire order
 (m11, m12, m21, m22, dx, dy). A present matrix is retained even for zero glyphs.
+
+### Effect (tag 0x103, record Type 0x4038)
+
+Every effect begins with a subtype u32 followed by the exact GUID bytes[16] in
+wire order (no GUID component byte swapping). All currently represented core
+Effect variants have normalized payloads. The remaining fields are:
+
+| Subtype | Core variant | Fields after GUID |
+| --- | --- | --- |
+| 0 | Unknown | buffer byte count u64, exact buffer bytes[count] |
+| 1 | Blur | radius f32bits, expand edge u32 |
+| 2 | BrightnessContrast | brightness i32, contrast i32 |
+| 3 | ColorBalance | cyan/red i32, magenta/green i32, yellow/blue i32 |
+| 4 | ColorCurve | adjustment u32, channel u32, intensity i32 |
+| 5 | ColorLookupTable | table count u64 (4), tables[count][256] u8 |
+| 6 | ColorMatrix | matrix[25] f32bits |
+| 7 | HueSaturationLightness | hue i32, saturation i32, lightness i32 |
+| 8 | Levels | highlight i32, midtone i32, shadow i32 |
+| 9 | RedEyeCorrection | area count u64, areas[count][4] i32 |
+| 10 | Sharpen | radius f32bits, amount f32bits |
+| 11 | Tint | hue i32, amount i32 |
+
+Lookup tables retain blue, green, red, alpha order. ColorMatrix retains core/wire
+order: Matrix[0..5][0], then Matrix[0..5][1], and so on. Each red-eye area is
+left, top, right, bottom without expansion or coordinate conversion. Zero-area
+and empty unknown buffers retain explicit zero counts. Unknown GUIDs are
+supported as subtype 0 without interpreting their buffers. Boolean/enum words
+and numeric values are preserved without rendering-range validation; expand
+edge is not converted to 0 or 1. Counts describe normalized arrays, independently
+of the original wire BufferSize/count fields available in the raw frame.
+
+### TSGraphics (tag 0x104, record Type 0x4039)
+
+There is one layout, with no subtype word. Fields in order are anti-alias mode
+u32, text-render hint u32, compositing mode u32, compositing quality u32,
+render origin x i32, render origin y i32, text contrast u32, filter type u32,
+pixel offset u32, world-to-device transform[6] f32bits, palette present u32.
+The original u8/u16 enum and contrast fields are zero-extended; the original i16
+render origins are sign-extended. The six transform words retain core/wire order
+(m11, m12, m21, m22, dx, dy).
+
+Palette presence is 0 or 1. Only when present, the following fields exist:
+style flags u32, entry count u64, entries[count] ARGB u32. A present empty palette
+is distinct from an absent palette. Style flags, enum values, float bits and
+palette entries are uninterpreted; the original T, V and ignored flags remain
+in the enclosing raw/Flags fields. This payload does not imply state application
+or rendering support.
 
 ### Output bounds
 

@@ -371,6 +371,13 @@ fn fixed_typed_families_preserve_word_bits_and_complex_families_keep_raw_frames(
         let typed = match kind {
             0x400f => words(&[2, 0, 0, 0, 0, 0, 0, 0]),
             0x401c => words(&[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            0x4038 => {
+                let mut typed = words(&[1]);
+                typed.extend(&body[..16]);
+                typed.extend(words(&[0x7fc12345, u32::MAX]));
+                typed
+            }
+            0x4039 => words(&[0; 16]),
             _ => Vec::new(),
         };
         cases.push((frame(kind, flags, &body, &[]), tag, typed));
@@ -589,6 +596,196 @@ fn normalized_drawing_and_text_cover_operations_encodings_arrays_and_presence() 
         }
         assert_eq!(at, bytes.len());
         let mut output = ptr::null_mut();
+        assert_eq!(
+            emf_document_emf_plus_snapshot_v1(
+                doc,
+                &options(bytes.len() as u64 - 1),
+                ptr::null(),
+                &mut output,
+                ptr::null_mut()
+            ),
+            EMF_LIMIT_EXCEEDED
+        );
+        assert!(output.is_null());
+        assert_eq!(
+            emf_document_emf_plus_snapshot_v1(
+                doc,
+                &options(bytes.len() as u64),
+                ptr::null(),
+                &mut output,
+                ptr::null_mut()
+            ),
+            EMF_OK
+        );
+        assert_eq!(view(output), bytes);
+        assert_eq!(emf_serialize(doc, &mut output, ptr::null_mut()), EMF_OK);
+        assert_eq!(view(output), original);
+        emf_document_free(doc);
+    }
+}
+
+#[test]
+fn normalized_effects_preserve_all_subtypes_guid_bits_counts_and_unknown_buffers() {
+    use emf_core::emf_plus::Effect;
+    // GUID selection uses core's public identity; expected payloads are built from
+    // explicit wire values independently of the FFI encoder.
+    let effects = [
+        Effect::Blur {
+            radius: 0,
+            expand_edge: 0,
+        },
+        Effect::BrightnessContrast {
+            brightness: 0,
+            contrast: 0,
+        },
+        Effect::ColorBalance {
+            cyan_red: 0,
+            magenta_green: 0,
+            yellow_blue: 0,
+        },
+        Effect::ColorCurve {
+            adjustment: 0,
+            channel: 0,
+            intensity: 0,
+        },
+        Effect::ColorLookupTable { tables: vec![] },
+        Effect::ColorMatrix { matrix: [0; 25] },
+        Effect::HueSaturationLightness {
+            hue: 0,
+            saturation: 0,
+            lightness: 0,
+        },
+        Effect::Levels {
+            highlight: 0,
+            midtone: 0,
+            shadow: 0,
+        },
+        Effect::RedEyeCorrection { areas: vec![] },
+        Effect::Sharpen {
+            radius: 0,
+            amount: 0,
+        },
+        Effect::Tint { hue: 0, amount: 0 },
+        Effect::Unknown {
+            guid: [0xa5; 16],
+            buffer: vec![],
+        },
+    ];
+    let bits = [0x80000000, 0x7fc12345, u32::MAX];
+    let mut cases = Vec::new();
+    for (index, effect) in effects.iter().enumerate() {
+        let subtype = if index == 11 { 0 } else { index as u32 + 1 };
+        let mut typed = words(&[subtype]);
+        let guid = effect.guid();
+        typed.extend(guid);
+        let parameters = match subtype {
+            1 | 2 | 10 | 11 => words(&bits[..2]),
+            3 | 4 | 7 | 8 => words(&bits),
+            5 => (0..1024).map(|i| (i / 256 * 37 + i % 256) as u8).collect(),
+            6 => (0..25).flat_map(|i| bits[i % 3].to_le_bytes()).collect(),
+            9 => words(&[2, u32::MAX, 0x80000000, 3, 4, 9, 8, 7, 6]),
+            0 => vec![0xff, 0, 0x80, 0x7f, 1, 2, 3, 4],
+            _ => unreachable!(),
+        };
+        match subtype {
+            5 => {
+                count(&mut typed, 4);
+                typed.extend(&parameters);
+            }
+            9 => {
+                count(&mut typed, 2);
+                typed.extend(&parameters[4..]);
+            }
+            0 => {
+                count(&mut typed, parameters.len() as u64);
+                typed.extend(&parameters);
+            }
+            _ => typed.extend(&parameters),
+        }
+        let mut body = guid.to_vec();
+        body.extend(words(&[parameters.len() as u32]));
+        body.extend(parameters);
+        cases.push((frame(0x4038, 0xa5fe, &body, b"PAD!"), 0x103, typed));
+    }
+    // Empty variable arrays retain explicit zero counts.
+    for (effect, parameters, subtype) in [
+        (Effect::RedEyeCorrection { areas: vec![] }, words(&[0]), 9),
+        (
+            Effect::Unknown {
+                guid: [0x5a; 16],
+                buffer: vec![],
+            },
+            vec![],
+            0,
+        ),
+    ] {
+        let guid = effect.guid();
+        let mut body = guid.to_vec();
+        body.extend(words(&[parameters.len() as u32]));
+        body.extend(parameters);
+        let mut typed = words(&[subtype]);
+        typed.extend(guid);
+        count(&mut typed, 0);
+        cases.push((frame(0x4038, 0, &body, &[]), 0x103, typed));
+    }
+    assert_normalized_cases(cases);
+}
+
+#[test]
+fn normalized_tsgraphics_expands_scalars_and_distinguishes_optional_empty_palette() {
+    let transform = [0x80000000, 0x7fc12345, u32::MAX, 1, 2, 3];
+    let mut cases = Vec::new();
+    for palette in [None, Some(vec![]), Some(vec![0x80ff0033, 0x00010203])] {
+        let mut body = vec![0xff, 0x80, 0x7f, 0xfe];
+        body.extend((-32768i16).to_le_bytes());
+        body.extend(32767i16.to_le_bytes());
+        body.extend(65535u16.to_le_bytes());
+        body.extend([0xa5, 0xb6]);
+        body.extend(words(&transform));
+        let mut typed = words(&[0xff, 0x80, 0x7f, 0xfe, 0xffff8000, 32767, 65535, 0xa5, 0xb6]);
+        typed.extend(words(&transform));
+        typed.extend(words(&[u32::from(palette.is_some())]));
+        let flags = 0xfffe | u16::from(palette.is_some());
+        if let Some(entries) = palette {
+            body.extend(words(&[0xfedcba98, entries.len() as u32]));
+            body.extend(words(&entries));
+            typed.extend(words(&[0xfedcba98]));
+            count(&mut typed, entries.len() as u64);
+            typed.extend(words(&entries));
+        }
+        cases.push((frame(0x4039, flags, &body, b"RAW!"), 0x104, typed));
+    }
+    // Unsupported core record types and pending Objects keep their raw payloads.
+    cases.push((frame(0x7fff, 0xbeef, b"raw!", &[]), 0, vec![]));
+    cases.push((
+        frame(0x4008, 0x0101, &words(&[0xdbc01002, 0, 0x80ff0033]), &[]),
+        0x105,
+        vec![],
+    ));
+    assert_normalized_cases(cases);
+}
+
+fn assert_normalized_cases(cases: Vec<(Vec<u8>, u32, Vec<u8>)>) {
+    let logical: Vec<u8> = cases
+        .iter()
+        .flat_map(|(raw, _, _)| raw.iter().copied())
+        .collect();
+    unsafe {
+        let original = input(&[&logical[..19], &logical[19..]]);
+        let doc = parse(&original);
+        let bytes = snapshot(doc);
+        let mut at = 104;
+        for (raw, tag, typed) in cases {
+            assert_eq!(u32_at(&bytes, at + 44), tag);
+            assert_eq!(u64_at(&bytes, at + 48), typed.len() as u64);
+            assert_eq!(u64_at(&bytes, at + 56), raw.len() as u64);
+            assert_eq!(&bytes[at + 64..at + 64 + raw.len()], raw);
+            at += 64 + raw.len();
+            assert_eq!(&bytes[at..at + typed.len()], typed);
+            at += typed.len();
+        }
+        assert_eq!(at, bytes.len());
+        let mut output = ptr::NonNull::dangling().as_ptr();
         assert_eq!(
             emf_document_emf_plus_snapshot_v1(
                 doc,

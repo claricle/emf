@@ -1,7 +1,9 @@
 //! Normalized variable-sized payloads; one traversal defines both sizing and writing.
 use super::emf_plus_snapshot::overflow;
 use crate::Failure;
-use emf_core::emf_plus::{Drawing, ImageSource, PointData, Rectangle, RelativeCoordinate, Text};
+use emf_core::emf_plus::{
+    Drawing, Effect, ImageSource, PointData, Rectangle, RelativeCoordinate, TSGraphics, Text,
+};
 
 pub(super) struct Sink<'a> {
     pub len: usize,
@@ -163,6 +165,94 @@ impl Sink<'_> {
                 self.word(8)?;
                 self.word(*value)?;
             }
+        }
+        Ok(())
+    }
+    pub fn effect(&mut self, effect: &Effect) -> Result<(), Failure> {
+        self.word(match effect {
+            Effect::Unknown { .. } => 0,
+            Effect::Blur { .. } => 1,
+            Effect::BrightnessContrast { .. } => 2,
+            Effect::ColorBalance { .. } => 3,
+            Effect::ColorCurve { .. } => 4,
+            Effect::ColorLookupTable { .. } => 5,
+            Effect::ColorMatrix { .. } => 6,
+            Effect::HueSaturationLightness { .. } => 7,
+            Effect::Levels { .. } => 8,
+            Effect::RedEyeCorrection { .. } => 9,
+            Effect::Sharpen { .. } => 10,
+            Effect::Tint { .. } => 11,
+        })?;
+        self.bytes(&effect.guid())?;
+        match effect {
+            Effect::Blur {
+                radius,
+                expand_edge,
+            } => self.words(&[*radius, *expand_edge]),
+            Effect::BrightnessContrast {
+                brightness,
+                contrast,
+            } => self.words(&[*brightness as u32, *contrast as u32]),
+            Effect::ColorBalance {
+                cyan_red,
+                magenta_green,
+                yellow_blue,
+            } => self.words(&[*cyan_red as u32, *magenta_green as u32, *yellow_blue as u32]),
+            Effect::ColorCurve {
+                adjustment,
+                channel,
+                intensity,
+            } => self.words(&[*adjustment, *channel, *intensity as u32]),
+            Effect::ColorLookupTable { tables } => {
+                self.count(tables.len())?;
+                for table in tables {
+                    self.bytes(table)?;
+                }
+                Ok(())
+            }
+            Effect::ColorMatrix { matrix } => self.words(matrix),
+            Effect::HueSaturationLightness {
+                hue,
+                saturation,
+                lightness,
+            } => self.words(&[*hue as u32, *saturation as u32, *lightness as u32]),
+            Effect::Levels {
+                highlight,
+                midtone,
+                shadow,
+            } => self.words(&[*highlight as u32, *midtone as u32, *shadow as u32]),
+            Effect::RedEyeCorrection { areas } => {
+                self.count(areas.len())?;
+                for area in areas {
+                    for value in area {
+                        self.word(*value as u32)?;
+                    }
+                }
+                Ok(())
+            }
+            Effect::Sharpen { radius, amount } => self.words(&[*radius, *amount]),
+            Effect::Tint { hue, amount } => self.words(&[*hue as u32, *amount as u32]),
+            Effect::Unknown { buffer, .. } => self.padding(buffer),
+        }
+    }
+    pub fn ts_graphics(&mut self, graphics: &TSGraphics) -> Result<(), Failure> {
+        self.words(&[
+            graphics.anti_alias_mode as u32,
+            graphics.text_render_hint as u32,
+            graphics.compositing_mode as u32,
+            graphics.compositing_quality as u32,
+            graphics.render_origin[0] as i32 as u32,
+            graphics.render_origin[1] as i32 as u32,
+            graphics.text_contrast as u32,
+            graphics.filter_type as u32,
+            graphics.pixel_offset as u32,
+        ])?;
+        self.words(&graphics.world_to_device)?;
+        self.word(u32::from(graphics.palette.is_some()))?;
+        if let Some(palette) = &graphics.palette {
+            self.word(palette.style_flags)?;
+            self.count(palette.entries.len())?;
+            self.words(&palette.entries)?;
         }
         Ok(())
     }
