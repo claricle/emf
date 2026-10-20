@@ -2,6 +2,7 @@
 
 require "bindata"
 require "emf/emr/binary/with_bounds"
+require "emf/emr/binary/dib_header"
 
 module Emf
   module Emr
@@ -30,6 +31,11 @@ module Emf
           uint32le :off_bits_src
           uint32le :cb_bits_src
           rest :body
+
+          # Read-only; computed from the current fields on each call.
+          def dib_header_view
+            DibHeader.view(off_bmi_src, cb_bmi_src, 100, body)
+          end
         end
       end
     end

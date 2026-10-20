@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/emr/binary/dib_header"
 require "emf/emr/binary/record"
 
 module Emf
@@ -18,6 +19,11 @@ module Emf
           uint32 :off_bits
           uint32 :cb_bits
           rest :body
+
+          # Read-only; computed from the current fields on each call.
+          def dib_header_view
+            DibHeader.view(off_bmi, cb_bmi, 32, body)
+          end
         end
       end
     end
