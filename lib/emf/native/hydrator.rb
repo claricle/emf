@@ -2,6 +2,7 @@
 
 require_relative "fields"
 require_relative "font_fields"
+require_relative "gradient_fields"
 
 module Emf
   module Native
@@ -10,7 +11,7 @@ module Emf
         2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
         37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68,
         70, 71, 72, 73,
-        74, 75, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 95, 98, 115, 120
+        74, 75, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 95, 98, 115, 118, 120
       ].freeze
 
       def initialize(snapshot, input)
@@ -58,9 +59,9 @@ module Emf
       def wire_fields(record, raw)
         payload = record.fetch(:payload)
         case record.fetch(:family)
+        when 93 then GradientFields.call(payload, raw)
         when 0 then raw_fields(record, raw)
         when 1 then eof_fields(payload, raw)
-        when 2 then Fields.call(payload, 2)
         when 3, 45..53 then Fields.point_array(payload, record.fetch(:family))
         when 54..57 then Fields.multi_point_array(payload, record.fetch(:family))
         when 58, 59 then Fields.poly_draw(payload, record.fetch(:family))
@@ -68,7 +69,7 @@ module Emf
         when 33
           klass, fields = Fields.call(payload, 33)
           [klass, fields.merge(trailing: raw.byteslice(12..))]
-        when 5..44, 60..86, 91, 92 then scalar_fields(record, raw)
+        when 2, 5..44, 60..86, 91, 92 then scalar_fields(record, raw)
         else raise FormatError, "unsupported native snapshot record family #{record.fetch(:family)}"
         end
       end
@@ -94,12 +95,9 @@ module Emf
         Fields.call(record.fetch(:payload), family)
       end
 
-      def require_length(payload, length)
-        raise FormatError, "invalid native typed payload length" unless payload.bytesize == length
-      end
-
       def raw_fields(record, raw)
-        require_length(record.fetch(:payload), 0)
+        raise FormatError, "invalid native typed payload length" unless record.fetch(:payload).empty?
+
         type = record.fetch(:type)
         if !SUPPORTED_TYPES.include?(type) && Emr::Binary::Records.lookup(type) != Emr::Binary::Records::Raw
           raise FormatError, "native backend does not support typed EMR record #{type}"
@@ -109,7 +107,8 @@ module Emf
       end
 
       def eof_fields(payload, raw)
-        require_length(payload, 12)
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 12
+
         entries, offset, last = payload.unpack("V3")
         raise FormatError, "native backend does not support extended or paletted EOF records" unless entries.zero? && raw.bytesize == 20
 
@@ -120,7 +119,8 @@ module Emf
         raise FormatError, "invalid native COMMENT payload" if payload.bytesize < 8
 
         count = payload.unpack1("Q<")
-        require_length(payload, 8 + count)
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 8 + count
+
         data = payload.byteslice(8..) + (raw.byteslice((12 + count)..) || "".b)
         [Emr::Binary::Records::Comment, { cb_data: count, data: data }]
       end

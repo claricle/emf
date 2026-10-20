@@ -169,3 +169,14 @@ SELECTCLIPPATH snapshots contain only region_mode; adapters retain its optional 
 Float32 fields encode their IEEE 754 bits as little-endian u32 without conversion, preserving NaN payloads, signed zero, infinities and subnormals. Transform order is m11, m12, m21, m22, dx, dy. ABI version remains 1; snapshot schema remains 2.
 
 EXTFLOODFILL and SETTEXTJUSTIFICATION transport the entire compatibility body, including arbitrary bytes. They expose no semantic fields. Consumers must validate the exact body length before allocation or model construction. These tags extend schema 2 without changing ABI 1.
+
+### GradientFill (family 93)
+
+Family 93 (EMR 118) contains signed bounds (four i32), mode (u32),
+vertex count (u64), and mesh count (u64). Each vertex is two signed i32
+coordinates followed by red, green, blue, alpha u16 channels. Vertex bytes
+are followed by all mesh indices as u32: two per rectangle (modes 0/1),
+three per triangle (mode 2). Rectangle indices are followed by one retained
+padding u32 per rectangle. Opaque record suffix bytes are excluded; the Ruby
+adapter retains them from the source record. Length arithmetic is checked before
+allocating the owned snapshot; all arrays come from budgeted core parsing.

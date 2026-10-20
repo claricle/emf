@@ -5,6 +5,9 @@ use emf_core::{
     Point, RecordData, Rect, RegionData, Size, XForm,
 };
 
+#[path = "gradient_snapshot.rs"]
+mod gradient_snapshot;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Error {
     SizeOverflow,
@@ -35,7 +38,8 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::InvertRgn { .. } => 78,
         RecordData::PaintRgn { .. } => 79,
         RecordData::ExtSelectClipRgn { .. } => 80,
-        RecordData::Raw | RecordData::Bitmap(_) | RecordData::GradientFill(_) => 0,
+        RecordData::GradientFill(_) => 93,
+        RecordData::Raw | RecordData::Bitmap(_) => 0,
         RecordData::Eof(_) => 1,
         RecordData::SetMapMode { .. } => 2,
         RecordData::Polyline { .. } => 3,
@@ -397,7 +401,8 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         RecordData::ExtSelectClipRgn { region, .. } => region
             .as_ref()
             .map_or(Ok(8), |region| region_len(region, 8)),
-        RecordData::Raw | RecordData::Bitmap(_) | RecordData::GradientFill(_) => Ok(0),
+        RecordData::GradientFill(value) => gradient_snapshot::len(value),
+        RecordData::Raw | RecordData::Bitmap(_) => Ok(0),
         RecordData::ScaleViewportExtEx { .. } | RecordData::ScaleWindowExtEx { .. } => Ok(16),
         RecordData::SetWorldTransform { .. } => Ok(24),
         RecordData::ModifyWorldTransform { .. } => Ok(28),
@@ -633,7 +638,8 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                     region_payload(&mut out, region)?;
                 }
             }
-            RecordData::Raw | RecordData::Bitmap(_) | RecordData::GradientFill(_) => {}
+            RecordData::GradientFill(value) => gradient_snapshot::encode(&mut out, value)?,
+            RecordData::Raw | RecordData::Bitmap(_) => {}
             RecordData::ScaleViewportExtEx { scale } | RecordData::ScaleWindowExtEx { scale } => {
                 for value in [scale.x_num, scale.x_denom, scale.y_num, scale.y_denom] {
                     i32_field(&mut out, value);
@@ -1018,8 +1024,9 @@ mod tests {
     }
 
     #[test]
-    fn bitmap_and_gradient_core_records_export_as_compatible_raw_families() {
-        for (kind, length) in [(93, 24), (118, 28)] {
+    fn bitmap_core_records_export_as_compatible_raw_families() {
+        {
+            let (kind, length) = (93, 24);
             let mut input = fixture_header(88);
             record(&mut input, kind, &vec![0; length]);
             let document = emf_core::parse(&input, &emf_core::ParseLimits::default()).unwrap();
