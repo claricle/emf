@@ -2,8 +2,10 @@
 mod snapshot;
 mod types;
 mod wmf;
+mod wmf_snapshot;
 pub use types::*;
 pub use wmf::*;
+pub use wmf_snapshot::*;
 
 use emf_core::{Format, ParseFailure, ParseLimits, SerializeFailure};
 use std::{

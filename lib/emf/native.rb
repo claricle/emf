@@ -24,15 +24,27 @@ module Emf
 
       def parse(bytes)
         input = bytes.b
+        return parse_wmf(input) if %i[wmf_apm wmf_standard].include?(Detector.call(input))
+
         @loader.document(input) do |document|
           snapshot = Snapshot.new(@loader.snapshot(document))
           Hydrator.new(snapshot, input).call
         end
       end
 
+      def parse_wmf(input)
+        require_relative "native/wmf_snapshot"
+        require_relative "native/wmf_hydrator"
+        @loader.wmf_document(input) do |document|
+          snapshot = WmfSnapshot.new(@loader.wmf_snapshot(document))
+          WmfHydrator.new(snapshot, input).call
+        end
+      end
+
       def serialize(metafile)
         case metafile.format
         when :emf, :emf_plus then Emr::Serializer.call(metafile)
+        when :wmf then Wmf::Serializer.call(metafile)
         else raise SerializeError, "native backend cannot serialize #{metafile.format.inspect}"
         end
       end

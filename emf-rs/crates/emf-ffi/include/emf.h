@@ -219,6 +219,10 @@ int32_t emf_wmf_document_info(const emf_wmf_document *document, emf_info *out_in
 int32_t emf_wmf_record_batch(const emf_wmf_document *document, uint64_t start, uint64_t capacity, emf_record_descriptor *out_descriptors, uint64_t *out_count);
 int32_t emf_wmf_record_bytes(const emf_wmf_document *document, uint64_t index, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_wmf_replace_record(emf_wmf_document *document, uint64_t index, uint32_t function, const uint8_t *data, uint64_t length, emf_error **out_error);
+/* Owned WMFS v1 little-endian snapshot; maximum output 200 MiB.
+ * Uses the current serialized document after edits, reparsed with default limits.
+ * Free the returned buffer with emf_buffer_free. */
+int32_t emf_wmf_document_snapshot(const emf_wmf_document *document, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_wmf_serialize(const emf_wmf_document *document, emf_buffer **out_buffer, emf_error **out_error);
 void emf_wmf_document_free(emf_wmf_document *document);
 int32_t emf_buffer_view(const emf_buffer *buffer, const uint8_t **out_data, uint64_t *out_length);
