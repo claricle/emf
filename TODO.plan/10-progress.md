@@ -398,3 +398,26 @@ An inherited setup path reproduced dependency-loading failure with Ruby 3.2.3
 and Bundler 2.4.19; the regression passed all seven benchmark examples after
 the fix. A Ruby 3.4 control and changed-file lint also passed. Current-head CI
 remains required before the Ruby 3.2 CI failure can be reported as resolved.
+
+### Extended pen bridge and WMF object lifecycle
+
+Commit `dff26df` adds extended-pen snapshot family 81 and direct Ruby hydration,
+including typed unsigned fields, styles, bitmap spans, buffer ordering and padding.
+Commit `54e2f44` fixes the adapter spec's standalone native-fields dependency.
+Commit `be0d78f` restores legacy `body=`/`body.assign` mutation through typed
+fields and guards Ruby style counts before allocation. Malformed records retain
+their bytes and preserve subsequent records; invalid body writes are atomic.
+Complete extended-pen corpus acceptance remains open.
+
+Commit `3ce96d6` adds Ruby WMF CreatePenIndirect, CreateBrushIndirect,
+SelectObject and DeleteObject models with editable serialization and bounded
+object-table allocation, reference validation, deletion and slot reuse. Known
+opaque object creators reserve slots while retaining their bytes. High-bit stock
+selectors remain opaque. Other object payloads, drawing-state semantics and
+native WMF remain open.
+
+The integrated checkpoint passed 130 affected Ruby examples (seed 13541),
+`cargo test --workspace`, strict workspace Clippy, formatting and the linked C
+smoke client. The WMF worker's seven changed Ruby files lint clean; eight new
+regressions failed against the previous implementation. Current-head CI, complete
+registry/corpus parity and performance/platform acceptance remain open.
