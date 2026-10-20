@@ -10,7 +10,8 @@ module Emf
       class FastFill
         DIRECTIVES = {
           "BinData::Uint32le" => "V",
-          "BinData::Int32le" => "l<"
+          "BinData::Int32le" => "l<",
+          "BinData::Uint8" => "C"
         }.freeze
         EMPTY_SUFFIX = "".b.freeze
         private_constant :DIRECTIVES, :EMPTY_SUFFIX
@@ -63,7 +64,10 @@ module Emf
           end
         end
 
-        ENABLED_TYPES = [TypeCodes::SELECTOBJECT].freeze
+        ENABLED_TYPES = [
+          TypeCodes::SELECTOBJECT, TypeCodes::MOVETOEX, TypeCodes::LINETO,
+          TypeCodes::DELETEOBJECT, TypeCodes::CREATEBRUSHINDIRECT
+        ].freeze
         BY_TYPE = ENABLED_TYPES.to_h { |type_id| [type_id, new(Records.lookup(type_id))] }.freeze
         private_constant :ENABLED_TYPES, :BY_TYPE
       end
