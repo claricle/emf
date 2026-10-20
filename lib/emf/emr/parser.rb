@@ -159,10 +159,25 @@ module Emf
         end
 
         wire_class = Emf::Emr::Binary::Records.lookup(type_id)
-        wire_class.read(head + payload)
+        verify_consumed(wire_class.read(head + payload), head, payload, offset, errors)
       rescue StandardError => e
         errors << ParseError.new(offset: offset, record_code: type_id,
                                  message: "#{e.class}: #{e.message}")
+        build_raw(head, payload)
+      end
+
+      def verify_consumed(wire, head, payload, offset, errors)
+        return wire if wire.is_a?(Emf::Emr::Binary::Records::Raw)
+
+        type_id, n_size = head.unpack("VV")
+        consumed = wire.to_binary_s.bytesize
+        return wire if consumed == n_size
+
+        errors << ParseError.new(
+          offset: offset, record_code: type_id,
+          message: "record at offset #{offset} (type #{type_id}) declares nSize #{n_size} " \
+                   "but its layout consumed #{consumed}; preserving as Raw"
+        )
         build_raw(head, payload)
       end
 
