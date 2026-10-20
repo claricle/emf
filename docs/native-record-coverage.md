@@ -12,7 +12,7 @@ The ten bitmap TODO rows are `BitBlt` (76), `StretchBlt` (77), `MaskBlt` (78), `
 
 ## SmallTextOut fixed-prefix support
 
-`SmallTextOut` (EMR 108) is not wholly opaque: native hydration decodes its 28-byte fixed payload prefix (36 bytes including header) and preserves the remaining text/options-dependent bytes as `body` ([fields](../lib/emf/native/small_text_fields.rb), [hydrator](../lib/emf/native/hydrator.rb)). The focused spec covers prefix edits, body preservation, short-record raw fallback and following-record continuity ([spec](../spec/emf/native/small_text_adapter_spec.rb)). Its TODO row records this partial typed-prefix support; text interpretation based on `cChars`/`fuOptions`, option variants, and corpus/truncation coverage remain unproven.
+`SmallTextOut` (EMR 108) exposes the 28-byte fixed payload prefix, a raw 16-byte optional block, and a count/flag-dependent binary `text_bytes` view; same-length edits preserve record layout ([fields](../lib/emf/native/small_text_fields.rb), [hydrator](../lib/emf/native/hydrator.rb)). The focused semantic spec proves Ruby/native parity and that semantic truncation raises, while existing controls preserve raw-body snapshots, suffix bytes, and short-body behavior ([semantic spec](../spec/emf/native/small_text_out_semantics_spec.rb), [adapter spec](../spec/emf/native/small_text_adapter_spec.rb)). Rendering, Unicode conversion, and full variant/corpus proof remain open.
 
 ## Opaque compatibility and status correction
 
@@ -44,6 +44,7 @@ the current literal Ruby declarations without loading native code or parsing a
 fixture. A future dynamic registry requires updating this extractor.
 
 Passing inventory checks does not prove semantic dispatch or corpus coverage.
-Opaque-body records and SmallTextOut's variable text body retain semantic gaps;
-newly exposed scalar fields likewise do not prove complete registered variants or
-corpus coverage. P11 remains incomplete pending full variant/corpus evidence.
+Opaque-body records retain semantic gaps; SmallTextOut exposes a binary text view
+but does not implement rendering or Unicode conversion. These controls likewise do
+not prove complete registered variants or corpus coverage. P11 remains incomplete
+pending full variant/corpus evidence.
