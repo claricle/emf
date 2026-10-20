@@ -1,12 +1,18 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "rbconfig"
 require_relative "../../support/extended_pen_records"
 
 RSpec.describe "native extended pen hydration" do
   include ExtendedPenRecords
 
-  let(:library) { ENV.fetch("EMF_TEST_NATIVE_LIBRARY") }
+  let(:library) do
+    ENV.fetch("EMF_TEST_NATIVE_LIBRARY") do
+      extension = RbConfig::CONFIG.fetch("host_os").include?("darwin") ? "dylib" : "so"
+      File.expand_path("../../../emf-rs/target/debug/libemf_ffi.#{extension}", __dir__)
+    end
+  end
   let(:header) { Emf::Emr::Binary::Header.new(i_type: 1, n_size: 108, d_signature: 0x464D4520).to_binary_s }
   let(:eof) { [14, 20, 0, 0, 20].pack("V*") }
   let(:unknown) { "#{[0xFFFF, 12].pack('V2')}RAW!" }
@@ -19,6 +25,8 @@ RSpec.describe "native extended pen hydration" do
   ensure
     %w[EMF_BACKEND EMF_NATIVE_LIBRARY].each { |key| ENV[key] = previous[key] }
   end
+
+  before { skip "build emf-ffi or set EMF_TEST_NATIVE_LIBRARY" unless File.file?(library) }
 
   it "hydrates semantic fields directly and preserves ordered spans, suffixes and subsequent records" do
     expect(Emf::Emr::Parser).not_to receive(:call)

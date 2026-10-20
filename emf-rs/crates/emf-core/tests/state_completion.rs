@@ -118,7 +118,7 @@ fn truncated_fixed_fields_stay_raw_with_diagnostics_and_continue_framing() {
 #[test]
 fn unknown_ids_and_cross_family_edits_preserve_original_records() {
     use emf_core::EditFailure;
-    for kind in [23, 48, 52, 69, 97, 99, 114, 116, 119, 121, 999] {
+    for kind in [23, 69, 97, 99, 114, 116, 119, 121, 999] {
         let mut input = header();
         input.extend(record(kind, b"unknown\xff"));
         let mut doc = parse(&input, &ParseLimits::default()).unwrap();

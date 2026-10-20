@@ -1134,8 +1134,8 @@ RSpec.describe Emf::Native do
     allow(loader).to receive(:invoke).and_call_original
     expect(loader).to receive(:invoke).with(:emf_document_free, anything).and_call_original
     expect(Emf::Emr::Parser).not_to receive(:call)
-    expect { backend.parse(header + [49, 12, 1].pack("V3") + eof) }
-      .to raise_error(Emf::FormatError, /does not support typed EMR record 49/)
+    expect { backend.parse(header + [76, 12, 1].pack("V3") + eof) }
+      .to raise_error(Emf::FormatError, /does not support typed EMR record 76/)
   end
 
   it "preserves malformed supported records as Raw with native diagnostics and unframed bytes" do
