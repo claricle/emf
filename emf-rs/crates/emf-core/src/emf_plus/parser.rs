@@ -91,6 +91,8 @@ pub(crate) fn parse_segments_budget(
             )?)
         } else if matches!(kind, 0x401c | 0x4036) {
             RecordData::Text(super::text::decode(kind, data_bytes, offset, budget)?)
+        } else if kind == 0x403a && flags & 0x8000 == 0 {
+            RecordData::TSClip(super::tsclip::decode(data_bytes, flags, offset, budget)?)
         } else if kind == 0x4039 {
             RecordData::TSGraphics(super::tsgraphics::decode(
                 data_bytes, flags, offset, budget,

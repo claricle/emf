@@ -11,6 +11,8 @@ pub use object_data::{
     LinearGradient, ObjectData, Path, PathGradient, PathPointRun, PathPointTypes, Pen, PenBrush,
     PenBrushData, PixelBitmap, Region, RegionNode, StringFormat, Texture, TextureImage,
 };
+mod tsclip;
+pub use tsclip::TSClip;
 mod tsgraphics;
 pub use tsgraphics::{Palette, TSGraphics};
 mod effects;

@@ -1,12 +1,22 @@
 # 09 — Complete typed WMF and structured EMF+
 
-Status: **In progress**. Estimate: **15–25 additional engineering days**, provisional after specification/fixture discovery. This is additional to the estimated 20–30 days for the initial EMF/native delivery; it is not an implied promise that all new-format scope fits that initial estimate.
+Status: **In progress; substantial typed implementations exist, whole-format acceptance remains open**. The original **15–25 additional engineering days** estimate is historical and has not been re-estimated from the current inventory. This is additional to the estimated 20–30 days for the initial EMF/native delivery; it is not an implied promise that all new-format scope fits that initial estimate.
 
 ## Problem and scope
 
 [Issue #15](https://github.com/claricle/emf/issues/15) includes typed EMF, EMF+ and WMF. Staging EMF parity first does not remove the other formats from issue completion.
 
-The Ruby WMF implementation recognizes standard and Aldus placeable headers and provides bounded record framing, EOF, MoveTo/LineTo, window/viewport origins and extents, Rectangle/Ellipse, Polygon/Polyline/PolyPolygon, Arc/Pie/Chord/RoundRect, window/viewport offsets and object creation/selection/deletion. Two synthetic fixtures cover both header containers. Native WMF, remaining record families and full specification/fixture coverage remain open. `lib/emf/emf_plus/parser.rb` and `serializer.rb` are also stubs. The current EMF parser concatenates EMF+ comment payloads into raw bytes and exposes them through `Model::Metafile#emf_plus`; this is not structured EMF+ decoding.
+The Ruby and native implementations now contain typed WMF record families and
+substantial structured EMF+ parsers/serializers; the earlier stub description is
+obsolete. The optional Ruby `Metafile#emf_plus_stream` view coexists with the raw
+`Metafile#emf_plus` String. Native `emf_core::emf_plus` has record/object/effect
+families and `Document::structured_emf_plus` / `apply_structured_emf_plus` for
+bounded, stale-checked comment editing. These implementations are not proof of
+whole-format acceptance. See the [cross-layer EMF+ inventory](../docs/format-coverage/emf-plus.md),
+[native details](../docs/format-coverage/native-emf-plus.md) and
+[Ruby inventory](09-emf-plus-coverage.md) for typed versus opaque boundaries.
+Native compressed SetTSClip and dedicated Comment interpretation, independent
+rendering oracles and complete cross-layer/platform acceptance remain open.
 
 Use `reference-docs/ms-wmf/`, `reference-docs/ms-emfplus/`, `reference-docs/ms-emf/` and their source specifications to build the coverage inventory. `kaitai-struct-wmf.ksy` can inform investigation but does not establish specification coverage or a new dependency. Parsanol remains an architectural reference only.
 
@@ -27,7 +37,7 @@ Use `reference-docs/ms-wmf/`, `reference-docs/ms-emfplus/`, `reference-docs/ms-e
 2. Acquire licensed WMF fixtures covering standard and placeable headers, both standard types, coordinate mapping, object creation/selection/deletion, drawing, text, palettes, bitmaps and escapes. Add minimal generated fixtures for missing families, invalid sizes/counts, handle misuse and checksum/header edge cases. Record which cases require rendering goldens or a trusted independent oracle; current Ruby stub behavior is not a correctness oracle.
 3. Implement WMF detection/header validation and typed record decoding with checked word-to-byte conversion, signedness, units, object table bounds and record progress. Preserve placeable metadata, unknown payloads, padding and trailing bytes where required. Implement serialization in the same family increments, including unchanged byte-identical output and explicit length/header/checksum updates after edits. Test standard/placeable detection ambiguity and malformed inputs. Prove any new interpretation with fixture assertions.
 4. Inventory EMF+ framing, flags, versions, object definitions/references, continuation/multi-record objects, drawing/text/image families, nested data and EMF dual-mode comments. Acquire licensed embedded examples and minimal boundary fixtures. Preserve comment segmentation and bytes for unchanged EMF serialization, even when the logical EMF+ stream spans comments; concatenated bytes alone do not retain all framing information.
-5. Resolve the representation gate before adding public accessors: retain the current `Metafile#emf_plus` raw-byte value and its CLI/dump byte-array representation. Design an optional typed model alongside it without changing existing return types or silently replacing raw data. Specify how typed edits map back to comment chunks, how raw-byte/wire mutations invalidate typed caches, and which source wins if both are edited. Record this decision and its compatibility tests in the coverage document. New optional API names remain undecided until this gate is resolved.
+5. Resolve the representation gate before adding public accessors: retain the current `Metafile#emf_plus` raw-byte value and its CLI/dump byte-array representation. Design an optional typed model alongside it without changing existing return types or silently replacing raw data. Specify how typed edits map back to comment chunks, how raw-byte/wire mutations invalidate typed caches, and which source wins if both are edited. Record this decision and its compatibility tests in the coverage document. The implemented Ruby optional API is `emf_plus_stream`; native extraction/application uses `structured_emf_plus` / `apply_structured_emf_plus`. Preserve their explicit stale-source/apply behavior and verify mapping independently.
 6. Implement EMF+ record/object decoding and serialization by family, with bounds for recursive/nested structures and expanded data. Extend ABI batch metadata/accessors and Ruby visitors without breaking EMF callers. Define standalone EMF+ parsing behavior from the specification/API inventory rather than assuming the current top-level detector supports it. An unimplemented typed family must remain visibly open even if its raw bytes round-trip.
 7. For each family add positive typed assertions, negative/resource-limit cases, exact unedited round-trips, mutable round-trips and rendering goldens where applicable. Extend [06-resilience.md](06-resilience.md) fuzz targets and [07-performance.md](07-performance.md) workloads. Test Ruby fallback behavior for the newly advertised formats: a native-only implementation cannot silently claim equivalent fallback coverage.
 8. Close the coverage inventory only after every promised family has implementation and tests, all conditional/version cases have a stated outcome, and unresolved interpretation/fixture gaps are tracked. An EMF-only milestone may ship separately, but complete issue scope remains open until WMF and structured EMF+ acceptance is met.
@@ -39,8 +49,10 @@ The bounded Ruby WMF suite passed 36 examples at `1735620` with
 count and size validation, placeable checksums and unknown-byte preservation.
 They do not establish full WMF or native coverage.
 
-The following commands remain planned full-format checks after the required
-fixtures, modules and tests exist:
+Historical commands below describe intended checks, not current passing evidence;
+verify actual spec paths before execution. Modules and family tests now exist.
+The focused native TSClip checkpoint is tracked in the EMF+ inventory; full-format
+and cross-platform checks remain separate:
 
 ```sh
 ruby script/fixture_manifest --check
