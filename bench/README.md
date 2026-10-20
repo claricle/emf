@@ -32,6 +32,56 @@ the library exposes no build metadata, so a filename does not establish a releas
 The exit status is 1 when any warm or cold fixture child failed, timed out, exceeded the RSS ceiling or produced an invalid
 result (the JSON is still written with a `failures` list).
 
+## CI smoke benchmark
+
+The single-runner [parser benchmark workflow](../.github/workflows/parser-benchmark.yml)
+builds the locked Rust release library, then saves forced Ruby and native reports
+for `spec/fixtures/simple/image1.emf` under `tmp/bench/`. It uses 20 iterations,
+5 warmups, 3 cold runs, a 60-second per-fixture deadline and a 2048 MiB
+child-process-group RSS ceiling. Manifest capture uses the same RSS ceiling
+and a 15-second deadline. The native run sets
+`EMF_NATIVE_LIBRARY` to `emf-rs/target/release/libemf_ffi.so`. Both reports are
+uploaded as the `parser-benchmark-reports` artifact, including when a benchmark
+fails. This small smoke workload checks reportable runs and makes no speedup
+claim or timing threshold assertion. The workflow creates and uploads a
+single-fixture schema-v2 manifest using the current `FixtureManifest` helpers;
+the manifest and reports preserve the fixture and source identity used by both runs.
+
+The equivalent local commands on Linux, after building the native library, are:
+
+```sh
+cargo build --release --locked -p emf-ffi --manifest-path emf-rs/Cargo.toml
+mkdir -p tmp/bench
+bundle exec ruby -Ilib <<'RUBY'
+require "json"
+require_relative "spec/support/fixture_manifest"
+root = Dir.pwd
+path = "spec/fixtures/simple/image1.emf"
+entry = FixtureManifest.fixtures(root).find { |fixture| fixture.fetch("path") == path }
+abort "fixture missing from manifest" unless entry
+runner = FixtureManifest::Runner.new(timeout: 15, rss_limit_bytes: 2048 * 1024 * 1024)
+observation = runner.call(File.join(root, path))
+abort "fixture observation failed: #{observation.inspect}" if observation["safety_failure"]
+manifest = {
+  "schema_version" => FixtureManifest::SCHEMA_VERSION,
+  "capture" => FixtureManifest::CAPTURE_METADATA,
+  "backend" => {
+    "name" => "ruby",
+    "ruby_version" => RUBY_VERSION,
+    "bindata_version" => Gem.loaded_specs.fetch("bindata").version.to_s,
+    "parser_source_sha256" => FixtureManifest.source_sha256(root)
+  },
+  "counts" => FixtureManifest.counts([entry]),
+  "fixtures" => [entry.merge(observation)]
+}
+File.write("tmp/bench/manifest-v2.json", JSON.pretty_generate(manifest))
+RUBY
+bundle exec ruby bench/parser.rb --manifest tmp/bench/manifest-v2.json --backend ruby --fixture spec/fixtures/simple/image1.emf --iterations 20 --warmups 5 --cold-runs 3 --timeout 60 --rss-limit-mb 2048 --output tmp/bench/parser-ruby.json
+EMF_NATIVE_LIBRARY="$PWD/emf-rs/target/release/libemf_ffi.so" bundle exec ruby bench/parser.rb --manifest tmp/bench/manifest-v2.json --backend native --fixture spec/fixtures/simple/image1.emf --iterations 20 --warmups 5 --cold-runs 3 --timeout 60 --rss-limit-mb 2048 --output tmp/bench/parser-native.json
+```
+
+On macOS, set the native library path to the built `.dylib` instead.
+
 ## What is measured
 
 Each fixture runs in its own child process with an external deadline and a bounded
