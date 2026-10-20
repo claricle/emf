@@ -1,8 +1,8 @@
 //! Version 2 owned snapshot encoding. All fields are explicitly little-endian.
 
 use emf_core::{
-    DiagnosticKind, Document, EmfHeader, ExtTextOut, Point, RecordData, Rect, RegionData, Size,
-    XForm,
+    DiagnosticKind, Document, EmfHeader, ExtCreatePen, ExtTextOut, Point, RecordData, Rect,
+    RegionData, Size, XForm,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -13,6 +13,7 @@ pub(crate) enum Error {
 
 pub(crate) fn family(data: &RecordData) -> u32 {
     match data {
+        RecordData::ExtCreatePen(_) => 81,
         RecordData::ExtTextOutA(_) => 74,
         RecordData::ExtTextOutW(_) => 75,
         RecordData::SetMapperFlags { .. } => 66,
@@ -147,6 +148,65 @@ fn region_payload(out: &mut Vec<u8>, region: &RegionData) -> Result<(), Error> {
     Ok(())
 }
 
+// Family 81: six scalar words, style count, presence/order flags, four byte
+// lengths, style words, info/bits bytes, then their preceding padding bytes.
+fn pen_len(pen: &ExtCreatePen) -> Result<usize, Error> {
+    let mut len = 76usize;
+    add_len(
+        &mut len,
+        pen.style_entries
+            .len()
+            .checked_mul(4)
+            .ok_or(Error::SizeOverflow)?,
+    )?;
+    for bytes in [
+        pen.bitmap_info.as_deref().unwrap_or(&[]),
+        pen.bitmap_bits.as_deref().unwrap_or(&[]),
+        &pen.info_padding,
+        &pen.bits_padding,
+    ] {
+        add_len(&mut len, bytes.len())?;
+    }
+    Ok(len)
+}
+
+fn pen_payload(out: &mut Vec<u8>, pen: &ExtCreatePen) -> Result<(), Error> {
+    for value in [pen.ih_pen, pen.pen_style, pen.width, pen.brush_style] {
+        u32_field(out, value);
+    }
+    out.extend_from_slice(&[
+        pen.color.red,
+        pen.color.green,
+        pen.color.blue,
+        pen.color.reserved,
+    ]);
+    u32_field(out, pen.brush_hatch);
+    u64_field(out, wire_len(pen.style_entries.len())?);
+    for flag in [
+        pen.bitmap_info.is_some(),
+        pen.bitmap_bits.is_some(),
+        pen.bits_first,
+    ] {
+        u32_field(out, u32::from(flag));
+    }
+    let buffers = [
+        pen.bitmap_info.as_deref().unwrap_or(&[]),
+        pen.bitmap_bits.as_deref().unwrap_or(&[]),
+        &pen.info_padding,
+        &pen.bits_padding,
+    ];
+    for bytes in buffers {
+        u64_field(out, wire_len(bytes.len())?);
+    }
+    for value in &pen.style_entries {
+        u32_field(out, *value);
+    }
+    for bytes in buffers {
+        out.extend_from_slice(bytes);
+    }
+    Ok(())
+}
+
 fn text_len<T>(text: &ExtTextOut<T>) -> Result<usize, Error> {
     let mut len = 104;
     add_len(
@@ -212,6 +272,7 @@ fn text_payload<T>(
 
 fn payload_len(data: &RecordData) -> Result<usize, Error> {
     match data {
+        RecordData::ExtCreatePen(pen) => pen_len(pen),
         RecordData::ExtTextOutA(text) => text_len(text),
         RecordData::ExtTextOutW(text) => text_len(text),
         RecordData::SetMapperFlags { .. }
@@ -375,6 +436,7 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
         u32_field(&mut out, family(record.data()));
         u64_field(&mut out, wire_len(payload_len(record.data())?)?);
         match record.data() {
+            RecordData::ExtCreatePen(pen) => pen_payload(&mut out, pen)?,
             RecordData::ExtTextOutA(text) => {
                 text_payload(&mut out, text, |out, value| out.push(*value))?
             }

@@ -247,6 +247,62 @@ module Emf
         [offsets, trailing + raw.byteslice(consumed..)]
       end
 
+      def self.extended_pen(payload, raw)
+        raise FormatError, "invalid native extended pen payload" if payload.bytesize < 76
+
+        count = payload.byteslice(24, 8).unpack1("Q<")
+        info, bits, first = payload.byteslice(32, 12).unpack("V3")
+        lengths = payload.byteslice(44, 32).unpack("Q<4")
+        raise FormatError, "invalid native extended pen length" unless payload.bytesize == 76 + (count * 4) + lengths.sum
+        raise FormatError, "native extended pen exceeds Ruby model limit" if count > 1_000_000 || payload.bytesize > 0xFFFFFFFF
+
+        pen_layout!([info, bits, first], lengths)
+
+        cursor = 76 + (count * 4)
+        parts = lengths.map do |length|
+          bytes = payload.byteslice(cursor, length)
+          cursor += length
+          bytes
+        end
+        offsets, buffers = pen_buffers(parts, [info, bits], first, 52 + (count * 4), raw)
+        values = payload.unpack("V6")
+        [Emr::Binary::Records::ExtCreatePen,
+         { ih_pen: values[0], pen_style: values[1], width: values[2], brush_style: values[3],
+           color: %i[red green blue reserved].zip(payload.byteslice(16, 4).unpack("C4")).to_h,
+           brush_hatch: values[5], num_style_entries: count, style_entries: payload.byteslice(76, count * 4).unpack("V*"),
+           off_bmi: offsets[0], cb_bmi: lengths[0], off_bits: offsets[1], cb_bits: lengths[1], buffers: buffers }]
+      end
+
+      def self.pen_layout!(flags, lengths)
+        valid = flags.all? { |flag| (0..1).cover?(flag) }
+        valid &&= flags[0] == 1 || [lengths[0], lengths[2]].all?(&:zero?)
+        valid &&= flags[1] == 1 || [lengths[1], lengths[3], flags[2]].all?(&:zero?)
+        raise FormatError, "invalid native extended pen layout" unless valid
+      end
+
+      def self.pen_buffers(parts, presence, first, fixed, raw)
+        offsets = [0, 0]
+        buffers = {}
+        cursor = fixed
+        (first == 1 || presence == [0, 1] ? [1, 0] : [0, 1]).each_with_index do |kind, index|
+          prefix = index.zero? ? "first" : "second"
+          padding, bytes = parts.values_at(kind + 2, kind)
+          cursor += padding.bytesize
+          if presence[kind] == 1
+            raise FormatError, "invalid native extended pen alignment" unless (cursor % 4).zero?
+
+            offsets[kind] = cursor
+          end
+          buffers[:"#{prefix}_padding"] = padding
+          buffers[:"#{prefix}_bitmap"] = bytes
+          cursor += bytes.bytesize
+        end
+        raise FormatError, "invalid native extended pen span" if cursor > raw.bytesize
+
+        buffers[:trailing] = raw.byteslice(cursor..)
+        [offsets, buffers]
+      end
+
       def self.region(payload, family, raw)
         klass = [Emr::Binary::Records::FillRgn, Emr::Binary::Records::FrameRgn,
                  Emr::Binary::Records::InvertRgn, Emr::Binary::Records::PaintRgn,
