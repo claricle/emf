@@ -27,6 +27,7 @@ to validate a complete playback document.
 - DrawString raw UTF-16, layout and format ID; DrawDriverString glyphs, positions,
   realized-advance layout and optional transform.
 - Object fragment headers with object ID/type and optional TotalObjectSize.
+- SetTSGraphics raw rendering state and transform bits, with optional bounded palette.
 - SerializableObject image effects: all eleven standard GUID parameter layouts,
   retaining ignored record flags, raw float/Boolean/enum words and signed fields.
 
@@ -208,3 +209,14 @@ work share the enclosing parse/serialize limits, with counted wire availability
 checked before reserve. `emf_plus_effects.rs` covers all GUIDs/fields, mutable and
 exact roundtrips, malformed counts/lengths, unknown buffers, split segments,
 ignored flags/padding preservation, growth/shrink and resource limits.
+
+SetTSGraphics exposes `RecordData::TSGraphics` and an optional `Palette` with raw
+style flags and ARGB entries. All rendering enums, ignored flags, V, signed render
+origins, text contrast and transform float bits survive unchanged. The T flag must
+agree with palette presence; edited palette counts and record sizes derive from
+the entries. Known layouts require exact lengths and count availability before
+allocation, with palette entries charged to shared allocation/work limits. Public
+`emf_plus_tsgraphics.rs` tests cover all flag combinations, exact fields/bytes,
+mutable state and palette growth/shrink/removal, malformed layouts, budget
+thresholds and Document repacking with atomic failures/stale-source protection.
+SetTSClip's compressed delta rectangles remain opaque pending interpretation.

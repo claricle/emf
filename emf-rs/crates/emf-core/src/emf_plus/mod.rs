@@ -11,6 +11,8 @@ pub use object_data::{
     LinearGradient, ObjectData, Path, PathGradient, PathPointRun, PathPointTypes, Pen, PenBrush,
     PenBrushData, Region, RegionNode, StringFormat, Texture, TextureImage,
 };
+mod tsgraphics;
+pub use tsgraphics::{Palette, TSGraphics};
 mod effects;
 pub use effects::Effect;
 mod text;
