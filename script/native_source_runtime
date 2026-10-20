@@ -1,0 +1,38 @@
+# frozen_string_literal: true
+
+# Child process workload: resolve emf exclusively from the smoke's GEM_HOME.
+require "emf"
+
+home = File.realpath(ENV.fetch("GEM_HOME")) + File::SEPARATOR
+spec = Gem.loaded_specs.fetch("emf")
+abort "emf resolved outside GEM_HOME" unless File.realpath(spec.full_gem_path).start_with?(home)
+entry = $LOADED_FEATURES.find { |path| path.end_with?("/emf.rb") }
+unless entry && File.realpath(entry).start_with?(File.realpath(spec.full_gem_path) + File::SEPARATOR)
+  abort "emf loaded outside installed gem"
+end
+abort "Fiddle loaded eagerly" if $LOADED_FEATURES.any? { |path| path.match?(%r{(?:\A|/)fiddle(?:[/.]|\z)}) }
+
+# Fixed EMF header, one editable COLORREF record, EOF and preserved trailing data.
+header = [1, 88, *Array.new(8, 0), 0x464D4520, 0x10000, 120, 3].pack("V*") +
+         [1, 0].pack("v2") + Array.new(7, 0).pack("V*")
+bytes = header + [24, 12, 0x00030201, 14, 20, 0, 0, 20].pack("V*") + "tail".b
+meta = Emf.parse(bytes)
+abort "wrong format or record API" unless meta.format == :emf && meta.records.size == 2 && meta.errors.empty?
+abort "roundtrip differs" unless Emf.serialize(meta) == bytes
+record = meta.records.first
+record.wire.color.red = 0xAB
+mutated = Emf.serialize(meta)
+expected = bytes.dup
+expected.setbyte(96, 0xAB)
+abort "mutable wire edit differs" unless mutated == expected && Emf.parse(mutated).records.first.wire.color.red.to_i == 0xAB
+abort "reparse roundtrip differs" unless Emf.serialize(Emf.parse(mutated)) == mutated
+begin
+  Emf.parse("bad".b)
+  abort "invalid input accepted"
+rescue Emf::FormatError
+  # Parser errors remain parser errors, independently of backend availability.
+end
+loaded_native = $LOADED_FEATURES.any? { |path| path.match?(%r{/(?:fiddle[/.]|emf/native/(?:loader|snapshot|hydrator)\.rb)}) }
+abort "source runtime loaded native machinery" if loaded_native
+puts "source runtime #{ENV.fetch('EMF_BACKEND')}: installed=true mutable_wire=true roundtrip=true " \
+     "invalid_input=FormatError native_loaded=false"

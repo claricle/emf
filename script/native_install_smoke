@@ -8,7 +8,9 @@
 # Installs emf from the .gem files in DIR into an isolated GEM_HOME with
 # --local, then checks that RubyGems picked the NAME platform gem, that nothing
 # was compiled, and that the installed library loads through Fiddle and returns
-# the ABI version recorded in platforms.json.
+# the ABI version recorded in platforms.json. Source gems must also load and
+# parse/mutate/serialize through Ruby in isolated auto and ruby processes.
+# Their BinData dependency must be staged and --resolve-dependencies enabled.
 #
 # --require-native: fail instead of skipping when this Ruby cannot use NAME.
 # --resolve-dependencies: resolve runtime dependencies from .gem files in DIR
@@ -19,7 +21,6 @@
 # "no extensions, nothing built" assertions still hold.
 
 require "digest"
-require "fiddle"
 require "json"
 require "open3"
 require "optparse"
@@ -49,20 +50,16 @@ class NativeInstallSmoke
       spec = installed_spec(home)
       check_selection(spec, home)
       check_library(spec)
+      check_source_runtime(home) if @platform == "ruby"
     end
     puts "native install smoke passed (#{@platform})"
   end
 
   private
 
-  def fail!(message)
-    warn "native install smoke failed: #{message}"
-    exit 1
-  end
+  def fail!(message) = abort "native install smoke failed: #{message}"
 
-  def compilers
-    COMPILERS.select { |tool| on_path?(tool) }
-  end
+  def compilers = COMPILERS.select { |tool| on_path?(tool) }
 
   # PATHEXT is honoured on any host where it is set, so Windows compilers
   # (gcc.exe, rustc.exe) are found and the check can be tested off Windows.
@@ -86,9 +83,7 @@ class NativeInstallSmoke
     false
   end
 
-  def skip
-    puts "skipped: #{@platform} does not match #{Gem::Platform.local}"
-  end
+  def skip = puts "skipped: #{@platform} does not match #{Gem::Platform.local}"
 
   def version
     gems = Dir.glob(File.join(@directory, "emf-*.gem"))
@@ -136,9 +131,20 @@ class NativeInstallSmoke
     puts "library #{File.basename(path)} reports ABI #{actual}"
   end
 
+  def check_source_runtime(home)
+    %w[auto ruby].each do |backend|
+      env = CLEAN_ENV.merge("GEM_HOME" => home, "GEM_PATH" => home,
+                            "EMF_BACKEND" => backend, "EMF_NATIVE_LIBRARY" => nil)
+      out, status = Open3.capture2e(env, RbConfig.ruby, File.join(__dir__, "native_source_runtime"), chdir: home)
+      fail!("source runtime #{backend} failed: #{out}") unless status.success?
+      print out
+    end
+  end
+
   # Windows cannot delete a loaded DLL, so the handle is closed before the
   # temporary GEM_HOME is removed.
   def abi_version(path)
+    require "fiddle"
     handle = Fiddle::Handle.new(path)
     Fiddle::Function.new(handle[@abi_symbol], [], Fiddle::TYPE_INT).call
   rescue Fiddle::DLError => e

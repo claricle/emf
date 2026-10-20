@@ -283,13 +283,13 @@ RSpec.describe "native install smoke integrity without a toolchain" do
     end
   end
 
-  it "installs the source gem without a compiler or native manifest" do
+  it "rejects a source installation without its runtime dependency" do
     Dir.mktmpdir("emf-install-source") do |directory|
       package.call(directory, native: false)
       out, err, status = smoke.call(directory, "ruby")
-      expect(status.exitstatus).to eq(0)
-      expect(err).not_to include("native install smoke failed")
-      expect(out).to include("compilers on PATH: none", "native install smoke passed (ruby)")
+      expect(status.exitstatus).to eq(1)
+      expect(err).to include("source runtime auto failed", "bindata")
+      expect(out).to include("compilers on PATH: none")
     end
   end
 end
