@@ -111,6 +111,46 @@ RSpec.describe "Native WMF bridge" do
     expect(Emf.parse(Emf.serialize(parsed)).records[1].dx).to eq([13, 5])
   end
 
+  it "matches Ruby and native optional BitBlt bitmap forms through the public bridge" do
+    bitmap = "\xDE\xAD\xBE\xEF".b
+    suffix = "\xAA\xBB".b
+    cases = [
+      [0x0A22, [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xBEEF, 0xFFFF, 2, 0xFFFD, 4].pack("v*"),
+       nil, 0xBEEF, suffix],
+      [0x0922, [0xAA99, 0xCCBB, 0x8000, 0x7FFF, 0xFFFF, 2, 0xFFFD, 4].pack("v*"),
+       bitmap, 0, "".b]
+    ]
+    fields = %i[type_id raster_operation source_y source_x height width destination_y destination_x reserved bitmap suffix]
+
+    inputs = cases.map do |type, body, expected_bitmap, _expected_reserved, expected_suffix|
+      native_wmf_bytes([native_wmf_record(type, body + (expected_bitmap || "".b) + expected_suffix)])
+    end
+    ENV["EMF_BACKEND"] = "ruby"
+    fallback_parses = inputs.map do |input|
+      parsed = Emf.parse(input)
+      [parsed, Emf.serialize(parsed)]
+    end
+
+    expect(Emf::Wmf::Parser).not_to receive(:call)
+    ENV["EMF_BACKEND"] = "native"
+    cases.zip(inputs, fallback_parses).each do |(_type, _body, expected_bitmap, expected_reserved, expected_suffix), input, fallback_data|
+      fallback, fallback_bytes = fallback_data
+      native = Emf.parse(input)
+      native_bytes = Emf.serialize(native)
+      fallback_record = fallback.records.first
+      native_record = native.records.first
+
+      expect(fallback_record).to be_a(Emf::Model::Wmf::Records::BitBlt)
+      expect(native_record).to be_a(Emf::Model::Wmf::Records::BitBlt)
+      expect(fields.map { |field| native_record.public_send(field) })
+        .to eq(fields.map { |field| fallback_record.public_send(field) })
+      expect(native_record.bitmap).to eq(expected_bitmap)
+      expect(native_record.reserved).to eq(expected_reserved)
+      expect(native_record.suffix).to eq(expected_suffix)
+      expect([fallback_bytes, native_bytes]).to eq([input, input])
+    end
+  end
+
   it "rejects malformed Ruby typed families and invalid object references without Ruby retry" do
     malformed = [
       native_wmf_record(0x0214, [1].pack("s<")),
