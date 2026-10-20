@@ -132,7 +132,8 @@ pub(crate) fn decode(
     if mode > 2 || len > payload.len() {
         return raw();
     }
-    // Validate indexes before allocating the model.
+    // Reserve work before scanning indexes or allocating the model.
+    budget.charge_work((nv as u64) + (nm as u64))?;
     let index_start = 28 + nv * 16;
     let index_count = nm * if mode == 2 { 3 } else { 2 };
     let mut indices = Reader::new(&payload[index_start..index_start + index_count * 4]);
@@ -146,7 +147,6 @@ pub(crate) fn decode(
             .and_then(|n| nm.checked_mul(12)?.checked_add(n))
             .ok_or(ParseFailure::ArithmeticOverflow { offset: 0 })?,
     )?;
-    budget.charge_work((nv as u64) + (nm as u64))?;
     let mut vertices = try_vec_with_capacity(nv)?;
     for _ in 0..nv {
         vertices.push(TriVertex {
@@ -189,4 +189,37 @@ pub(crate) fn decode(
         }),
         len,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{LimitKind, ParseLimits};
+
+    #[test]
+    fn index_validation_cannot_bypass_the_work_limit() {
+        let mut payload = vec![0; 28 + 16 + 12];
+        payload[16..20].copy_from_slice(&1u32.to_le_bytes());
+        payload[20..24].copy_from_slice(&1u32.to_le_bytes());
+        payload[24..28].copy_from_slice(&2u32.to_le_bytes());
+        // Invalid first index would recover as Raw if validation ran first.
+        payload[44..48].copy_from_slice(&1u32.to_le_bytes());
+        let mut limits = ParseLimits {
+            max_work_units: 1,
+            ..ParseLimits::default()
+        };
+        assert!(matches!(
+            decode(&payload, &mut Budget::new(&limits)),
+            Err(ParseFailure::LimitExceeded {
+                kind: LimitKind::WorkUnits,
+                requested: 2,
+                ..
+            })
+        ));
+        limits.max_work_units = 2;
+        assert_eq!(
+            decode(&payload, &mut Budget::new(&limits)).unwrap(),
+            (RecordData::Raw, 0)
+        );
+    }
 }
