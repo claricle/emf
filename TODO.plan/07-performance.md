@@ -8,6 +8,10 @@ The roughly 12-second fixture mentioned in [issue #15](https://github.com/claric
 
 `lib/emf/emr/parser.rb` constructs wire adapters and `lib/emf/model/metafile.rb` exposes the model. Consumers can inspect and mutate wire objects. Improvements must preserve those operations, byte round-trips, error/recovery behavior and downstream output. Parsanol is an architectural reference, not a dependency or a substitute benchmark.
 
+## Current workload evidence
+
+The [recorded Ruby slow-workload baseline](../docs/performance/issue-15-slow-workload.md) covers all 208 valid fixtures at `b81d6aa`: every parse succeeded and unchanged serialization was byte-identical. Six pinned emfsvg candidates were measured against the released gem and this revision. The reported approximately 12-second case remains unidentified. Current conversion exposes a font-construction compatibility failure in five candidates; fixing it and rerunning the consumer is required before accepting their timings. This sequential single-pass evidence identifies workloads and a correctness blocker; repeated distributions, final-head native comparisons and the subsecond target remain open.
+
 ## Implemented measurement surface
 
 - `bench/parser.rb` and [its guide](../bench/README.md) measure format detection, public parse, first/repeated wire traversal, dump, serialization, representative EMF wire mutation/serialization, parse-to-serialize and parse-file. Unsupported mutation workloads are explicit rather than successful timings.
