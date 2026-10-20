@@ -3,7 +3,7 @@
 Measures public parser stage timings per fixture and writes one JSON file. Ruby is the default backend; native runs must be explicitly selected. These measurements do not establish a native speedup.
 
 ```sh
-bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backend ruby --output tmp/bench/ruby.json
+bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backend ruby --output tmp/bench/ruby.json --rss-limit-mb 512
 ```
 
 | Option | Default | Meaning |
@@ -14,12 +14,13 @@ bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backen
 | `--limit N` | none | Keep the first N selected fixtures |
 | `--outcomes LIST` | `parsed` | Manifest outcomes to run (`parsed,recovered,format_error`) |
 | `--cold-runs N` | 3 | Fresh-process cold-load runs |
-| `--timeout SECONDS` | 120 | Deadline for each fixture child |
+| `--rss-limit-mb MB` | required | RSS ceiling for each child process group, in MiB; measure the target runner, there is no default |
+| `--timeout SECONDS` | 60 | Deadline for each fixture child, 1 to 60 |
 
 For native runs, point to the exact compiled library being measured:
 
 ```sh
-EMF_NATIVE_LIBRARY=/absolute/path/to/libemf_ffi.dylib bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backend native --output tmp/bench/native.json
+EMF_NATIVE_LIBRARY=/absolute/path/to/libemf_ffi.dylib bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backend native --output tmp/bench/native.json --rss-limit-mb 512
 ```
 
 The selected backend is forced in every warm and cold child, regardless of the
@@ -28,7 +29,7 @@ Missing native libraries and unsupported records fail the run without Ruby fallb
 The `native_library` report records the configured and resolved paths, SHA-256,
 size and modification time when readable. Build profile and compiler remain null:
 the library exposes no build metadata, so a filename does not establish a release build.
-The exit status is 1 when any warm or cold fixture child failed, timed out or produced an invalid
+The exit status is 1 when any warm or cold fixture child failed, timed out, exceeded the RSS ceiling or produced an invalid
 result (the JSON is still written with a `failures` list).
 
 ## What is measured

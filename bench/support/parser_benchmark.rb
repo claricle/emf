@@ -264,10 +264,11 @@ module ParserBenchmark
   end
 
   Options = Struct.new(:manifest, :backend, :output, :iterations, :warmups, :timeout, :fixtures, :limit, :outcomes,
-                       :cold_runs, :worker, :sha256, :path, keyword_init: true)
+                       :cold_runs, :worker, :sha256, :path, :rss_limit_bytes, keyword_init: true)
 
   class CLI
-    DEFAULTS = { backend: "ruby", iterations: 20, warmups: 5, timeout: 120, fixtures: [], outcomes: %w[parsed], cold_runs: 3 }.freeze
+    TIMEOUT_RANGE = (1..60)
+    DEFAULTS = { backend: "ruby", iterations: 20, warmups: 5, timeout: 60, fixtures: [], outcomes: %w[parsed], cold_runs: 3 }.freeze
 
     def initialize(argv)
       @argv = argv.dup
@@ -293,6 +294,7 @@ module ParserBenchmark
       raise UsageError, "unexpected arguments: #{rest.join(' ')}" unless rest.empty?
       raise UsageError, "--manifest is required" unless options.manifest
       raise UsageError, "--output is required" unless options.output
+      raise UsageError, "--rss-limit-mb is required" unless options.rss_limit_bytes
       unless SUPPORTED_BACKENDS.include?(options.backend)
         raise UsageError, "unsupported backend #{options.backend.inspect} (supported: #{SUPPORTED_BACKENDS.join(', ')})"
       end
@@ -302,9 +304,8 @@ module ParserBenchmark
     end
 
     def check_positive(options)
-      { "--iterations" => options.iterations, "--timeout" => options.timeout }.each do |name, value|
-        raise UsageError, "#{name} must be a positive integer" unless value.is_a?(Integer) && value.positive?
-      end
+      raise UsageError, "--iterations must be a positive integer" unless options.iterations.is_a?(Integer) && options.iterations.positive?
+      raise UsageError, "--timeout must be within #{TIMEOUT_RANGE} seconds" unless TIMEOUT_RANGE.cover?(options.timeout)
       raise UsageError, "--warmups must be >= 0" unless options.warmups.is_a?(Integer) && options.warmups >= 0
       raise UsageError, "--cold-runs must be >= 0" unless options.cold_runs.is_a?(Integer) && options.cold_runs >= 0
       raise UsageError, "--limit must be a positive integer" unless options.limit.nil? || options.limit.positive?
@@ -312,13 +313,20 @@ module ParserBenchmark
 
     def parser(options)
       OptionParser.new do |opts|
-        opts.banner = "Usage: bundle exec ruby bench/parser.rb --manifest FILE --backend NAME --output FILE [options]"
+        opts.banner = "Usage: bundle exec ruby bench/parser.rb --manifest FILE --backend NAME --output FILE --rss-limit-mb MB [options]"
         opts.on("--manifest FILE", "Fixture manifest (spec/fixtures/manifest.json)") { |v| options.manifest = v }
         opts.on("--backend NAME", "Forced backend to measure (default ruby): #{SUPPORTED_BACKENDS.join(', ')}") { |v| options.backend = v }
         opts.on("--output FILE", "JSON result path") { |v| options.output = v }
+        opts.on("--rss-limit-mb MB", Integer, "Required; per-child RSS ceiling in MiB (no default: measure the target runner)") do |v|
+          raise UsageError, "--rss-limit-mb must be a positive integer" unless v.positive?
+
+          options.rss_limit_bytes = v * 1024 * 1024
+        end
         opts.on("--iterations N", Integer, "Timed trials per fixture (default #{DEFAULTS[:iterations]})") { |v| options.iterations = v }
         opts.on("--warmups N", Integer, "Untimed warmup trials per fixture (default #{DEFAULTS[:warmups]})") { |v| options.warmups = v }
-        opts.on("--timeout SECONDS", Integer, "Deadline for each fixture child (default #{DEFAULTS[:timeout]})") { |v| options.timeout = v }
+        opts.on("--timeout SECONDS", Integer, "Fixture child deadline, #{TIMEOUT_RANGE} (default #{DEFAULTS[:timeout]})") do |v|
+          options.timeout = v
+        end
         opts.on("--fixture GLOB", "Manifest path glob (File.fnmatch); repeatable") { |v| options.fixtures << v }
         opts.on("--limit N", Integer, "Keep only the first N selected fixtures") { |v| options.limit = v }
         opts.on("--outcomes LIST", Array, "Manifest outcomes to run (default parsed)") { |v| options.outcomes = v }
@@ -393,6 +401,11 @@ module ParserBenchmark
     rescue SystemCallError
       nil
     end
+  end
+
+  def self.runner(options, output_limit, command)
+    FixtureManifest::Runner.new(timeout: options.timeout, rss_limit_bytes: options.rss_limit_bytes,
+                                output_limit: output_limit, command: command)
   end
 
   def self.cold_failures(cold)
@@ -515,8 +528,8 @@ module ParserBenchmark
     end
 
     def child(args, path)
-      command = [RbConfig.ruby, "-I", File.join(ROOT, "lib"), SCRIPT, "--backend", @options.backend, *args]
-      FixtureManifest::Runner.new(timeout: @options.timeout, output_limit: OUTPUT_LIMIT, command: command).call(path)
+      ParserBenchmark.runner(@options, self.class::OUTPUT_LIMIT,
+                             [RbConfig.ruby, "-I", File.join(ROOT, "lib"), SCRIPT, "--backend", @options.backend, *args]).call(path)
     end
 
     def cold_load(selected)
@@ -528,8 +541,7 @@ module ParserBenchmark
     end
 
     def slowest_case(fixtures)
-      candidates = fixtures.select { |f| f["status"] == "ok" }
-      best = candidates.max_by { |f| f.dig("stages", SLOWEST_STAGE, "summary_ns", "median") }
+      best = fixtures.select { |f| f["status"] == "ok" }.max_by { |f| f.dig("stages", SLOWEST_STAGE, "summary_ns", "median") }
       return nil unless best
 
       best.slice("path", "sha256", "size_bytes").merge(
@@ -549,6 +561,7 @@ module ParserBenchmark
 
     def method_description
       { "iterations" => @options.iterations, "warmups" => @options.warmups, "child_timeout_seconds" => @options.timeout,
+        "child_rss_limit_bytes" => @options.rss_limit_bytes,
         "timing" => { "clock" => "Process.clock_gettime(CLOCK_MONOTONIC, :nanosecond)", "unit" => "nanoseconds" },
         "gc_policy" => "GC.start before each stage, outside timed regions, so no stage pays for earlier garbage; " \
                        "GC stays enabled inside them",

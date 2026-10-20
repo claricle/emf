@@ -37,7 +37,7 @@ RSpec.describe EmfsvgBenchmark::CLI do
   let(:args) do
     ["--manifest", @manifest_path, "--emfsvg-path", checkout,
      "--revision", revision, "--output", result_path, "--fixture", "spec/fixtures/simple/*", "--iterations", "2",
-     "--warmups", "0", "--cold-runs", "1"]
+     "--warmups", "0", "--cold-runs", "1", "--rss-limit-mb", "512"]
   end
 
   after { FileUtils.remove_entry(directory) }
@@ -56,6 +56,35 @@ RSpec.describe EmfsvgBenchmark::CLI do
     expect(report.fetch("golden_inventory")).to contain_exactly(include("sha256" => Digest::SHA256.file(golden).hexdigest))
     expect(report.dig("cold_load", "runs", 0)).to include("status" => "ok", "require_emfsvg_ns" => be_positive)
     expect(report.fetch("slowest_measured_case")).to include("stage" => "from_file", "issue_15_fixture_identified" => false)
+  end
+
+  def with_option(arguments, name, value)
+    arguments.dup.tap { |a| a[a.index(name) + 1] = value }
+  end
+
+  it "requires an RSS ceiling and records it beside the child timeout" do
+    without = args.each_slice(2).to_h.except("--rss-limit-mb").to_a.flatten
+    expect { expect(described_class.new(without).run).to eq(2) }.to output(/--rss-limit-mb is required/).to_stderr
+    expect(described_class.new(args).run).to eq(0)
+    expect(report.fetch("method")).to include("child_timeout_seconds" => 60, "child_rss_limit_bytes" => 512 * 1024 * 1024)
+  end
+
+  it "reports a conversion child over the RSS ceiling as an rss_exceeded failure" do
+    expect(described_class.new(with_option(args, "--rss-limit-mb", "1")).run).to eq(1)
+    expect(report.fetch("fixtures").fetch(0)).to include("status" => "failed", "failure" => include("kind" => "rss_exceeded"))
+    expect(report.fetch("slowest_measured_case")).to be_nil
+  end
+
+  it "reports warm conversions that outrun the deadline as a timeout without partial timings" do
+    expect(described_class.new([*with_option(args, "--iterations", "100000000"), "--timeout", "1"]).run).to eq(1)
+    fixture = report.fetch("fixtures").fetch(0)
+    expect(fixture).to include("status" => "failed", "failure" => include("kind" => "timeout"))
+    expect(fixture).not_to have_key("stages")
+  end
+
+  it "rejects a --timeout above the supervisor cap" do
+    expect { expect(described_class.new([*args, "--timeout", "61"]).run).to eq(2) }.to output(/--timeout must be within 1..60/).to_stderr
+    expect(File).not_to exist(result_path)
   end
 
   it "records golden drift as a failed conversion and preserves the golden" do
