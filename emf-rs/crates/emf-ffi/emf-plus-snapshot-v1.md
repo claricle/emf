@@ -93,13 +93,96 @@ record Type/Flags distinguish operations sharing a layout (e.g. Pair).
 | 8 | Pair | values[2] (float bits) |
 | 9 | Scalar | value (float bits) |
 | 10 | ClipRect | rectangle[4] (float bits) |
-| 0x101 | Drawing | none; core typed, ABI typed encoding pending |
-| 0x102 | Text | none; core typed, ABI typed encoding pending |
+| 0x101 | Drawing | normalized subtype and values below |
+| 0x102 | Text | normalized subtype and values below |
 | 0x103 | Effect | none; core typed, ABI typed encoding pending |
 | 0x104 | TSGraphics | none; core typed, ABI typed encoding pending |
 | 0x105 | Object | none; core typed, ABI typed encoding pending |
 
-Consumers must keep the distinction between typed Empty and opaque/pending
-families. Pending families do not claim typed object/drawing/text parity. A later
-schema can add their normalized arrays/objects under a separately negotiated
-version; version 1 remains stable.
+Consumers must distinguish typed Empty from opaque/pending families. Effect,
+TSGraphics and Object remain explicitly unsupported typed families, with their
+complete raw frames preserved. This unpublished version 1 describes the current
+read-only increment; it does not claim complete structured EMF+ coverage.
+
+### Shared normalized values
+
+Drawing and Text are encoded from the extracted core values, rather than copying
+their wire bodies. Every field below is concatenated without alignment. `u32`
+means an unsigned 32-bit word; `i32` is its two's-complement signed interpretation.
+`f32bits` is a u32 containing the original IEEE-754 bits, without floating-point
+conversion (including NaNs and negative zero). Counts are u64, including counts
+of UTF-16 units, glyphs, points and padding bytes. Arrays have no terminator.
+Original Type and Flags retain operation identity, pen/object IDs held in flags,
+brush ID versus literal ARGB interpretation, and other operation-specific flags.
+
+| Value | Fields, in order |
+| --- | --- |
+| optional brush | present u32 (0 or 1), value u32 (zero when absent) |
+| rectangle | encoding u32 (0 float, 1 integer), x, y, width, height |
+| points | encoding u32 (0 float, 1 integer, 2 relative), count u64, points[count] |
+| source | image attributes ID u32, unit i32, rectangle[4] f32bits |
+| padding | byte count u64, exact bytes[count] |
+
+A rectangle's four coordinates are f32bits for encoding 0 and sign-extended i32
+for encoding 1. Each float/integer point has x and y in that same representation
+(8 bytes per point). A relative point has x-width u32, x-delta i32, y-width u32,
+y-delta i32 (16 bytes per point). Width is 7 or 15, preserving the core coordinate
+variant; signed deltas are not accumulated into absolute coordinates. The
+coordinate encodings describe the extracted values explicitly, independently of
+wire compression flags. Source rectangles always contain float bits.
+
+Padding here means core `data_padding`, including any bytes retained inside
+DataSize after the variable values. Any separate frame padding beyond DataSize
+remains only in the complete raw frame. Both are preserved verbatim.
+
+### Drawing (tag 0x101)
+
+The first u32 is a subtype. All currently represented core Drawing variants have
+normalized payloads. The remaining fields are:
+
+| Subtype | Core variant (record Types) | Fields after subtype |
+| --- | --- | --- |
+| 1 | Rectangles (0x400A, 0x400B) | optional brush, rectangle count u64, rectangles[count] |
+| 2 | Ellipse (0x400E, 0x400F) | optional brush, rectangle |
+| 3 | Arc (0x4010–0x4012) | optional brush, start angle f32bits, sweep angle f32bits, rectangle |
+| 4 | Points (0x400C, 0x400D, 0x4019) | optional brush, points, padding |
+| 5 | Curve (0x4016–0x4018) | optional brush, tension f32bits, range present u32, offset u32, segments u32, points, padding |
+| 6 | ImageRect (0x401A) | source, destination rectangle |
+| 7 | ImagePoints (0x401B) | source, points, padding |
+| 8 | ObjectReference (0x4013–0x4015) | value u32 |
+
+Curve range presence is 0 or 1; offset and segments are both zero when absent.
+Presence applies to DrawCurve's offset/segment pair, not its point count. Optional
+brushes are present for Fill operations represented with a brush/color word.
+ObjectReference's value is the preserved brush/color or pen ID word; original
+Type/Flags specify its meaning. No object-table resolution or effect linking is
+implied by these values.
+
+### Text (tag 0x102)
+
+The first u32 is a subtype. All currently represented core Text variants have
+normalized payloads. The remaining fields are:
+
+| Subtype | Core variant (record Type) | Fields after subtype |
+| --- | --- | --- |
+| 1 | String (0x401C) | brush u32, format ID u32, layout[4] f32bits, UTF-16 count u64, units[count] u16, padding |
+| 2 | Driver (0x4036) | brush u32, options u32, glyph count u64, glyphs[count] u16, position count u64, positions[count][2] f32bits, matrix present u32, optional matrix[6] f32bits, padding |
+
+UTF-16 units and glyphs are little-endian u16 values with no Unicode decoding,
+validation, replacement or normalization. Unpaired surrogates remain unchanged.
+Glyph values remain explicit even when options select glyph indices. A String's
+layout is x, y, width, height. A Driver position is x, y. The position count is
+explicit: with options bit 0x4 and nonempty glyphs core represents one position;
+otherwise it represents one position per glyph (zero for empty glyphs). Matrix
+presence is 0 or 1; its six words exist only when present, in core/wire order
+(m11, m12, m21, m22, dx, dy). A present matrix is retained even for zero glyphs.
+
+### Output bounds
+
+A nonallocating checked traversal sizes every normalized field, array element,
+UTF-16/glyph unit and retained padding byte before output is reserved. The entire
+header, segment table, raw frames and normalized payloads must fit both
+`max_output_bytes` and the platform vector-size bound. One fallible reservation
+covers that total; the same traversal then emits variable payloads into the
+reserved buffer without temporary arrays. A cap one byte below the required
+size rejects the entire snapshot with `EMF_LIMIT_EXCEEDED` and NULL output.

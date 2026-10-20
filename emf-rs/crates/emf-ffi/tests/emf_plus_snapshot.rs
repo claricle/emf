@@ -325,7 +325,7 @@ fn rejects_nulls_metadata_and_resource_limits_and_cleans_outputs() {
 }
 
 #[test]
-fn fixed_typed_families_preserve_word_bits_and_pending_families_keep_raw_frames() {
+fn fixed_typed_families_preserve_word_bits_and_complex_families_keep_raw_frames() {
     let fixed = [
         (0x4001, 1, 16),
         (0x4002, 2, 0),
@@ -368,7 +368,12 @@ fn fixed_typed_families_preserve_word_bits_and_pending_families_keep_raw_frames(
         (0x4039, 0xfffe, 0x104, vec![0; 36]),
         (0x4008, 0x0101, 0x105, brush),
     ] {
-        cases.push((frame(kind, flags, &body, &[]), tag, Vec::new()));
+        let typed = match kind {
+            0x400f => words(&[2, 0, 0, 0, 0, 0, 0, 0]),
+            0x401c => words(&[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            _ => Vec::new(),
+        };
+        cases.push((frame(kind, flags, &body, &[]), tag, typed));
     }
     let logical: Vec<u8> = cases
         .iter()
@@ -389,6 +394,225 @@ fn fixed_typed_families_preserve_word_bits_and_pending_families_keep_raw_frames(
             at += typed.len();
         }
         assert_eq!(at, bytes.len());
+        emf_document_free(doc);
+    }
+}
+
+fn words(values: &[u32]) -> Vec<u8> {
+    values.iter().flat_map(|n| n.to_le_bytes()).collect()
+}
+fn count(bytes: &mut Vec<u8>, n: u64) {
+    bytes.extend(n.to_le_bytes());
+}
+
+#[test]
+fn normalized_drawing_and_text_cover_operations_encodings_arrays_and_presence() {
+    let mut cases = Vec::new();
+    let bits = [0x7fc12345, 0x80000000, 0x3f800000, u32::MAX];
+    let rect = words(&bits);
+    let mut normalized_rect = words(&[0]);
+    normalized_rect.extend(&rect);
+    for kind in 0x400a..=0x401b {
+        let brush = matches!(kind, 0x400a | 0x400c | 0x400e | 0x4010 | 0x4016);
+        let mut body = if brush { words(&[0x80ff0033]) } else { vec![] };
+        let optional_brush = [u32::from(brush), if brush { 0x80ff0033 } else { 0 }];
+        let mut expected;
+        match kind {
+            0x400a | 0x400b => {
+                body.extend(words(&[2]));
+                body.extend(&rect);
+                body.extend(&rect);
+                expected = words(&[1]);
+                expected.extend(words(&optional_brush));
+                count(&mut expected, 2);
+                expected.extend(&normalized_rect);
+                expected.extend(&normalized_rect);
+            }
+            0x400e | 0x400f => {
+                body.extend(&rect);
+                expected = words(&[2]);
+                expected.extend(words(&optional_brush));
+                expected.extend(&normalized_rect);
+            }
+            0x4010..=0x4012 => {
+                body.extend(words(&bits[..2]));
+                body.extend(&rect);
+                expected = words(&[3]);
+                expected.extend(words(&optional_brush));
+                expected.extend(words(&bits[..2]));
+                expected.extend(&normalized_rect);
+            }
+            0x4013..=0x4015 => {
+                body.extend(words(&[0xfedcba98]));
+                expected = words(&[8, 0xfedcba98]);
+            }
+            0x401a => {
+                body.extend(words(&[9, u32::MAX]));
+                body.extend(&rect);
+                body.extend(&rect);
+                expected = words(&[6, 9, u32::MAX]);
+                expected.extend(&rect);
+                expected.extend(&normalized_rect);
+            }
+            _ => {
+                let image = kind == 0x401b;
+                let curve = matches!(kind, 0x4016..=0x4018);
+                if image {
+                    body.extend(words(&[9, u32::MAX]));
+                    body.extend(&rect);
+                }
+                if curve {
+                    body.extend(words(&[bits[0]]));
+                }
+                if kind == 0x4018 {
+                    body.extend(words(&[1, 2]));
+                }
+                let n = if kind == 0x4019 { 4 } else { 3 };
+                body.extend(words(&[n]));
+                for _ in 0..n {
+                    body.extend(words(&bits[..2]));
+                }
+                expected = words(&[if image {
+                    7
+                } else if curve {
+                    5
+                } else {
+                    4
+                }]);
+                if image {
+                    expected.extend(words(&[9, u32::MAX]));
+                    expected.extend(&rect);
+                } else {
+                    expected.extend(words(&optional_brush));
+                }
+                if curve {
+                    expected.extend(words(&[
+                        bits[0],
+                        u32::from(kind == 0x4018),
+                        if kind == 0x4018 { 1 } else { 0 },
+                        if kind == 0x4018 { 2 } else { 0 },
+                    ]));
+                }
+                expected.extend(words(&[0]));
+                count(&mut expected, n as u64);
+                for _ in 0..n {
+                    expected.extend(words(&bits[..2]));
+                }
+                count(&mut expected, 0);
+            }
+        }
+        cases.push((frame(kind, 0, &body, &[]), expected));
+    }
+    // Integer rectangles are sign extended; relative widths and deltas remain explicit.
+    let shorts: Vec<u8> = [i16::MIN, -1, 0, i16::MAX]
+        .into_iter()
+        .flat_map(i16::to_le_bytes)
+        .collect();
+    cases.push((
+        frame(0x400f, 0x4000, &shorts, &[]),
+        words(&[2, 0, 0, 1, 0xffff8000, u32::MAX, 0, 32767]),
+    ));
+    let mut body = words(&[2]);
+    body.extend(&shorts);
+    let mut typed = words(&[4, 0, 0, 1]);
+    count(&mut typed, 2);
+    typed.extend(words(&[0xffff8000, u32::MAX, 0, 32767]));
+    count(&mut typed, 0);
+    cases.push((frame(0x400d, 0x4000, &body, &[]), typed));
+    let mut body = words(&[2]);
+    body.extend([0x7f, 0x80, 1, 0xc0, 0, 0x3f, 0xa5, 0xb6]);
+    let mut typed = words(&[4, 0, 0, 2]);
+    count(&mut typed, 2);
+    typed.extend(words(&[7, u32::MAX, 15, 1, 15, 0xffffc000, 7, 63]));
+    count(&mut typed, 2);
+    typed.extend([0xa5, 0xb6]);
+    cases.push((frame(0x400d, 0x0800, &body, &[]), typed));
+    // Raw UTF-16 code units include an unpaired surrogate; no decoding or replacement.
+    let mut body = words(&[7, 8, 3]);
+    body.extend(&rect);
+    body.extend([0, 0xd8, 65, 0, 0xff, 0xff, 0xa5, 0xb6]);
+    let mut typed = words(&[1, 7, 8]);
+    typed.extend(&rect);
+    count(&mut typed, 3);
+    typed.extend([0, 0xd8, 65, 0, 0xff, 0xff]);
+    count(&mut typed, 2);
+    typed.extend([0xa5, 0xb6]);
+    cases.push((frame(0x401c, 0x8000, &body, &[]), typed));
+    for (options, n, present) in [
+        (0, 2, false),
+        (4, 2, true),
+        (4, 1, true),
+        (4, 0, true),
+        (0, 0, false),
+    ] {
+        let positions = if options == 4 && n > 0 { 1 } else { n };
+        let mut body = words(&[7, options, u32::from(present), n]);
+        let mut typed = words(&[2, 7, options]);
+        count(&mut typed, n as u64);
+        for _ in 0..n {
+            body.extend([0, 0xd8]);
+            typed.extend([0, 0xd8]);
+        }
+        count(&mut typed, positions as u64);
+        for _ in 0..positions {
+            body.extend(words(&bits[..2]));
+            typed.extend(words(&bits[..2]));
+        }
+        typed.extend(words(&[u32::from(present)]));
+        if present {
+            let matrix = words(&[bits[0], bits[1], 1, 2, 3, 4]);
+            body.extend(&matrix);
+            typed.extend(matrix);
+        }
+        let padding: &[u8] = if n % 2 == 1 { &[0xa5, 0xb6] } else { &[] };
+        body.extend(padding);
+        count(&mut typed, padding.len() as u64);
+        typed.extend(padding);
+        cases.push((frame(0x4036, 0, &body, &[]), typed));
+    }
+    let logical: Vec<u8> = cases
+        .iter()
+        .flat_map(|(raw, _)| raw.iter().copied())
+        .collect();
+    unsafe {
+        // Split a variable body, and preserve all original bytes after the read.
+        let original = input(&[&logical[..19], &logical[19..]]);
+        let doc = parse(&original);
+        let bytes = snapshot(doc);
+        let mut at = 104;
+        for (raw, typed) in cases {
+            assert_eq!(u64_at(&bytes, at + 48), typed.len() as u64);
+            assert_eq!(&bytes[at + 64..at + 64 + raw.len()], raw);
+            at += 64 + raw.len();
+            assert_eq!(&bytes[at..at + typed.len()], typed);
+            at += typed.len();
+        }
+        assert_eq!(at, bytes.len());
+        let mut output = ptr::null_mut();
+        assert_eq!(
+            emf_document_emf_plus_snapshot_v1(
+                doc,
+                &options(bytes.len() as u64 - 1),
+                ptr::null(),
+                &mut output,
+                ptr::null_mut()
+            ),
+            EMF_LIMIT_EXCEEDED
+        );
+        assert!(output.is_null());
+        assert_eq!(
+            emf_document_emf_plus_snapshot_v1(
+                doc,
+                &options(bytes.len() as u64),
+                ptr::null(),
+                &mut output,
+                ptr::null_mut()
+            ),
+            EMF_OK
+        );
+        assert_eq!(view(output), bytes);
+        assert_eq!(emf_serialize(doc, &mut output, ptr::null_mut()), EMF_OK);
+        assert_eq!(view(output), original);
         emf_document_free(doc);
     }
 }

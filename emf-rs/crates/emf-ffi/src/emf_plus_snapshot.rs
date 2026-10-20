@@ -1,4 +1,5 @@
 //! Independent read-only EMF+ snapshot schema; see emf-plus-snapshot-v1.md.
+use crate::emf_plus_typed::Sink;
 use crate::*;
 use emf_core::emf_plus::{Error, RecordData};
 
@@ -33,6 +34,16 @@ fn family(data: &RecordData) -> (u32, usize) {
     }
 }
 
+fn typed_len(data: &RecordData) -> Result<usize, Failure> {
+    let mut sink = Sink { len: 0, out: None };
+    match data {
+        RecordData::Drawing(value) => sink.drawing(value)?,
+        RecordData::Text(value) => sink.text(value)?,
+        _ => return Ok(family(data).1),
+    }
+    Ok(sink.len)
+}
+
 fn nested_error(error: Error) -> Failure {
     match error {
         Error::Resource(error) => error.into(),
@@ -43,7 +54,7 @@ fn nested_error(error: Error) -> Failure {
     }
 }
 
-fn overflow() -> Failure {
+pub(super) fn overflow() -> Failure {
     Failure::new(
         EMF_LIMIT_EXCEEDED,
         None,
@@ -96,8 +107,8 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
         let raw_len = lengths
             .iter()
             .try_fold(0usize, |n, len| n.checked_add(*len).ok_or_else(overflow))?;
-        let typed_len = stream.records.iter().try_fold(0usize, |n, record| {
-            n.checked_add(family(&record.data).1).ok_or_else(overflow)
+        let typed_total = stream.records.iter().try_fold(0usize, |n, record| {
+            n.checked_add(typed_len(&record.data)?).ok_or_else(overflow)
         })?;
         let total = lengths
             .len()
@@ -111,7 +122,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             })
             .and_then(|n| n.checked_add(40))
             .and_then(|n| n.checked_add(raw_len))
-            .and_then(|n| n.checked_add(typed_len))
+            .and_then(|n| n.checked_add(typed_total))
             .filter(|n| *n as u64 <= options.max_output_bytes && *n <= isize::MAX as usize)
             .ok_or_else(overflow)?;
         let mut bytes = Vec::new();
@@ -184,16 +195,29 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             }
             bytes.extend_from_slice(&header[..8]);
             bytes.extend_from_slice(&(data_size as u32).to_le_bytes());
-            let (tag, typed_len) = family(&record.data);
+            let (tag, _) = family(&record.data);
+            let typed_len = typed_len(&record.data)?;
             bytes.extend_from_slice(&tag.to_le_bytes());
             word(&mut bytes, typed_len as u64);
             word(&mut bytes, size as u64);
             let raw_start = bytes.len();
             bytes.extend_from_slice(&header);
             bytes.extend(source.by_ref().take(size - 12));
-            // Supported typed payloads are fixed-width little-endian words. Copying
-            // the validated wire body preserves IEEE bits and signed integers exactly.
-            bytes.extend_from_within(raw_start + 12..raw_start + 12 + typed_len);
+            // Variable families use normalized core values. The remaining supported
+            // families have fixed word layouts identical to their validated wire bodies.
+            match &record.data {
+                RecordData::Drawing(value) => Sink {
+                    len: 0,
+                    out: Some(&mut bytes),
+                }
+                .drawing(value)?,
+                RecordData::Text(value) => Sink {
+                    len: 0,
+                    out: Some(&mut bytes),
+                }
+                .text(value)?,
+                _ => bytes.extend_from_within(raw_start + 12..raw_start + 12 + typed_len),
+            }
             offset += size;
         }
         debug_assert_eq!(bytes.len(), total);
