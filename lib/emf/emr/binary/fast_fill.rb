@@ -12,7 +12,7 @@ module Emf
           "BinData::Uint32le" => "V",
           "BinData::Int32le" => "l<",
           "BinData::Uint8" => "C",
-          "BinData::FloatLe" => "e"
+          "Emf::Binary::Float32Le" => "V"
         }.freeze
         EMPTY_SUFFIX = "".b.freeze
         private_constant :DIRECTIVES, :EMPTY_SUFFIX
@@ -28,8 +28,8 @@ module Emf
           sample = klass.new
           @size = sample.num_bytes
           leaves = leaf_paths(sample, [])
-          @format = leaves.map(&:last).join
-          @setters = leaves.map { |path, _| [path[0..-2], :"#{path.last}="] }.freeze
+          @format = leaves.map { |_, field| DIRECTIVES.fetch(field.name) }.join
+          @setters = leaves.map { |path, field| setter_for(path, field) }.freeze
         end
 
         def call(record_bytes)
@@ -60,9 +60,15 @@ module Emf
             if field.respond_to?(:field_names)
               leaf_paths(field, prefix + [name])
             else
-              [[prefix + [name], DIRECTIVES.fetch(field.class.name)]]
+              [[prefix + [name], field.class]]
             end
           end
+        end
+
+        def setter_for(path, field_class)
+          return [path, :assign_bits] if field_class == Emf::Binary::Float32Le
+
+          [path[0..-2], :"#{path.last}="]
         end
 
         ENABLED_TYPES = [

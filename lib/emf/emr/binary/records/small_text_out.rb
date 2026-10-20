@@ -18,8 +18,8 @@ module Emf
           uint32 :c_chars
           uint32 :fu_options
           uint32 :i_graphics_mode
-          float :ex_scale
-          float :ey_scale
+          float32_le :ex_scale
+          float32_le :ey_scale
           rest :body
 
           def bounds

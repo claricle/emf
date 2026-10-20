@@ -107,6 +107,13 @@ RSpec.describe Emf::Emr::Binary::FastFill do
         wire, = described_class.for(type).call(bytes)
         expect(wire.to_binary_s).to eq(Emf::Emr::Binary::Records.const_get(name).read(bytes).to_binary_s)
       end
+
+      it "#{name} writes #{label} back as the input bytes" do
+        type, size, = types.fetch(name)
+        bytes = [type, size].pack("VV") + ([bits] * 6).pack("V*") + ("\x01".b * (size - 32))
+        wire, = described_class.for(type).call(bytes)
+        expect(wire.to_binary_s).to eq(bytes)
+      end
     end
   end
 
