@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/binary/float32_le"
 
 module Emf
   module EmfPlus
@@ -9,8 +10,8 @@ module Emf
         # EmfPlusPointF (2.2.2.36): 32-bit floats.
         class PointF < Body
           endian :little
-          float :x
-          float :y
+          float32_le :x
+          float32_le :y
         end
       end
     end

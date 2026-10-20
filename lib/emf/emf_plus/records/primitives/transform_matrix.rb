@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/binary/float32_le"
 
 module Emf
   module EmfPlus
@@ -9,12 +10,12 @@ module Emf
         # EmfPlusTransformMatrix (2.2.2.47): m11, m12, m21, m22, dx, dy.
         class TransformMatrix < Body
           endian :little
-          float :m11
-          float :m12
-          float :m21
-          float :m22
-          float :dx
-          float :dy
+          float32_le :m11
+          float32_le :m12
+          float32_le :m21
+          float32_le :m22
+          float32_le :dx
+          float32_le :dy
         end
       end
     end

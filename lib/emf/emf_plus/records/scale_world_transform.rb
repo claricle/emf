@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
+
 module Emf
   module EmfPlus
     module Records
@@ -11,8 +13,8 @@ module Emf
 
         class ScaleWorldTransformBody < Body
           endian :little
-          float :sx
-          float :sy
+          float32_le :sx
+          float32_le :sy
         end
         BODY = ScaleWorldTransformBody
 

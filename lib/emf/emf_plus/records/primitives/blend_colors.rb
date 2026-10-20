@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/argb"
 
 module Emf
@@ -11,7 +12,7 @@ module Emf
         class BlendColors < Body
           endian :little
           uint32 :position_count
-          array :blend_positions, type: :float_le, initial_length: :position_count
+          array :blend_positions, type: :float32_le, initial_length: :position_count
           array :blend_colors, type: :argb, initial_length: :position_count
         end
       end

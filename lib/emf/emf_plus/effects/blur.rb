@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
+
 module Emf
   module EmfPlus
     module Effects
@@ -9,7 +11,7 @@ module Emf
 
         class BlurBody < Records::Body
           endian :little
-          float :blur_radius
+          float32_le :blur_radius
           uint32 :expand_edge
         end
         BODY = BlurBody

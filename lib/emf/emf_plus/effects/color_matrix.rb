@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
+
 module Emf
   module EmfPlus
     module Effects
@@ -9,7 +11,7 @@ module Emf
 
         class ColorMatrixBody < Records::Body
           endian :little
-          array :matrix_values, type: :float_le, initial_length: 25
+          array :matrix_values, type: :float32_le, initial_length: 25
         end
         BODY = ColorMatrixBody
 

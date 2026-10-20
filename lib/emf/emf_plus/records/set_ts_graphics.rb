@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/palette"
 
 module Emf
@@ -29,7 +30,7 @@ module Emf
           uint16 :text_contrast
           uint8 :filter_type
           uint8 :pixel_offset
-          array :world_to_device, type: :float, initial_length: 6
+          array :world_to_device, type: :float32_le, initial_length: 6
           string :palette, read_length: -> { flags.anybits?(PALETTE_FLAG) ? data_size - FIXED_SIZE : 0 }
         end
         BODY = SetTSGraphicsBody

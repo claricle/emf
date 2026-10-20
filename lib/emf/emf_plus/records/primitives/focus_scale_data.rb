@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/binary/float32_le"
 
 module Emf
   module EmfPlus
@@ -10,8 +11,8 @@ module Emf
         class FocusScaleData < Body
           endian :little
           uint32 :focus_scale_count
-          float :focus_scale_x
-          float :focus_scale_y
+          float32_le :focus_scale_x
+          float32_le :focus_scale_y
         end
       end
     end

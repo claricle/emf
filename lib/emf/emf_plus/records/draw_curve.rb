@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/point_array"
 
 module Emf
@@ -14,7 +15,7 @@ module Emf
         class DrawCurveBody < Body
           endian :little
           mandatory_parameter :flags
-          float :tension
+          float32_le :tension
           uint32 :offset
           uint32 :num_segments
           uint32 :item_count

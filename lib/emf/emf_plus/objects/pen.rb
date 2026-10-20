@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/graphics_version"
 require "emf/emf_plus/records/primitives/transform_matrix"
 
@@ -34,21 +35,21 @@ module Emf
           uint32 :pen_type
           uint32 :pen_data_flags
           uint32 :pen_unit
-          float :pen_width
+          float32_le :pen_width
         end
 
         # EmfPlusDashedLineData (2.2.2.16).
         class DashedLineData < Records::Body
           endian :little
           uint32 :dashed_line_data_size
-          array :dashed_line_data, type: :float_le, initial_length: :dashed_line_data_size
+          array :dashed_line_data, type: :float32_le, initial_length: :dashed_line_data_size
         end
 
         # EmfPlusCompoundLineData (2.2.2.9).
         class CompoundLineData < Records::Body
           endian :little
           uint32 :compound_line_data_size
-          array :compound_line_data, type: :float_le, initial_length: :compound_line_data_size
+          array :compound_line_data, type: :float32_le, initial_length: :compound_line_data_size
         end
 
         # Optional scalars in spec order: flag, part name, BinData type.
@@ -56,10 +57,10 @@ module Emf
           [DATA_START_CAP, :start_cap, BinData::Int32le],
           [DATA_END_CAP, :end_cap, BinData::Int32le],
           [DATA_JOIN, :join, BinData::Int32le],
-          [DATA_MITER_LIMIT, :miter_limit, BinData::FloatLe],
+          [DATA_MITER_LIMIT, :miter_limit, Emf::Binary::Float32Le],
           [DATA_LINE_STYLE, :line_style, BinData::Int32le],
           [DATA_DASHED_LINE_CAP, :dashed_line_cap, BinData::Int32le],
-          [DATA_DASH_OFFSET, :dash_offset, BinData::FloatLe]
+          [DATA_DASH_OFFSET, :dash_offset, Emf::Binary::Float32Le]
         ].freeze
         private_constant :SCALARS
 

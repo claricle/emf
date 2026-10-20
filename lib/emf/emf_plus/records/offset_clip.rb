@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
+
 module Emf
   module EmfPlus
     module Records
@@ -9,8 +11,8 @@ module Emf
 
         class OffsetClipBody < Body
           endian :little
-          float :dx
-          float :dy
+          float32_le :dx
+          float32_le :dy
         end
         BODY = OffsetClipBody
 

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/point_f"
 
 module Emf
@@ -24,7 +25,7 @@ module Emf
           uint32 :glyph_count
           array :glyphs, type: :uint16, initial_length: :glyph_count
           array :glyph_positions, type: :point_f, initial_length: :glyph_count
-          array :transform_matrix, type: :float, initial_length: 6, onlyif: -> { matrix_present == 1 }
+          array :transform_matrix, type: :float32_le, initial_length: 6, onlyif: -> { matrix_present == 1 }
         end
         BODY = DrawDriverStringBody
 

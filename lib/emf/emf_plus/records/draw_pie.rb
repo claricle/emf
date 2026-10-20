@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/rect_array"
 
 module Emf
@@ -14,8 +15,8 @@ module Emf
         class DrawPieBody < Body
           endian :little
           mandatory_parameter :flags
-          float :start_angle
-          float :sweep_angle
+          float32_le :start_angle
+          float32_le :sweep_angle
           rect_array :rect_data,
                      rect_count: 1,
                      compressed: -> { flags.anybits?(ShapeFlags::COMPRESSED_FLAG) }
