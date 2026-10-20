@@ -863,6 +863,92 @@ static void init_limits(emf_limits *limits) {
     limits->max_work_units = UINT64_C(1048576);
 }
 
+static int check_lifetimes_and_recovery(void) {
+    const uint64_t invalid_lengths[] = {1, UINT64_MAX};
+    for (size_t i = 0; i < sizeof(invalid_lengths) / sizeof(invalid_lengths[0]); ++i) {
+        emf_document *document = NULL;
+        emf_wmf_document *wmf = NULL;
+        uint32_t format = EMF_FORMAT_EMF;
+        CHECK(emf_detect(NULL, invalid_lengths[i], &format, NULL) == EMF_INVALID_ARGUMENT);
+        CHECK(format == EMF_FORMAT_UNKNOWN);
+        CHECK(emf_parse(NULL, invalid_lengths[i], NULL, &document, NULL) == EMF_INVALID_ARGUMENT);
+        CHECK(document == NULL);
+        CHECK(emf_wmf_parse(NULL, invalid_lengths[i], NULL, &wmf, NULL) == EMF_INVALID_ARGUMENT);
+        CHECK(wmf == NULL);
+    }
+
+    make_fixture();
+    emf_document *document = NULL;
+    emf_buffer *encoded = NULL, *record = NULL, *output = NULL;
+    emf_error *first = NULL, *second = NULL, *error_output = NULL;
+    emf_error_info error_info;
+    emf_info info;
+    const uint8_t *data = NULL;
+    uint64_t length = 0, count = 99;
+    CHECK(emf_parse(input, input_length, NULL, &document, NULL) == EMF_OK);
+    CHECK(emf_serialize(document, &encoded, NULL) == EMF_OK);
+
+    /* Rejected calls clear outputs without consuming separately owned handles. */
+    output = encoded;
+    CHECK(emf_record_bytes(document, UINT64_MAX, &output, &first) == EMF_INVALID_ARGUMENT);
+    CHECK(output == NULL && first != NULL);
+    CHECK(emf_record_batch(document, 3, 0, NULL, &count) == EMF_INVALID_ARGUMENT);
+    CHECK(count == 0);
+    init_info(&info);
+    info.version++;
+    CHECK(emf_document_info(document, &info) == EMF_INVALID_ARGUMENT);
+    init_info(&info);
+    CHECK(emf_document_info(document, &info) == EMF_OK && info.record_count == 2);
+    CHECK(emf_record_bytes(document, 0, &record, NULL) == EMF_OK);
+
+    CHECK(emf_serialize(document, NULL, &second) == EMF_INVALID_ARGUMENT);
+    CHECK(second != NULL && second != first);
+    init_error_info(&error_info);
+    CHECK(emf_error_view(second, &error_info) == EMF_OK);
+    CHECK(error_info.status == EMF_INVALID_ARGUMENT && error_info.message_length > 0);
+    CHECK(error_info.message_length < 256);
+    uint8_t message[256];
+    uint64_t message_length = error_info.message_length;
+    memcpy(message, error_info.message, (size_t)message_length);
+
+    /* Success clears its error slot; ownership of the saved error stays here. */
+    error_output = first;
+    CHECK(emf_document_snapshot(document, &output, &error_output) == EMF_OK);
+    CHECK(output != NULL && error_output == NULL);
+    emf_buffer_free(output);
+    output = NULL;
+    init_error_info(&error_info);
+    CHECK(emf_error_view(first, &error_info) == EMF_OK);
+    CHECK(error_info.status == EMF_INVALID_ARGUMENT && error_info.message_length > 0);
+    emf_error_free(first);
+    first = NULL;
+    emf_document_free(document);
+    document = NULL;
+
+    CHECK(emf_buffer_view(encoded, &data, &length) == EMF_OK);
+    CHECK(length == input_length && memcmp(data, input, input_length) == 0);
+    /* Invalid view outputs also leave the buffer usable for the next call. */
+    CHECK(emf_buffer_view(encoded, NULL, &length) == EMF_INVALID_ARGUMENT);
+    CHECK(length == 0);
+    CHECK(emf_buffer_view(encoded, &data, &length) == EMF_OK);
+    CHECK(length == input_length && memcmp(data, input, input_length) == 0);
+    emf_buffer_free(encoded);
+    encoded = NULL;
+    CHECK(emf_buffer_view(record, &data, &length) == EMF_OK);
+    CHECK(length == 15 && memcmp(data, input + HEADER_SIZE, 15) == 0);
+    emf_buffer_free(record);
+    record = NULL;
+
+    /* This error outlives the document, its peer error and all output buffers. */
+    init_error_info(&error_info);
+    CHECK(emf_error_view(second, &error_info) == EMF_OK);
+    CHECK(error_info.status == EMF_INVALID_ARGUMENT);
+    CHECK(error_info.message_length == message_length);
+    CHECK(memcmp(error_info.message, message, (size_t)message_length) == 0);
+    emf_error_free(second);
+    return 0;
+}
+
 static int check_wmf(void) {
     static const uint8_t wmf[] = {
         1, 0, 9, 0, 0, 3, 16, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0,
@@ -882,11 +968,28 @@ static int check_wmf(void) {
     CHECK(emf_wmf_record_batch(document, 0, 2, records, &count) == EMF_OK);
     CHECK(count == 2 && records[0].type_id == 0x103 && records[1].family == 1);
     CHECK(emf_wmf_record_bytes(document, 0, &original, NULL) == EMF_OK);
-    CHECK(emf_wmf_serialize(document, &encoded, NULL) == EMF_OK);
-    CHECK(emf_buffer_view(encoded, &data, &length) == EMF_OK);
-    CHECK(length == sizeof(wmf) && memcmp(data, wmf, sizeof(wmf)) == 0);
-    emf_buffer_free(encoded);
-    encoded = NULL;
+    /* Every rejected mutation must preserve the same live document. */
+    static const uint8_t odd_payload[] = {1};
+    const struct {
+        uint64_t index;
+        uint32_t function;
+        const uint8_t *payload;
+        uint64_t length;
+    } rejected[] = {
+        {0, 0x103, odd_payload, sizeof(odd_payload)},
+        {2, 0x103, NULL, 0},
+        {0, 0x10000, NULL, 0},
+        {0, 0x103, NULL, 2}
+    };
+    for (size_t i = 0; i < sizeof(rejected) / sizeof(rejected[0]); ++i) {
+        CHECK(emf_wmf_replace_record(document, rejected[i].index, rejected[i].function,
+                                    rejected[i].payload, rejected[i].length, NULL) == EMF_INVALID_ARGUMENT);
+        CHECK(emf_wmf_serialize(document, &encoded, NULL) == EMF_OK);
+        CHECK(emf_buffer_view(encoded, &data, &length) == EMF_OK);
+        CHECK(length == sizeof(wmf) && memcmp(data, wmf, sizeof(wmf)) == 0);
+        emf_buffer_free(encoded);
+        encoded = NULL;
+    }
     static const uint8_t replacement[] = {2, 0, 99, 0};
     CHECK(emf_wmf_replace_record(document, 0, 0x999, replacement, sizeof(replacement), NULL) == EMF_OK);
     CHECK(emf_wmf_replace_record(document, 0, 0x10000, NULL, 0, NULL) == EMF_INVALID_ARGUMENT);
@@ -919,6 +1022,10 @@ static int check_emf_plus_snapshot(void) {
     put_u32(108, 16); put_u32(112, 4); put_u32(116, 0x80ff0033);
     input_length = 120;
     CHECK(emf_parse(input, input_length, NULL, &document, NULL) == EMF_OK);
+    options.version++;
+    CHECK(emf_document_emf_plus_snapshot_v1(document, &options, NULL, &buffer, NULL) == EMF_INVALID_ARGUMENT);
+    CHECK(buffer == NULL);
+    options.version = EMF_PLUS_SNAPSHOT_VERSION;
     CHECK(emf_document_emf_plus_snapshot_v1(document, &options, NULL, &buffer, NULL) == EMF_OK);
     emf_document_free(document);
     CHECK(emf_buffer_view(buffer, &data, &length) == EMF_OK);
@@ -934,6 +1041,7 @@ static int check_emf_plus_snapshot(void) {
 
 int main(void) {
     CHECK(check_layout() == 0);
+    CHECK(check_lifetimes_and_recovery() == 0);
     CHECK(check_snapshot() == 0);
     CHECK(check_scalar_state_snapshots() == 0);
     CHECK(check_coordinate_snapshots() == 0);
