@@ -37,6 +37,8 @@ pub fn serialize_with_limits(
         if record.edited {
             edited = true;
             let element_count = match &record.data {
+                RecordData::CreatePalette { entries, .. }
+                | RecordData::SetPaletteEntries { entries, .. } => entries.len(),
                 RecordData::ExtCreatePen(pen) => {
                     pen.work_len().ok_or(SerializeFailure::SizeOverflow)?
                 }
@@ -373,6 +375,44 @@ pub fn serialize_with_limits(
             }
             RecordData::ExcludeClipRect { clip } | RecordData::IntersectClipRect { clip } => {
                 append_rect(&mut out, *clip)
+            }
+            RecordData::RealizePalette => {}
+            RecordData::SelectPalette { ih_pal } => append(&mut out, *ih_pal),
+            RecordData::ResizePalette {
+                ih_pal,
+                entry_count,
+            } => {
+                append(&mut out, *ih_pal);
+                append(&mut out, *entry_count);
+            }
+            RecordData::CreatePalette {
+                ih_pal,
+                version,
+                entries,
+            } => {
+                append(&mut out, *ih_pal);
+                out.extend_from_slice(&version.to_le_bytes());
+                let count =
+                    u16::try_from(entries.len()).map_err(|_| SerializeFailure::SizeOverflow)?;
+                out.extend_from_slice(&count.to_le_bytes());
+                for entry in entries {
+                    out.extend_from_slice(&[entry.red, entry.green, entry.blue, entry.flags]);
+                }
+            }
+            RecordData::SetPaletteEntries {
+                ih_pal,
+                start,
+                entries,
+            } => {
+                append(&mut out, *ih_pal);
+                append(&mut out, *start);
+                append(
+                    &mut out,
+                    u32::try_from(entries.len()).map_err(|_| SerializeFailure::SizeOverflow)?,
+                );
+                for entry in entries {
+                    out.extend_from_slice(&[entry.red, entry.green, entry.blue, entry.flags]);
+                }
             }
             RecordData::ExtCreatePen(pen) => append_extended_pen(&mut out, start, pen)?,
             RecordData::CreatePen {

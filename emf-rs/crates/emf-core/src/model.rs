@@ -304,11 +304,41 @@ impl ExtCreatePen {
     }
 }
 
+/// PALETTEENTRY channels and flags retained as raw wire bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PaletteEntry {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub flags: u8,
+}
+
 /// Supported payloads. Raw records retain all their original bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordData {
     Raw,
     ExtCreatePen(ExtCreatePen),
+    RealizePalette,
+    SelectPalette {
+        ih_pal: u32,
+    },
+    CreatePalette {
+        ih_pal: u32,
+        /// Raw logical palette version.
+        version: u16,
+        /// The u16 wire count is derived from these entries.
+        entries: Vec<PaletteEntry>,
+    },
+    SetPaletteEntries {
+        ih_pal: u32,
+        start: u32,
+        /// The u32 wire count is derived from these entries.
+        entries: Vec<PaletteEntry>,
+    },
+    ResizePalette {
+        ih_pal: u32,
+        entry_count: u32,
+    },
     ExtTextOutA(ExtTextOut<u8>),
     ExtTextOutW(ExtTextOut<u16>),
     Eof(EofRecord),
@@ -586,6 +616,11 @@ pub enum RecordData {
 impl RecordData {
     pub(crate) fn record_type(&self) -> Option<u32> {
         match self {
+            Self::RealizePalette => Some(52),
+            Self::SelectPalette { .. } => Some(48),
+            Self::CreatePalette { .. } => Some(49),
+            Self::SetPaletteEntries { .. } => Some(50),
+            Self::ResizePalette { .. } => Some(51),
             Self::ExtCreatePen(_) => Some(95),
             Self::ExtTextOutA(_) => Some(83),
             Self::ExtTextOutW(_) => Some(84),
@@ -672,6 +707,17 @@ impl RecordData {
     }
     pub(crate) fn payload_len(&self) -> Option<usize> {
         match self {
+            Self::RealizePalette => Some(0),
+            Self::SelectPalette { .. } => Some(4),
+            Self::ResizePalette { .. } => Some(8),
+            Self::CreatePalette { entries, .. } => {
+                u16::try_from(entries.len()).ok()?;
+                8usize.checked_add(entries.len().checked_mul(4)?)
+            }
+            Self::SetPaletteEntries { entries, .. } => {
+                u32::try_from(entries.len()).ok()?;
+                12usize.checked_add(entries.len().checked_mul(4)?)
+            }
             Self::ExtCreatePen(pen) => pen.layout()?.2.checked_sub(8),
             Self::ExtTextOutA(text) => text.layout()?.2.checked_sub(8),
             Self::ExtTextOutW(text) => text.layout()?.2.checked_sub(8),

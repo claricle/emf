@@ -5,8 +5,8 @@ use crate::error::ParseFailure;
 use crate::limits::{try_vec_with_capacity, Budget, ParseLimits};
 use crate::model::{
     ColorRef, Diagnostic, DiagnosticKind, Document, EmfHeader, EofRecord, ExtCreatePen, ExtTextOut,
-    Float32, PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect, RegionData,
-    ScaleFactors, Size, XForm, EMR_HEADER, HEADER_FIXED_BYTES,
+    Float32, PaletteEntry, PixelFormatFields, Point, Point16, RecordData, RecordSpan, Rect,
+    RegionData, ScaleFactors, Size, XForm, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 use crate::reader::{u32_at, Reader};
 
@@ -84,7 +84,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=22 | 24..=47 | 53..=68 | 70..=75 | 83..=92 | 95 | 98 | 115 | 120
+                2..=22 | 24..=68 | 70..=75 | 83..=92 | 95 | 98 | 115 | 120
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -230,6 +230,16 @@ fn decode_record(
     let malformed = || Ok((RecordData::Raw, 0));
     let mut r = Reader::new(payload);
     match kind {
+        52 => Ok((RecordData::RealizePalette, 0)),
+        48 if payload.len() >= 4 => Ok((RecordData::SelectPalette { ih_pal: r.u32()? }, 4)),
+        51 if payload.len() >= 8 => Ok((
+            RecordData::ResizePalette {
+                ih_pal: r.u32()?,
+                entry_count: r.u32()?,
+            },
+            8,
+        )),
+        49 | 50 => decode_palette(kind, payload, budget),
         83 => decode_text::<u8>(payload, budget),
         84 => decode_text::<u16>(payload, budget),
         31 | 32 if payload.len() >= 16 => {
@@ -1266,4 +1276,55 @@ fn copy_pen_bytes(bytes: &[u8], budget: &mut Budget<'_>) -> Result<Vec<u8>, Pars
     let mut values = try_vec_with_capacity(bytes.len())?;
     values.extend_from_slice(bytes);
     Ok(values)
+}
+
+fn decode_palette(
+    kind: u32,
+    payload: &[u8],
+    budget: &mut Budget<'_>,
+) -> Result<(RecordData, usize), ParseFailure> {
+    let fixed = if kind == 49 { 8usize } else { 12usize };
+    if payload.len() < fixed {
+        return Ok((RecordData::Raw, 0));
+    }
+    let mut r = Reader::new(payload);
+    let ih_pal = r.u32()?;
+    let (version, start, count) = if kind == 49 {
+        (r.u16()?, 0, r.u16()? as usize)
+    } else {
+        (0, r.u32()?, r.u32()? as usize)
+    };
+    let Some(bytes) = count.checked_mul(4) else {
+        return Ok((RecordData::Raw, 0));
+    };
+    if bytes > payload.len() - fixed {
+        return Ok((RecordData::Raw, 0));
+    }
+    budget.charge_alloc(bytes)?;
+    budget.charge_work(count as u64)?;
+    let mut entries = try_vec_with_capacity(count)?;
+    for entry in r.take(bytes)?.chunks_exact(4) {
+        entries.push(PaletteEntry {
+            red: entry[0],
+            green: entry[1],
+            blue: entry[2],
+            flags: entry[3],
+        });
+    }
+    Ok((
+        if kind == 49 {
+            RecordData::CreatePalette {
+                ih_pal,
+                version,
+                entries,
+            }
+        } else {
+            RecordData::SetPaletteEntries {
+                ih_pal,
+                start,
+                entries,
+            }
+        },
+        fixed + bytes,
+    ))
 }
