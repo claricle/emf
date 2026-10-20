@@ -35,6 +35,10 @@ module Emf
         @lines << "  rec[#{adapter.offset}] type_id=#{adapter.type_id} #{wire.class.name&.split('::')&.last}"
       end
 
+      def visit_wmf_record(record)
+        @lines << "  rec[#{record.offset}] type_id=#{record.type_id} #{record.class.name&.split('::')&.last}"
+      end
+
       def method_missing(name, *args)
         return super unless name.to_s.start_with?("visit_")
 

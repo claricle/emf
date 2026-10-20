@@ -5,11 +5,8 @@ module Emf
     # Produces a record-class histogram for a Metafile. Used by spec assertions
     # (TODO 16) and as a quick sanity-check dump via `emf stats` (TODO 19).
     #
-    # The base Visitor auto-registers `visit_*` methods as no-ops. Stats
-    # overrides the generic dispatch to tally every record by its class name.
-    # Subclasses that override specific visit_* methods for richer behaviour
-    # still get tallied here because the record's accept calls the visit_*
-    # method, which (if not overridden) calls method_missing -> tally.
+    # Registered record families have explicit handlers; unregistered visit_*
+    # methods fall back to tallying the record's class name.
     class Stats < Emf::Model::Visitor
       def initialize
         @counts = Hash.new(0)
@@ -46,6 +43,10 @@ module Emf
       def visit_emr_wire_record(adapter)
         wire_class = adapter.wire.class.name&.split("::")&.last || "Raw"
         @counts["WireAdapter(#{wire_class})"] += 1
+      end
+
+      def visit_wmf_record(record)
+        @counts[record.class.name&.split("::")&.last || record.class.to_s] += 1
       end
 
       def method_missing(name, *args)

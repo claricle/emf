@@ -58,12 +58,9 @@ RSpec.describe "Native visitor output parity" do
         ruby_dump = Emf::Visitors::Dump.new.visit_all(ruby_metafile)
         native_dump = Emf::Visitors::Dump.new.visit_all(native_metafile)
 
-        # WMF currently inherits the base visitor's no-op record handler.
-        # Preserve its header-only output as well as EMF's per-record output.
-        expected_lines = expected_format == :wmf ? 2 : ruby_metafile.records.size + 2
-        expect(ruby_dump.lines.size).to eq(expected_lines)
+        expect(ruby_dump.lines.size).to eq(ruby_metafile.records.size + 2)
         expect(ruby_dump.to_s).to include("Metafile format=#{expected_format}")
-        expect(ruby_dump.to_s).to include("type_id=") unless expected_format == :wmf
+        expect(ruby_dump.to_s).to include("type_id=")
         expect(native_dump.lines).to eq(ruby_dump.lines)
         expect(native_dump.to_s).to eq(ruby_dump.to_s)
       end
@@ -72,8 +69,7 @@ RSpec.describe "Native visitor output parity" do
         ruby_stats = Emf::Visitors::Stats.new.visit_all(ruby_metafile)
         native_stats = Emf::Visitors::Stats.new.visit_all(native_metafile)
 
-        expected_total = expected_format == :wmf ? 0 : ruby_metafile.records.size
-        expect(ruby_stats.total).to eq(expected_total)
+        expect(ruby_stats.total).to eq(ruby_metafile.records.size)
         expect(ruby_stats.histogram.values.sum).to eq(ruby_stats.total)
         expect(ruby_stats.to_s).to include("Total: #{ruby_stats.total}")
         expect(native_stats.total).to eq(ruby_stats.total)
