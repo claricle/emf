@@ -13,7 +13,16 @@ module NativeCorpusParity
   EDITS = {
     "scalar" => [98, ->(wire) { wire.mode = 2 }],
     "nested" => [36, ->(wire) { wire.xform.dx = 12.5 }],
-    "array" => [86, ->(wire) { wire.apts[0].x = 241 }]
+    "array" => [86, ->(wire) { wire.apts[0].x = 241 }],
+    "extended_pen" => [95, ->(wire) { wire.width = 17 }],
+    "paletted_eof" => [14, ->(wire) { wire.n_size_last = 17 }]
+  }.freeze
+  EDIT_FIXTURES = {
+    "scalar" => "simple/image1.emf",
+    "nested" => "simple/image1.emf",
+    "array" => "simple/image1.emf",
+    "extended_pen" => "emf/test-154.emf",
+    "paletted_eof" => "emf/test-165.emf"
   }.freeze
 
   class Failure < StandardError; end

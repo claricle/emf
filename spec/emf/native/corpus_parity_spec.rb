@@ -43,9 +43,9 @@ RSpec.describe "Native valid-EMF corpus acceptance" do
     end
   end
 
-  NativeCorpusParity::EDITS.each_key do |shape|
+  NativeCorpusParity::EDIT_FIXTURES.each do |shape, fixture|
     it "matches live #{shape} wire edits, equality and sibling preservation" do
-      verdict = runner.call(File.join(root, "spec/fixtures/simple/image1.emf"), shape)
+      verdict = runner.call(File.join(root, "spec/fixtures", fixture), shape)
       expect(verdict).not_to have_key("failure"), verdict["failure"]
       expect(verdict.fetch("shape")).to eq(shape)
       expect(verdict.fetch("sha256")).to match(/\A[0-9a-f]{64}\z/)
