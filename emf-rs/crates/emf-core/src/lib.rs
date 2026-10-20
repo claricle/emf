@@ -4,6 +4,7 @@
 //! A small typed record slice supports checked edits. The [`wmf`] module adds
 //! bounded WMF framing with opaque drawing records and checked raw edits.
 
+mod bitmap;
 mod detect;
 mod error;
 mod gradient;
@@ -28,3 +29,8 @@ pub use reader::Reader;
 pub use serialize::{serialize, serialize_with_limits};
 
 pub use gradient::{GradientFill, GradientMesh, TriVertex};
+
+pub use bitmap::{
+    BitmapBuffer, BitmapBufferKind, BitmapBuffers, BitmapMask, BitmapRecord, BitmapSource,
+    BitmapTransfer, BlendFunction, DibTransfer,
+};
