@@ -1,5 +1,7 @@
 import json
+import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import tempfile
@@ -48,6 +50,69 @@ class RunReportTest(unittest.TestCase):
         self.assertEqual((code, report['status']), (1, 'wall_timeout'))
         kill.assert_called_once_with(1234, run.signal.SIGKILL)
         self.assertEqual(process.wait.call_count, 2)
+
+    def test_cargo_fuzz_commands_use_emf_rs_workspace_from_any_caller_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            workspace = base / 'emf-rs'
+            fuzz = workspace / 'fuzz'
+            (fuzz / 'corpus/serialize').mkdir(parents=True)
+            (fuzz / 'Cargo.toml').write_text('\n'.join(['[package]', 'name = "fuzz"', '']))
+            (fuzz / 'seeds.json').write_text('{}')
+            (fuzz / 'corpus/serialize/seed').write_bytes(b'input')
+            caller = base / 'caller'
+            caller.mkdir()
+            bin_dir = base / 'bin'
+            bin_dir.mkdir()
+            cargo_log = base / 'cargo.log'
+            cargo = bin_dir / 'cargo'
+            cargo.write_text('\n'.join([
+                '#!/bin/sh',
+                'if [ ! -f fuzz/Cargo.toml ]; then exit 42; fi',
+                'printf "%s\\n" "$*" >> "$CARGO_TEST_LOG"',
+                'exit 0',
+                '',
+            ]))
+            cargo.chmod(cargo.stat().st_mode | stat.S_IXUSR)
+            rustc = bin_dir / 'rustc'
+            rustc.write_text('\n'.join(['#!/bin/sh', 'printf "fake rustc\\n"', '']))
+            rustc.chmod(rustc.stat().st_mode | stat.S_IXUSR)
+
+            environment = os.environ.copy()
+            environment['PATH'] = f'{bin_dir}:{environment["PATH"]}'
+            environment['CARGO_TEST_LOG'] = str(cargo_log)
+            old_build = subprocess.run(
+                ['cargo', 'fuzz', 'build', '--fuzz-dir', 'emf-rs/fuzz', 'serialize'],
+                cwd=caller, env=environment, check=False)
+            self.assertEqual(old_build.returncode, 42)
+            build = subprocess.run(
+                ['cargo', 'fuzz', 'build', '--fuzz-dir', 'fuzz', 'serialize'],
+                cwd=workspace, env=environment, check=False)
+            self.assertEqual(build.returncode, 0)
+
+            with (patch.object(run, 'HERE', fuzz), patch.object(run, 'WORKSPACE', workspace),
+                  patch.object(run, 'validate', return_value={}),
+                  patch.object(sys, 'argv', ['run.py', 'serialize']),
+                  patch.dict(os.environ, environment, clear=True), patch('builtins.print')):
+                previous_cwd = Path.cwd()
+                os.chdir(caller)
+                try:
+                    with self.assertRaises(SystemExit) as result:
+                        run.main()
+                finally:
+                    os.chdir(previous_cwd)
+                report = json.loads((fuzz / 'reports/serialize.json').read_text())
+
+            self.assertEqual(result.exception.code, 0)
+            self.assertEqual(report['status'], 'passed')
+            self.assertEqual(report['command'][3:5], ['--fuzz-dir', 'fuzz'])
+            self.assertTrue((fuzz / 'artifacts/serialize').is_dir())
+            self.assertIn('fuzz build --fuzz-dir fuzz serialize', cargo_log.read_text())
+            self.assertIn('fuzz run --fuzz-dir fuzz serialize', cargo_log.read_text())
+
+            workflow = Path(__file__).resolve().parents[3] / '.github/workflows/native-fuzz.yml'
+            self.assertIn('Build instrumented target\n        working-directory: emf-rs\n        run: cargo fuzz build --fuzz-dir fuzz',
+                          workflow.read_text())
 
 
 if __name__ == '__main__':

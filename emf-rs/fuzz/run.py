@@ -8,7 +8,9 @@ import signal
 import subprocess
 import time
 
-from seeds import HERE, ROOT, TARGETS, validate
+from seeds import HERE, TARGETS, validate
+
+WORKSPACE = HERE.parent
 
 
 def main():
@@ -16,7 +18,6 @@ def main():
     parser.add_argument("target", choices=sorted(TARGETS))
     parser.add_argument("--seconds", type=int, choices=(30, 1800), default=30)
     args = parser.parse_args()
-    os.chdir(ROOT)
     counts = validate(json.loads((HERE / "seeds.json").read_text()))
     reports = HERE / "reports"
     reports.mkdir(exist_ok=True)
@@ -24,7 +25,7 @@ def main():
     artifacts.mkdir(parents=True, exist_ok=True)
     corpus = HERE / "corpus" / args.target
     assert corpus.is_dir(), "materialize corpus with seeds.py first"
-    command = ["cargo", "fuzz", "run", "--fuzz-dir", "emf-rs/fuzz", args.target,
+    command = ["cargo", "fuzz", "run", "--fuzz-dir", "fuzz", args.target,
                str(corpus), "--", "-seed=12345", f"-max_total_time={args.seconds}",
                "-max_len=8388608", "-rss_limit_mb=2048", "-malloc_limit_mb=512",
                "-timeout=10", f"-artifact_prefix={artifacts}/", "-print_final_stats=1"]
@@ -37,10 +38,11 @@ def main():
     try:
         for label, cmd in {"rustc": ["rustc", "-Vv"], "cargo": ["cargo", "-V"],
                            "cargo_fuzz": ["cargo", "fuzz", "--version"]}.items():
-            report["toolchain"][label] = subprocess.check_output(cmd, text=True, timeout=15).strip()
+            report["toolchain"][label] = subprocess.check_output(
+                cmd, text=True, timeout=15, cwd=WORKSPACE).strip()
         with (reports / f"{args.target}.log").open("w") as log:
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
-                                       start_new_session=True)
+                                       start_new_session=True, cwd=WORKSPACE)
             try:
                 exit_code = process.wait(timeout=args.seconds + 60)
                 report["status"] = "passed" if exit_code == 0 else "failed"

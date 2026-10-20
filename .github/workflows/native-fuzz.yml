@@ -44,7 +44,8 @@ jobs:
           rustc -Vv
           cargo fuzz --version
       - name: Build instrumented target
-        run: cargo fuzz build --fuzz-dir emf-rs/fuzz ${{ matrix.target }}
+        working-directory: emf-rs
+        run: cargo fuzz build --fuzz-dir fuzz ${{ matrix.target }}
       - name: Fuzz with fixed seed and explicit memory limits
         env:
           EVENT_NAME: ${{ github.event_name }}

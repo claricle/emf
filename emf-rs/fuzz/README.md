@@ -11,7 +11,7 @@ Run from the repository root:
 python3 -m unittest discover -s emf-rs/fuzz/tests -p 'test_*.py'
 python3 emf-rs/fuzz/seeds.py --corpus emf-rs/fuzz/corpus
 cargo +nightly-2025-04-01 install cargo-fuzz --version 0.12.0 --locked
-cargo +nightly-2025-04-01 fuzz build --fuzz-dir emf-rs/fuzz parse
+(cd emf-rs && cargo +nightly-2025-04-01 fuzz build --fuzz-dir fuzz parse)
 RUSTUP_TOOLCHAIN=nightly-2025-04-01 python3 emf-rs/fuzz/run.py parse --seconds 30
 ```
 
@@ -22,6 +22,10 @@ has an external deadline and explicit libFuzzer memory limits. Reports include
 actual toolchain versions, seed count, elapsed time, command and exit status;
 CI uploads reports and crash artifacts even on failure. Minimize any discovered
 failure and commit only public-safe licensed regressions.
+
+Cargo fuzz build and run commands use `emf-rs` as their working directory; the
+Python runner resolves reports, artifacts, and corpus paths from its own location,
+so it can be launched from any caller directory.
 
 `seeds.json` references all original 229 EMF files without duplicating them,
 plus two existing WMF fixtures and six project-authored synthetic boundaries.
