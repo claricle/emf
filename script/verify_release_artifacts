@@ -9,7 +9,8 @@
 # per expected platform plus exactly one source gem, all at --version. Each
 # platform gem must pass script/check_native_package --revision SHA (provenance
 # revision, gem_version, library_sha256 and manifest sha256 against the packaged
-# library) and declare the expected ABI version. Nothing is written unless every
+# library), match the checkout's crate version and Cargo.lock hash, and declare
+# the expected target and ABI version. Nothing is written unless every
 # check passes; then the gems and a SHA256SUMS file are written flat to --output.
 # The source gem carries no provenance, so its revision cannot be verified here.
 
@@ -26,6 +27,16 @@ class ReleaseArtifactVerifier
   ROOT = File.expand_path("..", __dir__)
   GEM_NAME = "emf"
   SOURCE = "ruby"
+  # Release rows, kept aligned with release.yml by the focused script spec.
+  TARGETS = {
+    "x86_64-linux-gnu" => "x86_64-unknown-linux-gnu",
+    "aarch64-linux-gnu" => "aarch64-unknown-linux-gnu",
+    "x86_64-linux-musl" => "x86_64-unknown-linux-musl",
+    "aarch64-linux-musl" => "aarch64-unknown-linux-musl",
+    "x86_64-darwin" => "x86_64-apple-darwin",
+    "arm64-darwin" => "aarch64-apple-darwin",
+    "x64-mingw-ucrt" => "x86_64-pc-windows-gnu"
+  }.freeze
 
   def initialize(directory:, revision:, version:, platforms:, abi_version:)
     @directory = directory
@@ -43,6 +54,8 @@ class ReleaseArtifactVerifier
   end
 
   def publish(output)
+    abort "output directory must be empty: #{output}" if File.exist?(output) && (!File.directory?(output) || !Dir.empty?(output))
+
     FileUtils.mkdir_p(output)
     paths = gem_paths
     FileUtils.cp(paths, output)
@@ -52,9 +65,7 @@ class ReleaseArtifactVerifier
 
   private
 
-  def gem_paths
-    Dir.glob(File.join(@directory, "**", "*.gem"))
-  end
+  def gem_paths = Dir.glob(File.join(@directory, "**", "*.gem"))
 
   def row_problems(gems)
     seen = gems.group_by { |_path, spec| spec.platform.to_s }
@@ -64,13 +75,9 @@ class ReleaseArtifactVerifier
     end
   end
 
-  def missing_rows(seen)
-    (expected_rows - seen.keys).map { |row| "missing #{row} gem" }
-  end
+  def missing_rows(seen) = (expected_rows - seen.keys).map { |row| "missing #{row} gem" }
 
-  def extra_rows(seen)
-    (seen.keys - expected_rows).map { |row| "unexpected #{row} gem" }
-  end
+  def extra_rows(seen) = (seen.keys - expected_rows).map { |row| "unexpected #{row} gem" }
 
   def expected_rows
     @platforms + [SOURCE]
@@ -80,6 +87,7 @@ class ReleaseArtifactVerifier
     gems.flat_map do |path, spec|
       problems = []
       problems << "#{relative(path)}: gem name #{spec.name} != #{GEM_NAME}" unless spec.name == GEM_NAME
+      problems << "#{relative(path)}: filename #{File.basename(path)} != #{spec.file_name}" unless File.basename(path) == spec.file_name
       problems << "#{relative(path)}: version #{spec.version} != #{@version}" unless spec.version.to_s == @version
       problems
     end
@@ -90,7 +98,7 @@ class ReleaseArtifactVerifier
 
     Dir.mktmpdir("emf-release-verify") do |dir|
       gems.each_with_index { |(path, _spec), index| FileUtils.cp(path, File.join(dir, "#{index}-#{File.basename(path)}")) }
-      checker_problems(dir) + abi_problems(gems)
+      checker_problems(dir) + metadata_problems(gems)
     end
   end
 
@@ -100,18 +108,34 @@ class ReleaseArtifactVerifier
     status.success? ? [] : err.lines.map { |line| "check_native_package: #{line.strip.sub(/\A\d+-/, '')}" }
   end
 
-  def abi_problems(gems)
-    gems.reject { |_path, spec| spec.platform.to_s == SOURCE }.filter_map do |path, _spec|
-      abi = platform_manifest(path)["abi_version"]
-      "#{relative(path)}: abi_version #{abi.inspect} != #{@abi_version}" unless abi == @abi_version
+  def metadata_problems(gems)
+    gems.reject { |_path, spec| spec.platform.to_s == SOURCE }.flat_map do |path, spec|
+      Dir.mktmpdir("emf-release-metadata") do |dir|
+        Gem::Package.new(path).extract_files(dir)
+        metadata = File.join(dir, "lib/emf/native")
+        abi = read_metadata(metadata, "platforms.json")["abi_version"]
+        problems = []
+        problems << "#{relative(path)}: abi_version #{abi.inspect} != #{@abi_version}" unless abi == @abi_version
+        problems + provenance_problems(path, spec, read_metadata(metadata, "provenance.json"))
+      end
     end
   end
 
-  def platform_manifest(path)
-    Dir.mktmpdir("emf-release-abi") do |dir|
-      Gem::Package.new(path).extract_files(dir)
-      JSON.parse(File.read(File.join(dir, "lib/emf/native/platforms.json")))
+  def provenance_problems(path, spec, provenance)
+    expected = {
+      "target" => TARGETS[spec.platform.to_s],
+      "cargo_lock_sha256" => Digest::SHA256.file(File.join(ROOT, "emf-rs/Cargo.lock")).hexdigest,
+      "crate_version" => File.read(File.join(ROOT, "emf-rs/crates/emf-ffi/Cargo.toml"))[/^version\s*=\s*"([^"]+)"/, 1]
+    }
+    expected.filter_map do |field, value|
+      next if value && provenance[field] == value
+
+      "#{relative(path)}: #{field} #{provenance[field].inspect} != #{value || 'a supported release target'}"
     end
+  end
+
+  def read_metadata(directory, file)
+    JSON.parse(File.read(File.join(directory, file)))
   rescue Errno::ENOENT, JSON::ParserError
     {}
   end

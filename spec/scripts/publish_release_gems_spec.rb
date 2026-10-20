@@ -54,6 +54,9 @@ RSpec.describe "script/publish_release_gems" do
 
   def add_gem(name, push:, remote: nil)
     File.write(File.join(@gems, name), "local bytes of #{name}")
+    paths = Dir.glob(File.join(@gems, "*.gem"))
+    sums = paths.map { |path| "#{Digest::SHA256.file(path).hexdigest}  #{File.basename(path)}\n" }.join
+    File.write(File.join(@gems, "SHA256SUMS"), sums)
     File.write(File.join(@state, "#{name}.push"), push)
     File.write(File.join(@state, "#{name}.remote"), remote) if remote
   end
@@ -64,7 +67,7 @@ RSpec.describe "script/publish_release_gems" do
     [status.exitstatus, out, err]
   end
 
-  def calls = File.read(File.join(@state, "calls.log")).lines.map(&:strip)
+  def calls = File.exist?(File.join(@state, "calls.log")) ? File.readlines(File.join(@state, "calls.log"), chomp: true) : []
 
   it "pushes every gem when all versions are new" do
     add_gem("emf-1.0.0.gem", push: "ok")
@@ -130,6 +133,65 @@ RSpec.describe "script/publish_release_gems" do
     status, _out, err = publish
     expect(status).to eq(1)
     expect(err).to include("no gems found")
+  end
+
+  it "rejects modified bytes in any gem before attempting the first push" do
+    add_gem("emf-1.0.0-arm64-darwin.gem", push: "ok")
+    add_gem("emf-1.0.0.gem", push: "ok")
+    File.write(File.join(@gems, "emf-1.0.0.gem"), "tampered after verification")
+    status, _out, err = publish
+    expect([status, err, calls]).to match([1, /sha256 mismatch.*emf-1.0.0.gem/, []])
+  end
+
+  it "requires the verified checksum manifest before pushing" do
+    add_gem("emf-1.0.0.gem", push: "ok")
+    FileUtils.rm(File.join(@gems, "SHA256SUMS"))
+    status, _out, err = publish
+    expect([status, err, calls]).to match([1, /missing SHA256SUMS/, []])
+  end
+
+  it "rejects an extra gem absent from the verified manifest" do
+    add_gem("emf-1.0.0.gem", push: "ok")
+    File.write(File.join(@gems, "emf-2.0.0.gem"), "unverified")
+    status, _out, err = publish
+    expect([status, err, calls]).to match([1, /checksum inventory.*emf-2.0.0.gem/, []])
+  end
+
+  it "rejects a missing gem from the verified manifest" do
+    add_gem("emf-1.0.0.gem", push: "ok")
+    add_gem("emf-1.0.0-arm64-darwin.gem", push: "ok")
+    FileUtils.rm(File.join(@gems, "emf-1.0.0-arm64-darwin.gem"))
+    status, _out, err = publish
+    expect([status, err, calls]).to match([1, /checksum inventory.*emf-1.0.0-arm64-darwin.gem/, []])
+  end
+
+  it "rejects duplicate checksum entries before pushing" do
+    add_gem("emf-1.0.0.gem", push: "ok")
+    manifest = File.join(@gems, "SHA256SUMS")
+    File.write(manifest, File.read(manifest) * 2)
+    status, _out, err = publish
+    expect([status, err, calls]).to match([1, /duplicate checksum.*emf-1.0.0.gem/, []])
+  end
+
+  it "rejects checksum paths outside the flat verified directory" do
+    add_gem("emf-1.0.0.gem", push: "ok")
+    manifest = File.join(@gems, "SHA256SUMS")
+    File.write(manifest, File.read(manifest).sub("  emf-", "  ../emf-"))
+    status, _out, err = publish
+    expect([status, err, calls]).to match([1, /invalid SHA256SUMS entry/, []])
+  end
+
+  it "preserves manual release and the environment-free trusted publisher identity" do
+    workflow = YAML.safe_load_file(File.join(root, ".github/workflows/release.yml"))
+    triggers = workflow["on"] || workflow[true]
+    expect(triggers.keys).to eq(["workflow_dispatch"])
+    expect(triggers.dig("workflow_dispatch", "inputs", "dry_run", "default")).to be(true)
+    publish_job = workflow.dig("jobs", "publish")
+    expect(publish_job["if"]).to eq("${{ !inputs.dry_run }}")
+    expect(publish_job["permissions"]).to eq("contents" => "read", "id-token" => "write")
+    expect(publish_job).not_to have_key("environment")
+    credentials = publish_job["steps"].filter_map { |step| step["uses"] }.grep(%r{rubygems/configure-rubygems-credentials@})
+    expect(credentials).to eq(["rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a"])
   end
 
   it "is the only thing the workflow's publish job pushes with, and no step overrides a GITHUB_ variable" do
