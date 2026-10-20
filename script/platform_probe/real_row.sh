@@ -137,17 +137,23 @@ fi
 package_steps() {
   local pkg=$out/package stage=$out/stage home=$out/gem-home
   local nroot nlib npkg nstage nhome nhere nfixture req
+  # Both gems and the package check are bound to one source revision: the release
+  # revision in CI, else the checkout's HEAD.
   local revision=${EMF_RELEASE_REVISION:-${GITHUB_SHA:-}}
+  if [ -z "$revision" ]; then
+    revision=$(git -C "$root" rev-parse HEAD 2>/dev/null) || { blocker "cannot determine the source revision"; return; }
+  fi
   nroot=$(native_path "$root") nlib=$(native_path "$lib") npkg=$(native_path "$pkg")
   nstage=$(native_path "$stage") nhome=$(native_path "$home") nhere=$(native_path "$here")
   nfixture=$(native_path "$out/fixture.emf")
   rm -rf "${pkg:?}" "${stage:?}" "${home:?}" "${out:?}/bin"
   ruby="$(ruby -e 'print RbConfig.ruby')"
   step "build_platform_gem" package-build-platform.log \
-    ruby "$nroot/script/build_native_gem" --platform "$platform" --library "$nlib" --abi-version 1 --target "$target" ${revision:+--revision "$revision"} --output "$npkg" || return
+    ruby "$nroot/script/build_native_gem" --platform "$platform" --library "$nlib" --abi-version 1 --target "$target" --revision "$revision" --output "$npkg" || return
   step "build_source_gem" package-build-source.log \
-    ruby "$nroot/script/build_native_gem" --platform ruby --output "$npkg" || return
-  step "package_check" package-check.log ruby "$nroot/script/check_native_package" --directory "$npkg" || return
+    ruby "$nroot/script/build_source_release_gem" --revision "$revision" --output "$npkg" || return
+  step "package_check" package-check.log \
+    ruby "$nroot/script/check_native_package" --directory "$npkg" --revision "$revision" || return
   req=$(cd "$root" && ruby -e 'print Gem::Specification.load("emf.gemspec").dependencies.find { |d| d.name == "bindata" }.requirement') ||
     { blocker "could not read the bindata requirement from emf.gemspec"; return; }
   if ! { mkdir -p "$stage" && cp "$pkg"/*.gem "$stage"/; }; then
