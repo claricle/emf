@@ -46,6 +46,34 @@ RSpec.describe Emf::EmfPlus::Stream::Conformance do
     expect(conformance_errors(metafile_with(record(0x4002, "") + record(0x4004, "")))).to be_empty
   end
 
+  describe "EmfPlusHeader placement (MS-EMFPLUS 2.3.3.3: \"MUST be the record immediately following the EMF header\")" do
+    let(:header) { record(0x4001, [0xDB020000, 0, 96, 96].pack("V4"), flags: 1) }
+
+    it "reports a header in a later comment, keeping bytes, Metafile#errors and parsing intact" do
+      payloads = [record(0x4004, ""), header + record(0x4002, "")]
+      metafile = metafile_with(*payloads)
+
+      expect(conformance_errors(metafile)).to match(
+        [have_attributes(kind: :header_not_after_emf_header, comment_index: 1, offset: 0, record_type: 0x4001)]
+      )
+      expect(metafile.errors).to eq(source.errors)
+      expect(Emf.parse(Emf.serialize(metafile)).emf_plus_stream.segments.map(&:payload)).to eq(payloads)
+    end
+
+    it "reports nothing for a header in the first comment" do
+      expect(conformance_errors(metafile_with(header + record(0x4002, "")))).to be_empty
+    end
+
+    it "does not report a duplicate header or records after EndOfFile, which the text does not forbid" do
+      payloads = [header + record(0x4002, ""), header + record(0x4004, "") + record(0x4002, "")]
+      expect(conformance_errors(metafile_with(*payloads))).to be_empty
+    end
+
+    it "does not report a missing EndOfFile" do
+      expect(conformance_errors(metafile_with(header + record(0x4004, "")))).to be_empty
+    end
+  end
+
   it "reports nothing on an EMF+ fixture" do
     expect(conformance_errors(source)).to be_empty
   end
