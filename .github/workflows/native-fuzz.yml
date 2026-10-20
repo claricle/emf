@@ -1,0 +1,66 @@
+name: Native fuzz
+
+on:
+  pull_request:
+    paths:
+      - 'emf-rs/**'
+      - 'spec/fixtures/**'
+      - '.github/workflows/native-fuzz.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'emf-rs/**'
+      - 'spec/fixtures/**'
+      - '.github/workflows/native-fuzz.yml'
+  schedule:
+    - cron: '23 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [parse, serialize, ffi]
+    env:
+      CARGO_BUILD_JOBS: 1
+      RUSTUP_TOOLCHAIN: nightly-2025-04-01
+      CARGO_TARGET_DIR: ${{ github.workspace }}/emf-rs/fuzz/target
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check seed and runner contracts
+        run: python3 -m unittest discover -s emf-rs/fuzz/tests -p 'test_*.py'
+      - name: Validate and materialize all seeds
+        run: python3 emf-rs/fuzz/seeds.py --corpus emf-rs/fuzz/corpus --report emf-rs/fuzz/reports/seeds.json
+      - name: Install pinned fuzz toolchain
+        run: |
+          rustup toolchain install nightly-2025-04-01 --profile minimal --component rust-src
+          cargo install cargo-fuzz --version 0.12.0 --locked
+          rustc -Vv
+          cargo fuzz --version
+      - name: Build instrumented target
+        run: cargo fuzz build --fuzz-dir emf-rs/fuzz ${{ matrix.target }}
+      - name: Fuzz with fixed seed and explicit memory limits
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          seconds=30
+          if [[ "$EVENT_NAME" == schedule || "$EVENT_NAME" == workflow_dispatch ]]; then
+            seconds=1800
+          fi
+          python3 emf-rs/fuzz/run.py "${{ matrix.target }}" --seconds "$seconds"
+      - name: Retain reports and crashes on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-fuzz-${{ matrix.target }}-${{ github.run_id }}
+          path: |
+            emf-rs/fuzz/reports/
+            emf-rs/fuzz/artifacts/
+          if-no-files-found: warn
+          retention-days: 14
