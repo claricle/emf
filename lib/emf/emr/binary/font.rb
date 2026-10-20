@@ -79,6 +79,7 @@ module Emf
         def assign(value)
           bytes = value.respond_to?(:snapshot) ? value.snapshot : value
           @font = parse_font(bytes)
+          @assigned_size = bytes.bytesize
           super(bytes)
         end
 
@@ -129,7 +130,7 @@ module Emf
               raise BinData::ValidityError, "design vector axis count does not match values"
             end
           end
-          length = eval_parameter(:byte_length)
+          length = body_length
           if @font.is_a?(LogFontPanose) && length.between?(93, 319)
             raise BinData::ValidityError, "font edit exceeds partial Panose body" unless bytes.byteslice(length..).bytes.all?(&:zero?)
 
@@ -138,6 +139,15 @@ module Emf
           raise BinData::ValidityError, "font body does not match record size" unless bytes.bytesize == length
 
           bytes
+        end
+
+        # A record built in memory can be serialized before its nSize is set:
+        # emfsvg assigns a raw LOGFONTW body, then derives n_size from
+        # to_binary_s. Until nSize gives a size, the body keeps the size it
+        # was assigned; an explicit nSize is still validated.
+        def body_length
+          length = eval_parameter(:byte_length)
+          length.positive? || @assigned_size.nil? ? length : @assigned_size
         end
 
         def sensible_default
