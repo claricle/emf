@@ -1,8 +1,8 @@
 //! Ruby-independent EMF core: checked reads, detection, header and record
 //! framing, and exact unchanged serialization.
 //!
-//! A small typed record slice supports checked edits. WMF signatures
-//! are detected but WMF is not parsed.
+//! A small typed record slice supports checked edits. The [`wmf`] module adds
+//! bounded WMF framing with opaque drawing records and checked raw edits.
 
 mod detect;
 mod error;
@@ -11,6 +11,7 @@ mod model;
 mod parse;
 mod reader;
 mod serialize;
+pub mod wmf;
 
 pub use detect::{detect_format, Format};
 pub use error::{EditFailure, LimitKind, ParseFailure, SerializeFailure};
