@@ -58,7 +58,7 @@ RSpec.describe DllClosure do
   end
 
   it "accepts a DLL importing only system DLLs" do
-    dll = write_dll(%w[KERNEL32.dll ntdll.dll api-ms-win-crt-heap-l1-1-0.dll bcrypt.dll])
+    dll = write_dll(%w[KERNEL32.dll ntdll.dll api-ms-win-crt-heap-l1-1-0.dll bcrypt.dll BCryptPrimitives.dll])
 
     expect(described_class.missing(dll)).to eq([])
   end

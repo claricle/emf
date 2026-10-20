@@ -5,7 +5,7 @@
 # nor shipped in the same directory, because a user's machine will not have it.
 module DllClosure
   SYSTEM_DLLS = %w[
-    advapi32 bcrypt combase crypt32 gdi32 iphlpapi kernel32 kernelbase msvcrt
+    advapi32 bcrypt bcryptprimitives combase crypt32 gdi32 iphlpapi kernel32 kernelbase msvcrt
     ncrypt ntdll ole32 oleaut32 rpcrt4 secur32 shell32 shlwapi synchronization
     ucrtbase user32 userenv ws2_32
   ].map { |name| "#{name}.dll" }.freeze
