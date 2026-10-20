@@ -117,6 +117,34 @@ results. The bounded cases establish:
   calls release 24 documents, 24 snapshot buffers and 24 errors; copied error
   messages remain usable after native error release.
 
+### Additional bounded public parity evidence
+
+`spec/emf/native/wmf_collection_parity_spec.rb` adds structural WMF collection
+controls for removal, insertion and replacement on standard and placeable WMF.
+The retained Apple Silicon library at
+`/private/tmp/emf-execution/apple-repro/clean-a/aarch64-apple-darwin/release/libemf_ffi.dylib`
+(SHA-256 `a167eae1e2ed3ebeaa7066b8ea870508185a9304416e4f8740e8ea4f5fb67ef3`)
+passed 12 examples with 0 failures (seed 14873). The cases verify exact bytes,
+two serialize/reparse generations, regenerated size/count fields, opaque
+siblings, trailing bytes and placeable-header checksums. This is bounded
+Apple-arm64 evidence against a retained library; it does not qualify final Rust
+HEAD or other platforms. See `/private/tmp/emf-execution/wmf-collection-parity.log`.
+
+The same retained library ran `spec/emf/native_wmf_resilience_seeds_spec.rb`:
+2 examples, 0 failures (seed 11231). Eight named malformed WMF seeds were
+rejected with Ruby fallback forbidden, then valid generated input was parsed,
+serialized and compared byte-for-byte. This adds malformed-input controls, not
+whole-corpus or cross-platform acceptance; see the resilience plan's bounded
+evidence and the shared handoff.
+
+`spec/scripts/installed_wmf_workload_spec.rb` also exercises the installed
+workload's native WMF path against that retained library: 14 examples, 0
+failures (seed 30005). Standard and placeable WMF are parsed, dumped exactly,
+mutated through typed `MoveTo.x`, reparsed and serialized again; the workload
+retains EMF+ format reporting. Discovery is stubbed in these specs, so this
+does not establish real installed-gem or final-Rust-HEAD behavior. See the
+platform-delivery plan and shared handoff for the environment controls.
+
 Run the focused checks against an actual built library:
 
 ```sh

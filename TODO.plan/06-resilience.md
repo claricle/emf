@@ -86,6 +86,21 @@ scheduled budgets, and complete allocation/work boundary coverage across the
 implemented record/accessor paths. Native C lifetime controls are tracked in
 [04](04-c-abi.md). Do not infer whole-phase completion from Linux smoke checks.
 
+### Additional bounded WMF malformed-input evidence
+
+`spec/emf/native_wmf_resilience_seeds_spec.rb` pins eight generated malformed
+WMF seeds (`header-size`, `file-size`, `max-record`, `zero-record`,
+`missing-eof`, `negative-text-count`, `placeable-checksum`, and
+`bitmap-short-record`) as rejected outcomes. With Ruby parser fallback forbidden,
+the forced-native check rejected all eight and then parsed/serialized valid
+generated input with exact byte preservation: 2 examples, 0 failures (seed
+11231), using the retained Apple Silicon library with SHA-256
+`a167eae1e2ed3ebeaa7066b8ea870508185a9304416e4f8740e8ea4f5fb67ef3`.
+This is a finite seed check on a retained artifact, not final-head, full-corpus,
+fuzz-budget or per-platform resilience certification. The log was not retained;
+the command and verdict are recorded in
+`/private/tmp/emf-execution/native-corpus-parity-handoff.md`.
+
 ## Acceptance
 
 - All 21 corrupt fixtures terminate within supervised limits, including the named pathological file; exact baseline outcomes or explicitly documented resource-limit outcomes are asserted.
