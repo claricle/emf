@@ -10,7 +10,9 @@ module Emf
         FIXED_SIZE = 24
         LENGTH_OFFSET = 20
 
-        class FontBody < Records::Body
+        # Anonymous until assigned so BinData does not register it as :font_body,
+        # a name the EMR record field resolves by symbol.
+        FontBody = Class.new(Records::Body) do
           endian :little
           graphics_version :version
           float :em_size
