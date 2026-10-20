@@ -61,7 +61,9 @@ module AvailabilityMatrix
     def path(name) = File.join(@directory, "#{name}#{@extension}")
 
     def truncated
-      File.binwrite(path("corrupt"), File.binread(@library)[0, File.size(@library) / 2])
+      # Keep only the magic: a complete ELF header with truncated mapped segments
+      # can SIGBUS inside dlopen before Ruby can report a recoverable load error.
+      File.binwrite(path("corrupt"), File.binread(@library, 4))
       path("corrupt")
     end
 
@@ -140,7 +142,11 @@ module AvailabilityMatrix
 
     def scenarios
       unavailable = ->(pattern) { ["none", "Emf::Native::Unavailable", pattern] }
-      load_failure = ->(path) { unavailable.call(/native backend could not load: .*#{Regexp.escape(File.basename(path))}/m) }
+      load_failure = lambda do |path|
+        # Windows Fiddle reports errno text without the library path.
+        cause = Gem.win_platform? ? /\S.+/ : /.*#{Regexp.escape(File.basename(path))}/
+        unavailable.call(/native backend could not load: #{cause}/m)
+      end
       [baseline, absent(load_failure), broken("corrupt_library", @fixtures.truncated, load_failure),
        broken("wrong_architecture", @fixtures.foreign_architecture, load_failure),
        dependent(load_failure), wrong_abi(unavailable), missing_fiddle(unavailable),
@@ -217,9 +223,7 @@ module AvailabilityMatrix
       end
     end
 
-    def discovered
-      scenario("library_not_configured", nil, auto: ["native", nil, nil], native: ["native", nil, nil])
-    end
+    def discovered = scenario("library_not_configured", nil, auto: ["native", nil, nil], native: ["native", nil, nil])
 
     def broken_installs(unavailable)
       {
@@ -294,17 +298,20 @@ module AvailabilityMatrix
   end
 end
 
-options = {}
-OptionParser.new do |o|
-  o.on("--library PATH") { |v| options[:library] = File.expand_path(v) }
-  o.on("--fixture PATH") { |v| options[:fixture] = File.expand_path(v) }
-end.parse!
-gem_home = ENV.fetch("GEM_HOME", nil) or abort "GEM_HOME must point at the install under test"
-abort "--library and --fixture are required" unless options[:library] && options[:fixture]
+if $PROGRAM_NAME == __FILE__
+  options = {}
+  OptionParser.new do |o|
+    o.on("--library PATH") { |v| options[:library] = File.expand_path(v) }
+    o.on("--fixture PATH") { |v| options[:fixture] = File.expand_path(v) }
+  end.parse!
+  gem_home = ENV.fetch("GEM_HOME", nil) or abort "GEM_HOME must point at the install under test"
+  abort "--library and --fixture are required" unless options[:library] && options[:fixture]
 
-passed = Dir.mktmpdir("emf-availability") do |directory|
-  runner = AvailabilityMatrix::Runner.new(gem_home: gem_home, library: options[:library], fixture: options[:fixture], directory: directory)
-  AvailabilityMatrix::Report.new(runner).call
+  passed = Dir.mktmpdir("emf-availability") do |directory|
+    runner = AvailabilityMatrix::Runner.new(gem_home: gem_home, library: options[:library],
+                                            fixture: options[:fixture], directory: directory)
+    AvailabilityMatrix::Report.new(runner).call
+  end
+  puts(passed ? "availability matrix passed" : "availability matrix FAILED")
+  exit(passed ? 0 : 1)
 end
-puts(passed ? "availability matrix passed" : "availability matrix FAILED")
-exit(passed ? 0 : 1)
