@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/emr/binary/lazy_utf16_array"
 
 module Emf
   module Emr
@@ -21,7 +22,7 @@ module Emf
         uint8 :clip_precision
         uint8 :quality
         uint8 :pitch_and_family
-        array :facename, type: :uint16, initial_length: 32
+        lazy_utf16_array :facename, initial_length: 32
       end
 
       class Panose < BinData::Record
@@ -40,8 +41,8 @@ module Emf
       class LogFontPanose < BinData::Record
         endian :little
         log_font :log_font
-        array :fullname, type: :uint16, initial_length: 64
-        array :style, type: :uint16, initial_length: 32
+        lazy_utf16_array :fullname, initial_length: 64
+        lazy_utf16_array :style, initial_length: 32
         uint32 :version
         uint32 :style_size
         uint32 :match
@@ -62,9 +63,9 @@ module Emf
       class LogFontExDv < BinData::Record
         endian :little
         log_font :log_font
-        array :fullname, type: :uint16, initial_length: 64
-        array :style, type: :uint16, initial_length: 32
-        array :script, type: :uint16, initial_length: 32
+        lazy_utf16_array :fullname, initial_length: 64
+        lazy_utf16_array :style, initial_length: 32
+        lazy_utf16_array :script, initial_length: 32
         design_vector :design_vector
         rest :trailing
       end
