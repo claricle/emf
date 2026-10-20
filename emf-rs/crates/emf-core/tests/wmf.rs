@@ -387,3 +387,82 @@ fn invalid_typed_edit_reports_target_index_and_preserves_document() {
     assert_eq!(doc.records()[1].typed(), Some(&original));
     assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
 }
+
+#[test]
+fn version100_dib_records_report_conformance_without_losing_typed_edits() {
+    let dib = [
+        12, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 255, 255, 255, 0x80, 0, 0, 0,
+    ];
+    for (function, prefix) in [
+        (0x0940, 16),
+        (0x0b41, 20),
+        (0x0d33, 18),
+        (0x0f43, 22),
+        (0x0142, 4),
+    ] {
+        let mut body = vec![0; prefix];
+        body.extend_from_slice(&dib);
+        for version in [0x0100u16, 0x0300] {
+            for has_placeable in [false, true] {
+                let mut bytes = standard(
+                    &[record(function, &body), record(0, &[])],
+                    &[0xde, 0xad, 0xbe],
+                );
+                bytes[4..6].copy_from_slice(&version.to_le_bytes());
+                if has_placeable {
+                    bytes = placeable(&bytes);
+                }
+                let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+                let expected_count = usize::from(version == 0x0100);
+                assert_eq!(doc.diagnostics().len(), expected_count, "{function:04x}");
+                if let Some(diagnostic) = doc.diagnostics().first() {
+                    assert_eq!(
+                        diagnostic.kind,
+                        wmf::DiagnosticKind::DibUnsupportedByVersion { version }
+                    );
+                    assert_eq!(diagnostic.offset, if has_placeable { 40 } else { 18 });
+                    assert_eq!(diagnostic.function, Some(function));
+                }
+                assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+                let typed = doc.records()[0].typed().unwrap().clone();
+                doc.replace_typed(0, typed.clone()).unwrap();
+                let output = wmf::serialize(&doc).unwrap();
+                let reparsed = wmf::parse(&output, &ParseLimits::default()).unwrap();
+                assert_eq!(reparsed.records()[0].typed(), Some(&typed));
+                assert_eq!(reparsed.diagnostics(), doc.diagnostics());
+                assert_eq!(reparsed.tail(), &[0xde, 0xad, 0xbe]);
+            }
+        }
+    }
+}
+
+#[test]
+fn version100_no_source_and_bitmap16_records_have_no_dib_warning() {
+    let bitmap16 = [0, 0, 1, 0, 1, 0, 2, 0, 1, 1, 0x80, 0];
+    let mut bitblt = vec![0; 16];
+    bitblt.extend_from_slice(&bitmap16);
+    let mut stretchblt = vec![0; 20];
+    stretchblt.extend_from_slice(&bitmap16);
+    let mut brush = vec![0; 32];
+    brush[2..10].copy_from_slice(&[1, 0, 1, 0, 2, 0, 1, 1]);
+    brush.extend_from_slice(&[0x80, 0]);
+    for (function, body) in [
+        (0x0940, vec![0; 18]),
+        (0x0b41, vec![0; 22]),
+        (0x0922, bitblt),
+        (0x0b23, stretchblt),
+        (0x01f9, brush),
+        (0x02fc, vec![0; 8]),
+    ] {
+        let mut bytes = standard(&[record(function, &body), record(0, &[])], &[]);
+        bytes[4..6].copy_from_slice(&0x0100u16.to_le_bytes());
+        let doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+        assert!(
+            doc.diagnostics().is_empty(),
+            "{function:04x}: {:?}",
+            doc.diagnostics()
+        );
+        assert!(doc.records()[0].typed().is_some());
+        assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+    }
+}

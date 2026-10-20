@@ -88,6 +88,10 @@ pub enum DiagnosticKind {
     UnsupportedVersion {
         version: u16,
     },
+    /// A DIB-bearing record occurs in a metafile version that excludes DIBs.
+    DibUnsupportedByVersion {
+        version: u16,
+    },
     HeaderSizeMismatch {
         declared_words: u32,
         actual_words: u64,
@@ -496,6 +500,32 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             Some((value, consumed)) => (Some(value), consumed),
             None => (None, 0),
         };
+        // MS-WMF MetafileVersion excludes DIBs from version 0x0100. No-source
+        // forms are legal, and the diagnostic must not discard decoded bytes.
+        let has_dib = match &typed {
+            Some(TypedRecord::Bitmap(bitmap::BitmapRecord::DibBitBlt(value))) => {
+                value.bitmap.is_some()
+            }
+            Some(TypedRecord::Bitmap(bitmap::BitmapRecord::DibStretchBlt(value))) => {
+                value.bitmap.is_some()
+            }
+            Some(TypedRecord::Bitmap(
+                bitmap::BitmapRecord::SetDibToDev(_) | bitmap::BitmapRecord::StretchDib(_),
+            ))
+            | Some(TypedRecord::Brush(brush::BrushRecord::DibCreatePatternBrush(_))) => true,
+            _ => false,
+        };
+        if header.version == 0x0100 && has_dib {
+            push_diagnostic(
+                &mut budget,
+                &mut diagnostics,
+                offset,
+                Some(function),
+                DiagnosticKind::DibUnsupportedByVersion {
+                    version: header.version,
+                },
+            )?;
+        }
         let (object_index, issues) = objects.apply(
             function,
             &input[offset + RECORD_HEADER_BYTES..offset + size],
