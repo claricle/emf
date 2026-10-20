@@ -95,7 +95,12 @@ RSpec.describe "Generated EMF+ whole-file coverage" do
           it "exposes the case through the EMF+ stream with the same typed records and bytes" do
             stream = metafile.emf_plus_stream
 
-            expect(stream.errors).to be_empty
+            if name == :StrokeFillPath
+              expect(stream.errors).to contain_exactly(have_attributes(kind: :stroke_fill_path, record_type: 0x4037,
+                                                                       comment_index: 0, offset: 28))
+            else
+              expect(stream.errors).to be_empty
+            end
             expect(stream.records.map { |handle| handle.record.class }[1..-2]).to eq(classes)
             expect(stream.records.map(&:stream_index)).to eq((0...(classes.size + 2)).to_a)
             expect(stream.to_metafile).to equal(metafile)
@@ -252,7 +257,9 @@ RSpec.describe "Generated EMF+ whole-file coverage" do
           reread = Emf.parse(Emf.serialize(result)).emf_plus_stream
           others = (0...stream.segments.size).reject { |index| index == handle.segment_index }
 
-          expect(stream.errors).to be_empty
+          expect(stream.errors).to contain_exactly(have_attributes(kind: :stroke_fill_path, record_type: 0x4037,
+                                                                   comment_index: 2, offset: 68))
+          expect(reread.errors).to eq(stream.errors)
           expect(stream.segments.size).to eq(generator.all_records.each_slice(4).count)
           expect(Emf.serialize(stream.to_metafile)).to eq(bytes)
           expect(reread.records[handle.stream_index].record.body.snapshot).to eq(edited.body.snapshot)
@@ -270,10 +277,11 @@ RSpec.describe "Generated EMF+ whole-file coverage" do
         end
 
         framing_failures = {
-          truncated_record: [/truncated EMF\+ record \(Size 64/, [0x4001]],
-          data_size_beyond_size: [/DataSize 40 exceeds Size 16 - 12/, [0x4001]]
+          truncated_record: [/EMF\+ record \(Size 64\) overruns EMR_COMMENT_EMFPLUS record 0 by 36 bytes/, [0x4001],
+                             /truncated EMF\+ record \(Size 64/],
+          data_size_beyond_size: [/DataSize 40 exceeds Size 16 - 12/, [0x4001], /DataSize 40 exceeds Size 16 - 12/]
         }
-        framing_failures.each do |name, (message, types)|
+        framing_failures.each do |name, (message, types, raw_message)|
           it "#{name}: records a framing error, keeps the frames before it and the file bytes" do
             bytes = cases.fetch(name)
             metafile, frames, errors = framing(bytes)
@@ -282,7 +290,7 @@ RSpec.describe "Generated EMF+ whole-file coverage" do
             expect(frames.map(&:type)).to eq(types)
             expect(metafile).to be_ok
             expect(Emf.serialize(metafile)).to eq(bytes)
-            expect { plus::Parser.call(metafile.emf_plus) }.to raise_error(Emf::ParseError, message)
+            expect { plus::Parser.call(metafile.emf_plus) }.to raise_error(Emf::ParseError, raw_message)
           end
         end
 
@@ -298,7 +306,8 @@ RSpec.describe "Generated EMF+ whole-file coverage" do
         end
 
         it "reports each framing failure and the bytes through the stream" do
-          expected = { truncated_record: [/truncated EMF\+ record/, 1], data_size_beyond_size: [/DataSize 40 exceeds/, 1],
+          expected = { truncated_record: [/EMF\+ record \(Size 64\) overruns EMR_COMMENT_EMFPLUS record 0 by 36 bytes/, 1],
+                       data_size_beyond_size: [/DataSize 40 exceeds/, 1],
                        data_size_short: [/malformed Save body/, 3] }
           expected.each do |name, (message, count)|
             stream = Emf.parse(cases.fetch(name)).emf_plus_stream
