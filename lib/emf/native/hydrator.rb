@@ -112,12 +112,12 @@ module Emf
       end
 
       def eof_fields(payload, raw)
-        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 12
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 12 && raw.bytesize >= 20
 
-        entries, offset, last = payload.unpack("V3")
-        raise FormatError, "native backend does not support extended or paletted EOF records" unless entries.zero? && raw.bytesize == 20
-
-        [Emr::Binary::Records::Eof, { n_pal_entries: entries, off_pal_entries: offset, n_size_last: last, body: "".b }]
+        # The public Ruby wire keeps the fixed word and opaque remainder even
+        # when the native EOF model reads nSizeLast from the record's final word.
+        entries, offset, last = raw.byteslice(8, 12).unpack("V3")
+        [Emr::Binary::Records::Eof, { n_pal_entries: entries, off_pal_entries: offset, n_size_last: last, body: raw.byteslice(20..) }]
       end
 
       def comment_fields(payload, raw)

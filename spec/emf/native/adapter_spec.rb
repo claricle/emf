@@ -1251,9 +1251,12 @@ RSpec.describe Emf::Native do
     expect { backend.parse(malformed_wmf) }.to raise_error(Emf::FormatError)
   end
 
-  it "rejects extended EOF honestly rather than changing its palette layout" do
-    expect { Emf.parse(header + [14, 24, 1, 16, 0, 24].pack("V6")) }
-      .to raise_error(Emf::FormatError, /extended or paletted EOF/)
+  it "preserves the Ruby fixed fields and opaque body of extended EOF" do
+    input = header + [14, 24, 1, 16, 0, 24].pack("V6")
+    parsed = Emf.parse(input)
+    expect(parsed.errors).to be_empty
+    expect(parsed.records.last.wire.snapshot).to include(n_pal_entries: 1, off_pal_entries: 16, n_size_last: 0, body: [24].pack("V"))
+    expect(Emf.serialize(parsed)).to eq(input)
   end
 
   it "falls back only when loading fails during selection" do
