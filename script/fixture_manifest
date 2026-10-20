@@ -1,0 +1,38 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require_relative "../spec/support/fixture_manifest"
+
+options = {}
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: ruby script/fixture_manifest [--check]"
+  opts.separator "Generate baseline Ruby observations (15s/16KiB per fixture; not performance/resource-budget acceptance)."
+  opts.separator "Observations force the Ruby backend, regardless of EMF_BACKEND."
+  opts.separator "--check verifies fixture bytes, counts, schema and parser-source fingerprint without parsing."
+  opts.separator "Regenerate after intentional fixture or parser changes; review exceptions and safety failures."
+  opts.on("--check", "Check the saved inventory; fail on stale data or safety failures") { options[:check] = true }
+  opts.on("-h", "--help", "Show usage") do
+    puts opts
+    exit
+  end
+end
+parser.parse!
+abort(parser.to_s) unless ARGV.empty?
+root = File.expand_path("..", __dir__)
+path = File.join(root, "spec/fixtures/manifest.json")
+inventory = FixtureManifest::Inventory.new(root)
+if options[:check]
+  unless inventory.check(JSON.parse(File.read(path)))
+    abort "Manifest is stale or unsafe; run ruby script/fixture_manifest and review the changes."
+  end
+
+  puts "Fixture manifest matches all 231 fixtures and parser sources (saved observations; no parses run)."
+else
+  manifest = inventory.generate
+  File.write(path, "#{JSON.pretty_generate(manifest)}\n")
+  puts "Wrote #{path} (#{manifest.fetch('fixtures').size} fixtures)."
+  abort "Manifest records safety failures; review them before accepting the baseline." if manifest.fetch("fixtures").any? do |entry|
+    entry.key?("safety_failure")
+  end
+end

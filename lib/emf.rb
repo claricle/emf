@@ -8,6 +8,8 @@ module Emf
   autoload :FormatError, "emf/error"
   autoload :ParseError, "emf/error"
   autoload :SerializeError, "emf/error"
+  autoload :Backend, "emf/backend"
+  autoload :Native, "emf/native"
   autoload :Detector, "emf/detector"
   autoload :Binary, "emf/binary"
   autoload :Model, "emf/model"
@@ -18,10 +20,7 @@ module Emf
 
   class << self
     def parse(bytes)
-      case Detector.call(bytes)
-      when :wmf_apm, :wmf_standard then Wmf::Parser.call(bytes)
-      when :emf then Emr::Parser.call(bytes)
-      end
+      Backend.parse(bytes)
     end
 
     def parse_file(path)
@@ -29,11 +28,7 @@ module Emf
     end
 
     def serialize(metafile)
-      case metafile.format
-      when :wmf then Wmf::Serializer.call(metafile)
-      when :emf, :emf_plus then Emr::Serializer.call(metafile)
-      else raise SerializeError, "unknown format: #{metafile.format.inspect}"
-      end
+      Backend.serialize(metafile)
     end
 
     def serialize_file(metafile, path)

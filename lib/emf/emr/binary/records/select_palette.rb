@@ -9,6 +9,7 @@ module Emf
       module Records
         class SelectPalette < Emf::Emr::Binary::Record
           uint32 :ih_pal
+          rest :trailing
         end
       end
     end
