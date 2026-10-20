@@ -206,12 +206,19 @@ module Emf
         end
 
         record_bytes = head + payload
-        wire = Emf::Emr::Binary::Records.lookup(type_id).read(record_bytes)
-        [wire, Model::Emr::Records::WireAdapter.suffix_of(record_bytes, wire)]
+        read_typed(type_id, n_size, record_bytes)
       rescue StandardError => e
         errors << ParseError.new(offset: offset, record_code: type_id,
                                  message: "#{e.class}: #{e.message}")
         [build_raw(head, payload), "".b]
+      end
+
+      def read_typed(type_id, n_size, record_bytes)
+        filler = Emf::Emr::Binary::FastFill.for(type_id)
+        return filler.call(record_bytes) if filler && n_size >= filler.size
+
+        wire = Emf::Emr::Binary::Records.lookup(type_id).read(record_bytes)
+        [wire, Model::Emr::Records::WireAdapter.suffix_of(record_bytes, wire)]
       end
 
       def build_raw(head, payload)
