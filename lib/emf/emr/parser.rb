@@ -22,10 +22,10 @@ module Emf
 
         until io.eof?
           offset = io.pos
-          wire = read_record(io, offset, errors)
+          wire, suffix = read_record(io, offset, errors)
           break if wire.nil?
 
-          records << Model::Emr::Records::WireAdapter.new(wire: wire, offset: offset)
+          records << Model::Emr::Records::WireAdapter.new(wire: wire, offset: offset, suffix: suffix)
           emf_plus_bytes << extract_emf_plus(wire) if wire.is_a?(Emf::Emr::Binary::Records::Comment)
 
           if wire.is_a?(Emf::Emr::Binary::Records::Eof)
@@ -202,30 +202,16 @@ module Emf
             message: "variable-array record at offset #{offset} declares " \
                      "more entries than nSize allows; preserving as Raw"
           )
-          return build_raw(head, payload)
+          return [build_raw(head, payload), "".b]
         end
 
-        wire_class = Emf::Emr::Binary::Records.lookup(type_id)
-        verify_consumed(wire_class.read(head + payload), head, payload, offset, errors)
+        record_bytes = head + payload
+        wire = Emf::Emr::Binary::Records.lookup(type_id).read(record_bytes)
+        [wire, Model::Emr::Records::WireAdapter.suffix_of(record_bytes, wire)]
       rescue StandardError => e
         errors << ParseError.new(offset: offset, record_code: type_id,
                                  message: "#{e.class}: #{e.message}")
-        build_raw(head, payload)
-      end
-
-      def verify_consumed(wire, head, payload, offset, errors)
-        return wire if wire.is_a?(Emf::Emr::Binary::Records::Raw)
-
-        type_id, n_size = head.unpack("VV")
-        consumed = wire.to_binary_s.bytesize
-        return wire if consumed == n_size
-
-        errors << ParseError.new(
-          offset: offset, record_code: type_id,
-          message: "record at offset #{offset} (type #{type_id}) declares nSize #{n_size} " \
-                   "but its layout consumed #{consumed}; preserving as Raw"
-        )
-        build_raw(head, payload)
+        [build_raw(head, payload), "".b]
       end
 
       def build_raw(head, payload)

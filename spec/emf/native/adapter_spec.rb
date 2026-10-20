@@ -19,6 +19,39 @@ RSpec.describe Emf::Native do
       szl_device: { cx: 800, cy: 600 }, szl_micrometers: { cx: 20, cy: 30 }
     ).to_binary_s
   end
+
+  def edited_first_integer_field?(parsed)
+    wire = parsed.records.first.wire
+    name = wire.field_names.grep_v(/\A(i_type|n_size|cpt|c_pt|n_polys)/).find { |field| wire.public_send(field).is_a?(BinData::BasePrimitive) && wire.public_send(field).value.is_a?(Integer) }
+    return false unless name
+
+    wire.public_send("#{name}=", wire.public_send(name) ^ 1)
+    true
+  end
+
+  # Ruby assertions come first so a failure after them isolates the native side.
+  def expect_suffix_contract(ruby, native, input)
+    expect(ruby.errors).to be_empty
+    expect(Emf.serialize(ruby)).to eq(input)
+    expect(Emf.parse(Emf.serialize(ruby)).records).to eq(ruby.records)
+    expect_edit_keeps_suffix(ruby, input)
+    expect(Emf.serialize(native)).to eq(input)
+    expect_edit_keeps_suffix(native, input)
+  end
+
+  def expect_edit_keeps_suffix(parsed, input)
+    start = header.bytesize
+    layout = parsed.records.first.wire.num_bytes
+    return unless edited_first_integer_field?(parsed)
+
+    edited = Emf.serialize(parsed)
+    expect(edited).not_to eq(input)
+    expect(edited.bytesize).to eq(input.bytesize)
+    expect(edited.byteslice(start + 4, 4)).to eq(input.byteslice(start + 4, 4))
+    expect(edited.byteslice((start + layout)..)).to eq(input.byteslice((start + layout)..))
+    expect(Emf.parse(edited).errors).to be_empty
+  end
+
   let(:eof) { [14, 20, 0, 0, 20].pack("V*") }
   let(:map_mode) { [17, 12, 8].pack("V*") }
   let(:polyline) { [4, 44].pack("V2") + [-5, 2, 40, 60].pack("l<4") + [2].pack("V") + [-1, 4, 9, -2].pack("l<4") }
@@ -331,6 +364,7 @@ RSpec.describe Emf::Native do
         expect(native.records.map { |entry| entry.wire.snapshot }).to eq(ruby.records.map { |entry| entry.wire.snapshot })
         expect(native.records).to eq(ruby.records)
         expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+        expect_suffix_contract(ruby, native, input)
       end
     end
   end
@@ -416,6 +450,7 @@ RSpec.describe Emf::Native do
         expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
         expect(native.records).to eq(ruby.records)
         expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+        expect_suffix_contract(ruby, native, input)
         next unless type == 67
 
         native.records.first.wire.region_mode = 1
@@ -508,6 +543,7 @@ RSpec.describe Emf::Native do
         expect(native.errors).to be_empty
         expect(native.records[1].wire.class).to eq(Emf::Emr::Binary::Records::Raw)
         expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+        expect_suffix_contract(ruby, native, input)
       end
     end
   end
@@ -595,6 +631,7 @@ RSpec.describe Emf::Native do
           expect(native.errors).to be_empty
           expect(native.records[1].wire.class).to eq(Emf::Emr::Binary::Records::Raw)
           expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+          expect_suffix_contract(ruby, native, input)
         end
       end
     end
@@ -695,6 +732,7 @@ RSpec.describe Emf::Native do
           expect(native.errors).to be_empty
           expect(native.records[1].wire.class).to eq(Emf::Emr::Binary::Records::Raw)
           expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+          expect_suffix_contract(ruby, native, input)
         end
       end
     end
@@ -792,6 +830,7 @@ RSpec.describe Emf::Native do
       ruby = Emf.parse(input)
       expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
       expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+      expect_suffix_contract(ruby, native, input)
       next unless scalar_types.include?(type)
 
       ENV["EMF_BACKEND"] = "native"
@@ -876,6 +915,7 @@ RSpec.describe Emf::Native do
         ruby = Emf.parse(input)
         expect(native.records.map { |record| record.wire.snapshot }).to eq(ruby.records.map { |record| record.wire.snapshot })
         expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+        expect_suffix_contract(ruby, native, input)
       end
       ENV["EMF_BACKEND"] = "native"
       (0...length).each do |short|
@@ -963,6 +1003,7 @@ RSpec.describe Emf::Native do
           expect(native.errors).to be_empty
           expect(native.records[1].wire.class).to eq(Emf::Emr::Binary::Records::Raw)
           expect(Emf.serialize(native)).to eq(Emf.serialize(ruby))
+          expect_suffix_contract(ruby, native, input)
         end
       end
     end

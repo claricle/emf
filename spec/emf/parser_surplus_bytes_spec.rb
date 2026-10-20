@@ -29,11 +29,29 @@ RSpec.describe "Emf::Emr::Parser fixed-layout record with surplus nSize bytes" d
     let(:bytes) { synthetic }
     let(:metafile) { Emf.parse(bytes) }
 
-    it "reports a ParseError naming offset, type, declared and consumed size" do
-      offset = header_bytes.bytesize
-      expect(metafile.errors.map(&:message)).to contain_exactly(
-        a_string_including("offset #{offset}", "type 27", "nSize 24", "consumed 16")
-      )
+    it "keeps the typed record and its surplus bytes without a ParseError" do
+      record = metafile.records.first
+      expect(metafile.errors).to be_empty
+      expect(record.wire).to be_a(Emf::Emr::Binary::Records::MoveToEx)
+      expect(record.suffix).to eq("\xAA\xBB\xCC\xDD\x01\x02\x03\x04".b)
+      expect(record.wire.n_size).to eq(24)
+    end
+
+    it "keeps the suffix and nSize when a typed field is edited" do
+      record = metafile.records.first
+      record.wire.origin.x = 99
+      expect(Emf.serialize(metafile)).to eq(header_bytes + [27, 24, 99, 4].pack("V4") + "\xAA\xBB\xCC\xDD\x01\x02\x03\x04".b + eof_bytes)
+    end
+
+    it "recomputes nSize from layout plus suffix when a variable layout grows" do
+      polyline = [4, 40, 0, 0, 0, 0, 1, 7, 8].pack("V9") + "tail".b
+      parsed = Emf.parse(header_bytes + polyline + eof_bytes)
+      wire = parsed.records.first.wire
+      wire.cptl = 2
+      wire.aptl << { x: 9, y: 10 }
+      expected = [4, 48, 0, 0, 0, 0, 2, 7, 8, 9, 10].pack("V11") + "tail".b
+      expect(parsed.errors).to be_empty
+      expect(Emf.serialize(parsed)).to eq(header_bytes + expected + eof_bytes)
     end
 
     it "preserves the record bytes verbatim" do
@@ -45,8 +63,8 @@ RSpec.describe "Emf::Emr::Parser fixed-layout record with surplus nSize bytes" d
       expect(second).to eq(first)
     end
 
-    it "does not flag a record whose nSize equals its layout" do
-      expect(Emf.parse(synthetic(surplus: "".b)).errors).to be_empty
+    it "has an empty suffix when nSize equals the layout" do
+      expect(Emf.parse(synthetic(surplus: "".b)).records.first.suffix).to be_empty
     end
   end
 
