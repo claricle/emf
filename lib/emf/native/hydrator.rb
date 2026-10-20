@@ -11,6 +11,7 @@ module Emf
   module Native
     class Hydrator
       SUPPORTED_TYPES = [*(2..22), *(24..68), *(70..95), 98, 114, 115, 116, 118, 120].freeze
+      OPAQUE_BODY_TYPES = [96, 97, *(99..106), *(109..113), 119, 121, 122].freeze
 
       def initialize(snapshot, input)
         @snapshot = snapshot
@@ -101,7 +102,7 @@ module Emf
 
         # These Ruby wire classes expose only an opaque body. Family 0 already
         # preserves it; materialize the registered class for body editing parity.
-        return [Emr::Binary::Records.lookup(type), { body: raw.byteslice(8..) }] if [99, 100, 101, 122].include?(type)
+        return [Emr::Binary::Records.lookup(type), { body: raw.byteslice(8..) }] if OPAQUE_BODY_TYPES.include?(type)
 
         if !SUPPORTED_TYPES.include?(type) && Emr::Binary::Records.lookup(type) != Emr::Binary::Records::Raw
           raise FormatError, "native backend does not support typed EMR record #{type}"
