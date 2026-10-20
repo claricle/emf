@@ -93,7 +93,15 @@ There is no typed cache and neither representation silently wins a conflict.
 A snapshot may be used with an equivalent document having the same selected
 indices and payloads; it is a content snapshot, not a document identity token.
 
-Apply keeps the original segment lengths and rejects size-changing streams.
+Apply retains the existing selected comment set. Earlier comments retain their
+original logical capacities, clamped to the remaining bytes on shrink; the final
+selected comment receives the remainder, including growth. Empty comments retain
+their `EMF+` signature. Same-length streams keep their exact original segmentation.
+This is an enclosing-container policy: standalone `serialize_segments` remains
+strict, and callers requiring different boundaries can explicitly edit raw
+comments. Unlike Ruby's per-origin-frame grouping, Rust also retains boundaries
+inside records. A nonempty stream with no original selected comments is rejected;
+this API does not insert EMR records.
 Every layout check and allocation completes before mutation. Only segments with
 changed bytes are marked edited; untouched comments retain their exact original
 wire representation, including noncanonical suffixes. Changed comments require
@@ -101,13 +109,15 @@ the same canonical padding layout as `edit_record`; original padding bytes are
 preserved by the enclosing serializer. Unknown records, unrelated comments,
 header opaque bytes and tails follow the existing EMF serialization contract
 (including header count refresh after any edit). Serialization limits cover the
-logical stream and additional comparison/staging work; this operation does not
+logical stream, all comment signatures and additional comparison/staging work; this operation does not
 serialize the whole enclosing EMF, whose output has its own limits.
 
 Public regressions: `emf_plus_container.rs` covers typed edits across split/empty
 segments, exact unchanged output, unknowns and nonzero inner/outer padding,
 coexisting unrelated raw edits, stale selection/data rejection, malformed opt-in
-data, late atomic layout failure, size changes, typed continuation-object edits
-and parse/serialize budgets.
-Container repacking for size-changing edits, FFI/Ruby mapping, licensed embedded
+data, late atomic layout failure, growth/shrink across comments (including an
+empty logical stream), typed continuation-object edits and parse/serialize
+budgets. Growth and shrink preserve unrelated wire records, retain original outer
+padding prefixes where they fit and zero new padding via the existing EMF writer.
+Custom segment policies, new EMR insertion, FFI/Ruby mapping, licensed embedded
 rendering fixtures and the remaining typed families above remain open.

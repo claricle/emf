@@ -1135,7 +1135,10 @@ impl Document {
         crate::emf_plus::EmbeddedStream::extract(self, limits)
     }
 
-    /// Apply a snapshot atomically, retaining the original comment boundaries.
+    /// Apply a snapshot atomically using the existing selected comments.
+    /// Earlier comments retain their logical capacities (clamped on shrink);
+    /// the final comment receives the remainder. Empty comments stay selected.
+    /// A nonempty stream requires at least one original EMF+ comment.
     pub fn apply_structured_emf_plus(
         &mut self,
         snapshot: &crate::emf_plus::EmbeddedStream,

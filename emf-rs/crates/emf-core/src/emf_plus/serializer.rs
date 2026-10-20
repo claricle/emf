@@ -79,7 +79,7 @@ fn check_limits(total: usize, work: u64, limits: &SerializeLimits) -> Result<(),
     Ok(())
 }
 
-fn plan(
+pub(super) fn plan(
     stream: &Stream,
     limits: &SerializeLimits,
     segmented: bool,

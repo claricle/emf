@@ -79,24 +79,39 @@ impl EmbeddedStream {
         doc: &mut Document,
         limits: &SerializeLimits,
     ) -> Result<(), EmbedError> {
-        // Reserve work for scanning/comparing and staging signed comment data.
+        // Preflight the logical encoding and all enclosing comparison/staging work
+        // before allocating output. The final comment absorbs growth; earlier
+        // capacities are retained (or clamped when the logical stream shrinks).
+        let (logical_len, logical_work) = super::serializer::plan(&self.stream, limits, false)?;
+        if self.source.is_empty() && logical_len != 0 {
+            return Err(SerializeFailure::Inconsistent { offset: 0 }.into());
+        }
+        let total = self
+            .source
+            .len()
+            .checked_mul(4)
+            .and_then(|n| n.checked_add(logical_len))
+            .ok_or(SerializeFailure::SizeOverflow)?;
         let mut work = doc.records.len() as u64;
-        let mut total = 0usize;
         for (_, data) in &self.source {
-            total = total
-                .checked_add(data.len())
-                .ok_or(SerializeFailure::SizeOverflow)?;
             work = work
-                .checked_add(2 * (data.len() as u64).div_ceil(16) + 1)
+                .checked_add((data.len() as u64).div_ceil(16) + 1)
                 .ok_or(SerializeFailure::SizeOverflow)?;
         }
+        work = work
+            .checked_add((total as u64).div_ceil(16))
+            .and_then(|n| n.checked_add(self.source.len() as u64))
+            .ok_or(SerializeFailure::SizeOverflow)?;
+        let combined_work = work
+            .checked_add(logical_work)
+            .ok_or(SerializeFailure::SizeOverflow)?;
         for (kind, requested, limit) in [
             (
                 LimitKind::OutputBytes,
                 total as u64,
                 limits.max_output_bytes as u64,
             ),
-            (LimitKind::WorkUnits, work, limits.max_work_units),
+            (LimitKind::WorkUnits, combined_work, limits.max_work_units),
         ] {
             if requested > limit {
                 return Err(SerializeFailure::LimitExceeded {
@@ -106,6 +121,22 @@ impl EmbeddedStream {
                 }
                 .into());
             }
+        }
+        let mut remaining = logical_len;
+        for (position, (_, original)) in self.source.iter().enumerate() {
+            let len = if position + 1 == self.source.len() {
+                remaining
+            } else {
+                remaining.min(original.len() - 4)
+            };
+            // EMR_COMMENT: 8-byte record header, 4-byte count, signature and
+            // payload, rounded to DWORD alignment. Reject before reserving.
+            let size = len
+                .checked_add(16)
+                .and_then(|n| n.checked_add((4 - n % 4) % 4))
+                .ok_or(SerializeFailure::SizeOverflow)?;
+            u32::try_from(size).map_err(|_| SerializeFailure::SizeOverflow)?;
+            remaining -= len;
         }
         let mut selected = self.source.iter();
         for (index, record) in doc.records.iter().enumerate() {
@@ -126,24 +157,26 @@ impl EmbeddedStream {
             max_work_units: limits.max_work_units - work,
             ..limits.clone()
         };
-        let segments = super::serialize_segments(&self.stream, &remaining)?;
-        // Segment lengths are private, but also check source correspondence explicitly.
-        if segments.len() != self.source.len() {
-            return Err(SerializeFailure::Inconsistent { offset: 0 }.into());
-        }
+        let bytes = super::serialize_with_limits(&self.stream, &remaining)?;
         let mut replacements = Vec::new();
         replacements
-            .try_reserve_exact(segments.len())
+            .try_reserve_exact(self.source.len())
             .map_err(|_| SerializeFailure::AllocationFailed {
-                bytes: segments
+                bytes: self
+                    .source
                     .len()
                     .saturating_mul(std::mem::size_of::<(usize, RecordData)>()),
             })?;
-        for ((index, original), segment) in self.source.iter().zip(segments) {
-            if segment.len() != original.len() - 4 {
-                return Err(SerializeFailure::Inconsistent { offset: *index }.into());
-            }
-            if segment == original[4..] {
+        let mut offset = 0;
+        for (position, (index, original)) in self.source.iter().enumerate() {
+            let len = if position + 1 == self.source.len() {
+                bytes.len() - offset
+            } else {
+                (bytes.len() - offset).min(original.len() - 4)
+            };
+            let segment = &bytes[offset..offset + len];
+            offset += len;
+            if segment == &original[4..] {
                 continue;
             }
             let record = &doc.records[*index];
@@ -154,13 +187,13 @@ impl EmbeddedStream {
                 }));
             }
             let mut data = Vec::new();
-            data.try_reserve_exact(original.len()).map_err(|_| {
+            data.try_reserve_exact(4 + segment.len()).map_err(|_| {
                 SerializeFailure::AllocationFailed {
-                    bytes: original.len(),
+                    bytes: 4 + segment.len(),
                 }
             })?;
             data.extend_from_slice(b"EMF+");
-            data.extend_from_slice(&segment);
+            data.extend_from_slice(segment);
             replacements.push((*index, RecordData::Comment { data }));
         }
         // All validation and fallible allocation precede the first mutation.
