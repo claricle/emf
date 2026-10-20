@@ -129,11 +129,17 @@ fetch_in() { (cd "$1" && gem fetch "$2" --version "$3"); }
 
 package_steps() {
   local pkg=$out/package install_dir=$out/package-install req isolated
+  local build_toolchain
   local nroot nlib npkg ninstall
+  build_toolchain=$(cd "$crate" && rustup show active-toolchain 2>/dev/null | awk 'NR == 1 { print $1 }')
+  if [ -z "$build_toolchain" ]; then
+    blocker "could not identify the Rust toolchain used to build the probe"
+    return 1
+  fi
   nroot=$(native_path "$root") nlib=$(native_path "$lib") npkg=$(native_path "$pkg") ninstall=$(native_path "$install_dir")
   rm -rf "${pkg:?}" "${install_dir:?}" "${out:?}/bin"
   step "build_platform_gem" package-build-platform.log \
-    ruby "$nroot/script/build_native_gem" --platform "$platform" --library "$nlib" --abi-version 1 --target "$target" ${GITHUB_SHA:+--revision "$GITHUB_SHA"} --output "$npkg" || return
+    env RUSTUP_TOOLCHAIN="$build_toolchain" ruby "$nroot/script/build_native_gem" --platform "$platform" --library "$nlib" --abi-version 1 --target "$target" ${GITHUB_SHA:+--revision "$GITHUB_SHA"} --output "$npkg" || return
   step "build_source_gem" package-build-source.log \
     ruby "$nroot/script/build_native_gem" --platform ruby --output "$npkg" || return
   step "package_check" package-check.log ruby "$nroot/script/check_native_package" --directory "$npkg" || return
