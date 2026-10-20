@@ -73,6 +73,9 @@ module Emf
           return Model::Wmf::Records::Eof.new(offset: offset)
         end
         return decode_object(raw, function, offset) if Binary::OBJECT_RECORDS.key?(function & 0xFF)
+        if Binary::TEXT_FUNCTIONS.include?(function & 0xFF)
+          return TextCodec.decode(raw, function, offset) { |message| parse_error(offset, function, message) }
+        end
         return decode_point_array(raw, function, offset) if Binary::POINT_ARRAY_RECORDS.key?(function & 0xFF)
 
         record_class = Binary::FIXED_RECORDS[function & 0xFF]
@@ -118,6 +121,7 @@ module Emf
 
       def record_size(record)
         return record.raw_bytes.bytesize / 2 if record.is_a?(Model::Wmf::Records::UnknownRecord)
+        return TextCodec.byte_size(record) / 2 if record.is_a?(Model::Wmf::Records::TextOut)
 
         return 3 + (record.class::PAYLOAD_BYTES / 2) if record.is_a?(Model::Wmf::Records::ObjectRecord)
 

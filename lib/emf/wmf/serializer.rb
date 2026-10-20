@@ -58,6 +58,7 @@ module Emf
         when Model::Wmf::Records::PointRecord, Model::Wmf::Records::RectangleRecord, Model::Wmf::Records::OffsetRecord
           serialize_fixed(record)
         when Model::Wmf::Records::ObjectRecord then serialize_object(record)
+        when Model::Wmf::Records::TextOut then TextCodec.encode(record)
         when Model::Wmf::Records::PointArrayRecord then serialize_point_array(record)
         when Model::Wmf::Records::UnknownRecord then serialize_unknown(record)
         else raise SerializeError, "unsupported WMF record #{record.class}"
@@ -122,7 +123,7 @@ module Emf
         raw = record.raw_bytes
         words, function = raw.unpack("Vv")
         unless raw.bytesize >= 6 && raw.bytesize.even? && words == raw.bytesize / 2 && function == record.type_id &&
-               !function.zero? && !Binary::OBJECT_RECORDS.key?(function & 0xFF) &&
+               !function.zero? && !Binary::OBJECT_RECORDS.key?(function & 0xFF) && !Binary::TEXT_FUNCTIONS.include?(function & 0xFF) &&
                !Binary::FIXED_RECORDS.key?(function & 0xFF) && !Binary::POINT_ARRAY_RECORDS.key?(function & 0xFF)
           raise SerializeError, "invalid raw WMF record"
         end

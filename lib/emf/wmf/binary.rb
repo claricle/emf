@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "emf/wmf/text_codec"
+
 module Emf
   module Wmf
     module Binary
@@ -43,6 +45,7 @@ module Emf
       OBJECT_FUNCTIONS = OBJECT_RECORDS.invert.freeze
       # Opaque creators still consume the lowest available object-table slot.
       OBJECT_CREATORS = [0xFA, 0xFC, 0xFB, 0xF7, 0xF9, 0xFF, 0x42].freeze
+      TEXT_FUNCTIONS = [0x21, 0x32].freeze
 
       module_function
 
