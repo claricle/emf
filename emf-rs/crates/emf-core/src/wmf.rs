@@ -85,6 +85,17 @@ pub struct Diagnostic {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DiagnosticKind {
+    UnsupportedVersion {
+        version: u16,
+    },
+    HeaderSizeMismatch {
+        declared_words: u32,
+        actual_words: u64,
+    },
+    MaxRecordMismatch {
+        declared_words: u32,
+        actual_words: u32,
+    },
     PlaceableChecksumMismatch {
         expected: u16,
         found: u16,
@@ -399,12 +410,24 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             minimum: HEADER_BYTES as u32,
         });
     }
+    if !matches!(header.version, 0x0100 | 0x0300) {
+        push_diagnostic(
+            &mut budget,
+            &mut diagnostics,
+            header_offset + 4,
+            None,
+            DiagnosticKind::UnsupportedVersion {
+                version: header.version,
+            },
+        )?;
+    }
     budget.charge_work((input.len() as u64).div_ceil(16))?;
     budget.charge_alloc(input.len())?;
     let mut source = try_vec_with_capacity(input.len())?;
     source.extend_from_slice(input);
     let mut records = Vec::new();
     let mut found_eof = false;
+    let mut max_record_words = 0;
     let mut objects = objects::ObjectTable::new(header.num_objects);
     while !reader.is_empty() {
         let offset = reader.position();
@@ -488,6 +511,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             )?;
         }
         reader.skip(size)?;
+        max_record_words = max_record_words.max(size_words);
         records.push(Record {
             offset,
             size_words,
@@ -513,6 +537,36 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         }
     }
     let tail_offset = reader.position();
+    // A recovered prefix does not establish the complete metafile's size or
+    // largest record. Compare metadata only after reaching a valid terminator,
+    // excluding both the placeable prefix and the retained post-EOF tail.
+    if found_eof {
+        let actual_words = ((tail_offset - header_offset) / 2) as u64;
+        if u64::from(header.size) != actual_words {
+            push_diagnostic(
+                &mut budget,
+                &mut diagnostics,
+                header_offset + 6,
+                None,
+                DiagnosticKind::HeaderSizeMismatch {
+                    declared_words: header.size,
+                    actual_words,
+                },
+            )?;
+        }
+        if header.max_record != max_record_words {
+            push_diagnostic(
+                &mut budget,
+                &mut diagnostics,
+                header_offset + 12,
+                None,
+                DiagnosticKind::MaxRecordMismatch {
+                    declared_words: header.max_record,
+                    actual_words: max_record_words,
+                },
+            )?;
+        }
+    }
     if !found_eof {
         push_diagnostic(
             &mut budget,
