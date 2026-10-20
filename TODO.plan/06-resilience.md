@@ -1,6 +1,6 @@
 # 06 — Bound corrupt-input handling and fuzz native entry points
 
-Status: **Not started**. Estimate: **2–3 engineering days**, after the baseline, core reader, C ABI and Ruby backend selection exist. Ongoing fuzz execution is separate from implementation time.
+Status: **In progress**. Core budgets, subprocess supervision, corrupt-corpus CI and three instrumented fuzz targets are implemented. Platform-specific resilience certification remains open. The original **2–3 engineering days** estimate describes implementation scope, not remaining time; ongoing fuzz execution is separate.
 
 ## Problem and current evidence
 
@@ -8,7 +8,7 @@ Status: **Not started**. Estimate: **2–3 engineering days**, after the baselin
 
 The shared `spec/fixtures/manifest.json` must reference the original 208 valid and 21 corrupt EMF files. The corrupted directory has 22 files including its README; only 21 are EMF seeds. Do not move fixtures or count that README as input. Additional synthetic/minimized inputs must record provenance and expected outcomes.
 
-## Proposed files
+## Implemented files
 
 - `emf-rs/crates/emf-core/src/limits.rs`: parser/serializer resource budgets and deterministic resource-limit errors.
 - `emf-rs/crates/emf-core/tests/resilience.rs`: arithmetic, budget and recovery regressions.
@@ -16,7 +16,8 @@ The shared `spec/fixtures/manifest.json` must reference the original 208 valid a
 - `emf-rs/fuzz/Cargo.toml`, `emf-rs/fuzz/fuzz_targets/parse.rs`, `serialize.rs`, `ffi.rs`: separate fuzz entry points.
 - `emf-rs/fuzz/seeds.json`: manifest of original fixture paths, hashes, target eligibility and minimized regression seeds; do not duplicate the entire fixture tree.
 - `script/native_resilience`, `spec/emf/native_resilience_spec.rb`: subprocess supervision and Ruby-visible outcome checks.
-- `.github/workflows/native-fuzz.yml`: bounded scheduled/manual fuzz jobs and failure-artifact retention; `spec/fixtures/regressions/` holds only licensed, minimized regression inputs.
+- `.github/workflows/native-fuzz.yml`: bounded change/scheduled/manual fuzz jobs and failure-artifact retention.
+- `.github/workflows/native-resilience.yml`: forced-native original corrupt-corpus supervision on Ubuntu. New minimized regressions must retain provenance and licensing.
 
 ## Execution order and dependencies
 
@@ -27,20 +28,63 @@ The shared `spec/fixtures/manifest.json` must reference the original 208 valid a
 5. Seed all 229 existing EMF fixtures through the seed manifest. Fuzz parsing arbitrary bytes, parse/serialize/reparse, and valid C ABI lifecycle sequences with malformed payloads. Compare parse outcomes/model/bytes where the baseline defines a stable oracle. Add mutations for zero-size records, truncated headers, extreme counts, offset overflow, overlapping ranges, embedded comments and large output requests. Add WMF/EMF+ seeds as [09-format-extension.md](09-format-extension.md) lands.
 6. Proposed execution policy: a short fixed-seed smoke job on changes; nightly/manual 30-minute runs per target with recorded toolchain, seed and budget. Retain crash artifacts as CI artifacts, minimize failures, then commit only a public-safe licensed regression plus deterministic test. A finite clean fuzz run is evidence for that budget, not proof of absence of defects.
 
-## Planned commands
+## Implemented commands
 
-These commands are future checks; their scripts/targets do not exist yet and no result is claimed here. Run from the repository root after implementation:
+Run from the repository root with the declared native library/toolchain available. These commands describe reproducible checks; execution evidence is distinguished below:
 
 ```sh
 cargo test --manifest-path emf-rs/Cargo.toml -p emf-core --test resilience
-ruby script/native_resilience --manifest spec/fixtures/manifest.json --backend native --wall-seconds 60 --report tmp/native-resilience.json
+bundle exec ruby script/native_resilience --manifest spec/fixtures/manifest.json --backend native --scope corrupted --wall-seconds 60 --rss-limit-mb 1024 --report tmp/native-resilience.json
 EMF_BACKEND=native bundle exec rspec spec/emf/native_resilience_spec.rb spec/emf/corrupted_resilience_spec.rb
-cargo +nightly fuzz run --fuzz-dir emf-rs/fuzz parse -- -max_total_time=60
-cargo +nightly fuzz run --fuzz-dir emf-rs/fuzz serialize -- -max_total_time=60
-cargo +nightly fuzz run --fuzz-dir emf-rs/fuzz ffi -- -max_total_time=60
+python3 -m unittest discover -s emf-rs/fuzz/tests -p 'test_*.py'
+python3 emf-rs/fuzz/seeds.py --corpus emf-rs/fuzz/corpus
+# Install cargo-fuzz 0.12.0 with nightly-2025-04-01 as documented in emf-rs/fuzz/README.md.
+(cd emf-rs && cargo +nightly-2025-04-01 fuzz build --fuzz-dir fuzz parse)
+RUSTUP_TOOLCHAIN=nightly-2025-04-01 python3 emf-rs/fuzz/run.py parse --seconds 30
+# Repeat build/run for serialize and ffi.
 ```
 
 The runner must refuse to execute until its recorded RSS limit is configured. Pin the nightly/fuzzer versions in CI and report the actual seed count and elapsed fuzz time.
+
+## Current implementation and evidence
+
+`ParseLimits` defaults in `limits.rs` cap input at 200 MiB, a record at
+128 MiB, record count at 4,000,000, accounted allocation at 640 MiB and work
+at 64 Mi units. Serialization defaults cap output at 200 MiB and work at
+64 Mi units. Accounted allocation is an internal budget, not a physical RSS
+guarantee or a guarantee that allocator aborts are recoverable.
+
+The supervisor requires an explicit RSS limit and a wall deadline in 1–60
+seconds. Its checks cover timeout/RSS enforcement, termination and reaping,
+monitor failures, expected semantic outcomes, unchanged fixture hashes and
+serialize/reparse/reserialize byte identity for successful parses. A native
+availability failure cannot pass by falling back to Ruby. Focused runner
+verification passed 32 examples with one optional real-corpus example pending;
+that pending example is not corpus execution evidence.
+
+[PR #33](https://github.com/claricle/emf/pull/33) head `9a51cfa` passed
+the **Forced native corrupt corpus** CI check on Ubuntu: all original 21
+corrupt fixtures ran with 60-second per-fixture deadlines and a 1024 MiB
+RSS ceiling. This is Linux evidence under the workflow's declared limits,
+not per-platform calibration or a promise about all possible inputs. The
+named `bad_corrupted_2014-12-09-002112.emf` remains in the original manifest.
+The workflow always retains its report and log for 14 days.
+
+At the same head all three instrumented fuzz smoke CI checks passed. The
+workflow pins nightly `2025-04-01` and cargo-fuzz `0.12.0`; each target runs
+30 seconds on changes or 1800 seconds on scheduled/manual execution with
+seed 12345, a 10-second input timeout, 2048 MiB RSS limit, 512 MiB allocation
+limit and 8 MiB generated-input limit. The seed manifest currently contains
+253 entries, including all 229 original EMF fixtures and additional WMF /
+synthetic format boundaries. Hash validation and target eligibility precede
+execution. Actual reports retain toolchain, seed count, elapsed time and exit
+status; finite clean smoke runs establish only their executed budgets.
+
+Remaining acceptance includes equivalent supervised evidence on each delivered
+platform, supported-runner RSS calibration using the valid corpus, longer
+scheduled budgets, and complete allocation/work boundary coverage across the
+implemented record/accessor paths. Native C lifetime controls are tracked in
+[04](04-c-abi.md). Do not infer whole-phase completion from Linux smoke checks.
 
 ## Acceptance
 
