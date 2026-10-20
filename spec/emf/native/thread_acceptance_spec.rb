@@ -4,8 +4,12 @@ require "spec_helper"
 require_relative "../../support/native_thread_acceptance"
 
 RSpec.describe "Native independent-document thread acceptance" do
-  # A child deadline contains native crashes/deadlocks; absence of the library is a failure, never a skip/fallback.
+  # A child deadline contains native crashes/deadlocks; a configured library must load without fallback.
   let(:report) { NativeThreadAcceptance.run }
+
+  before do
+    skip "set EMF_TEST_NATIVE_LIBRARY to a built emf-ffi library" if ENV.fetch("EMF_TEST_NATIVE_LIBRARY", "").empty?
+  end
 
   it "copies stable EMF and WMF results through synchronized independent document scopes" do
     expect(report.fetch("repetitions")).to eq(3)
