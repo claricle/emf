@@ -68,6 +68,8 @@ module Emf
       # allocate a giant array. The element size is bytes per array entry.
       VARIABLE_ARRAY_RECORDS = {
         Binary::TypeCodes::EXTCREATEPEN => { count_offset: 48, element_size: 4 },
+        Binary::TypeCodes::CREATEPALETTE => { count_offset: 14, count_width: 2, element_size: 4 },
+        Binary::TypeCodes::SETPALETTEENTRIES => { count_offset: 16, element_size: 4 },
         Binary::TypeCodes::POLYGON => { count_offset: 24, element_size: 8 },
         Binary::TypeCodes::POLYLINE => { count_offset: 24, element_size: 8 },
         Binary::TypeCodes::POLYBEZIER => { count_offset: 24, element_size: 8 },
@@ -99,9 +101,10 @@ module Emf
         return true unless spec
 
         full = head + payload
-        return true if full.bytesize < spec[:count_offset] + 4
+        count_width = spec.fetch(:count_width, 4)
+        return true if full.bytesize < spec[:count_offset] + count_width
 
-        count = read_uint32(full, spec[:count_offset])
+        count = full.byteslice(spec[:count_offset], count_width).unpack1(count_width == 2 ? "v" : "V")
         return false if count > MAX_SANE_ARRAY_LENGTH
 
         # For single-array records, element_size is the per-entry size.
@@ -109,7 +112,7 @@ module Emf
         # are always uint32 (4 bytes); element_size applies only to the
         # second array (aptl/apts).
         first_array_entry_size = spec[:count2_offset] ? 4 : spec[:element_size]
-        bytes_needed = spec[:count_offset] + 4 + (count * first_array_entry_size)
+        bytes_needed = spec[:count_offset] + count_width + (count * first_array_entry_size)
         return false if bytes_needed > n_size
 
         # Multi-array records also need to validate the second count.

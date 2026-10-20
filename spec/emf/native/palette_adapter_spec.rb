@@ -111,6 +111,20 @@ RSpec.describe "native palette hydration" do
     end
   end
 
+  it "applies body mutations after native hydration while preserving adjacent bytes" do
+    [49, 50, 51].each do |kind|
+      parsed = Emf.parse("#{header}#{palette_record(kind)}#{unknown}#{eof}tail")
+      wire = parsed.records.first.wire
+      offset = kind == 49 ? 12 : 8
+      replacement = palette_record(kind)
+      replacement[12, kind == 49 ? 2 : 4] = kind == 49 ? "\0\x03".b : "\x07\0\0\0".b
+      wire.body = replacement.byteslice(offset..)
+      expect(Emf.serialize(parsed)).to eq("#{header}#{replacement}#{unknown}#{eof}tail")
+      wire.body.assign(palette_record(kind).byteslice(offset..))
+      expect(Emf.serialize(parsed)).to eq("#{header}#{palette_record(kind)}#{unknown}#{eof}tail")
+    end
+  end
+
   it "rejects invalid snapshot counts lengths and create versions before allocating entries" do
     payload = [7, 0x300, 0].pack("V2Q<")
     invalid_counts = [0xFFFFFFFFFFFFFFFF, 1].map { |count| Array.new(1, count).pack("Q<") }

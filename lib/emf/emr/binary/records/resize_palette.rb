@@ -2,6 +2,7 @@
 
 require "bindata"
 require "emf/emr/binary/record"
+require "emf/emr/binary/palette_body"
 
 module Emf
   module Emr
@@ -13,7 +14,15 @@ module Emf
           rest :trailing
 
           def body
-            to_binary_s.byteslice(8..)
+            PaletteBody.new(self, to_binary_s.byteslice(8..))
+          end
+
+          def body=(value)
+            bytes = value.to_s
+            raise ArgumentError, "invalid palette body length" if bytes.bytesize < 8
+
+            replacement = self.class.read(to_binary_s.byteslice(0, 8) + bytes)
+            assign(replacement.snapshot)
           end
         end
       end
