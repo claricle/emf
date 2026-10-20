@@ -194,11 +194,79 @@ RSpec.describe Emf::EmfPlus::Stream do
     end
   end
 
-  describe "extension points" do
-    it "leaves objects and link accessors to their own work" do
-      expect(stream.objects).to be_nil
-      expect(stream.dc_spans).to eq([])
-      expect(stream.effect_for(world_transform)).to be_nil
+  describe "representation" do
+    def stream_of(name) = Emf.parse_file(File.expand_path("../../fixtures/emf/#{name}.emf", __dir__)).emf_plus_stream
+
+    def world_transform_in(stream)
+      stream.each_record.find { |h| h.record.is_a?(Emf::EmfPlus::Records::SetWorldTransform) }
+    end
+
+    def frames_of(stream)
+      Emf::EmfPlus::Parser.from_metafile(stream.source)
+    end
+
+    it "links both E-flag draws of test-038 to their SerializableObject" do
+      s = stream_of("test-038")
+      draws = s.each_record.select { |h| h.record.is_a?(Emf::EmfPlus::Records::DrawImagePoints) && h.record.flags.anybits?(0x2000) }
+
+      expect(draws.size).to eq(2)
+      draws.each do |draw|
+        effect = s.effect_for(draw)
+        expect(effect.record).to be_a(Emf::EmfPlus::Records::SerializableObject)
+        expect(effect.stream_index).to eq(draw.stream_index - 1)
+      end
+      expect(s.effect_for(world_transform)).to be_nil
+      expect(s.errors).to be_empty
+    end
+
+    %w[test-109 test-155].each do |name|
+      it "resolves #{name} DrawImagePoints image and attributes through the stream" do
+        s = stream_of(name)
+        draws = s.each_record.select { |h| h.record.is_a?(Emf::EmfPlus::Records::DrawImagePoints) }
+        resolved = draws.flat_map { |h| s.resolve(h) }
+
+        expect(draws).not_to be_empty
+        expect(resolved.map(&:role).uniq).to eq(%i[image image_attributes])
+        expect(resolved.select { |r| r.role == :image }.map(&:diagnostic)).to all(be_nil)
+        expect(resolved.select { |r| r.role == :image }.map { |r| r.object.object_type }.uniq).to eq([Emf::EmfPlus::Objects::IMAGE])
+        expect(s.objects).to equal(s.objects)
+      end
+    end
+
+    it "gives as many dc_spans as Links finds GetDC frames" do
+      s = stream_of("test-109")
+      expected = Emf::EmfPlus::Links.get_dc_spans(s.source, frames_of(s))
+
+      expect(s.dc_spans.size).to eq(7)
+      expect(s.dc_spans.map(&:to_a)).to eq(expected.map(&:to_a))
+    end
+
+    it "merges link diagnostics into stream.errors only, after an edit unlinks an effect" do
+      s = stream_of("test-038")
+      draw = s.each_record.find { |h| h.record.is_a?(Emf::EmfPlus::Records::DrawImagePoints) && h.record.flags.anybits?(0x2000) }
+      effect = s.effect_for(draw)
+      edited = s.with_record(effect, world_transform_in(s).record)
+      edited_draw = edited.each_record.find { |h| h.stream_index == draw.stream_index }
+
+      expect(edited.effect_for(edited_draw)).to be_nil
+      expect(edited.errors.map(&:reason)).to eq([:missing_effect])
+      expect(edited.objects.errors).to be_empty
+      expect(edited.source.errors).to eq(s.source.errors)
+      expect(s.errors).to be_empty
+    end
+
+    it "rebuilds objects and dc_spans from the edited records" do
+      s = stream_of("test-109")
+      draw = s.each_record.find { |h| h.record.is_a?(Emf::EmfPlus::Records::DrawImagePoints) }
+      s.objects
+      s.dc_spans
+      edited = s.with_record(draw, draw.record.with(image_object_id: 62))
+      edited_draw = edited.each_record.find { |h| h.stream_index == draw.stream_index }
+
+      expect(edited.objects).not_to equal(s.objects)
+      expect(edited.resolve(edited_draw).first.diagnostic.kind).to eq(:empty_slot)
+      expect(s.resolve(draw).first.diagnostic).to be_nil
+      expect(edited.dc_spans.size).to eq(s.dc_spans.size)
     end
   end
 end

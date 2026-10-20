@@ -17,8 +17,9 @@ module Emf
       autoload :EmfGap, "emf/emf_plus/stream/emf_gap"
       autoload :Rebuild, "emf/emf_plus/stream/rebuild"
       autoload :Editor, "emf/emf_plus/stream/editor"
+      autoload :LinkIndex, "emf/emf_plus/stream/link_index"
 
-      attr_reader :source, :segments, :errors
+      attr_reader :source, :segments
 
       def self.from_metafile(metafile)
         errors = []
@@ -36,11 +37,16 @@ module Emf
       def initialize(source:, segments:, errors:, digests:)
         @source = source
         @segments = segments.freeze
-        @errors = errors.freeze
+        @framing_errors = errors.freeze
         @digests = digests.freeze
       end
 
       def ok? = errors.empty?
+
+      # Framing problems, then object table and effect link diagnostics.
+      def errors
+        @errors ||= (@framing_errors + objects.errors + links.errors).freeze
+      end
 
       # EMF+ records and EMF gaps in file order.
       def entries
@@ -78,7 +84,7 @@ module Emf
         raise ArgumentError, "record does not belong to this stream" unless position
 
         swapped = segments.dup.tap { |list| list[handle.segment_index] = segment.replace(position, new_record) }
-        self.class.new(source: source, segments: swapped, errors: errors, digests: @digests)
+        self.class.new(source: source, segments: swapped, errors: @framing_errors, digests: @digests)
       end
 
       # Yields an Editor (#replace(handle, record)) and returns the edited Metafile.
@@ -100,12 +106,24 @@ module Emf
         raise StaleStreamError, "the source metafile's EMF+ comments changed after this stream was built" if stale?
       end
 
-      # Extension points filled in by the object table and link work.
-      def objects = nil
-      def dc_spans = []
-      def effect_for(_handle) = nil
+      # The object table over this stream's records in stream order.
+      def objects
+        @objects ||= ObjectTable.new(records.map(&:record))
+      end
+
+      # Resolutions of the object references `handle`'s record carries.
+      def resolve(handle) = objects.resolve(handle.record, at: handle.stream_index)
+
+      def dc_spans = links.dc_spans
+
+      # The SerializableObject handle linked to an E-flag draw handle, or nil.
+      def effect_for(handle) = links.effect_for(handle)
 
       private
+
+      def links
+        @links ||= LinkIndex.new(source, records, segments)
+      end
 
       def build_entries
         stream_index = 0
