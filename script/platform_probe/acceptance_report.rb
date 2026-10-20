@@ -96,11 +96,35 @@ module PlatformAcceptance
     end
   end
 
+  module RealEvidence
+    def self.checks(directory)
+      workload = File.join(directory, "real/workload.log")
+      log = File.file?(workload) ? File.read(workload) : ""
+      checks = { "real.forced_native_workload" => workload_passes?(log) ? "PASS" : "OPEN" }
+      availability = File.join(directory, "real/availability.log")
+      log = File.file?(availability) ? File.read(availability) : ""
+      checks["real.availability_result"] = log.lines.last == "availability matrix passed\n" && !log.include?("MISMATCH ") ? "PASS" : "OPEN"
+      %w[auto native].each do |mode|
+        AVAILABILITY.each do |name|
+          checks["real.availability.#{name}/#{mode}"] = log.match?(%r{^availability #{name}/#{mode}=\S+}) ? "PASS" : "OPEN"
+        end
+      end
+      checks
+    end
+
+    def self.workload_passes?(log)
+      log.match?(/^installed gem: emf-/) && log.match?(/^parsed: format=.+ records=\d+$/) &&
+        log.lines.include?("discovery_without_env=works\n") && log.lines.include?("dump: roundtrip_identical=true\n") &&
+        log.match?(/^mutate: SetTextColor color.red \d+ -> \d+, reparse\+reserialize identical$/) && log.lines.last == "ok\n"
+    end
+  end
+
   class Row
-    def initialize(directory, target, ruby)
+    def initialize(directory, target, ruby, expected_revision = nil)
       @directory = directory
       @target = target
       @ruby = ruby
+      @expected_revision = expected_revision
       @platform = TARGETS.fetch(target)
       @checks = {}
       @conflicts = []
@@ -114,8 +138,7 @@ module PlatformAcceptance
       check("probe.linkage", probe.match?(/^linkage=ok .+/) && present?("linkage.txt"))
       check_loads
       check("real.build", real.lines.include?("build_cdylib=ok\n") && present?("real/build.log"))
-      check_workload
-      check_availability
+      @checks.merge!(RealEvidence.checks(@directory))
       read_packages
       result
     end
@@ -156,24 +179,6 @@ module PlatformAcceptance
       check("probe.installed_load", installed.size == 2 && load_ok?(installed.last))
     end
 
-    def check_workload
-      log = read(File.join(@directory, "real/workload.log"))
-      check("real.forced_native_workload", log.match?(/^installed gem: emf-/) && log.match?(/^parsed: format=.+ records=\d+$/) &&
-        log.lines.include?("discovery_without_env=works\n") && log.lines.include?("dump: roundtrip_identical=true\n") &&
-        log.match?(/^mutate: SetTextColor color.red \d+ -> \d+, reparse\+reserialize identical$/) && log.lines.last == "ok\n")
-    end
-
-    def check_availability
-      log = read(File.join(@directory, "real/availability.log"))
-      check("real.availability_result", log.lines.last == "availability matrix passed\n" && !log.include?("MISMATCH "))
-      modes = %w[auto native]
-      AVAILABILITY.each do |name|
-        modes.each do |mode|
-          check("real.availability.#{name}/#{mode}", log.match?(%r{^availability #{name}/#{mode}=\S+}))
-        end
-      end
-    end
-
     def read_packages
       @revisions = %w[probe real].filter_map do |name|
         directory = name == "probe" ? @directory : File.join(@directory, "real")
@@ -185,6 +190,7 @@ module PlatformAcceptance
       end
       @conflicts << "mixed revisions within row" if @revisions.uniq.size > 1
       @revision = @revisions.uniq.size == 1 ? @revisions.first : nil
+      validate_expected_revisions
     rescue Gem::Package::Error, JSON::ParserError, Errno::ENOENT => e
       @blockers << "package metadata unreadable: #{e.message}"
     end
@@ -199,6 +205,16 @@ module PlatformAcceptance
       provenance["revision"] if provenance["revision"].is_a?(String)
     end
 
+    def validate_expected_revisions
+      return unless @expected_revision
+
+      @revisions.compact.uniq.each do |actual|
+        next if actual == @expected_revision
+
+        @conflicts << "revision mismatch: expected #{@expected_revision}, actual #{actual}"
+      end
+    end
+
     def result
       status = @checks.value?("OPEN") ? "OPEN" : "PASS"
       status = "FAILED" unless @conflicts.empty? && @blockers.empty?
@@ -209,8 +225,11 @@ module PlatformAcceptance
   end
 
   class Report
-    def initialize(directory)
+    def initialize(directory, revision: nil)
+      raise ArgumentError, "revision must be a full lowercase 40-character SHA" if revision && !revision.match?(/\A[0-9a-f]{40}\z/)
+
       @directory = File.expand_path(directory)
+      @expected_revision = revision
     end
 
     def call
@@ -243,7 +262,7 @@ module PlatformAcceptance
         raise ArgumentError, "duplicate row #{key.join('/')}" if rows.key?(key)
 
         target, ruby = key
-        rows[key] = Row.new(directory, target, ruby).call
+        rows[key] = Row.new(directory, target, ruby, @expected_revision).call
       end
       rows
     end
@@ -278,11 +297,15 @@ end
 
 if $PROGRAM_NAME == __FILE__
   options = {}
-  parser = OptionParser.new { |o| o.on("--json") { options[:json] = true } }
+  parser = OptionParser.new do |o|
+    o.on("--json") { options[:json] = true }
+    o.on("--revision FULL_SHA") { |value| options[:revision] = value }
+  end
   parser.parse!
-  abort "usage: ruby #{$PROGRAM_NAME} ARTIFACT_DIRECTORY [--json]" unless ARGV.size == 1 && File.directory?(ARGV.first)
+  usage = "usage: ruby #{$PROGRAM_NAME} ARTIFACT_DIRECTORY [--revision FULL_SHA] [--json]"
+  abort usage unless ARGV.size == 1 && File.directory?(ARGV.first)
   begin
-    report = PlatformAcceptance::Report.new(ARGV.first).call
+    report = PlatformAcceptance::Report.new(ARGV.first, revision: options[:revision]).call
     if options[:json]
       puts JSON.pretty_generate(report)
     else
@@ -295,7 +318,7 @@ if $PROGRAM_NAME == __FILE__
       end
       report[:conflicts].each { |conflict| warn conflict }
     end
-    exit(report[:conflicts].empty? ? 0 : 1)
+    exit(report[:status] == "FAILED" ? 1 : 0)
   rescue ArgumentError => e
     warn e.message
     exit 1

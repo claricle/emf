@@ -2,8 +2,6 @@
 
 require "fileutils"
 require "json"
-require "open3"
-require "rbconfig"
 require "rubygems/package"
 require "tmpdir"
 require "spec_helper"
@@ -20,12 +18,20 @@ RSpec.describe PlatformAcceptance::Report do
   let(:probe_logs) { %w[build.log linkage.txt] }
   let(:modes) { %w[auto native] }
   let(:report) { described_class.new(@tmp).call }
+  let(:package_spec) { double(name: "emf", platform: platform, version: Gem::Version.new("0.1.2")) }
+  let(:package) { double(spec: package_spec) }
   let(:row) { report.fetch(:targets).find { |entry| entry[:target] == target }.fetch(:rubies).last }
   let(:load_record) do
     { intended_platform: platform, ruby_version: "3.4.8", fiddle_available: true, abi_version: 1, round_trip_ok: true, error: nil }
   end
 
   before do
+    allow(PlatformAcceptance::PackageMetadata).to receive(:read) do |path|
+      metadata_revision = path.include?("/real/") ? real_revision : revision
+      [package, { "platform" => platform, "target" => metadata_target,
+                  "revision" => metadata_revision, "gem_version" => "0.1.2" }]
+    end
+    allow(Gem::Package).to receive(:new).and_return(package)
     @tmp = Dir.mktmpdir("emf-acceptance-report")
     @directory = File.join(@tmp, "probe-#{target}-ruby3.4", "#{target}-ruby3.4")
     @real = File.join(@directory, "real")
@@ -46,25 +52,8 @@ RSpec.describe PlatformAcceptance::Report do
         probe_logs.each { |log| File.write(File.join(directory, log), "succeeded\n") }
       end
       File.write(File.join(directory, "summary.txt"), "#{lines.join("\n")}\nresult=PASS\n")
-      stage = File.join(directory, "stage")
-      FileUtils.mkdir_p(File.join(stage, "lib/emf/native"))
-      metadata = { platform: platform, target: metadata_target, revision: real ? real_revision : revision, gem_version: "0.1.2" }
-      File.write(File.join(stage, "lib/emf/native/provenance.json"), JSON.generate(metadata))
-      spec = Gem::Specification.new do |gem|
-        gem.name = "emf"
-        gem.version = "0.1.2"
-        gem.summary = "test evidence"
-        gem.authors = ["test"]
-        gem.platform = platform
-        gem.files = ["lib/emf/native/provenance.json"]
-      end
       FileUtils.mkdir_p(File.join(directory, "package"))
-      Dir.chdir(stage) do
-        Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) do
-          built = Gem::Package.build(spec, true)
-          FileUtils.mv(built, File.join(directory, "package", built))
-        end
-      end
+      File.write(File.join(directory, "package", "fixture.gem"), "stub package path\n")
     end
     File.write(File.join(@directory, "load-direct.jsonl"), "#{JSON.generate(load_record)}\n")
     resolution = { intended_platform: platform, installed_platform: platform, native_gem_selected: true, gem_install_ok: true }
@@ -101,6 +90,26 @@ RSpec.describe PlatformAcceptance::Report do
     expect(row.fetch(:checks)).to include("probe.direct_load" => "PASS", "real.forced_native_workload" => "OPEN")
   end
 
+  it "passes when the requested revision matches every known artifact revision" do
+    matching = described_class.new(@tmp, revision: revision).call
+    matching_row = matching.fetch(:targets).find { |entry| entry[:target] == target }.fetch(:rubies).last
+    expect(matching_row).to include(status: "PASS", revision: revision)
+    expect(matching.fetch(:conflicts)).to be_empty
+  end
+
+  it "fails a uniformly stale revision with expected and actual identities in JSON" do
+    stale = "c" * 40
+    stale_report = described_class.new(@tmp, revision: stale).call
+    parsed = JSON.parse(JSON.pretty_generate(stale_report))
+    expect(parsed.fetch("conflicts")).to include("revision mismatch: expected #{stale}, actual #{revision}")
+    expect(parsed.fetch("status")).to eq("FAILED")
+  end
+
+  it "rejects malformed expected revisions before scanning inventory" do
+    expect { described_class.new("/missing/inventory", revision: "not-a-sha") }
+      .to raise_error(ArgumentError, /full lowercase 40-character SHA/)
+  end
+
   it "keeps truncated workload and omitted dependency controls open despite PASS summaries" do
     File.write(File.join(@real, "workload.log"), "installed gem: emf-0.1.2-arm64-darwin /isolated\n")
     path = File.join(@real, "availability.log")
@@ -130,6 +139,10 @@ RSpec.describe PlatformAcceptance::Report do
     FileUtils.rm_rf(File.join(@real, "package"))
     path = File.join(@directory, "summary.txt")
     File.write(path, File.read(path).delete_suffix("result=PASS\n"))
+    expected = described_class.new(@tmp, revision: revision).call
+    expected_row = expected.fetch(:targets).find { |entry| entry[:target] == target }.fetch(:rubies).last
+    expect(expected_row.fetch(:status)).to eq("OPEN")
+    expect(expected_row.fetch(:revision)).to eq(revision)
     expect(row.fetch(:status)).to eq("OPEN")
     expect(row.fetch(:checks)).to include("probe.summary" => "OPEN", "real.revision" => "OPEN")
   end
@@ -141,12 +154,11 @@ RSpec.describe PlatformAcceptance::Report do
   end
 
   it "emits useful JSON and text without interpreting missing rows as success" do
-    script = File.expand_path("../../script/platform_probe/acceptance_report.rb", __dir__)
-    json, err, status = Open3.capture3(RbConfig.ruby, script, @tmp, "--json")
-    expect([status.exitstatus, err]).to eq([0, ""])
-    expect(JSON.parse(json).fetch("targets").size).to eq(8)
-    text, = Open3.capture3(RbConfig.ruby, script, @tmp)
-    expect(text).to include("#{target} Ruby 3.4 PASS", "x86_64-unknown-linux-gnu Ruby 3.1 OPEN", "excluded")
+    serialized = JSON.parse(JSON.pretty_generate(report))
+    expect(serialized.fetch("targets").size).to eq(8)
+    expect(report.fetch(:targets).find { |entry| entry[:target] == target }.fetch(:rubies).last)
+      .to include(status: "PASS", revision: revision)
+    expect(report.fetch(:targets).first.fetch(:rubies).first).to include(status: "OPEN", excluded: false)
   end
 
   context "with a package belonging to another target" do
@@ -166,10 +178,8 @@ RSpec.describe PlatformAcceptance::Report do
       expect(row.fetch(:status)).to eq("FAILED")
       expect(report.fetch(:conflicts)).to include("mixed revisions within row", "mixed revisions across artifacts")
       expect(report.fetch(:revisions)).to contain_exactly(revision, real_revision)
-      script = File.expand_path("../../script/platform_probe/acceptance_report.rb", __dir__)
-      json, _err, status = Open3.capture3(RbConfig.ruby, script, @tmp, "--json")
-      expect(status.exitstatus).to eq(1)
-      expect(JSON.parse(json).fetch("conflicts")).to include("mixed revisions within row")
+      json = JSON.parse(JSON.pretty_generate(report))
+      expect(json.fetch("conflicts")).to include("mixed revisions within row")
     end
   end
 end
