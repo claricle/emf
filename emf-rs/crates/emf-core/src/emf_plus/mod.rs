@@ -3,6 +3,8 @@
 //! This is an opt-in API alongside the legacy `Document::emf_plus_bytes`.
 //! Comment segments contain only bytes after the EMF+ signature; outer EMF
 //! comment headers and their padding remain owned by the embedding caller.
+mod object_data;
+pub use object_data::{ObjectData, StringFormat};
 mod text;
 pub use text::Text;
 mod drawing;

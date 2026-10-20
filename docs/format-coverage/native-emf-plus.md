@@ -45,13 +45,18 @@ fragment sizes, flags, padding and comment boundaries.
 
 Borrowed, allocation-free object views currently decode Solid/Hatch Brush, Font
 (including raw UTF-16 and suffix) and ImageAttributes. Other object subtypes remain
-explicitly opaque. Editing assembled bytes and replacing an object is supported;
+explicitly opaque. Independently budgeted `ObjectDefinition::decode` additionally
+returns editable `ObjectData` for those four bodies, StringFormat (all header
+fields, counted tab stops and character ranges), and Image bitmap/metafile
+metadata. Bitmap bytes and nested metafiles remain raw, without decompression or
+recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
+serialization derives edited counts under shared SerializeLimits.
+Editing assembled bytes and replacing an object is supported;
 there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Deeper Pen/Path/Region/Image/StringFormat/CustomLineCap
-objects, nested object structures and effects remain opaque. Playback object
+Deeper Pen/Path/Region/CustomLineCap objects and image pixel/palette structures, nested object structures and effects remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
 it does not claim full native EMF+ format acceptance or add a Ruby public API.
@@ -65,3 +70,6 @@ relative-width/sign and NaN-bit preservation, count/truncation/encoding failures
 allocation/work limit failures before counted vector expansion.
 `tests/emf_plus_text.rs` covers raw UTF-16, glyph/position/matrix layouts, edits,
 invalid counts and matrix flags, padding and resource budgets.
+`tests/emf_plus_objects.rs` covers typed object fields, exact/mutable roundtrips,
+StringFormat count validation, all independent resource limits, unexpanded image
+payloads and typed edits through continuation/comment boundary preservation.
