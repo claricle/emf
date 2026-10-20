@@ -47,11 +47,16 @@ Borrowed, allocation-free object views currently decode Solid/Hatch Brush, Font
 (including raw UTF-16 and suffix) and ImageAttributes. Other object subtypes remain
 explicitly opaque. Independently budgeted `ObjectDefinition::decode` additionally
 returns editable `ObjectData` for those four bodies, StringFormat (all header
-fields, counted tab stops and character ranges), Path, and Image bitmap/metafile
+fields, counted tab stops and character ranges), Path, Region, and Image bitmap/metafile
 metadata. Path retains raw floating-point, signed integer and relative coordinate
 encodings, compressed point-type runs and alignment bytes. Relative coordinate
 widths and ignored flag bits survive typed edits; coordinate/type counts, run
-totals and alignment are validated before serialization. Bitmap bytes and nested
+totals and alignment are validated before serialization. Region retains a flat preorder
+node sequence for binary operations, raw rectangle bits, nested Path, empty and
+infinite nodes. Counts, complete binary-tree shape and nested Path lengths are
+validated without recursive parsing or destruction; nested allocations share the
+object budget. Unknown node types retain the complete object as opaque because
+their payload has no generic length. Bitmap bytes and nested
 metafiles remain raw, without decompression or recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
 serialization derives edited counts under shared SerializeLimits.
 Editing assembled bytes and replacing an object is supported;
@@ -59,7 +64,7 @@ there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Deeper Pen/Region/CustomLineCap objects, image pixel/palette structures, nested
+Deeper Pen/CustomLineCap objects, image pixel/palette structures, nested
 object structures and effects remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
@@ -80,6 +85,12 @@ payloads and typed edits through continuation/comment boundary preservation.
 `tests/emf_plus_path.rs` covers all Path coordinate encodings, raw bit/width and
 RLE preservation, counted edits, malformed layouts, shared budgets and typed
 continuation edits with exact fragment, padding and segment preservation.
+
+`tests/emf_plus_region.rs` covers typed preorder nodes, all binary operators, raw
+rectangle bits, nested Path edits, derived node counts/lengths, unknown-node opaque
+preservation, malformed trees, shared budgets and a 20,000-level tree without
+recursive parsing, writing or destruction. Continuation edits retain exact
+fragment headers, unknown records, padding and comment segment boundaries.
 
 ## Enclosing native Document API
 

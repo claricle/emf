@@ -5,7 +5,9 @@ use crate::{
     LimitKind, ParseLimits, SerializeFailure, SerializeLimits,
 };
 mod path;
+mod region;
 pub use path::{Path, PathPointRun, PathPointTypes};
+pub use region::{Region, RegionNode};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StringFormat {
@@ -29,6 +31,7 @@ pub struct StringFormat {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObjectData {
     Path(Path),
+    Region(Region),
     SolidBrush {
         version: u32,
         argb: u32,
@@ -95,6 +98,10 @@ impl ObjectDefinition {
         };
         let value = match self.object_type {
             3 => ObjectData::Path(path::read(&mut r)?),
+            4 => match region::read(&mut r)? {
+                Some(v) => ObjectData::Region(v),
+                None => return opaque(self, r.budget),
+            },
             1 => {
                 let version = r.word()?;
                 match r.word()? {
@@ -235,6 +242,7 @@ impl ObjectData {
     pub fn object_type(&self) -> u8 {
         match self {
             Self::Path(_) => 3,
+            Self::Region(_) => 4,
             Self::SolidBrush { .. } | Self::HatchBrush { .. } => 1,
             Self::BitmapImage { .. } | Self::MetafileImage { .. } => 5,
             Self::Font { .. } => 6,
@@ -248,6 +256,10 @@ impl ObjectData {
     pub fn serialize(&self, limits: &SerializeLimits) -> Result<Vec<u8>, SerializeFailure> {
         let overflow = || SerializeFailure::SizeOverflow;
         let (base, parts, elements): (usize, [usize; 3], u64) = match self {
+            Self::Region(v) => {
+                let (size, work) = v.layout()?;
+                (size, [0; 3], work)
+            }
             Self::Path(v) => {
                 let (size, work) = v.layout()?;
                 (size, [0; 3], work)
@@ -329,6 +341,7 @@ impl ObjectData {
             .map_err(|_| SerializeFailure::AllocationFailed { bytes: size })?;
         match self {
             Self::Path(v) => v.write(&mut out),
+            Self::Region(v) => v.write(&mut out),
             Self::SolidBrush { version, argb } => words(&mut out, &[*version, 0, *argb]),
             Self::HatchBrush {
                 version,
