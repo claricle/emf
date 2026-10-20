@@ -40,6 +40,15 @@ pub fn serialize_with_limits(
         if record.edited {
             edited = true;
             let element_count = match &record.data {
+                RecordData::Bitmap(b) => b
+                    .buffers()
+                    .work_len()
+                    .ok_or(SerializeFailure::SizeOverflow)?,
+                RecordData::GradientFill(g) => g
+                    .vertices
+                    .len()
+                    .checked_add(g.count())
+                    .ok_or(SerializeFailure::SizeOverflow)?,
                 RecordData::CreatePalette { entries, .. }
                 | RecordData::SetPaletteEntries { entries, .. } => entries.len(),
                 RecordData::CreateFontIndirectW(font) => match &font.font {
@@ -433,6 +442,8 @@ pub fn serialize_with_limits(
                 }
             }
             RecordData::CreateFontIndirectW(font) => append_font(&mut out, font),
+            RecordData::GradientFill(g) => g.append(&mut out),
+            RecordData::Bitmap(b) => b.append(&mut out),
             RecordData::ExtCreatePen(pen) => append_extended_pen(&mut out, start, pen)?,
             RecordData::CreatePen {
                 ih_pen,
@@ -554,7 +565,10 @@ pub fn serialize_with_limits(
         }
         if matches!(
             record.data,
-            RecordData::ExtTextOutA(_) | RecordData::ExtTextOutW(_) | RecordData::ExtCreatePen(_)
+            RecordData::ExtTextOutA(_)
+                | RecordData::ExtTextOutW(_)
+                | RecordData::ExtCreatePen(_)
+                | RecordData::Bitmap(_)
         ) {
             let padding = (4 - (out.len() - start) % 4) % 4;
             out.resize(out.len() + padding, 0);

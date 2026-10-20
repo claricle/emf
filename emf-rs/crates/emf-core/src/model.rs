@@ -405,6 +405,8 @@ pub struct FontRecord {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordData {
     Raw,
+    GradientFill(crate::GradientFill),
+    Bitmap(crate::BitmapRecord),
     CreateFontIndirectW(Box<FontRecord>),
     ExtCreatePen(ExtCreatePen),
     RealizePalette,
@@ -706,6 +708,8 @@ pub enum RecordData {
 impl RecordData {
     pub(crate) fn record_type(&self) -> Option<u32> {
         match self {
+            Self::GradientFill(_) => Some(118),
+            Self::Bitmap(b) => Some(b.record_type()),
             Self::RealizePalette => Some(52),
             Self::SelectPalette { .. } => Some(48),
             Self::CreatePalette { .. } => Some(49),
@@ -798,6 +802,8 @@ impl RecordData {
     }
     pub(crate) fn payload_len(&self) -> Option<usize> {
         match self {
+            Self::GradientFill(g) => g.payload_len(),
+            Self::Bitmap(b) => b.payload_len(),
             Self::RealizePalette => Some(0),
             Self::SelectPalette { .. } => Some(4),
             Self::ResizePalette { .. } => Some(8),
@@ -957,6 +963,7 @@ impl RecordSpan {
                 RecordData::ExtTextOutA(_)
                     | RecordData::ExtTextOutW(_)
                     | RecordData::ExtCreatePen(_)
+                    | RecordData::Bitmap(_)
             ) {
                 size.checked_add((4 - size % 4) % 4)
             } else {
@@ -1063,6 +1070,8 @@ impl Document {
             return Err(EditFailure::RecordFamily { index });
         }
         let invalid_layout = match &data {
+            RecordData::GradientFill(g) => !g.valid(),
+            RecordData::Bitmap(b) => !b.valid(),
             RecordData::CreateFontIndirectW(font) => !font.font.valid(),
             RecordData::ExtCreatePen(pen) => !pen.valid(),
             RecordData::ExtTextOutA(text) => !text.valid(),

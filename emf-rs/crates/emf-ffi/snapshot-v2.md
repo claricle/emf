@@ -169,3 +169,29 @@ SELECTCLIPPATH snapshots contain only region_mode; adapters retain its optional 
 Float32 fields encode their IEEE 754 bits as little-endian u32 without conversion, preserving NaN payloads, signed zero, infinities and subnormals. Transform order is m11, m12, m21, m22, dx, dy. ABI version remains 1; snapshot schema remains 2.
 
 EXTFLOODFILL and SETTEXTJUSTIFICATION transport the entire compatibility body, including arbitrary bytes. They expose no semantic fields. Consumers must validate the exact body length before allocation or model construction. These tags extend schema 2 without changing ABI 1.
+
+### GradientFill (family 93)
+
+Family 93 (EMR 118) contains signed bounds (four i32), mode (u32),
+vertex count (u64), and mesh count (u64). Each vertex is two signed i32
+coordinates followed by red, green, blue, alpha u16 channels. Vertex bytes
+are followed by all mesh indices as u32: two per rectangle (modes 0/1),
+three per triangle (mode 2). Rectangle indices are followed by one retained
+padding u32 per rectangle. Opaque record suffix bytes are excluded; the Ruby
+adapter retains them from the source record. Length arithmetic is checked before
+allocating the owned snapshot; all arrays come from budgeted core parsing.
+
+### Bitmap records (families 94–103)
+
+Families 94–99 correspond to EMR 76–81, families 100/101 to EMR 93/94,
+and families 102/103 to EMR 114/116. Their semantic payloads use each EMR's
+fixed field widths and order, omitting the eight-byte EMR header. All fields
+are encoded from the typed model, including signed coordinates, raw float bits,
+blend bytes, and reserved color bytes. Buffer offsets retain EMR-relative origins
+and are rebuilt from the typed buffer order, retained gaps, and current lengths.
+Absent buffers retain zero offsets/lengths; present empty buffers retain nonzero
+offsets. Source/mask buffers can be reversed or interleaved. The payload ends at
+the last buffer (or fixed fields when all buffers are absent). Generic trailing
+bytes are excluded and retained by the Ruby adapter from the original span.
+Length/offset arithmetic and snapshot reservations are checked before encoding;
+layout calculation examines at most four buffers and copies only budgeted data.

@@ -5,6 +5,12 @@ use emf_core::{
     Point, RecordData, Rect, RegionData, Size, XForm,
 };
 
+#[path = "bitmap_snapshot.rs"]
+mod bitmap_snapshot;
+
+#[path = "gradient_snapshot.rs"]
+mod gradient_snapshot;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Error {
     SizeOverflow,
@@ -35,7 +41,9 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::InvertRgn { .. } => 78,
         RecordData::PaintRgn { .. } => 79,
         RecordData::ExtSelectClipRgn { .. } => 80,
+        RecordData::GradientFill(_) => 93,
         RecordData::Raw => 0,
+        RecordData::Bitmap(value) => bitmap_snapshot::family(value),
         RecordData::Eof(_) => 1,
         RecordData::SetMapMode { .. } => 2,
         RecordData::Polyline { .. } => 3,
@@ -397,7 +405,9 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         RecordData::ExtSelectClipRgn { region, .. } => region
             .as_ref()
             .map_or(Ok(8), |region| region_len(region, 8)),
+        RecordData::GradientFill(value) => gradient_snapshot::len(value),
         RecordData::Raw => Ok(0),
+        RecordData::Bitmap(value) => bitmap_snapshot::len(value),
         RecordData::ScaleViewportExtEx { .. } | RecordData::ScaleWindowExtEx { .. } => Ok(16),
         RecordData::SetWorldTransform { .. } => Ok(24),
         RecordData::ModifyWorldTransform { .. } => Ok(28),
@@ -633,7 +643,9 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                     region_payload(&mut out, region)?;
                 }
             }
+            RecordData::GradientFill(value) => gradient_snapshot::encode(&mut out, value)?,
             RecordData::Raw => {}
+            RecordData::Bitmap(value) => bitmap_snapshot::encode(&mut out, value)?,
             RecordData::ScaleViewportExtEx { scale } | RecordData::ScaleWindowExtEx { scale } => {
                 for value in [scale.x_num, scale.x_denom, scale.y_num, scale.y_denom] {
                     i32_field(&mut out, value);
