@@ -5,10 +5,12 @@ use crate::{
     LimitKind, ParseLimits, SerializeFailure, SerializeLimits,
 };
 mod line_cap;
+mod linear_brush;
 mod path;
 mod pen;
 mod region;
 pub use line_cap::{ArrowLineCap, CustomLineCap, CustomLineCapData, DefaultLineCap};
+pub use linear_brush::LinearGradient;
 pub use path::{Path, PathPointRun, PathPointTypes};
 pub use pen::{Pen, PenBrush, PenBrushData};
 pub use region::{Region, RegionNode};
@@ -35,6 +37,10 @@ pub struct StringFormat {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObjectData {
     Pen(Pen),
+    LinearGradientBrush {
+        version: u32,
+        data: LinearGradient,
+    },
     CustomLineCap(CustomLineCap),
     Path(Path),
     Region(Region),
@@ -128,6 +134,10 @@ impl ObjectDefinition {
                         style: r.word()?,
                         foreground: r.word()?,
                         background: r.word()?,
+                    },
+                    4 => match linear_brush::read(&mut r)? {
+                        Some(data) => ObjectData::LinearGradientBrush { version, data },
+                        None => return opaque(self, r.budget),
                     },
                     _ => return opaque(self, &mut budget),
                 }
@@ -259,7 +269,9 @@ impl ObjectData {
             Self::CustomLineCap(_) => 9,
             Self::Path(_) => 3,
             Self::Region(_) => 4,
-            Self::SolidBrush { .. } | Self::HatchBrush { .. } => 1,
+            Self::SolidBrush { .. }
+            | Self::HatchBrush { .. }
+            | Self::LinearGradientBrush { .. } => 1,
             Self::BitmapImage { .. } | Self::MetafileImage { .. } => 5,
             Self::Font { .. } => 6,
             Self::StringFormat(_) => 7,
@@ -287,6 +299,10 @@ impl ObjectData {
             Self::Path(v) => {
                 let (size, work) = v.layout()?;
                 (size, [0; 3], work)
+            }
+            Self::LinearGradientBrush { data, .. } => {
+                let (size, work) = data.layout()?;
+                (size.checked_add(8).ok_or_else(overflow)?, [0; 3], work)
             }
             Self::SolidBrush { .. } => (12, [0; 3], 0),
             Self::HatchBrush { .. } => (20, [0; 3], 0),
@@ -364,6 +380,10 @@ impl ObjectData {
         out.try_reserve_exact(size)
             .map_err(|_| SerializeFailure::AllocationFailed { bytes: size })?;
         match self {
+            Self::LinearGradientBrush { version, data } => {
+                words(&mut out, &[*version, 4]);
+                data.write(&mut out);
+            }
             Self::Pen(v) => v.write(&mut out),
             Self::CustomLineCap(v) => v.write(&mut out),
             Self::Path(v) => v.write(&mut out),

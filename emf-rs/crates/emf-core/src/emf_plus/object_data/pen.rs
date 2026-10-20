@@ -1,5 +1,5 @@
 //! Pen optional data, MS-EMFPLUS 2.2.1.7 and 2.2.2.33–34.
-use super::{line_cap, words, CustomLineCap, Reader};
+use super::{line_cap, linear_brush, words, CustomLineCap, LinearGradient, Reader};
 use crate::{emf_plus::Error, SerializeFailure};
 
 /// Floating-point fields retain their IEEE bits. Option presence must match flags.
@@ -32,6 +32,7 @@ pub struct PenBrush {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PenBrushData {
+    LinearGradient(LinearGradient),
     Solid {
         argb: u32,
     },
@@ -65,12 +66,21 @@ impl Pen {
         {
             return Err(SerializeFailure::Inconsistent { offset: 0 });
         }
+        let (brush_size, mut work) = match &self.brush.data {
+            PenBrushData::LinearGradient(v) => {
+                let (size, work) = v.layout()?;
+                (
+                    size.checked_add(8).ok_or(SerializeFailure::SizeOverflow)?,
+                    work,
+                )
+            }
+            PenBrushData::Solid { .. } => (12, 0),
+            PenBrushData::Hatch { .. } => (20, 0),
+        };
         let mut size = 20usize
-            + match self.brush.data {
-                PenBrushData::Solid { .. } => 12,
-                PenBrushData::Hatch { .. } => 20,
-            };
-        let mut work = 0u64;
+            .checked_add(brush_size)
+            .ok_or(SerializeFailure::SizeOverflow)?;
+
         for (i, p) in present.iter().enumerate() {
             if *p {
                 size = size
@@ -147,13 +157,20 @@ impl Pen {
             let len = (out.len() - start - 4) as u32;
             out[start..start + 4].copy_from_slice(&len.to_le_bytes());
         }
-        match self.brush.data {
-            PenBrushData::Solid { argb } => words(out, &[self.brush.version, 0, argb]),
+        match &self.brush.data {
+            PenBrushData::Solid { argb } => words(out, &[self.brush.version, 0, *argb]),
+            PenBrushData::LinearGradient(v) => {
+                words(out, &[self.brush.version, 4]);
+                v.write(out);
+            }
             PenBrushData::Hatch {
                 style,
                 foreground,
                 background,
-            } => words(out, &[self.brush.version, 1, style, foreground, background]),
+            } => words(
+                out,
+                &[self.brush.version, 1, *style, *foreground, *background],
+            ),
         }
     }
 }
@@ -230,6 +247,10 @@ pub(super) fn read(r: &mut Reader<'_, '_, '_>) -> Result<Option<Pen>, Error> {
             style: r.word()?,
             foreground: r.word()?,
             background: r.word()?,
+        },
+        4 => match linear_brush::read(r)? {
+            Some(v) => PenBrushData::LinearGradient(v),
+            None => return Ok(None),
         },
         _ => return Ok(None),
     };

@@ -47,7 +47,7 @@ Borrowed, allocation-free object views currently decode Solid/Hatch Brush, Font
 (including raw UTF-16 and suffix) and ImageAttributes. Other object subtypes remain
 explicitly opaque. Independently budgeted `ObjectDefinition::decode` additionally
 returns editable `ObjectData` for those four bodies, StringFormat (all header
-fields, counted tab stops and character ranges), Path, Region, CustomLineCap, Pen, and Image bitmap/metafile
+fields, counted tab stops and character ranges), Path, Region, CustomLineCap, Pen, LinearGradient Brush, and Image bitmap/metafile
 metadata. Path retains raw floating-point, signed integer and relative coordinate
 encodings, compressed point-type runs and alignment bytes. Relative coordinate
 widths and ignored flag bits survive typed edits; coordinate/type counts, run
@@ -62,7 +62,7 @@ Path lengths are checked on decode and derived on edit; both Paths share the
 object allocation and work budgets. Unknown cap types or optional-data flags
 retain the complete opaque body. Known flags must agree with optional Path presence
 on serialization. Pen retains all flag-selected fixed fields, counted dash/compound
-arrays, ordered optional custom caps and Solid/Hatch nested brushes. Unknown Pen
+arrays, ordered optional custom caps and Solid/Hatch/LinearGradient nested brushes. Unknown Pen
 types, flags, nested cap types or brush types preserve the complete opaque body.
 Custom cap lengths and array counts are derived on edit; option presence must
 match flags and all nested allocations share the object budget. Floating-point
@@ -159,3 +159,15 @@ budgets and continuation/segment/unknown-record preservation.
 raw bits, edited array/cap lengths, unknown opaque fallback, malformed nested
 boundaries/counts, inconsistent flags, shared budgets and continuation/segment
 byte preservation.
+
+LinearGradient brushes expose flags, wrap mode, rectangle/color/reserved words,
+optional transform and counted blend arrays, both standalone and inside Pen.
+`LinearGradient::blends` stores pairs of position bits and ARGB/factor bits;
+wire ordering is preset colors, or vertical then horizontal factors as selected.
+Counts derive from edits. Known conflicting blend flags, fewer than two factor
+samples, inconsistent optional fields, truncated arrays and suffixes fail.
+Unknown flags preserve the complete enclosing object as opaque. Floating-point
+bits and enum words are retained without rendering-domain validation.
+`emf_plus_linear_brush.rs` covers all optional combinations, wire order,
+standalone/nested growth and shrink, malformed and unknown data, shared budgets,
+and exact continuation/segment/unknown-record/padding preservation.
