@@ -17,8 +17,9 @@ module Emf
       # allocates, so a hostile count cannot hang or exhaust memory.
       #
       # The nested EmfPlusPath of a path gradient boundary (BoundaryPathData)
-      # and the EmfPlusImage of a texture brush stay raw bytes; their typed
-      # classes belong to the Path and Image objects.
+      # and the EmfPlusImage of a texture brush decode through the Path and
+      # Image objects. A nested body that does not parse stays raw bytes, so
+      # the brush still round-trips.
       class Brush < Typed
         SOLID = 0
         HATCH = 1
@@ -107,6 +108,36 @@ module Emf
         class Malformed < StandardError; end
         private_constant :Malformed
 
+        module Nested
+          Source = Struct.new(:object_type, :data, :offset)
+
+          module_function
+
+          # The decoded nested object, or nil when its bytes do not parse.
+          def decode(klass, object_type, data)
+            klass.new(Source.new(object_type, data, 0))
+          rescue Emf::ParseError
+            nil
+          end
+        end
+        private_constant :Nested
+
+        # BoundaryPathData with its EmfPlusPath decoded. Size and bytes follow
+        # the path, so an edit to it re-serializes with the right size.
+        class BoundaryPath
+          attr_reader :path
+
+          def initialize(record)
+            @raw = record.boundary_path_data.to_s.b.freeze
+            @path = Nested.decode(Path, PATH, @raw)
+          end
+
+          def boundary_path_data = path ? path.to_binary : @raw
+          def boundary_path_size = boundary_path_data.bytesize
+          def to_binary_s = [boundary_path_size].pack("l<") + boundary_path_data
+          def num_bytes = 4 + boundary_path_size
+        end
+
         # Ordered pieces of the object; strings are raw nested objects.
         class Body
           attr_reader :parts
@@ -115,9 +146,19 @@ module Emf
 
           def version = parts.fetch(:header).version
 
-          def num_bytes = parts.each_value.sum { |part| part.is_a?(String) ? part.bytesize : part.num_bytes }
+          def num_bytes = parts.each_value.sum { |part| bytes(part).bytesize }
 
-          def to_binary_s = parts.each_value.map { |part| part.is_a?(String) ? part : part.to_binary_s }.join.b
+          def to_binary_s = parts.each_value.map { |part| bytes(part) }.join.b
+
+          private
+
+          def bytes(part)
+            case part
+            when String then part
+            when Typed then part.to_binary
+            else part.to_binary_s
+            end
+          end
         end
 
         # Walks the data once, reading each piece the flags select.
@@ -151,6 +192,14 @@ module Emf
             take(:data, TextureBrushData)
             take(:transform, P::TransformMatrix) if flag?(DATA_TRANSFORM)
             take_rest(:image)
+            decode_image
+          end
+
+          def decode_image
+            raw = @parts[:image]
+            return unless raw
+
+            @parts[:image] = Nested.decode(Image, IMAGE, raw) || raw
           end
 
           def read_linear_gradient
@@ -174,6 +223,7 @@ module Emf
 
           def read_boundary_path
             take_counted(:boundary_path, BoundaryPathData, 1, signed: true)
+            @parts[:boundary_path] = BoundaryPath.new(@parts[:boundary_path])
           end
 
           def read_path_gradient_optional

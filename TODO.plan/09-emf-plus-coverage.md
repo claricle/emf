@@ -174,7 +174,7 @@ Variable data is derived from `(variable)` / array / optional fields in each obj
 | EmfPlusBitmapData | 2.2.2.3 | yes | Colors (palette) MUST be present when PixelFormat I flag is set | typed, byte-identical round-trip | not measured | `Structures::BitmapData` |
 | EmfPlusBlendColors | 2.2.2.4 | yes | - | typed, byte-identical round-trip | not measured | `Structures::BlendColors` |
 | EmfPlusBlendFactors | 2.2.2.5 | yes | - | typed, byte-identical round-trip | not measured | `Structures::BlendFactors` |
-| EmfPlusBoundaryPathData | 2.2.2.6 | yes | - | typed, byte-identical round-trip (nested EmfPlusPath kept raw) | not measured | `Structures::BoundaryPathData` |
+| EmfPlusBoundaryPathData | 2.2.2.6 | yes | - | typed, byte-identical round-trip (nested EmfPlusPath decoded as Objects::Path; raw bytes if it does not parse; corpus: 37 of 37 path boundaries decode) | not measured | `Structures::BoundaryPathData` |
 | EmfPlusBoundaryPointData | 2.2.2.7 | yes | - | typed, byte-identical round-trip | not measured | `Structures::BoundaryPointData` |
 | EmfPlusCharacterRange | 2.2.2.8 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::CharacterRange` |
 | EmfPlusCompoundLineData | 2.2.2.9 | yes | - | typed, byte-identical round-trip | not measured | `Structures::CompoundLineData` |
@@ -214,7 +214,7 @@ Variable data is derived from `(variable)` / array / optional fields in each obj
 | EmfPlusSolidBrushData | 2.2.2.43 | no | - | typed, byte-identical round-trip | not measured | `Structures::SolidBrushData` |
 | EmfPlusStringFormatData | 2.2.2.44 | yes | both arrays optional; sizes from TabStopCount/RangeCount in the parent | typed, byte-identical round-trip | not measured | `Records::Primitives::StringFormatData` |
 | EmfPlusTextureBrushData | 2.2.2.45 | yes | OptionalData selected by BrushDataFlags | typed, byte-identical round-trip | not measured | `Structures::TextureBrushData` |
-| EmfPlusTextureBrushOptionalData | 2.2.2.46 | yes | Transform if BrushDataTransform; ImageObject present iff the record is large enough to hold it | typed, byte-identical round-trip (nested EmfPlusImage kept raw) | not measured | `Structures::TextureBrushOptionalData` |
+| EmfPlusTextureBrushOptionalData | 2.2.2.46 | yes | Transform if BrushDataTransform; ImageObject present iff the record is large enough to hold it | typed, byte-identical round-trip (nested EmfPlusImage decoded as Objects::Image; raw bytes if it does not parse; corpus: 1 texture brush, decoded) | not measured | `Structures::TextureBrushOptionalData` |
 | EmfPlusTransformMatrix | 2.2.2.47 | no | - | not started | not measured | `Structures::TransformMatrix` |
 
 ### Image effect parameter block (11)
