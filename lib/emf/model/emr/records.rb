@@ -58,7 +58,7 @@ module Emf
           def to_binary_s
             return @wire_source.to_binary_s unless @wire
 
-            bytes = @wire.to_binary_s
+            bytes = Emf::Emr::Binary::FastFill.for_class(@wire.class)&.pack(@wire) || @wire.to_binary_s
             return bytes if @suffix.empty?
 
             bytes[4, 4] = [bytes.bytesize + @suffix.bytesize].pack("V")

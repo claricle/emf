@@ -14,26 +14,36 @@ module Emf
           "BinData::Uint8" => "C",
           "Emf::Binary::Float32Le" => "V"
         }.freeze
+        FLOAT_LEAF = "Emf::Binary::Float32Le"
         EMPTY_SUFFIX = "".b.freeze
-        private_constant :DIRECTIVES, :EMPTY_SUFFIX
+        private_constant :DIRECTIVES, :FLOAT_LEAF, :EMPTY_SUFFIX
 
         def self.for(type_id)
           BY_TYPE[type_id]
         end
 
-        attr_reader :size
+        def self.for_class(wire_class)
+          BY_CLASS[wire_class]
+        end
+
+        attr_reader :size, :wire_class
 
         def initialize(klass)
-          @klass = klass
+          @wire_class = klass
           sample = klass.new
           @size = sample.num_bytes
           leaves = leaf_paths(sample, [])
           @format = leaves.map { |_, field| DIRECTIVES.fetch(field.name) }.join
+          # Float layouts are not packed: measured on test-000, BinData writes
+          # SETWORLDTRANSFORM in 15 objects against 18+ for a value pack, and
+          # Float32Le must write its retained NaN bits itself.
+          @pack_format = @format unless leaves.any? { |_, field| float?(field) }
+          @value_readers = leaves.map { |path, _| path.freeze }.freeze
           @setters = leaves.map { |path, field| setter_for(path, field) }.freeze
         end
 
         def call(record_bytes)
-          wire = @klass.new
+          wire = @wire_class.new
           values = record_bytes.unpack(@format)
           i = 0
           while i < @setters.size
@@ -46,7 +56,21 @@ module Emf
           [wire, suffix(record_bytes)]
         end
 
+        # Bytes of the fixed layout, equal to wire.to_binary_s, or nil for a
+        # float layout (the caller falls back to BinData). Values are read
+        # from the live leaves, so edits are reflected; BinData clamps integers
+        # on assignment, so the stored values are always in range.
+        def pack(wire)
+          return unless @pack_format
+
+          @value_readers.map { |path| path.inject(wire) { |target, getter| target.public_send(getter) }.value }.pack(@pack_format)
+        end
+
         private
+
+        def float?(field)
+          field.name == FLOAT_LEAF
+        end
 
         def suffix(record_bytes)
           return EMPTY_SUFFIX if record_bytes.bytesize == @size
@@ -87,7 +111,8 @@ module Emf
           TypeCodes::SETMITERLIMIT, TypeCodes::SETICMMODE, TypeCodes::SETLAYOUT
         ].freeze
         BY_TYPE = ENABLED_TYPES.to_h { |type_id| [type_id, new(Records.lookup(type_id))] }.freeze
-        private_constant :ENABLED_TYPES, :BY_TYPE
+        BY_CLASS = BY_TYPE.values.to_h { |filler| [filler.wire_class, filler] }.freeze
+        private_constant :ENABLED_TYPES, :BY_TYPE, :BY_CLASS
       end
     end
   end
