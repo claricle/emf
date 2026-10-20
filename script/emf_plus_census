@@ -1,0 +1,177 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Read-only census of EMF+ framing across the fixture corpus.
+#
+#   ruby script/emf_plus_census [--out PATH] [--root DIR]
+#
+# Writes JSON to PATH (default: stdout). Parses one file at a time.
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "emf"
+require "json"
+require "optparse"
+
+module EmfPlusCensus
+  EMF_PLUS_SIGNATURE = "EMF+".b
+  HEADER_BYTES = 12
+  HEADER_TYPE = 0x4001
+  OBJECT_TYPE = 0x4008
+  CONTINUE_BIT = 0x8000
+  MAX_REPORTED_ANOMALIES = 20
+
+  module_function
+
+  def run(root:)
+    paths = fixture_paths(root)
+    entries = paths.each_with_index.map do |path, index|
+      warn "[#{index + 1}/#{paths.size}] #{path.delete_prefix("#{root}/")}"
+      census_file(path, root)
+    end
+    {
+      "root" => "spec/fixtures",
+      "summary" => summarise(entries),
+      "fixtures" => entries.select { |e| e["emf_plus_comments"].positive? || e["error"] }
+    }
+  end
+
+  def fixture_paths(root)
+    Dir.glob(File.join(root, "**", "*.emf"))
+  end
+
+  def census_file(path, root)
+    entry = { "path" => path.delete_prefix("#{root}/"), "emf_plus_comments" => 0 }
+    payloads = comment_payloads(Emf.parse_file(path))
+    entry.merge!(describe(payloads)) unless payloads.empty?
+    entry
+  rescue Emf::Error => e
+    entry.merge("error" => "#{e.class}: #{e.message[0, 120]}")
+  ensure
+    GC.start
+  end
+
+  def comment_payloads(metafile)
+    metafile.records.filter_map do |record|
+      wire = record.respond_to?(:wire) ? record.wire : nil
+      next unless wire.is_a?(Emf::Emr::Binary::Records::Comment)
+
+      data = wire.data.to_s.b
+      data.byteslice(4..) if data.byteslice(0, 4) == EMF_PLUS_SIGNATURE
+    end
+  end
+
+  def describe(payloads)
+    stream = payloads.join
+    walk = walk_records(stream, comment_ends(payloads))
+    {
+      "emf_plus_comments" => payloads.size,
+      "emf_plus_bytes" => stream.bytesize,
+      "comment_bytes" => payloads.map(&:bytesize),
+      "record_count" => walk[:count],
+      "histogram" => walk[:histogram].sort.to_h,
+      "dual" => walk[:dual],
+      "object_types" => walk[:object_types].sort.to_h,
+      "continued_object_records" => walk[:continued],
+      "records_spanning_comments" => walk[:spanning],
+      "inconsistent_record_count" => walk[:inconsistent].size,
+      "inconsistent_records" => walk[:inconsistent].first(MAX_REPORTED_ANOMALIES),
+      "trailing_bytes" => walk[:trailing]
+    }
+  end
+
+  def comment_ends(payloads)
+    payloads.each_with_object([]) { |p, ends| ends << ((ends.last || 0) + p.bytesize) }
+  end
+
+  def walk_records(stream, ends)
+    state = { count: 0, histogram: Hash.new(0), object_types: Hash.new(0), inconsistent: [],
+              spanning: 0, continued: 0, dual: nil, trailing: 0 }
+    offset = 0
+    while offset + HEADER_BYTES <= stream.bytesize
+      type, flags, size, data_size = stream.byteslice(offset, HEADER_BYTES).unpack("vvVV")
+      note_record(state, stream, offset, [type, flags, size, data_size], ends)
+      break if size < HEADER_BYTES || offset + size > stream.bytesize
+
+      offset += size
+    end
+    state[:trailing] = stream.bytesize - offset
+    state
+  end
+
+  def note_record(state, stream, offset, fields, ends)
+    type, flags, size, data_size = fields
+    state[:count] += 1
+    state[:histogram][format("0x%04X", type)] += 1
+    state[:dual] = flags.anybits?(1) if type == HEADER_TYPE && state[:dual].nil?
+    note_object(state, flags) if type == OBJECT_TYPE
+    state[:spanning] += 1 if spans_comments?(offset, size, ends)
+    problem = inconsistency(offset, size, data_size, stream.bytesize)
+    state[:inconsistent] << problem.merge("offset" => offset, "type" => format("0x%04X", type)) if problem
+  end
+
+  def note_object(state, flags)
+    state[:continued] += 1 if flags.anybits?(CONTINUE_BIT)
+    state[:object_types][(flags >> 8) & 0x7F] += 1
+  end
+
+  def spans_comments?(offset, size, ends)
+    last = offset + [size, 1].max - 1
+    ends.bsearch_index { |e| e > offset } != ends.bsearch_index { |e| e > last }
+  end
+
+  def inconsistency(offset, size, data_size, stream_bytes)
+    reason =
+      if size < HEADER_BYTES then "size_below_header"
+      elsif data_size != size - HEADER_BYTES then "data_size_mismatch"
+      elsif (size % 4).nonzero? then "size_unaligned"
+      elsif offset + size > stream_bytes then "size_exceeds_stream"
+      end
+    reason && { "reason" => reason, "size" => size, "data_size" => data_size }
+  end
+
+  def summarise(entries)
+    with_plus = entries.select { |e| e["emf_plus_comments"].positive? }
+    {
+      "fixtures_total" => entries.size,
+      "fixtures_with_emf_plus" => with_plus.size,
+      "fixtures_unparseable" => entries.count { |e| e["error"] },
+      "with_emf_plus_by_directory" => count_by_directory(with_plus),
+      "total_by_directory" => count_by_directory(entries),
+      "dual_true" => with_plus.count { |e| e["dual"] == true },
+      "dual_false" => with_plus.count { |e| e["dual"] == false },
+      "fixtures_with_inconsistent_records" => with_plus.count { |e| e["inconsistent_record_count"].positive? },
+      "fixtures_with_spanning_records" => with_plus.count { |e| e["records_spanning_comments"].positive? },
+      "fixtures_with_continued_objects" => with_plus.count { |e| e["continued_object_records"].positive? },
+      "record_totals" => sum_histograms(with_plus),
+      "fixtures_per_object_type" => fixtures_per_object_type(with_plus),
+      "fixtures_per_record_type" => fixtures_per_type(with_plus)
+    }
+  end
+
+  def count_by_directory(list)
+    list.each_with_object(Hash.new(0)) { |e, h| h[e["path"].split("/").first] += 1 }.sort.to_h
+  end
+
+  def sum_histograms(list)
+    list.each_with_object(Hash.new(0)) { |e, h| e["histogram"].each { |k, v| h[k] += v } }.sort.to_h
+  end
+
+  def fixtures_per_object_type(list)
+    list.each_with_object(Hash.new(0)) { |e, h| e["object_types"].each_key { |k| h[k] += 1 } }.sort.to_h
+  end
+
+  def fixtures_per_type(list)
+    list.each_with_object(Hash.new(0)) { |e, h| e["histogram"].each_key { |k| h[k] += 1 } }.sort.to_h
+  end
+end
+
+options = { root: File.expand_path("../spec/fixtures", __dir__), out: nil }
+OptionParser.new do |opts|
+  opts.banner = "Usage: script/emf_plus_census [--root DIR] [--out PATH]"
+  opts.on("--root DIR", "fixture root") { |v| options[:root] = v }
+  opts.on("--out PATH", "write JSON here instead of stdout") { |v| options[:out] = v }
+end.parse!
+
+json = JSON.pretty_generate(EmfPlusCensus.run(root: options[:root]))
+options[:out] ? File.write(options[:out], "#{json}\n") : puts(json)

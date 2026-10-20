@@ -5,5 +5,8 @@ module Emf
     autoload :Parser, "emf/emf_plus/parser"
     autoload :Serializer, "emf/emf_plus/serializer"
     autoload :Binary, "emf/emf_plus/binary"
+    autoload :Frame, "emf/emf_plus/frame"
+    autoload :Records, "emf/emf_plus/records"
+    autoload :ObjectChain, "emf/emf_plus/object_chain"
   end
 end
