@@ -20,6 +20,8 @@ module Emf
         end
         BODY = HeaderBody
 
+        def flag_fields = { dual: DUAL_FLAG }
+
         def dual? = flags.anybits?(DUAL_FLAG)
         def video? = body.emf_plus_flags.anybits?(VIDEO_FLAG)
         def graphics_signature = body.graphics_version >> 12

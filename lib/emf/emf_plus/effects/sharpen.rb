@@ -1,0 +1,22 @@
+# frozen_string_literal: true
+
+module Emf
+  module EmfPlus
+    module Effects
+      # SharpenEffect (2.2.3.10).
+      class Sharpen < Effect
+        GUID = "63cbf3ee-c526-402c-8f71-62c540bf5142"
+
+        class SharpenBody < BinData::Record
+          endian :little
+          float :radius
+          float :amount
+        end
+        BODY = SharpenBody
+
+        def radius = body.radius
+        def amount = body.amount
+      end
+    end
+  end
+end

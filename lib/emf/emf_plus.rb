@@ -8,5 +8,7 @@ module Emf
     autoload :Frame, "emf/emf_plus/frame"
     autoload :Records, "emf/emf_plus/records"
     autoload :ObjectChain, "emf/emf_plus/object_chain"
+    autoload :Objects, "emf/emf_plus/objects"
+    autoload :Effects, "emf/emf_plus/effects"
   end
 end
