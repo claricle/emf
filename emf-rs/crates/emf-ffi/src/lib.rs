@@ -1,5 +1,7 @@
 //! C ABI for owned EMF framing handles. See `include/emf.h` for pointer contracts.
+mod emf_plus_snapshot;
 mod snapshot;
+pub use emf_plus_snapshot::*;
 mod types;
 mod wmf;
 mod wmf_snapshot;

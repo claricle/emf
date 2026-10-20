@@ -97,6 +97,14 @@ extern "C" {
 #define EMF_FAMILY_SETLAYOUT 72u
 #define EMF_FAMILY_SETTEXTJUSTIFICATION 73u
 
+#define EMF_PLUS_SNAPSHOT_VERSION 1u
+/* Independent read-only EMF+ snapshot options, not an outer snapshot version. */
+typedef struct emf_plus_snapshot_options {
+  uint32_t struct_size;
+  uint32_t version;
+  uint64_t max_output_bytes;
+} emf_plus_snapshot_options;
+
 typedef struct emf_document emf_document;
 typedef struct emf_wmf_document emf_wmf_document;
 typedef struct emf_buffer emf_buffer;
@@ -230,6 +238,14 @@ int32_t emf_error_view(const emf_error *error, emf_error_info *out_info);
 void emf_document_free(emf_document *document);
 void emf_buffer_free(emf_buffer *buffer);
 void emf_error_free(emf_error *error);
+
+/* All nested frames in one owned buffer. See emf-plus-snapshot-v1.md.
+ * options is required; limits is optional (core defaults). Existing ABI/version
+ * and outer snapshot schema are unchanged. On failure *out_buffer is NULL.
+ * Free returned buffers/errors with emf_buffer_free/emf_error_free. */
+int32_t emf_document_emf_plus_snapshot_v1(
+    const emf_document *document, const emf_plus_snapshot_options *options,
+    const emf_limits *limits, emf_buffer **out_buffer, emf_error **out_error);
 
 #ifdef __cplusplus
 }
