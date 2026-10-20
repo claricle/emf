@@ -13,5 +13,6 @@ module Emf
     autoload :Effects, "emf/emf_plus/effects"
     autoload :Stream, "emf/emf_plus/stream"
     autoload :StaleStreamError, "emf/error"
+    autoload :Links, "emf/emf_plus/links"
   end
 end
