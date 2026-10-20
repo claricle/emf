@@ -39,7 +39,7 @@ RSpec.describe AvailabilityMatrix::Fixtures do
       end
     RUBY
 
-    out, err, status = Open3.capture3(RbConfig.ruby, "-e", child, corrupt)
+    out, err, status = Open3.capture3(AvailabilityMatrix::CLEAN_ENV, RbConfig.ruby, "-e", child, corrupt)
 
     expect([status.success?, out, err]).to eq([true, "rejected corrupt library\n", ""])
   end
@@ -80,5 +80,44 @@ RSpec.describe AvailabilityMatrix::Runner do
 
     expect("native backend could not load: corrupt.dll: file too short").to match(scenario.native.last)
     expect("native backend could not load: file too short").not_to match(scenario.native.last)
+  end
+
+  it "identifies the missing dependency named by POSIX loaders" do
+    allow(Gem).to receive(:win_platform?).and_return(false)
+    allow(fixtures).to receive_messages(missing_dependency: "needs_dependency.so", path: "dependency.so")
+
+    scenario = runner.scenarios.find { |entry| entry.name == "missing_dependent_library" }
+
+    expect(scenario.library).to eq("needs_dependency.so")
+    expect(scenario.auto).to eq(["ruby", nil, nil])
+    expect(scenario.native.first(2)).to eq(["none", "Emf::Native::Unavailable"])
+    expect("native backend could not load: /tmp/dependency.so: cannot open shared object file: No such file or directory")
+      .to match(scenario.native.last)
+    expect("native backend could not load: Library not loaded: /tmp/dependency.so\nReferenced from: /tmp/needs_dependency.so")
+      .to match(scenario.native.last)
+    expect("native backend could not load: /tmp/unrelated.so: No such file or directory").not_to match(scenario.native.last)
+    expect("native backend could not load: ").not_to match(scenario.native.last)
+  end
+end
+
+RSpec.describe AvailabilityMatrix::Report do
+  it "leaves the actual mismatch in the captured CI log tail" do
+    child = <<~RUBY
+      require #{File.expand_path('../../script/platform_probe/availability_matrix', __dir__).inspect}
+      scenario = AvailabilityMatrix::Scenario.new(name: "installed_library_missing",
+        auto: ["ruby", nil, nil], native: ["none", "Emf::Native::Unavailable", /missing library/])
+      runner = Object.new
+      runner.define_singleton_method(:scenarios) { [scenario] }
+      runner.define_singleton_method(:run) do |_scenario, mode|
+        AvailabilityMatrix::Row.new(name: scenario.name, mode: mode, backend: "ruby")
+      end
+      exit(AvailabilityMatrix::Report.new(runner).call ? 0 : 1)
+    RUBY
+
+    out, status = Open3.capture2e(RbConfig.ruby, "-e", child)
+
+    expect(status.exitstatus).to eq(1)
+    expect(out.lines.last).to include("MISMATCH installed_library_missing/native:", "backend ruby, expected none",
+                                      'error nil, expected "Emf::Native::Unavailable"', "message nil !~")
   end
 end

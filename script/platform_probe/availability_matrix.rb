@@ -201,7 +201,7 @@ module AvailabilityMatrix
 
     def dependent(load_failure)
       path = @fixtures.missing_dependency
-      path && scenario("missing_dependent_library", path, auto: fallback, native: load_failure.call(path))
+      path && scenario("missing_dependent_library", path, auto: fallback, native: load_failure.call(@fixtures.path("dependency")))
     end
 
     def wrong_abi(unavailable)
@@ -265,6 +265,7 @@ module AvailabilityMatrix
     def call
       rows = @runner.scenarios.flat_map { |scenario| MODES.map { |mode| check(scenario, mode) } }
       print_table(rows)
+      $stdout.flush # Keep stderr diagnostics after the table in captured CI logs.
       @mismatches.each { |line| warn "MISMATCH #{line}" }
       @mismatches.empty?
     end
