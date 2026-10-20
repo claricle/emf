@@ -18,6 +18,7 @@ module Emf
       autoload :Rebuild, "emf/emf_plus/stream/rebuild"
       autoload :Editor, "emf/emf_plus/stream/editor"
       autoload :LinkIndex, "emf/emf_plus/stream/link_index"
+      autoload :Conformance, "emf/emf_plus/stream/conformance"
 
       attr_reader :source, :segments
 
@@ -43,9 +44,9 @@ module Emf
 
       def ok? = errors.empty?
 
-      # Framing problems, then object table and effect link diagnostics.
+      # Framing problems, then object table, effect link and conformance diagnostics.
       def errors
-        @errors ||= (@framing_errors + objects.errors + links.errors).freeze
+        @errors ||= (@framing_errors + objects.errors + links.errors + Conformance.check(records, segments)).freeze
       end
 
       # EMF+ records and EMF gaps in file order.
