@@ -47,7 +47,7 @@ Borrowed, allocation-free object views currently decode Solid/Hatch Brush, Font
 (including raw UTF-16 and suffix) and ImageAttributes. Other object subtypes remain
 explicitly opaque. Independently budgeted `ObjectDefinition::decode` additionally
 returns editable `ObjectData` for those four bodies, StringFormat (all header
-fields, counted tab stops and character ranges), Path, Region, CustomLineCap, and Image bitmap/metafile
+fields, counted tab stops and character ranges), Path, Region, CustomLineCap, Pen, and Image bitmap/metafile
 metadata. Path retains raw floating-point, signed integer and relative coordinate
 encodings, compressed point-type runs and alignment bytes. Relative coordinate
 widths and ignored flag bits survive typed edits; coordinate/type counts, run
@@ -61,7 +61,12 @@ fields, raw Boolean/float/enum words and optional fill/outline Paths. Nested sig
 Path lengths are checked on decode and derived on edit; both Paths share the
 object allocation and work budgets. Unknown cap types or optional-data flags
 retain the complete opaque body. Known flags must agree with optional Path presence
-on serialization. Bitmap bytes and nested
+on serialization. Pen retains all flag-selected fixed fields, counted dash/compound
+arrays, ordered optional custom caps and Solid/Hatch nested brushes. Unknown Pen
+types, flags, nested cap types or brush types preserve the complete opaque body.
+Custom cap lengths and array counts are derived on edit; option presence must
+match flags and all nested allocations share the object budget. Floating-point
+and enum fields retain raw bits without rendering-domain validation. Bitmap bytes and nested
 metafiles remain raw, without decompression or recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
 serialization derives edited counts under shared SerializeLimits.
 Editing assembled bytes and replacing an object is supported;
@@ -69,7 +74,7 @@ there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Pen objects, image pixel/palette structures, nested
+Other brush types, image pixel/palette structures, remaining nested
 object structures and effects remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
@@ -149,3 +154,8 @@ rendering fixtures and the remaining typed families above remain open.
 field/padding identity, derived edited lengths, unknown opaque fallback, malformed
 signed lengths/truncation/suffixes, inconsistent edits, shared parse/serialize
 budgets and continuation/segment/unknown-record preservation.
+
+`emf_plus_pen.rs` covers every optional flag and both supported nested brushes,
+raw bits, edited array/cap lengths, unknown opaque fallback, malformed nested
+boundaries/counts, inconsistent flags, shared budgets and continuation/segment
+byte preservation.
