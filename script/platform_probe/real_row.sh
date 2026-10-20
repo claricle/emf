@@ -14,6 +14,27 @@ status=0
 # run_row.sh may have bootstrapped rustup here on a Windows runner without it.
 PATH="$HOME/.cargo/bin:$PATH"
 
+# Keep paths supplied by the caller anchored to its cwd before package steps cd.
+# cygpath also handles Windows drive paths while preserving native path syntax.
+absolute_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -am "$1"
+    return
+  fi
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *)
+      local parent base
+      parent=$(dirname "$1")
+      base=$(basename "$1")
+      mkdir -p "$parent"
+      (cd "$parent" && printf '%s/%s\n' "$PWD" "$base")
+      ;;
+  esac
+}
+
+out=$(absolute_path "$out")
+
 rm -rf "${out:?}"
 mkdir -p "$out"
 summary=$out/summary.txt
@@ -86,6 +107,9 @@ note "ruby=$(ruby -v)"
 
 # EMF_REAL_LIBRARY is preset only for a local dry run; CI builds the library.
 lib=${EMF_REAL_LIBRARY:-}
+if [ -n "$lib" ]; then
+  lib=$(absolute_path "$lib")
+fi
 if [ -z "$lib" ]; then
   if step "build_cdylib" build.log build_cdylib; then
     for candidate in libemf_ffi.so libemf_ffi.dylib emf_ffi.dll; do
@@ -98,13 +122,14 @@ fi
 package_steps() {
   local pkg=$out/package stage=$out/stage home=$out/gem-home
   local nroot nlib npkg nstage nhome nhere nfixture req
+  local revision=${EMF_RELEASE_REVISION:-${GITHUB_SHA:-}}
   nroot=$(native_path "$root") nlib=$(native_path "$lib") npkg=$(native_path "$pkg")
   nstage=$(native_path "$stage") nhome=$(native_path "$home") nhere=$(native_path "$here")
   nfixture=$(native_path "$out/fixture.emf")
   rm -rf "${pkg:?}" "${stage:?}" "${home:?}" "${out:?}/bin"
   ruby="$(ruby -e 'print RbConfig.ruby')"
   step "build_platform_gem" package-build-platform.log \
-    ruby "$nroot/script/build_native_gem" --platform "$platform" --library "$nlib" --abi-version 1 --target "$target" ${GITHUB_SHA:+--revision "$GITHUB_SHA"} --output "$npkg" || return
+    ruby "$nroot/script/build_native_gem" --platform "$platform" --library "$nlib" --abi-version 1 --target "$target" ${revision:+--revision "$revision"} --output "$npkg" || return
   step "build_source_gem" package-build-source.log \
     ruby "$nroot/script/build_native_gem" --platform ruby --output "$npkg" || return
   step "package_check" package-check.log ruby "$nroot/script/check_native_package" --directory "$npkg" || return
