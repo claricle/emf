@@ -9,7 +9,7 @@ mod object_data;
 pub use object_data::{
     ArrowLineCap, CustomLineCap, CustomLineCapData, DefaultLineCap, GradientBoundary,
     LinearGradient, ObjectData, Path, PathGradient, PathPointRun, PathPointTypes, Pen, PenBrush,
-    PenBrushData, Region, RegionNode, StringFormat, Texture, TextureImage,
+    PenBrushData, PixelBitmap, Region, RegionNode, StringFormat, Texture, TextureImage,
 };
 mod tsgraphics;
 pub use tsgraphics::{Palette, TSGraphics};

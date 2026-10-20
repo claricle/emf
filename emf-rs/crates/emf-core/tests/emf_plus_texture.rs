@@ -73,6 +73,9 @@ fn every_flag_combination_and_image_form_preserves_raw_bits() {
                     assert_eq!(pixel_format, 0x12345678);
                     assert_eq!(data, [0xa1, 0xb2, 0xc3]);
                 }
+                Some(emf_plus::TextureImage::PixelBitmap(_)) => {
+                    panic!("unknown format must stay raw")
+                }
                 Some(emf_plus::TextureImage::Metafile {
                     metafile_type,
                     data,
@@ -95,6 +98,7 @@ fn image_payload_edits_grow_shrink_and_reach_nested_pen() {
             panic!()
         };
         match data.image.as_mut().unwrap() {
+            emf_plus::TextureImage::PixelBitmap(_) => panic!("unknown format must stay raw"),
             emf_plus::TextureImage::Bitmap { data, .. }
             | emf_plus::TextureImage::Metafile { data, .. } => data.extend([7, 8, 9, 10]),
         };
@@ -114,6 +118,7 @@ fn image_payload_edits_grow_shrink_and_reach_nested_pen() {
             panic!()
         };
         match t.image.as_mut().unwrap() {
+            emf_plus::TextureImage::PixelBitmap(_) => panic!("unknown format must stay raw"),
             emf_plus::TextureImage::Bitmap { data, .. }
             | emf_plus::TextureImage::Metafile { data, .. } => data.truncate(3),
         };

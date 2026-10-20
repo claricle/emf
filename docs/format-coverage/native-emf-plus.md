@@ -51,7 +51,7 @@ Borrowed, allocation-free object views currently decode Solid/Hatch Brush, Font
 explicitly opaque. Independently budgeted `ObjectDefinition::decode` additionally
 returns editable `ObjectData` for those four bodies, StringFormat (all header
 fields, counted tab stops and character ranges), Path, Region, CustomLineCap, Pen, LinearGradient/PathGradient/Texture Brushes, and Image bitmap/metafile
-metadata. Path retains raw floating-point, signed integer and relative coordinate
+metadata and known-format pixel bitmap palettes. Path retains raw floating-point, signed integer and relative coordinate
 encodings, compressed point-type runs and alignment bytes. Relative coordinate
 widths and ignored flag bits survive typed edits; coordinate/type counts, run
 totals and alignment are validated before serialization. Region retains a flat preorder
@@ -69,16 +69,15 @@ arrays, ordered optional custom caps and Solid/Hatch/LinearGradient/PathGradient
 types, flags, nested cap types or brush types preserve the complete opaque body.
 Custom cap lengths and array counts are derived on edit; option presence must
 match flags and all nested allocations share the object budget. Floating-point
-and enum fields retain raw bits without rendering-domain validation. Bitmap bytes and nested
-metafiles remain raw, without decompression or recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
+and enum fields retain raw bits without rendering-domain validation. Pixel bytes and nested
+metafiles remain unexpanded, without decompression or recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
 serialization derives edited counts under shared SerializeLimits.
 Editing assembled bytes and replacing an object is supported;
 there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Image pixel/palette structures and remaining nested
-object structures remain opaque. Playback object
+TSClip and unknown object/record variants remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
 it does not claim full native EMF+ format acceptance or add a Ruby public API.
@@ -187,15 +186,25 @@ nested Pen growth/shrink, malformed lengths/counts/truncations, inconsistent edi
 shared budgets and exact continuation/segment/unknown-record/padding preservation.
 
 Texture brushes expose flags, wrap mode and an optional transform and image,
-both standalone and inside Pen. `TextureImage` retains bitmap metadata and raw
-pixel/compressed bytes, or metafile metadata, counted bytes and suffix. Nested
+both standalone and inside Pen. `TextureImage` retains bitmap metadata, or
+metafile metadata, counted bytes and suffix. Known pixel formats with BitmapType 0
+expose `PixelBitmap` for standalone images and nested textures, with an optional
+typed palette and unexpanded pixel bytes. Palette presence follows the indexed
+flag; its count derives on edit. Reserved pixel-format bits, signed dimensions,
+stride, pixel bytes and row padding are retained without raster validation.
+Compressed bitmaps, unknown bitmap types and unknown pixel formats retain the
+existing raw bitmap variant. Nested
 image data shares the object budget and is never decompressed or recursively
 parsed. Unknown brush flags or image types preserve the entire enclosing object
 as opaque; malformed known headers/counts and inconsistent transforms fail.
 `emf_plus_texture.rs` covers all eight flag combinations and three image forms,
 image growth/shrink/removal, nested Pen edits, unknown preservation, malformed
 headers/counts/suffixes, exact allocation thresholds, shared resource limits and
-continuation/segment/unknown-record/padding identity.
+continuation/segment/unknown-record/padding identity. `emf_plus_bitmap.rs`
+additionally covers all 14 defined pixel formats, palette edits through standalone
+images, texture brushes and pens, unknown formats/types, malformed palette counts,
+shared parse/serialize limits and atomic Document growth/shrink with explicit
+continuation edits, stale-source rejection and unrelated comment preservation.
 
 SerializableObject records expose `RecordData::Effect` with Blur, BrightnessContrast,
 ColorBalance, ColorCurve, ColorLookupTable, ColorMatrix, HueSaturationLightness,

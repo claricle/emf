@@ -4,6 +4,8 @@ use crate::{
     limits::{try_vec_with_capacity, Budget},
     LimitKind, ParseLimits, SerializeFailure, SerializeLimits,
 };
+mod bitmap;
+pub use bitmap::PixelBitmap;
 mod line_cap;
 mod linear_brush;
 mod path;
@@ -84,7 +86,9 @@ pub enum ObjectData {
         reserved2: u32,
     },
     StringFormat(StringFormat),
-    /// BitmapData is preserved without pixel expansion or image decompression.
+    /// Known pixel formats expose palette entries and unexpanded pixel bytes.
+    PixelBitmap(PixelBitmap),
+    /// Compressed and unknown bitmap formats retain their raw data.
     BitmapImage {
         version: u32,
         width: i32,
@@ -165,14 +169,26 @@ impl ObjectDefinition {
             5 => {
                 let version = r.word()?;
                 match r.word()? {
-                    1 => ObjectData::BitmapImage {
-                        version,
-                        width: r.word()? as i32,
-                        height: r.word()? as i32,
-                        stride: r.word()? as i32,
-                        pixel_format: r.word()?,
-                        bitmap_type: r.word()?,
-                        data: r.rest()?,
+                    1 => match bitmap::read(&mut r, version)? {
+                        texture::TextureImage::PixelBitmap(v) => ObjectData::PixelBitmap(v),
+                        texture::TextureImage::Bitmap {
+                            version,
+                            width,
+                            height,
+                            stride,
+                            pixel_format,
+                            bitmap_type,
+                            data,
+                        } => ObjectData::BitmapImage {
+                            version,
+                            width,
+                            height,
+                            stride,
+                            pixel_format,
+                            bitmap_type,
+                            data,
+                        },
+                        texture::TextureImage::Metafile { .. } => unreachable!(),
                     },
                     2 => {
                         let metafile_type = r.word()?;
@@ -294,7 +310,7 @@ impl ObjectData {
             | Self::LinearGradientBrush { .. }
             | Self::PathGradientBrush { .. }
             | Self::TextureBrush { .. } => 1,
-            Self::BitmapImage { .. } | Self::MetafileImage { .. } => 5,
+            Self::PixelBitmap(_) | Self::BitmapImage { .. } | Self::MetafileImage { .. } => 5,
             Self::Font { .. } => 6,
             Self::StringFormat(_) => 7,
             Self::ImageAttributes { .. } => 8,
@@ -373,6 +389,10 @@ impl ObjectData {
                     ],
                     (v.tab_stops.len() as u64).saturating_add(v.character_ranges.len() as u64),
                 )
+            }
+            Self::PixelBitmap(v) => {
+                let (size, work) = v.layout()?;
+                (size, [0; 3], work)
             }
             Self::BitmapImage { data, .. } => (28, [data.len(), 0, 0], 0),
             Self::MetafileImage { data, suffix, .. } => {
@@ -502,6 +522,7 @@ impl ObjectData {
                     words(&mut out, &[range[0] as u32, range[1] as u32]);
                 }
             }
+            Self::PixelBitmap(v) => v.write(&mut out),
             Self::BitmapImage {
                 version,
                 width,

@@ -3,6 +3,7 @@ use super::{words, Reader};
 use crate::{emf_plus::Error, SerializeFailure};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TextureImage {
+    PixelBitmap(super::PixelBitmap),
     Bitmap {
         version: u32,
         width: i32,
@@ -36,7 +37,13 @@ impl Texture {
         } else {
             8usize
         };
+        let mut elements = 0;
         let image_size = match &self.image {
+            Some(TextureImage::PixelBitmap(v)) => {
+                let (size, work) = v.layout()?;
+                elements = work;
+                size
+            }
             None => 0,
             Some(TextureImage::Bitmap { data, .. }) => 28usize
                 .checked_add(data.len())
@@ -54,7 +61,7 @@ impl Texture {
         size = size
             .checked_add(image_size)
             .ok_or(SerializeFailure::SizeOverflow)?;
-        Ok((size, 0))
+        Ok((size, elements))
     }
     pub(super) fn write(&self, out: &mut Vec<u8>) {
         words(out, &[self.flags, self.wrap_mode as u32]);
@@ -63,6 +70,7 @@ impl Texture {
         }
         match &self.image {
             None => {}
+            Some(TextureImage::PixelBitmap(v)) => v.write(out),
             Some(TextureImage::Bitmap {
                 version,
                 width,
@@ -115,15 +123,7 @@ pub(super) fn read(r: &mut Reader<'_, '_, '_>) -> Result<Option<Texture>, Error>
     } else {
         let version = r.word()?;
         Some(match r.word()? {
-            1 => TextureImage::Bitmap {
-                version,
-                width: r.word()? as i32,
-                height: r.word()? as i32,
-                stride: r.word()? as i32,
-                pixel_format: r.word()?,
-                bitmap_type: r.word()?,
-                data: r.rest()?,
-            },
+            1 => super::bitmap::read(r, version)?,
             2 => {
                 let metafile_type = r.word()?;
                 let count = r.word()? as usize;
