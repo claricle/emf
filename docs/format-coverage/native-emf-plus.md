@@ -47,7 +47,7 @@ Borrowed, allocation-free object views currently decode Solid/Hatch Brush, Font
 (including raw UTF-16 and suffix) and ImageAttributes. Other object subtypes remain
 explicitly opaque. Independently budgeted `ObjectDefinition::decode` additionally
 returns editable `ObjectData` for those four bodies, StringFormat (all header
-fields, counted tab stops and character ranges), Path, Region, and Image bitmap/metafile
+fields, counted tab stops and character ranges), Path, Region, CustomLineCap, and Image bitmap/metafile
 metadata. Path retains raw floating-point, signed integer and relative coordinate
 encodings, compressed point-type runs and alignment bytes. Relative coordinate
 widths and ignored flag bits survive typed edits; coordinate/type counts, run
@@ -56,7 +56,12 @@ node sequence for binary operations, raw rectangle bits, nested Path, empty and
 infinite nodes. Counts, complete binary-tree shape and nested Path lengths are
 validated without recursive parsing or destruction; nested allocations share the
 object budget. Unknown node types retain the complete object as opaque because
-their payload has no generic length. Bitmap bytes and nested
+their payload has no generic length. CustomLineCap retains both default and adjustable-arrow
+fields, raw Boolean/float/enum words and optional fill/outline Paths. Nested signed
+Path lengths are checked on decode and derived on edit; both Paths share the
+object allocation and work budgets. Unknown cap types or optional-data flags
+retain the complete opaque body. Known flags must agree with optional Path presence
+on serialization. Bitmap bytes and nested
 metafiles remain raw, without decompression or recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
 serialization derives edited counts under shared SerializeLimits.
 Editing assembled bytes and replacing an object is supported;
@@ -64,7 +69,7 @@ there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Deeper Pen/CustomLineCap objects, image pixel/palette structures, nested
+Pen objects, image pixel/palette structures, nested
 object structures and effects remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
@@ -139,3 +144,8 @@ budgets. Growth and shrink preserve unrelated wire records, retain original oute
 padding prefixes where they fit and zero new padding via the existing EMF writer.
 Custom segment policies, new EMR insertion, FFI/Ruby mapping, licensed embedded
 rendering fixtures and the remaining typed families above remain open.
+
+`emf_plus_linecap.rs` covers both cap types, every optional Path combination, raw
+field/padding identity, derived edited lengths, unknown opaque fallback, malformed
+signed lengths/truncation/suffixes, inconsistent edits, shared parse/serialize
+budgets and continuation/segment/unknown-record preservation.

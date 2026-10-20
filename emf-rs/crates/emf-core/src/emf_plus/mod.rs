@@ -7,7 +7,8 @@ mod container;
 pub use container::{EmbedError, EmbeddedStream};
 mod object_data;
 pub use object_data::{
-    ObjectData, Path, PathPointRun, PathPointTypes, Region, RegionNode, StringFormat,
+    ArrowLineCap, CustomLineCap, CustomLineCapData, DefaultLineCap, ObjectData, Path, PathPointRun,
+    PathPointTypes, Region, RegionNode, StringFormat,
 };
 mod text;
 pub use text::Text;

@@ -4,8 +4,10 @@ use crate::{
     limits::{try_vec_with_capacity, Budget},
     LimitKind, ParseLimits, SerializeFailure, SerializeLimits,
 };
+mod line_cap;
 mod path;
 mod region;
+pub use line_cap::{ArrowLineCap, CustomLineCap, CustomLineCapData, DefaultLineCap};
 pub use path::{Path, PathPointRun, PathPointTypes};
 pub use region::{Region, RegionNode};
 
@@ -30,6 +32,7 @@ pub struct StringFormat {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObjectData {
+    CustomLineCap(CustomLineCap),
     Path(Path),
     Region(Region),
     SolidBrush {
@@ -97,6 +100,10 @@ impl ObjectDefinition {
             budget: &mut budget,
         };
         let value = match self.object_type {
+            9 => match line_cap::read(&mut r)? {
+                Some(v) => ObjectData::CustomLineCap(v),
+                None => return opaque(self, r.budget),
+            },
             3 => ObjectData::Path(path::read(&mut r)?),
             4 => match region::read(&mut r)? {
                 Some(v) => ObjectData::Region(v),
@@ -241,6 +248,7 @@ fn opaque(def: &ObjectDefinition, budget: &mut Budget<'_>) -> Result<ObjectData,
 impl ObjectData {
     pub fn object_type(&self) -> u8 {
         match self {
+            Self::CustomLineCap(_) => 9,
             Self::Path(_) => 3,
             Self::Region(_) => 4,
             Self::SolidBrush { .. } | Self::HatchBrush { .. } => 1,
@@ -256,6 +264,10 @@ impl ObjectData {
     pub fn serialize(&self, limits: &SerializeLimits) -> Result<Vec<u8>, SerializeFailure> {
         let overflow = || SerializeFailure::SizeOverflow;
         let (base, parts, elements): (usize, [usize; 3], u64) = match self {
+            Self::CustomLineCap(v) => {
+                let (size, work) = v.layout()?;
+                (size, [0; 3], work)
+            }
             Self::Region(v) => {
                 let (size, work) = v.layout()?;
                 (size, [0; 3], work)
@@ -340,6 +352,7 @@ impl ObjectData {
         out.try_reserve_exact(size)
             .map_err(|_| SerializeFailure::AllocationFailed { bytes: size })?;
         match self {
+            Self::CustomLineCap(v) => v.write(&mut out),
             Self::Path(v) => v.write(&mut out),
             Self::Region(v) => v.write(&mut out),
             Self::SolidBrush { version, argb } => words(&mut out, &[*version, 0, *argb]),
