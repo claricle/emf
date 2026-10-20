@@ -21,9 +21,16 @@ module Emf
             adapter
           end
 
-          def initialize(wire:, offset: nil)
+          # Bytes of a record that follow its typed layout (declared nSize larger
+          # than the layout consumes). Kept verbatim beside the wire.
+          def self.suffix_of(record_bytes, wire)
+            (record_bytes.byteslice(wire.num_bytes..) || "").b.freeze
+          end
+
+          def initialize(wire:, offset: nil, suffix: "".b)
             @wire = wire
             @offset = offset
+            @suffix = suffix
           end
 
           attr_reader :offset
@@ -32,12 +39,24 @@ module Emf
             return @wire if @wire
 
             @wire = @wire_source.materialize
+            @suffix = self.class.suffix_of(@wire_source.to_binary_s, @wire)
             @wire_source = nil
             @wire
           end
 
+          def suffix
+            wire
+            @suffix
+          end
+
           def to_binary_s
-            @wire ? @wire.to_binary_s : @wire_source.to_binary_s
+            return @wire_source.to_binary_s unless @wire
+
+            bytes = @wire.to_binary_s
+            return bytes if @suffix.empty?
+
+            bytes[4, 4] = [bytes.bytesize + @suffix.bytesize].pack("V")
+            bytes + @suffix
           end
 
           def type_id
@@ -49,12 +68,12 @@ module Emf
           end
 
           def ==(other)
-            other.is_a?(self.class) && wire.to_binary_s == other.wire.to_binary_s
+            other.is_a?(self.class) && to_binary_s == other.to_binary_s
           end
           alias eql? ==
 
           def hash
-            [self.class, wire.to_binary_s].hash
+            [self.class, to_binary_s].hash
           end
 
           def inspect

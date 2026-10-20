@@ -22,10 +22,10 @@ module Emf
 
         until io.eof?
           offset = io.pos
-          wire = read_record(io, offset, errors)
+          wire, suffix = read_record(io, offset, errors)
           break if wire.nil?
 
-          records << Model::Emr::Records::WireAdapter.new(wire: wire, offset: offset)
+          records << Model::Emr::Records::WireAdapter.new(wire: wire, offset: offset, suffix: suffix)
           emf_plus_bytes << extract_emf_plus(wire) if wire.is_a?(Emf::Emr::Binary::Records::Comment)
 
           if wire.is_a?(Emf::Emr::Binary::Records::Eof)
@@ -97,6 +97,11 @@ module Emf
       MAX_INPUT_BYTES = 200 * 1024 * 1024
 
       def variable_array_sane?(type_id, n_size, head, payload)
+        sized_arrays_sane?(type_id, n_size, head, payload) &&
+          ext_text_out_sane?(type_id, n_size, head, payload)
+      end
+
+      def sized_arrays_sane?(type_id, n_size, head, payload)
         spec = VARIABLE_ARRAY_RECORDS[type_id]
         return true unless spec
 
@@ -122,6 +127,48 @@ module Emf
         return false if count2 > MAX_SANE_ARRAY_LENGTH
 
         bytes_needed + (count2 * spec[:element_size]) <= n_size
+      end
+
+      ETO_NO_RECT = 0x100
+      ETO_PDY = 0x2000
+      EXT_TEXT_OUT_CHAR_WIDTH = {
+        Binary::TypeCodes::EXTTEXTOUTA => 1,
+        Binary::TypeCodes::EXTTEXTOUTW => 2
+      }.freeze
+
+      # Mirrors the native decoder: the string and Dx spans implied by nChars
+      # must lie inside the record, after the fixed fields, and not overlap.
+      def ext_text_out_sane?(type_id, n_size, head, payload)
+        width = EXT_TEXT_OUT_CHAR_WIDTH[type_id]
+        return true unless width
+
+        spans, fixed = ext_text_out_spans(head + payload, width)
+        return false unless spans
+
+        spans.all? { |off, len, align| span_inside?(off, len, align, fixed, n_size) } &&
+          (spans.size < 2 || !spans_overlap?(*spans))
+      end
+
+      def ext_text_out_spans(full, width)
+        return if full.bytesize < 60
+
+        count, off_string, options = full.byteslice(44, 12).unpack("V3")
+        dx_at = options.anybits?(ETO_NO_RECT) ? 56 : 72
+        return if full.bytesize < dx_at + 4
+
+        off_dx = read_uint32(full, dx_at)
+        dx_entry = options.anybits?(ETO_PDY) ? 8 : 4
+        string = [off_string, count * width, width] unless off_string.zero? && count.zero?
+        dx = [off_dx, count * dx_entry, 4] unless off_dx.zero?
+        [[string, dx].compact, dx_at + 4]
+      end
+
+      def span_inside?(off, len, align, fixed, n_size)
+        (off % align).zero? && off >= fixed && off + len <= n_size
+      end
+
+      def spans_overlap?(first, second)
+        first[0] < second[0] + second[1] && second[0] < first[0] + first[1]
       end
 
       def read_uint32(bytes, offset)
@@ -155,15 +202,16 @@ module Emf
             message: "variable-array record at offset #{offset} declares " \
                      "more entries than nSize allows; preserving as Raw"
           )
-          return build_raw(head, payload)
+          return [build_raw(head, payload), "".b]
         end
 
-        wire_class = Emf::Emr::Binary::Records.lookup(type_id)
-        wire_class.read(head + payload)
+        record_bytes = head + payload
+        wire = Emf::Emr::Binary::Records.lookup(type_id).read(record_bytes)
+        [wire, Model::Emr::Records::WireAdapter.suffix_of(record_bytes, wire)]
       rescue StandardError => e
         errors << ParseError.new(offset: offset, record_code: type_id,
                                  message: "#{e.class}: #{e.message}")
-        build_raw(head, payload)
+        [build_raw(head, payload), "".b]
       end
 
       def build_raw(head, payload)

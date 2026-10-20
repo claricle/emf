@@ -82,8 +82,8 @@ RSpec.describe "Native lazy wire compatibility" do
                                      records: [parsed.records.first, manual, *parsed.records.drop(2)], trailing: parsed.trailing)
     expected = "#{header}#{mode}#{manual.wire.to_binary_s}#{comment}#{eof}tail"
     expect(Emf.serialize(mixed)).to eq(expected)
-    # Exposure switches even an unedited record to its actual BinData serialization.
-    exposed = parsed.records.first.wire.to_binary_s
-    expect(Emf.serialize(mixed)).to eq("#{header}#{exposed}#{manual.wire.to_binary_s}#{comment}#{eof}tail")
+    # Exposure keeps the record's surplus bytes: the typed layout is 12 bytes of the declared 16.
+    expect(parsed.records.first.wire.to_binary_s).to eq(mode.byteslice(0, 12))
+    expect(Emf.serialize(mixed)).to eq(expected)
   end
 end
