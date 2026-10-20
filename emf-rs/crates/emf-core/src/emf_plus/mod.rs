@@ -9,7 +9,7 @@ mod object_data;
 pub use object_data::{
     ArrowLineCap, CustomLineCap, CustomLineCapData, DefaultLineCap, GradientBoundary,
     LinearGradient, ObjectData, Path, PathGradient, PathPointRun, PathPointTypes, Pen, PenBrush,
-    PenBrushData, Region, RegionNode, StringFormat,
+    PenBrushData, Region, RegionNode, StringFormat, Texture, TextureImage,
 };
 mod text;
 pub use text::Text;

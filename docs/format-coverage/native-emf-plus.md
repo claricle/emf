@@ -47,7 +47,7 @@ Borrowed, allocation-free object views currently decode Solid/Hatch Brush, Font
 (including raw UTF-16 and suffix) and ImageAttributes. Other object subtypes remain
 explicitly opaque. Independently budgeted `ObjectDefinition::decode` additionally
 returns editable `ObjectData` for those four bodies, StringFormat (all header
-fields, counted tab stops and character ranges), Path, Region, CustomLineCap, Pen, LinearGradient/PathGradient Brushes, and Image bitmap/metafile
+fields, counted tab stops and character ranges), Path, Region, CustomLineCap, Pen, LinearGradient/PathGradient/Texture Brushes, and Image bitmap/metafile
 metadata. Path retains raw floating-point, signed integer and relative coordinate
 encodings, compressed point-type runs and alignment bytes. Relative coordinate
 widths and ignored flag bits survive typed edits; coordinate/type counts, run
@@ -62,7 +62,7 @@ Path lengths are checked on decode and derived on edit; both Paths share the
 object allocation and work budgets. Unknown cap types or optional-data flags
 retain the complete opaque body. Known flags must agree with optional Path presence
 on serialization. Pen retains all flag-selected fixed fields, counted dash/compound
-arrays, ordered optional custom caps and Solid/Hatch/LinearGradient/PathGradient nested brushes. Unknown Pen
+arrays, ordered optional custom caps and Solid/Hatch/LinearGradient/PathGradient/Texture nested brushes. Unknown Pen
 types, flags, nested cap types or brush types preserve the complete opaque body.
 Custom cap lengths and array counts are derived on edit; option presence must
 match flags and all nested allocations share the object budget. Floating-point
@@ -74,7 +74,7 @@ there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Other brush types, image pixel/palette structures, remaining nested
+Image pixel/palette structures, remaining nested
 object structures and effects remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
@@ -182,3 +182,14 @@ budgets; unknown flags preserve the entire enclosing object as opaque.
 `emf_plus_path_brush.rs` covers all 48 optional combinations, typed boundary and
 nested Pen growth/shrink, malformed lengths/counts/truncations, inconsistent edits,
 shared budgets and exact continuation/segment/unknown-record/padding preservation.
+
+Texture brushes expose flags, wrap mode and an optional transform and image,
+both standalone and inside Pen. `TextureImage` retains bitmap metadata and raw
+pixel/compressed bytes, or metafile metadata, counted bytes and suffix. Nested
+image data shares the object budget and is never decompressed or recursively
+parsed. Unknown brush flags or image types preserve the entire enclosing object
+as opaque; malformed known headers/counts and inconsistent transforms fail.
+`emf_plus_texture.rs` covers all eight flag combinations and three image forms,
+image growth/shrink/removal, nested Pen edits, unknown preservation, malformed
+headers/counts/suffixes, exact allocation thresholds, shared resource limits and
+continuation/segment/unknown-record/padding identity.

@@ -10,12 +10,14 @@ mod path;
 mod path_brush;
 mod pen;
 mod region;
+mod texture;
 pub use line_cap::{ArrowLineCap, CustomLineCap, CustomLineCapData, DefaultLineCap};
 pub use linear_brush::LinearGradient;
 pub use path::{Path, PathPointRun, PathPointTypes};
 pub use path_brush::{GradientBoundary, PathGradient};
 pub use pen::{Pen, PenBrush, PenBrushData};
 pub use region::{Region, RegionNode};
+pub use texture::{Texture, TextureImage};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StringFormat {
@@ -39,6 +41,10 @@ pub struct StringFormat {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObjectData {
     Pen(Pen),
+    TextureBrush {
+        version: u32,
+        data: Texture,
+    },
     PathGradientBrush {
         version: u32,
         data: PathGradient,
@@ -140,6 +146,10 @@ impl ObjectDefinition {
                         style: r.word()?,
                         foreground: r.word()?,
                         background: r.word()?,
+                    },
+                    2 => match texture::read(&mut r)? {
+                        Some(data) => ObjectData::TextureBrush { version, data },
+                        None => return opaque(self, r.budget),
                     },
                     3 => match path_brush::read(&mut r)? {
                         Some(data) => ObjectData::PathGradientBrush { version, data },
@@ -282,7 +292,8 @@ impl ObjectData {
             Self::SolidBrush { .. }
             | Self::HatchBrush { .. }
             | Self::LinearGradientBrush { .. }
-            | Self::PathGradientBrush { .. } => 1,
+            | Self::PathGradientBrush { .. }
+            | Self::TextureBrush { .. } => 1,
             Self::BitmapImage { .. } | Self::MetafileImage { .. } => 5,
             Self::Font { .. } => 6,
             Self::StringFormat(_) => 7,
@@ -310,6 +321,10 @@ impl ObjectData {
             Self::Path(v) => {
                 let (size, work) = v.layout()?;
                 (size, [0; 3], work)
+            }
+            Self::TextureBrush { data, .. } => {
+                let (size, work) = data.layout()?;
+                (size.checked_add(8).ok_or_else(overflow)?, [0; 3], work)
             }
             Self::PathGradientBrush { data, .. } => {
                 let (size, work) = data.layout()?;
@@ -395,6 +410,10 @@ impl ObjectData {
         out.try_reserve_exact(size)
             .map_err(|_| SerializeFailure::AllocationFailed { bytes: size })?;
         match self {
+            Self::TextureBrush { version, data } => {
+                words(&mut out, &[*version, 2]);
+                data.write(&mut out);
+            }
             Self::PathGradientBrush { version, data } => {
                 words(&mut out, &[*version, 3]);
                 data.write(&mut out);

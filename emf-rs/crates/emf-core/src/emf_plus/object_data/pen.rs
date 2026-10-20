@@ -1,6 +1,7 @@
 //! Pen optional data, MS-EMFPLUS 2.2.1.7 and 2.2.2.33–34.
 use super::{
-    line_cap, linear_brush, path_brush, words, CustomLineCap, LinearGradient, PathGradient, Reader,
+    line_cap, linear_brush, path_brush, texture, words, CustomLineCap, LinearGradient,
+    PathGradient, Reader, Texture,
 };
 use crate::{emf_plus::Error, SerializeFailure};
 
@@ -34,6 +35,7 @@ pub struct PenBrush {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PenBrushData {
+    Texture(Texture),
     PathGradient(PathGradient),
     LinearGradient(LinearGradient),
     Solid {
@@ -70,6 +72,13 @@ impl Pen {
             return Err(SerializeFailure::Inconsistent { offset: 0 });
         }
         let (brush_size, mut work) = match &self.brush.data {
+            PenBrushData::Texture(v) => {
+                let (size, work) = v.layout()?;
+                (
+                    size.checked_add(8).ok_or(SerializeFailure::SizeOverflow)?,
+                    work,
+                )
+            }
             PenBrushData::PathGradient(v) => {
                 let (size, work) = v.layout()?;
                 (
@@ -168,6 +177,10 @@ impl Pen {
             out[start..start + 4].copy_from_slice(&len.to_le_bytes());
         }
         match &self.brush.data {
+            PenBrushData::Texture(v) => {
+                words(out, &[self.brush.version, 2]);
+                v.write(out);
+            }
             PenBrushData::Solid { argb } => words(out, &[self.brush.version, 0, *argb]),
             PenBrushData::PathGradient(v) => {
                 words(out, &[self.brush.version, 3]);
@@ -261,6 +274,10 @@ pub(super) fn read(r: &mut Reader<'_, '_, '_>) -> Result<Option<Pen>, Error> {
             style: r.word()?,
             foreground: r.word()?,
             background: r.word()?,
+        },
+        2 => match texture::read(r)? {
+            Some(v) => PenBrushData::Texture(v),
+            None => return Ok(None),
         },
         3 => match path_brush::read(r)? {
             Some(v) => PenBrushData::PathGradient(v),
