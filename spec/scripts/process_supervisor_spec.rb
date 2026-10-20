@@ -2,6 +2,7 @@
 
 require "spec_helper"
 require "rbconfig"
+require "tmpdir"
 require_relative "../support/process_supervisor"
 require_relative "../support/process_supervisor_helpers"
 
@@ -105,6 +106,20 @@ RSpec.describe ProcessSupervisor do
     expect([failed.status, failed.exit_code, failed]).to match([:exited, 3, satisfy { |r| !r.success? }])
     expect([signaled.status, signaled.signal, signaled.success?]).to eq([:signaled, 9, false])
     expect(env.output).to eq("native")
+  end
+
+  it "kills the group and fails closed when the RSS probe cannot be read" do
+    Dir.mktmpdir("emf-failing-ps-") do |dir|
+      File.write(File.join(dir, "ps"), "#!/bin/sh\nexit 1\n")
+      File.chmod(0o700, File.join(dir, "ps"))
+      result = with_path(dir) do
+        short_supervisor.call([RbConfig.ruby, "--disable-gems", "-e", "a = %q(x) * 8_000_000; sleep 30"])
+      end
+
+      expect(result.status).to eq(:monitor_failed)
+      expect(result).not_to be_success
+      expect(result.elapsed).to be < 2
+    end
   end
 
   it "returns frozen results" do

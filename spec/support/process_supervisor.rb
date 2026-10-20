@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "English"
 require "io/wait"
 
 # Signals and reaps a whole process group, tolerating darwin's zombie-leader EPERM.
@@ -105,20 +106,23 @@ class ProcessSupervisor
     peak = 0
     loop do
       drain(reader, output)
-      peak = [peak, group_rss_bytes(pid)].max
+      sample = group_rss_bytes(pid)
+      peak = [peak, sample.to_i].max
+      monitored = !sample.nil?
       reaped = Process.wait2(pid, Process::WNOHANG)
-      return finish(reaped.last, started, peak, drain(reader, output)) if reaped
+      return finish(reaped.last, started, peak, drain(reader, output), monitored) if reaped
 
-      breach = breach(started, peak, output)
+      breach = breach(started, peak, output, monitored)
       return killed(pid, breach, started, peak, output) if breach
 
       reader.wait_readable(SAMPLE_INTERVAL)
     end
   end
 
-  def breach(started, peak, output)
+  def breach(started, peak, output, monitored)
     return :output_limit if output.bytesize > @output_limit
     return :rss_exceeded if peak > @rss_limit_bytes
+    return :monitor_failed unless monitored
 
     :timed_out if now - started >= @wall_seconds
   end
@@ -132,8 +136,8 @@ class ProcessSupervisor
   end
 
   # A limit breached before the exit was noticed still wins: an exit never launders a breach into success.
-  def finish(process_status, started, peak, output)
-    status = breach(started, peak, output) || (process_status.signaled? ? :signaled : :exited)
+  def finish(process_status, started, peak, output, monitored)
+    status = breach(started, peak, output, monitored) || (process_status.signaled? ? :signaled : :exited)
     build(status, started, peak, output, exit_code: process_status.exitstatus, signal: process_status.termsig)
   end
 
@@ -148,12 +152,14 @@ class ProcessSupervisor
   end
 
   # `ps -g` means different things on Linux and darwin; filtering `-A` output by pgid is the portable form.
+  # nil means the sample is untrustworthy: ps failed, or listed no member of the group. The unreaped leader
+  # (even as a zombie) is always a member, so an empty group can only mean the reading is wrong.
   def group_rss_bytes(pgid)
     rows = IO.popen(%w[ps -A -o pid=,pgid=,rss=], err: File::NULL, &:read)
-    rows.each_line.sum do |line|
-      _pid, group, rss_kib = line.split
-      group.to_i == pgid ? rss_kib.to_i * 1024 : 0
-    end
+    return nil unless $CHILD_STATUS.success?
+
+    members = rows.each_line.map(&:split).select { |_pid, group, _rss| group.to_i == pgid }
+    members.sum { |_pid, _group, rss_kib| rss_kib.to_i * 1024 } unless members.empty?
   end
 
   def now

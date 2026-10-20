@@ -9,6 +9,14 @@ module ProcessSupervisorHelpers
     ["env", "-u", "RUBYOPT", RbConfig.ruby, "--disable-gems", "-e", code]
   end
 
+  def with_path(path)
+    original = ENV.fetch("PATH")
+    ENV["PATH"] = path
+    yield
+  ensure
+    ENV["PATH"] = original
+  end
+
   # A killed orphan stays signalable as a zombie until init reaps it, so allow that brief window.
   def alive?(pid)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2
