@@ -85,6 +85,14 @@ pub(crate) fn parse_segments_budget(
                 });
             }
             decode_fixed(kind, data_bytes)
+        } else if kind == 0x4003 {
+            if data_len % 4 != 0 || size != 12 + data_len {
+                return Err(Error::InvalidRecord {
+                    offset,
+                    reason: "invalid Comment DataSize/padding",
+                });
+            }
+            RecordData::Comment(copy(data_bytes, budget)?)
         } else if super::drawing::supported(kind) {
             RecordData::Drawing(super::drawing::decode(
                 kind, flags, data_bytes, offset, budget,

@@ -23,7 +23,7 @@ The native opt-in module is `emf-rs/crates/emf-core/src/emf_plus/`.
 | SetTSGraphics 0x4039 | `tsgraphics.rs`, fixed state and optional palette | `emf_plus_tsgraphics.rs` | Raw rendering fields; no terminal-server playback |
 | SetTSClip 0x403A, C clear | `tsclip.rs`, counted signed four-word rectangles | `emf_plus_tsclip.rs` | Wire-order words only; no guessed delta/geometry interpretation |
 | SetTSClip 0x403A, C set | Explicit `RecordData::Opaque` | `emf_plus_tsclip.rs` | Section 2.3.8.1 fixes four bytes per rectangle but describes variable one/two-byte deltas. Resolve against an independent oracle before typed compressed decoding |
-| Comment 0x4003 | Explicit `RecordData::Opaque` | Generic unknown/padding retention in `emf_plus.rs` | Dedicated private-data variant/acceptance remains open |
+| Comment 0x4003 | Named `RecordData::Comment` private bytes | `emf_plus_comment.rs` | Private application bytes have no standardized interpretation |
 | Reserved 0x4005–0x4007; StrokeFillPath 0x4037; unknown IDs | Explicit `RecordData::Opaque` | `emf_plus.rs` | No invented layout for reserved/undocumented data |
 
 SetTSClip C-clear decoding requires DataSize = (Flags & 0x7FFF) * 8 before any
@@ -33,6 +33,15 @@ DataSize derive from data. Signed extremes, zero/maximal count, malformed counts
 truncation, shared allocation/work limits, type/count mismatch, mutable sizes,
 unknown neighboring data, padding and split/empty segments have public controls.
 Compressed bytes keep their original flags/data without claiming typed acceptance.
+
+Comment private data is named rather than treated as an unknown record. Section
+2.3.2.1 requires aligned DataSize and Size = DataSize + 12: unaligned data and
+extra record padding are rejected on both parse and write. Ignored nonzero flags
+are preserved. Private bytes remain uninterpreted. Dedicated tests cover empty
+and nonempty bytes, split segments, unknown neighbors, mutable size derivation,
+parse/output limits, rejected edits and atomic enclosing Document repacking.
+This changes the earlier permissive malformed-Comment behavior deliberately;
+valid Comment bytes retain exact round trips.
 
 ## Native objects
 
@@ -69,7 +78,7 @@ variant has a mapped ABI/Ruby consumer, Model visitor or CLI rendering path.
 
 ## Remaining acceptance
 
-Resolve compressed TSClip, supply dedicated native Comment acceptance, establish
+Resolve compressed TSClip, establish
 independent rendering/conditional-version oracles, and measure the advertised
 ABI/Ruby mapping for every family. Keep licensed embedded corpus, EMF+ Only/dual
 mode behavior, full ordering/reference validation, fuzz/performance evidence and
@@ -86,3 +95,9 @@ Commands: `cargo test --manifest-path emf-rs/Cargo.toml -p emf-core --test
 emf_plus_tsclip --test emf_plus_tsgraphics --test emf_plus --test
 emf_plus_container`, using the existing local target and one build job. These
 are macOS arm64 debug checks, not release/platform or full-corpus acceptance.
+
+Comment's malformed-layout assertion fails against `aacd19d` (`invalid Comment
+layout accepted`). With named private data and strict layout validation, its four
+new tests and the same 28 preservation tests pass (32 total). Add
+`--test emf_plus_comment` to the command above. Atomic enclosing edits, source
+staleness, ignored flags, private-byte edits and failed-limit recovery are included.
