@@ -43,6 +43,23 @@ RSpec.describe AvailabilityMatrix::Fixtures do
 
     expect([status.success?, out, err]).to eq([true, "rejected corrupt library\n", ""])
   end
+
+  it "uses a foreign-endian ELF object instead of retaining executable host code" do
+    bytes = "\x7fELF\x02\x01\x01".b.ljust(64, "\x00") << "host instructions"
+    bytes[16, 4] = [3, 62].pack("vv")
+    source = File.join(@directory, "original.so")
+    File.binwrite(source, bytes)
+
+    foreign = File.binread(described_class.new(@directory, source).foreign_architecture)
+
+    expect(foreign.byteslice(0, 7)).to eq("\x7fELF\x02\x02\x01".b)
+    expect(foreign.byteslice(16, 4).unpack("nn")).to eq([3, 21]) # ET_DYN, EM_PPC64
+    expect(foreign.bytesize).to eq(64)
+    # musl ignores e_machine, but rejects a native-endian e_type other than
+    # ET_EXEC/ET_DYN before reading program headers or mapping instructions.
+    expect([2, 3]).not_to include(foreign.byteslice(16, 2).unpack1("v"))
+    expect(File.binread(source)).to eq(bytes)
+  end
 end
 
 RSpec.describe AvailabilityMatrix::Runner do

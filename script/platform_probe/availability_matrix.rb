@@ -107,12 +107,16 @@ module AvailabilityMatrix
       end
     end
 
-    # Rewrites the machine field of the object header to the other of
-    # x86_64/arm64, so dlopen rejects the otherwise intact library.
+    # musl ignores ELF's machine field, so swapping it leaves runnable host
+    # code. Use a big-endian PowerPC64 shared-object header with no host payload:
+    # its byte order also makes musl reject e_type before mapping any segments.
+    # Mach-O and PE loaders do validate the machine field.
     def swap_machine(bytes)
       bytes = bytes.dup
       case bytes[0, 4]
-      when "\x7FELF".b then bytes[18, 2] = [bytes[18, 2].unpack1("v") == 62 ? 183 : 62].pack("v")
+      when "\x7FELF".b
+        ident = "\x7FELF\x02\x02\x01".b.ljust(16, "\x00")
+        bytes = [ident, 3, 21, 1, 0, 0, 0, 0, 64, 56, 0, 64, 0, 0].pack("a16nnNQ>Q>Q>Nnnnnnn")
       when "\xCF\xFA\xED\xFE".b then bytes[4, 4] = [bytes[4, 4].unpack1("V") == 0x0100000C ? 0x01000007 : 0x0100000C].pack("V")
       when /\AMZ/n then swap_pe(bytes)
       else raise "cannot derive a foreign-architecture library from #{@library}: unknown object format"
