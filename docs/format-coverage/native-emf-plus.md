@@ -18,6 +18,10 @@ to validate a complete playback document.
 - Save/Restore, Begin/EndContainer, BeginContainerNoParams.
 - Set/Multiply/ResetWorldTransform, Translate/Scale/RotateWorldTransform,
   SetPageTransform; Reset/SetClipRect/Path/Region and OffsetClip.
+- Fill/DrawRects, Fill/DrawEllipse, Fill/DrawPie, DrawArc.
+- FillPolygon, DrawLines and DrawBeziers with float, signed 16-bit or relative
+  coordinates; relative values retain seven/fifteen-bit width and data padding.
+- FillRegion/FillPath brush words and DrawPath pen words.
 - Object fragment headers with object ID/type and optional TotalObjectSize.
 
 Floating-point fields expose their IEEE bits. Record flags, unknown record data,
@@ -42,7 +46,7 @@ there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Drawing/text/image families, deeper Pen/Path/Region/Image/StringFormat/CustomLineCap
+Curves, text/image families, deeper Pen/Path/Region/Image/StringFormat/CustomLineCap
 objects, nested object structures and effects remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
@@ -52,3 +56,6 @@ Public regressions: `emf-rs/crates/emf-core/tests/emf_plus.rs` cover exact and m
 roundtrips, typed values, unknown/padding and segment preservation, malformed
 framing, every shared parse budget, serialization limits, continuation forms,
 pre-expansion object limits and atomic edit failure.
+`tests/emf_plus_drawing.rs` adds typed drawing assertions, mutable/exact roundtrips,
+relative-width/sign and NaN-bit preservation, count/truncation/encoding failures and
+allocation/work limit failures before counted vector expansion.

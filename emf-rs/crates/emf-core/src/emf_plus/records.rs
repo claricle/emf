@@ -26,6 +26,7 @@ pub struct Header {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordData {
     Header(Header),
+    Drawing(super::Drawing),
     Empty,
     Clear {
         argb: u32,
@@ -51,6 +52,7 @@ pub enum RecordData {
 impl RecordData {
     pub(crate) fn len(&self) -> usize {
         match self {
+            Self::Drawing(d) => d.len(),
             Self::Header(_) | Self::ClipRect(_) => 16,
             Self::Empty => 0,
             Self::Clear { .. } | Self::StackIndex(_) | Self::Scalar(_) => 4,
@@ -68,6 +70,7 @@ impl RecordData {
             }
         }
         match self {
+            Self::Drawing(d) => d.write(out),
             Self::Header(h) => words(
                 out,
                 &[
@@ -120,6 +123,16 @@ impl Record {
         self.flags & 0x2000 != 0
     }
     pub(crate) fn validate(&self, offset: usize) -> Result<(), Error> {
+        if let RecordData::Drawing(d) = &self.data {
+            return if d.valid(self.record_type, self.flags) {
+                Ok(())
+            } else {
+                Err(Error::InvalidRecord {
+                    offset,
+                    reason: "drawing type/flags/data mismatch",
+                })
+            };
+        }
         let valid = matches!(
             (self.record_type, &self.data),
             (0x4001, RecordData::Header(_))
@@ -142,6 +155,9 @@ impl Record {
             (RecordData::Opaque(_), Some(_))
         ) && !(self.record_type == 0x4008
             && matches!(self.data, RecordData::Opaque(_)));
+        let valid = valid
+            && !(super::drawing::supported(self.record_type)
+                && matches!(self.data, RecordData::Opaque(_)));
         if valid {
             Ok(())
         } else {

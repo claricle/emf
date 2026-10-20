@@ -78,6 +78,14 @@ pub fn parse_segments(segments: &[&[u8]], limits: &ParseLimits) -> Result<Stream
                 });
             }
             decode_fixed(kind, data_bytes)
+        } else if super::drawing::supported(kind) {
+            RecordData::Drawing(super::drawing::decode(
+                kind,
+                flags,
+                data_bytes,
+                offset,
+                &mut budget,
+            )?)
         } else if kind == 0x4008 {
             let (total_size, object_bytes) = if flags & 0x8000 != 0 {
                 if data_bytes.len() < 4 {
