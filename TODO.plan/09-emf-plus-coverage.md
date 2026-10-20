@@ -130,7 +130,7 @@ Columns: Variable data = the record has a variable-length field beyond the 12-by
 | EmfPlusBeginContainer | 0x4027 | 2.3.7.1 | PageUnit=0x00FF (UnitType) | no | typed, byte-identical round-trip | 0 | `Records::BeginContainer` |
 | EmfPlusBeginContainerNoParams | 0x4028 | 2.3.7.2 | unused | no | typed, byte-identical round-trip | 0 | `Records::BeginContainerNoParams` |
 | EmfPlusEndContainer | 0x4029 | 2.3.7.3 | unused | no | typed, byte-identical round-trip | 0 | `Records::EndContainer` |
-| EmfPlusSetTSGraphics | 0x4039 | 2.3.8.2 | V=0x0002 (VGA palette), T=0x0001 (Palette present) | yes | typed, byte-identical round-trip; `#palette` decodes `Records::Primitives::Palette` when `T` is set, raw bytes kept in `palette_bytes` (short or over-long palettes stay raw) | 0 | `Records::SetTSGraphics` |
+| EmfPlusSetTSGraphics | 0x4039 | 2.3.8.2 | V=0x0002 (VGA palette), T=0x0001 (Palette present) | yes | typed, byte-identical round-trip; `#palette` (alias `#palette_bytes`) stays the raw bytes String; `#decoded_palette` returns `Records::Primitives::Palette` when `T` is set, else nil (short or over-long palettes stay raw only) | 0 | `Records::SetTSGraphics` |
 
 ### Clipping (6)
 
