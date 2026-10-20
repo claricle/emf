@@ -86,6 +86,8 @@ pub fn parse_segments(segments: &[&[u8]], limits: &ParseLimits) -> Result<Stream
                 offset,
                 &mut budget,
             )?)
+        } else if matches!(kind, 0x401c | 0x4036) {
+            RecordData::Text(super::text::decode(kind, data_bytes, offset, &mut budget)?)
         } else if kind == 0x4008 {
             let (total_size, object_bytes) = if flags & 0x8000 != 0 {
                 if data_bytes.len() < 4 {

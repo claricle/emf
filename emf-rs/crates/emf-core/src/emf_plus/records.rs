@@ -27,6 +27,7 @@ pub struct Header {
 pub enum RecordData {
     Header(Header),
     Drawing(super::Drawing),
+    Text(super::Text),
     Empty,
     Clear {
         argb: u32,
@@ -50,9 +51,17 @@ pub enum RecordData {
     Opaque(Vec<u8>),
 }
 impl RecordData {
+    pub(crate) fn element_work(&self) -> u64 {
+        match self {
+            Self::Drawing(d) => d.element_work(),
+            Self::Text(t) => t.element_work(),
+            _ => 0,
+        }
+    }
     pub(crate) fn len(&self) -> usize {
         match self {
             Self::Drawing(d) => d.len(),
+            Self::Text(t) => t.len(),
             Self::Header(_) | Self::ClipRect(_) => 16,
             Self::Empty => 0,
             Self::Clear { .. } | Self::StackIndex(_) | Self::Scalar(_) => 4,
@@ -71,6 +80,7 @@ impl RecordData {
         }
         match self {
             Self::Drawing(d) => d.write(out),
+            Self::Text(t) => t.write(out),
             Self::Header(h) => words(
                 out,
                 &[
@@ -123,6 +133,16 @@ impl Record {
         self.flags & 0x2000 != 0
     }
     pub(crate) fn validate(&self, offset: usize) -> Result<(), Error> {
+        if let RecordData::Text(t) = &self.data {
+            return if t.valid(self.record_type) {
+                Ok(())
+            } else {
+                Err(Error::InvalidRecord {
+                    offset,
+                    reason: "text type/data mismatch",
+                })
+            };
+        }
         if let RecordData::Drawing(d) = &self.data {
             return if d.valid(self.record_type, self.flags) {
                 Ok(())
@@ -156,6 +176,8 @@ impl Record {
         ) && !(self.record_type == 0x4008
             && matches!(self.data, RecordData::Opaque(_)));
         let valid = valid
+            && !(matches!(self.record_type, 0x401c | 0x4036)
+                && matches!(self.data, RecordData::Opaque(_)))
             && !(super::drawing::supported(self.record_type)
                 && matches!(self.data, RecordData::Opaque(_)));
         if valid {

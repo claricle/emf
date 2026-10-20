@@ -22,6 +22,10 @@ to validate a complete playback document.
 - FillPolygon, DrawLines and DrawBeziers with float, signed 16-bit or relative
   coordinates; relative values retain seven/fifteen-bit width and data padding.
 - FillRegion/FillPath brush words and DrawPath pen words.
+- Fill/DrawClosedCurve and DrawCurve, retaining tension bits, offsets and ranges.
+- DrawImage/DrawImagePoints source fields and destination rectangles/three points.
+- DrawString raw UTF-16, layout and format ID; DrawDriverString glyphs, positions,
+  realized-advance layout and optional transform.
 - Object fragment headers with object ID/type and optional TotalObjectSize.
 
 Floating-point fields expose their IEEE bits. Record flags, unknown record data,
@@ -46,7 +50,7 @@ there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Curves, text/image families, deeper Pen/Path/Region/Image/StringFormat/CustomLineCap
+Deeper Pen/Path/Region/Image/StringFormat/CustomLineCap
 objects, nested object structures and effects remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
@@ -59,3 +63,5 @@ pre-expansion object limits and atomic edit failure.
 `tests/emf_plus_drawing.rs` adds typed drawing assertions, mutable/exact roundtrips,
 relative-width/sign and NaN-bit preservation, count/truncation/encoding failures and
 allocation/work limit failures before counted vector expansion.
+`tests/emf_plus_text.rs` covers raw UTF-16, glyph/position/matrix layouts, edits,
+invalid counts and matrix flags, padding and resource budgets.
