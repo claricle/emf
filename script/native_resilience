@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require "fileutils"
+require_relative "../spec/support/native_resilience"
+
+options = { backend: "native", scope: "corrupted", wall_seconds: 60, manifest: "spec/fixtures/manifest.json" }
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: ruby script/native_resilience --rss-limit-mb MB [options]"
+  opts.separator "Runs each manifest fixture in a supervised child with EMF_BACKEND forced; the native backend also needs"
+  opts.separator "EMF_NATIVE_LIBRARY. A fixture passes only if its child exits 0 within the wall and RSS limits, reports"
+  opts.separator "the manifest's baseline outcome, parses, serializes, reparses and re-serializes byte-identically (format_error"
+  opts.separator "fixtures skip the round trip), and the fixture file hashes the same before and after."
+  opts.separator "Exit: 0 all passed, 1 any failure, 2 usage or missing RSS limit."
+  opts.separator "The RSS ceiling has no default: choose it by measuring the valid corpus (--scope all) on the target runner."
+  opts.on("--manifest PATH", "Fixture manifest (default #{options[:manifest]})") { |value| options[:manifest] = value }
+  opts.on("--backend NAME", NativeResilience::BACKENDS, "native (default) or ruby control") { |value| options[:backend] = value }
+  opts.on("--scope NAME", NativeResilience::SCOPES, "corrupted (default) or all") { |value| options[:scope] = value }
+  opts.on("--wall-seconds N", Integer, "Per-fixture wall limit, 1..60 (default 60)") { |value| options[:wall_seconds] = value }
+  opts.on("--rss-limit-mb MB", Integer, "Per-fixture process-group RSS ceiling in MiB (required)") do |value|
+    options[:rss_limit_mb] = value
+  end
+  opts.on("--report PATH", "Write the JSON report here") { |value| options[:report] = value }
+  opts.on("-h", "--help", "Show usage") do
+    puts opts
+    exit
+  end
+end
+
+begin
+  parser.parse!
+  raise OptionParser::MissingArgument, "--rss-limit-mb" unless options[:rss_limit_mb]&.positive?
+  raise OptionParser::InvalidArgument, "unexpected arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+rescue OptionParser::ParseError => e
+  warn "#{e.message}\n#{parser}"
+  exit 2
+end
+
+root = File.expand_path("..", __dir__)
+begin
+  runner = NativeResilience::Runner.new(root: root, backend: options[:backend], wall_seconds: options[:wall_seconds],
+                                        rss_limit_bytes: options[:rss_limit_mb] * 1024 * 1024)
+rescue ArgumentError => e
+  warn e.message
+  exit 2
+end
+
+manifest = JSON.parse(File.read(File.expand_path(options[:manifest], root)))
+report = runner.call(NativeResilience.entries(manifest, options[:scope]))
+json = JSON.pretty_generate(report)
+if options[:report]
+  FileUtils.mkdir_p(File.dirname(options[:report]))
+  File.write(options[:report], "#{json}\n")
+end
+totals = report.fetch("totals")
+puts "#{totals['passed']}/#{totals['fixtures']} fixtures passed (backend #{options[:backend]})"
+report["results"].select { |result| result["verdict"] == "failed" }.each { |result| warn "FAILED #{result['path']}: #{result['reason']}" }
+exit(totals["fixtures"].positive? && totals["failed"].zero? ? 0 : 1)
