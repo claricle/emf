@@ -170,7 +170,8 @@ module EmfsvgComparison
       digest(fixture, "sha256")
       size = value(fixture, "size_bytes")
       require_value(size.is_a?(Integer) && size >= 0, "invalid fixture size_bytes")
-      string(fixture, "outcome")
+      require_value(data.fetch("inputs").fetch("selected_outcomes").include?(string(fixture, "outcome")),
+                    "fixture outcome is not selected")
       require_value(value(golden, "fixture") == path, "golden inventory fixture mismatch")
       string(golden, "path")
       digest(golden, "sha256")

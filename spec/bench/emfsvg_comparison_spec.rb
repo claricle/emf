@@ -87,6 +87,18 @@ RSpec.describe EmfsvgComparison::CLI do
     expect(entry).to include("native_over_ruby_allocated_objects" => nil, "allocation_ratio_reason" => /zero/)
   end
 
+  it "preserves explicitly selected outcomes" do
+    [ruby_report, native_report].each do |report|
+      report["inputs"]["selected_outcomes"] = %w[parsed recovered]
+      report["fixtures"][0]["outcome"] = "recovered"
+    end
+    write_reports
+    expect(described_class.new(arguments).run).to eq(0)
+    report = JSON.parse(File.read(output_path))
+    expect(report.dig("fixtures", 0, "outcome")).to eq("recovered")
+    expect(report.dig("provenance", "inputs", "selected_outcomes")).to eq(%w[parsed recovered])
+  end
+
   {
     "unsupported schema" => ->(_ruby, native) { native["schema_version"] = 2 },
     "wrong backend" => ->(_ruby, native) { native["backend"] = "ruby" },
@@ -94,6 +106,9 @@ RSpec.describe EmfsvgComparison::CLI do
     "missing shared identity" => ->(ruby, native) { [ruby, native].each { |report| report["revision"].delete("git_sha") } },
     "missing parser digest" => ->(ruby, native) { [ruby, native].each { |report| report["revision"].delete("parser_source_sha256") } },
     "missing manifest selection" => ->(ruby, native) { [ruby, native].each { |report| report["inputs"].delete("fixture_limit") } },
+    "unselected outcome" => lambda do |ruby, native|
+      [ruby, native].each { |report| report["fixtures"][0]["outcome"] = "recovered" }
+    end,
     "missing method control" => ->(ruby, native) { [ruby, native].each { |report| report["method"].delete("gc_policy") } },
     "noninteger count" => ->(_ruby, native) { native["fixtures"][0]["stages"]["from_bytes"]["summary_ns"]["count"] = 2.0 },
     "manifest mismatch" => ->(_ruby, native) { native["inputs"]["manifest_sha256"] = "e" * 64 },
