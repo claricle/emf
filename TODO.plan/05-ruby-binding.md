@@ -108,6 +108,9 @@ results. The bounded cases establish:
 - Exceptions after one real lazy EMF record, during WMF typed construction, after
   native buffer view, and while converting an actual native error release their
   acquired handles. The same adapter subsequently parses successfully.
+- `Loader#record_bytes` rejects an out-of-range index, then returns independent
+  Ruby strings from the same valid document. Both strings remain usable after
+  native buffer/document release and GC; mutating one leaves the other intact.
 - Twelve rounds of EMF and WMF successful parse/serialize plus real failing parse
   calls release 24 documents, 24 snapshot buffers and 24 errors; copied error
   messages remain usable after native error release.

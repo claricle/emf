@@ -130,6 +130,23 @@ RSpec.describe "Native Ruby ownership and lifetime acceptance" do
     expect_native_released(events, error: 2, document: 1, buffer: 1)
   end
 
+  it "keeps independent Ruby record buffers after document release and recovers from a rejected index" do
+    events = observe_native_lifetimes(loader)
+    first, second = loader.document(bytes) do |document|
+      expect { loader.record_bytes(document, 99) }.to raise_error(Emf::Error, /.+/)
+      [loader.record_bytes(document, 0), loader.record_bytes(document, 0)]
+    end
+    expect_native_released(events, document: 1, buffer: 2, error: 1)
+    GC.start(full_mark: true, immediate_sweep: true)
+    expect(first).to eq(mode)
+    expect(second).to eq(mode)
+    expect(first).not_to equal(second)
+    first.replace("changed Ruby copy")
+    expect(second).to eq(mode)
+    expect(backend.serialize(backend.parse(bytes))).to eq(bytes)
+    expect_native_released(events, document: 2, buffer: 3, error: 1)
+  end
+
   it "balances actual handles across repeated successful and failing EMF and WMF calls" do
     events = observe_native_lifetimes(loader)
     input = native_wmf_bytes([wmf_record], placeable: true)
