@@ -7,7 +7,7 @@ module Emf
       class Restore < Base
         TYPE = 0x4026
 
-        class RestoreBody < BinData::Record
+        class RestoreBody < Body
           endian :little
           uint32 :stack_index
         end

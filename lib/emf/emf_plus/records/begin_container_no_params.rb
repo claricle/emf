@@ -7,7 +7,7 @@ module Emf
       class BeginContainerNoParams < Base
         TYPE = 0x4028
 
-        class BeginContainerNoParamsBody < BinData::Record
+        class BeginContainerNoParamsBody < Body
           endian :little
           uint32 :stack_index
         end

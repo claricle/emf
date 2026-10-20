@@ -9,7 +9,7 @@ module Emf
 
         TYPE = 0x402E
 
-        class ScaleWorldTransformBody < BinData::Record
+        class ScaleWorldTransformBody < Body
           endian :little
           float :sx
           float :sy

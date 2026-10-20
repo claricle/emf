@@ -7,7 +7,7 @@ module Emf
       class SetPixelOffsetMode < Base
         TYPE = 0x4022
 
-        class SetPixelOffsetModeBody < BinData::Record
+        class SetPixelOffsetModeBody < Body
           endian :little
         end
         BODY = SetPixelOffsetModeBody

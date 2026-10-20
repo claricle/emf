@@ -9,7 +9,7 @@ module Emf
 
         TYPE = 0x402D
 
-        class TranslateWorldTransformBody < BinData::Record
+        class TranslateWorldTransformBody < Body
           endian :little
           float :dx
           float :dy

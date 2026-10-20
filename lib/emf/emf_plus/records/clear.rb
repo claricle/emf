@@ -9,7 +9,7 @@ module Emf
       class Clear < Base
         TYPE = 0x4009
 
-        class ClearBody < BinData::Record
+        class ClearBody < Body
           endian :little
           argb :color
         end

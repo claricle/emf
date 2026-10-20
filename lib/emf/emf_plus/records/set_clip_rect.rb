@@ -11,7 +11,7 @@ module Emf
 
         TYPE = 0x4032
 
-        class SetClipRectBody < BinData::Record
+        class SetClipRectBody < Body
           endian :little
           rect_f :clip_rect
         end

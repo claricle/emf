@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusARGB (2.2.2.1): bytes are stored blue, green, red, alpha.
-        class ARGB < BinData::Record
+        class ARGB < Body
           endian :little
           uint8 :blue
           uint8 :green

@@ -16,7 +16,7 @@ module Emf
         REALIZED_ADVANCE = 0x00000004
         LIMIT_SUBPIXEL = 0x00000008
 
-        class DrawDriverStringBody < BinData::Record
+        class DrawDriverStringBody < Body
           endian :little
           uint32 :brush_id
           uint32 :options_flags

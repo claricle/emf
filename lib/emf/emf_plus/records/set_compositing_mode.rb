@@ -7,7 +7,7 @@ module Emf
       class SetCompositingMode < Base
         TYPE = 0x4023
 
-        class SetCompositingModeBody < BinData::Record
+        class SetCompositingModeBody < Body
           endian :little
         end
         BODY = SetCompositingModeBody

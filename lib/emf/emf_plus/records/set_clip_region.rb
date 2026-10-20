@@ -10,7 +10,7 @@ module Emf
 
         TYPE = 0x4034
 
-        class SetClipRegionBody < BinData::Record
+        class SetClipRegionBody < Body
           endian :little
         end
         BODY = SetClipRegionBody

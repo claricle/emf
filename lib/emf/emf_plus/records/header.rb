@@ -11,7 +11,7 @@ module Emf
         DUAL_FLAG = 0x0001
         VIDEO_FLAG = 0x00000001
 
-        class HeaderBody < BinData::Record
+        class HeaderBody < Body
           endian :little
           uint32 :graphics_version
           uint32 :emf_plus_flags

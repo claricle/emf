@@ -8,7 +8,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusBlendColors (2.2.2.4).
-        class BlendColors < BinData::Record
+        class BlendColors < Body
           endian :little
           uint32 :position_count
           array :blend_positions, type: :float_le, initial_length: :position_count

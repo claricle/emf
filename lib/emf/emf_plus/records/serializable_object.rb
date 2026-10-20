@@ -8,7 +8,7 @@ module Emf
       class SerializableObject < Base
         TYPE = 0x4038
 
-        class SerializableObjectBody < BinData::Record
+        class SerializableObjectBody < Body
           endian :little
           string :object_guid_bytes, length: 16
           uint32 :buffer_size

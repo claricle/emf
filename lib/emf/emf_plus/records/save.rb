@@ -7,7 +7,7 @@ module Emf
       class Save < Base
         TYPE = 0x4025
 
-        class SaveBody < BinData::Record
+        class SaveBody < Body
           endian :little
           uint32 :stack_index
         end

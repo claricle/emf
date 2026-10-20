@@ -16,7 +16,7 @@ module Emf
         VGA_PALETTE_FLAG = 0x0002
         FIXED_SIZE = 36
 
-        class SetTSGraphicsBody < BinData::Record
+        class SetTSGraphicsBody < Body
           endian :little
           mandatory_parameter :data_size
           mandatory_parameter :flags

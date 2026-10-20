@@ -12,7 +12,7 @@ module Emf
         SOLID_COLOR_FLAG = 0x8000
         OBJECT_ID_MASK = 0x00FF
 
-        class DrawStringBody < BinData::Record
+        class DrawStringBody < Body
           endian :little
           uint32 :brush_id
           uint32 :format_id

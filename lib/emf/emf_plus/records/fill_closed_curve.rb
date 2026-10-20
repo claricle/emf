@@ -12,7 +12,7 @@ module Emf
 
         TYPE = 0x4016
 
-        class FillClosedCurveBody < BinData::Record
+        class FillClosedCurveBody < Body
           endian :little
           mandatory_parameter :flags
           uint32 :brush_id

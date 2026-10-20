@@ -10,7 +10,7 @@ module Emf
         ANTI_ALIAS_FLAG = 0x0001
         SMOOTHING_MODE_MASK = 0x00FE
 
-        class SetAntiAliasModeBody < BinData::Record
+        class SetAntiAliasModeBody < Body
           endian :little
         end
         BODY = SetAntiAliasModeBody

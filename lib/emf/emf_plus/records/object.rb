@@ -12,7 +12,7 @@ module Emf
         TYPE_MASK = 0x7F00
         ID_MASK = 0x00FF
 
-        class ObjectBody < BinData::Record
+        class ObjectBody < Body
           endian :little
           mandatory_parameter :data_size
           mandatory_parameter :flags

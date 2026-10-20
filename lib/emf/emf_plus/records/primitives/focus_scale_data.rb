@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusFocusScaleData (2.2.2.18).
-        class FocusScaleData < BinData::Record
+        class FocusScaleData < Body
           endian :little
           uint32 :focus_scale_count
           float :focus_scale_x

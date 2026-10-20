@@ -12,7 +12,7 @@ module Emf
 
         TYPE = 0x4010
 
-        class FillPieBody < BinData::Record
+        class FillPieBody < Body
           endian :little
           mandatory_parameter :flags
           uint32 :brush_id

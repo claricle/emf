@@ -19,7 +19,7 @@ module Emf
         RELATIVE_FLAG = 0x0800
         OBJECT_ID_MASK = 0x00FF
 
-        class DrawImagePointsBody < BinData::Record
+        class DrawImagePointsBody < Body
           endian :little
           mandatory_parameter :flags
           uint32 :image_attributes_id

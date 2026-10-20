@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusBlendFactors (2.2.2.5).
-        class BlendFactors < BinData::Record
+        class BlendFactors < Body
           endian :little
           uint32 :position_count
           array :blend_positions, type: :float_le, initial_length: :position_count

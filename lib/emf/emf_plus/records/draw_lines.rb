@@ -11,7 +11,7 @@ module Emf
 
         TYPE = 0x400D
 
-        class DrawLinesBody < BinData::Record
+        class DrawLinesBody < Body
           endian :little
           mandatory_parameter :flags
           uint32 :item_count

@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusTransformMatrix (2.2.2.47): m11, m12, m21, m22, dx, dy.
-        class TransformMatrix < BinData::Record
+        class TransformMatrix < Body
           endian :little
           float :m11
           float :m12

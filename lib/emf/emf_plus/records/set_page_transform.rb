@@ -7,7 +7,7 @@ module Emf
       class SetPageTransform < Base
         TYPE = 0x4030
 
-        class SetPageTransformBody < BinData::Record
+        class SetPageTransformBody < Body
           endian :little
           float :page_scale
         end

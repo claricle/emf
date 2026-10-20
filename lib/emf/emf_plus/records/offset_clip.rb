@@ -7,7 +7,7 @@ module Emf
       class OffsetClip < Base
         TYPE = 0x4035
 
-        class OffsetClipBody < BinData::Record
+        class OffsetClipBody < Body
           endian :little
           float :dx
           float :dy

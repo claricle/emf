@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusRect (2.2.2.39): 16-bit signed, the "compressed" form.
-        class Rect < BinData::Record
+        class Rect < Body
           endian :little
           int16 :x
           int16 :y

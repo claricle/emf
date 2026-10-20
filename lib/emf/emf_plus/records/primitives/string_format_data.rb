@@ -9,7 +9,7 @@ module Emf
       module Primitives
         # EmfPlusStringFormatData (2.2.2.44). Both arrays are sized by the
         # parent EmfPlusStringFormat's TabStopCount and RangeCount.
-        class StringFormatData < BinData::Record
+        class StringFormatData < Body
           endian :little
           mandatory_parameters :tab_stop_count, :range_count
           array :tab_stops, type: :float_le, initial_length: :tab_stop_count

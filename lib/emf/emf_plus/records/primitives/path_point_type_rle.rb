@@ -9,7 +9,7 @@ module Emf
       module Primitives
         # EmfPlusPathPointTypeRLE (2.2.2.32): a Bezier bit, a reserved bit and
         # a 6-bit run count, then the type shared by that many points.
-        class PathPointTypeRLE < BinData::Record
+        class PathPointTypeRLE < Body
           endian :little
           uint8 :header
           path_point_type :point_type

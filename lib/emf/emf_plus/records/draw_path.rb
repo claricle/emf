@@ -9,7 +9,7 @@ module Emf
 
         TYPE = 0x4015
 
-        class DrawPathBody < BinData::Record
+        class DrawPathBody < Body
           endian :little
           uint32 :pen_id
         end

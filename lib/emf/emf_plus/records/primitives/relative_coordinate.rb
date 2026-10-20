@@ -9,7 +9,7 @@ module Emf
         # One EmfPlusInteger7 (2.2.2.21) or EmfPlusInteger15 (2.2.2.22). The
         # first byte decides: high bit clear is a 7-bit value, set is a 15-bit
         # value whose high byte comes first. The width is kept so it re-encodes.
-        class RelativeCoordinate < BinData::Record
+        class RelativeCoordinate < Body
           endian :little
           uint8 :lead
           uint8 :low, onlyif: -> { lead.anybits?(0x80) }

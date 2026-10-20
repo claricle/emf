@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusRectF (2.2.2.40): 32-bit floats.
-        class RectF < BinData::Record
+        class RectF < Body
           endian :little
           float :x
           float :y

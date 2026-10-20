@@ -7,7 +7,7 @@ module Emf
       class EndContainer < Base
         TYPE = 0x4029
 
-        class EndContainerBody < BinData::Record
+        class EndContainerBody < Body
           endian :little
           uint32 :stack_index
         end

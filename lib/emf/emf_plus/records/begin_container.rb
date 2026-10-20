@@ -11,7 +11,7 @@ module Emf
         TYPE = 0x4027
         PAGE_UNIT_MASK = 0x00FF
 
-        class BeginContainerBody < BinData::Record
+        class BeginContainerBody < Body
           endian :little
           rect_f :dest_rect
           rect_f :src_rect

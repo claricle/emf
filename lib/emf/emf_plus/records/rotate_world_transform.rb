@@ -9,7 +9,7 @@ module Emf
 
         TYPE = 0x402F
 
-        class RotateWorldTransformBody < BinData::Record
+        class RotateWorldTransformBody < Body
           endian :little
           float :angle
         end

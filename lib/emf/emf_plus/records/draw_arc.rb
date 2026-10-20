@@ -11,7 +11,7 @@ module Emf
 
         TYPE = 0x4012
 
-        class DrawArcBody < BinData::Record
+        class DrawArcBody < Body
           endian :little
           mandatory_parameter :flags
           float :start_angle

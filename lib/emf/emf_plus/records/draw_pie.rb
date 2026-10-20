@@ -11,7 +11,7 @@ module Emf
 
         TYPE = 0x4011
 
-        class DrawPieBody < BinData::Record
+        class DrawPieBody < Body
           endian :little
           mandatory_parameter :flags
           float :start_angle

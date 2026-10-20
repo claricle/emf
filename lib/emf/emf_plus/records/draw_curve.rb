@@ -11,7 +11,7 @@ module Emf
 
         TYPE = 0x4018
 
-        class DrawCurveBody < BinData::Record
+        class DrawCurveBody < Body
           endian :little
           mandatory_parameter :flags
           float :tension

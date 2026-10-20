@@ -8,7 +8,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusPalette (2.2.2.28).
-        class Palette < BinData::Record
+        class Palette < Body
           endian :little
           uint32 :palette_style_flags
           uint32 :palette_count

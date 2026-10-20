@@ -11,7 +11,7 @@ module Emf
 
         TYPE = 0x402C
 
-        class MultiplyWorldTransformBody < BinData::Record
+        class MultiplyWorldTransformBody < Body
           endian :little
           transform_matrix :matrix
         end

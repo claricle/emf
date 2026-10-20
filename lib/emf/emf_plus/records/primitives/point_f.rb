@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusPointF (2.2.2.36): 32-bit floats.
-        class PointF < BinData::Record
+        class PointF < Body
           endian :little
           float :x
           float :y
