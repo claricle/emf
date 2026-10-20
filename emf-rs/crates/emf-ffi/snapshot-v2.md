@@ -180,3 +180,18 @@ three per triangle (mode 2). Rectangle indices are followed by one retained
 padding u32 per rectangle. Opaque record suffix bytes are excluded; the Ruby
 adapter retains them from the source record. Length arithmetic is checked before
 allocating the owned snapshot; all arrays come from budgeted core parsing.
+
+### Bitmap records (families 94–103)
+
+Families 94–99 correspond to EMR 76–81, families 100/101 to EMR 93/94,
+and families 102/103 to EMR 114/116. Their semantic payloads use each EMR's
+fixed field widths and order, omitting the eight-byte EMR header. All fields
+are encoded from the typed model, including signed coordinates, raw float bits,
+blend bytes, and reserved color bytes. Buffer offsets retain EMR-relative origins
+and are rebuilt from the typed buffer order, retained gaps, and current lengths.
+Absent buffers retain zero offsets/lengths; present empty buffers retain nonzero
+offsets. Source/mask buffers can be reversed or interleaved. The payload ends at
+the last buffer (or fixed fields when all buffers are absent). Generic trailing
+bytes are excluded and retained by the Ruby adapter from the original span.
+Length/offset arithmetic and snapshot reservations are checked before encoding;
+layout calculation examines at most four buffers and copies only budgeted data.

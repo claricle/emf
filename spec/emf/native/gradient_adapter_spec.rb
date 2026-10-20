@@ -5,7 +5,12 @@ require "rbconfig"
 require "emf/native/gradient_fields"
 
 RSpec.describe "native gradient hydration" do
-  let(:library) { ENV.fetch("EMF_TEST_NATIVE_LIBRARY", File.expand_path("../../../emf-rs/target/debug/libemf_ffi.dylib", __dir__)) }
+  let(:library) do
+    ENV.fetch("EMF_TEST_NATIVE_LIBRARY") do
+      extension = RbConfig::CONFIG.fetch("host_os").include?("darwin") ? "dylib" : "so"
+      File.expand_path("../../../emf-rs/target/debug/libemf_ffi.#{extension}", __dir__)
+    end
+  end
   let(:header) { Emf::Emr::Binary::Header.new(i_type: 1, n_size: 108, d_signature: 0x464D4520).to_binary_s }
   let(:eof) { [14, 20, 0, 0, 20].pack("V*") }
   let(:unknown) { "#{[0xFFFF, 12].pack('V2')}RAW!" }
