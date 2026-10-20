@@ -56,7 +56,7 @@ RSpec.describe "Native typed record suffix preservation" do
       expect(Emf.serialize(parsed)).to eq(input)
       wire.public_send("#{field}=", edited)
       expected_record = record.dup
-      expected_record[offset, 4] = "\x13\x00\x00\x00".b
+      expected_record[offset, type == 24 ? 1 : 4] = type == 24 ? "\x13".b : "\x13\x00\x00\x00".b
       expected = header + expected_record + siblings
       expect(parsed.records.first.to_binary_s).to eq(expected_record)
       expect(Emf.serialize(parsed)).to eq(expected)
