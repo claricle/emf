@@ -11,7 +11,7 @@ module Emf
   module Native
     class Hydrator
       SUPPORTED_TYPES = [*(2..22), *(24..68), *(70..95), 98, 114, 115, 116, 118, 120].freeze
-      OPAQUE_BODY_TYPES = [96, 97, *(99..106), *(109..113), 119, 121, 122].freeze
+      OPAQUE_BODY_TYPES = [23, 96, 97, *(99..106), *(109..113), 119, 121, 122].freeze
 
       def initialize(snapshot, input)
         @snapshot = snapshot

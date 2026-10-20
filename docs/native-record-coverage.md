@@ -4,7 +4,7 @@ This records bounded implementation evidence reconciled with [`TODO.plan/11-reco
 
 ## Typed core and native fields
 
-Palette records are represented as typed Rust variants and decoded by the core parser ([model](../emf-rs/crates/emf-core/src/model.rs), [parser](../emf-rs/crates/emf-core/src/parse.rs)); FFI snapshots and native hydration map the five families to editable Ruby fields ([snapshot](../emf-rs/crates/emf-ffi/src/snapshot.rs), [hydrator](../lib/emf/native/hydrator.rb), [fields](../lib/emf/native/palette_fields.rb)). The exact TODO rows are `RealizePalette` (EMR 52), `SelectPalette` (48), `CreatePalette` (49), `ResizePalette` (51), and `SetPaletteEntries` (50). Focused evidence covers all five records, array edits and malformed counts ([native spec](../spec/emf/native/palette_adapter_spec.rb), [wire spec](../spec/emf/native/palette_wire_spec.rb), [snapshot spec](../emf-rs/crates/emf-ffi/tests/palette_snapshot.rs)). Remaining acceptance is registry reconciliation and corpus/variant accounting, including zero/one/many entries and malformed spans/counts across the registered record set; no corpus-wide result is asserted here.
+Palette records are represented as typed Rust variants and decoded by the core parser ([model](../emf-rs/crates/emf-core/src/model.rs), [parser](../emf-rs/crates/emf-core/src/parse.rs)); FFI snapshots and native hydration map the five families to editable Ruby fields ([snapshot](../emf-rs/crates/emf-ffi/src/snapshot.rs), [hydrator](../lib/emf/native/hydrator.rb), [fields](../lib/emf/native/palette_fields.rb)). The exact TODO rows are `RealizePalette` (EMR 52), `SelectPalette` (48), `CreatePalette` (49), `ResizePalette` (51), and `SetPaletteEntries` (50). Focused evidence covers all five records, array edits and malformed counts ([native spec](../spec/emf/native/palette_adapter_spec.rb), [wire spec](../spec/emf/native/palette_wire_spec.rb), [snapshot spec](../emf-rs/crates/emf-ffi/tests/palette_snapshot.rs)). Remaining acceptance is corpus/variant accounting, including zero/one/many entries and malformed spans/counts across the registered record set; no corpus-wide result is asserted here.
 
 `GradientFill` (EMR 118) is a typed Rust `GradientFill` model with rectangle/triangle mesh decoding and validation ([model](../emf-rs/crates/emf-core/src/model.rs), [gradient decoder](../emf-rs/crates/emf-core/src/gradient.rs), [snapshot](../emf-rs/crates/emf-ffi/src/gradient_snapshot.rs)); native family 93 dispatches through [BitmapFields](../lib/emf/native/bitmap_fields.rb) to [GradientFields](../lib/emf/native/gradient_fields.rb). Focused specs cover gradient modes and malformed counts ([native spec](../spec/emf/native/gradient_adapter_spec.rb), [snapshot spec](../emf-rs/crates/emf-ffi/tests/gradient_snapshot.rs)). Remaining work is verifying the registered variants and real corpus, including mesh shapes/index and truncation boundaries.
 
@@ -16,7 +16,11 @@ The ten bitmap TODO rows are `BitBlt` (76), `StretchBlt` (77), `MaskBlt` (78), `
 
 ## Opaque compatibility and status correction
 
-These adapter types are intentionally carried as editable opaque `body` bytes, not typed record semantics: `PolyTextOutA` 96, `PolyTextOutW` 97, `CreateColorspace` 99, `SetColorspace` 100, `DeleteColorspace` 101, `GlsRecord` 102, `GlsBoundedRecord` 103, `PixelFormat` 104, `DrawEscape` 105, `ExtEscape` 106, `ForceUfiMapping` 109, `NamedEscape` 110, `ColorCorrectPalette` 111, `SetIcmProfileA` 112, `SetIcmProfileW` 113, `SetLinkedUfis` 119, `ColorMatchToTargetW` 121, and `CreateColorspaceW` 122. `OPAQUE_BODY_TYPES` establishes the dispatch list and [adapter spec](../spec/emf/native/adapter_spec.rb) checks empty/nonempty bodies, Ruby parity, edits and unknown-record preservation ([hydrator](../lib/emf/native/hydrator.rb)). For these TODO rows, use “In progress: native opaque-body compatibility and edit parity; semantic decoding and registry/corpus variant proof remain open”; this does not imply typed parsing.
+Fifteen adapter types retain opaque body compatibility: `PolyTextOutA` 96, `PolyTextOutW` 97, `CreateColorspace` 99, `GlsRecord` 102, `GlsBoundedRecord` 103, `PixelFormat` 104, `DrawEscape` 105, `ExtEscape` 106, `ForceUfiMapping` 109, `NamedEscape` 110, `SetIcmProfileA` 112, `SetIcmProfileW` 113, `SetLinkedUfis` 119, `ColorMatchToTargetW` 121, and `CreateColorspaceW` 122. Their `body` bytes remain editable and native family-0 snapshots carry no typed payload; [adapter specs](../spec/emf/native/adapter_spec.rb) and [hydrator](../lib/emf/native/hydrator.rb) cover this compatibility path. Semantic decoding and full registered-variant/corpus proof remain open for these opaque rows.
+
+Three color-related wire classes expose additive semantic access over preserved `body`: `ColorCorrectPalette` (111) has four unsigned 32-bit accessors (`ih_palette`, `first_entry`, `entry_count`, `reserved`) ([field/body spec](../spec/emf/native/color_correct_palette_spec.rb)); `SetColorspace` (100) and `DeleteColorspace` (101) expose the unsigned 32-bit `ih_cs` object-table index ([accessor spec](../spec/emf/native/colorspace_handles_spec.rb)). Native family-0 body parity is proven for all three; the opaque snapshot preserves body bytes, while these Ruby accessors do not change the snapshot shape. They do not implement playback/rendering semantics or establish complete variant/corpus coverage.
+
+`SetColorAdjustment` (23) has Ruby wire accessors for the twelve ColorAdjustment scalar fields over a preserved `body` ([wire class](../lib/emf/emr/binary/records/set_color_adjustment.rb)); the focused [field/body spec](../spec/emf/native/set_color_adjustment_spec.rb) is the acceptance reference. Native family-0 body parity is proven. Rust typed snapshots, playback/rendering, and complete variant/corpus proof remain open.
 
 `ExtFloodFill` (53) and `SetTextJustification` (120) have typed scalar fields in
 Rust `RecordData` and parse arms ([model](../emf-rs/crates/emf-core/src/model.rs),
@@ -29,16 +33,17 @@ remains open. No group above claims completion.
 
 ## Inventory check
 
-Run `ruby script/record_coverage` using a supported project Ruby to compare all 118
-autoloads (117 registered numeric types plus the `Raw` fallback) with the plan.
-`HEADER` and `SETCOLORADJUSTMENT` constants are not registry entries and are not
-silently added as record rows. Header parsing has separate acceptance criteria.
+The current registry has 119 autoloads: 118 numeric record types plus `Raw`.
+`SETCOLORADJUSTMENT` maps to `SetColorAdjustment` in the registry. `HEADER` is not a
+record registry entry; header parsing has separate acceptance criteria. Run
+`ruby script/record_coverage` using a supported project Ruby to check inventory
+identity against the plan; this is not semantic or corpus proof.
 The guard detects missing/extra/duplicate classes, numeric collisions, mismatched
 constants, registration/autoload differences and wire-source link drift. It reads
 the current literal Ruby declarations without loading native code or parsing a
 fixture. A future dynamic registry requires updating this extractor.
 
-Passing inventory checks does not prove semantic dispatch or corpus coverage. The
-18 opaque compatibility types above and SmallTextOut's variable text body remain
-the exact semantic gaps in this registry accounting; typed records still require
-variant and corpus reconciliation before P11 can be marked complete.
+Passing inventory checks does not prove semantic dispatch or corpus coverage.
+Opaque-body records and SmallTextOut's variable text body retain semantic gaps;
+newly exposed scalar fields likewise do not prove complete registered variants or
+corpus coverage. P11 remains incomplete pending full variant/corpus evidence.
