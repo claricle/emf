@@ -44,17 +44,27 @@ module Emf
         fail_at(offset, nil, "truncated EMF+ record header (#{remaining} bytes left)") if remaining < Frame::HEADER_BYTES
 
         type, flags, size, data_size = bytes.byteslice(offset, Frame::HEADER_BYTES).unpack("vvVV")
-        validate_sizes(offset, type, size, data_size, remaining)
+        validate_sizes(offset, type, size, data_size, remaining, comment_index)
         Frame.new(type: type, flags: flags, size: size, data_size: data_size,
                   data: bytes.byteslice(offset + Frame::HEADER_BYTES, size - Frame::HEADER_BYTES),
                   offset: offset, comment_index: comment_index)
       end
 
-      def validate_sizes(offset, type, size, data_size, remaining)
+      def validate_sizes(offset, type, size, data_size, remaining, comment_index = nil)
         fail_at(offset, type, "EMF+ record Size #{size} < #{Frame::HEADER_BYTES}") if size < Frame::HEADER_BYTES
         fail_at(offset, type, "EMF+ record Size #{size} is not a multiple of 4") unless (size % 4).zero?
         fail_at(offset, type, "EMF+ record DataSize #{data_size} exceeds Size #{size} - 12") if data_size > size - Frame::HEADER_BYTES
-        fail_at(offset, type, "truncated EMF+ record (Size #{size}, #{remaining} bytes left)") if size > remaining
+        fail_at(offset, type, truncated_message(size, remaining, comment_index, offset)) if size > remaining
+      end
+
+      # MS-EMFPLUS 1.3 and MS-EMF 2.3.3.2: an EMR_COMMENT_EMFPLUS holds whole
+      # EMF+ records; only an EmfPlusObject (C flag) continues in a later record.
+      # A record that runs past its comment is therefore malformed, not split.
+      def truncated_message(size, remaining, comment_index, offset)
+        return "truncated EMF+ record (Size #{size}, #{remaining} bytes left)" unless comment_index
+
+        "EMF+ record (Size #{size}) overruns EMR_COMMENT_EMFPLUS record #{comment_index} by " \
+          "#{size - remaining} bytes; a record cannot span comments (comment payload offset #{offset})"
       end
 
       def fail_at(offset, type, message)
