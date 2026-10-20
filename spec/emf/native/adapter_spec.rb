@@ -1151,10 +1151,13 @@ RSpec.describe Emf::Native do
   it "propagates native parse errors without Ruby retry and frees the error handle" do
     backend = described_class.backend
     loader = backend.instance_variable_get(:@loader)
+    malformed_wmf = [Emf::Detector::APM_MAGIC].pack("V")
     allow(loader).to receive(:invoke).and_call_original
+    expect(loader).to receive(:invoke).with(:emf_wmf_parse, malformed_wmf, malformed_wmf.bytesize, 0,
+                                            anything, anything).and_call_original
     expect(loader).to receive(:invoke).with(:emf_error_free, anything).and_call_original
     expect(Emf::Emr::Parser).not_to receive(:call)
-    expect { backend.parse("broken") }.to raise_error(Emf::FormatError)
+    expect { backend.parse(malformed_wmf) }.to raise_error(Emf::FormatError)
   end
 
   it "rejects extended EOF honestly rather than changing its palette layout" do
