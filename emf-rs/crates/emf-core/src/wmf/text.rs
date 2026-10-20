@@ -91,15 +91,16 @@ pub(crate) fn decode(
         None
     };
     let has_dx = extended && count > 0 && body.len() > aligned_end;
+    let dx_count = count * if options & 0x2000 != 0 { 2 } else { 1 };
     let consumed = if has_dx {
-        aligned_end + count * 2
+        aligned_end + dx_count * 2
     } else {
         aligned_end
     };
     if extended && body.len() < consumed {
         return Err(DecodeError::Malformed);
     }
-    budget.charge_work((count as u64).div_ceil(16) + if has_dx { count as u64 } else { 0 })?;
+    budget.charge_work((count as u64).div_ceil(16) + if has_dx { dx_count as u64 } else { 0 })?;
     let padding_end = if extended {
         aligned_end
     } else {
@@ -121,8 +122,8 @@ pub(crate) fn decode(
         )));
     }
     let dx = if has_dx {
-        budget.charge_alloc(count * std::mem::size_of::<i16>())?;
-        let mut values = try_vec_with_capacity(count)?;
+        budget.charge_alloc(dx_count * std::mem::size_of::<i16>())?;
+        let mut values = try_vec_with_capacity(dx_count)?;
         for offset in (aligned_end..consumed).step_by(2) {
             values.push(word(body, offset)?);
         }
@@ -182,8 +183,9 @@ pub(crate) fn encode(record: &TextRecord) -> Result<(u16, Vec<u8>), EditFailure>
         ..
     } = record
     {
+        let dx_count = text.len() * if options & 0x2000 != 0 { 2 } else { 1 };
         if (options & 6 != 0) != rectangle.is_some()
-            || dx.as_ref().is_some_and(|values| values.len() != text.len())
+            || dx.as_ref().is_some_and(|values| values.len() != dx_count)
         {
             return Err(invalid());
         }

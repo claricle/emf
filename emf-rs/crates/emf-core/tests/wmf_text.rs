@@ -136,6 +136,60 @@ fn extended_text_conditional_rectangle_spacing_padding_and_suffix_roundtrip() {
 }
 
 #[test]
+fn extended_text_pdy_uses_two_displacements_per_byte_and_preserves_suffix_on_edit() {
+    for content in [vec![0x80, 0xfe], vec![0x80, 0xfe, 0x7f]] {
+        let mut body = words(&[-13, -27, content.len() as i16, 0x2000]);
+        body.extend_from_slice(&content);
+        if content.len() % 2 != 0 {
+            body.push(0xa5);
+        }
+        let original_dx = [-12, 13, 0, -1, 32767, -32768];
+        body.extend_from_slice(&words(&original_dx[..content.len() * 2]));
+        body.extend_from_slice(&[0xca, 0xfe]);
+        let bytes = document(0x0a32, &body);
+        let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+        assert_eq!(
+            text(&doc),
+            TextRecord::ExtTextOut {
+                function: 0x0a32,
+                text: content.clone(),
+                padding: if content.len() % 2 == 0 {
+                    vec![]
+                } else {
+                    vec![0xa5]
+                },
+                x: -27,
+                y: -13,
+                options: 0x2000,
+                rectangle: None,
+                dx: Some(original_dx[..content.len() * 2].to_vec()),
+            }
+        );
+        assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+
+        let edited_dx = [1, -2, 3, -4, 5, -6];
+        let mut edited = text(&doc);
+        if let TextRecord::ExtTextOut { dx, .. } = &mut edited {
+            *dx = Some(edited_dx[..content.len() * 2].to_vec());
+        }
+        doc.replace_typed(0, TypedRecord::Text(edited.clone()))
+            .unwrap();
+        let output = wmf::serialize(&doc).unwrap();
+        let reparsed = wmf::parse(&output, &ParseLimits::default()).unwrap();
+        assert_eq!(text(&reparsed), edited);
+        assert!(reparsed
+            .record_body(&reparsed.records()[0])
+            .unwrap()
+            .ends_with(&[0xca, 0xfe]));
+        assert_eq!(
+            reparsed.record_bytes(&reparsed.records()[1]),
+            doc.record_bytes(&doc.records()[1])
+        );
+        assert_eq!(reparsed.tail(), doc.tail());
+    }
+}
+
+#[test]
 fn extended_text_accepts_absent_spacing_and_empty_text_with_opaque_suffix() {
     for content in [vec![1, 2], vec![]] {
         let mut body = words(&[-1, -2, content.len() as i16, 0]);
@@ -180,6 +234,8 @@ fn malformed_known_text_stays_opaque_and_roundtrips() {
         (0x0a32, words(&[0, 0, -1, 0])),
         (0x0a32, words(&[0, 0, 0, 2])),
         (0x0a32, words(&[0, 0, 3, 0, 0, 0, 1])),
+        // Two bytes with ETO_PDY require four displacement words.
+        (0x0a32, words(&[0, 0, 2, 0x2000, 0x6261, 1])),
     ];
     for (function, body) in cases {
         let bytes = document(function, &body);
@@ -191,6 +247,31 @@ fn malformed_known_text_stays_opaque_and_roundtrips() {
             .any(|d| d.kind == wmf::DiagnosticKind::MalformedRecord));
         assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
     }
+}
+
+#[test]
+fn invalid_pdy_edit_is_atomic() {
+    let bytes = document(0x0a32, &words(&[0, 0, 2, 0x2000, 0x6261, 1, 2, 3, 4]));
+    let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+    assert!(text(&doc).eq(&TextRecord::ExtTextOut {
+        function: 0x0a32,
+        text: b"ab".to_vec(),
+        padding: vec![],
+        x: 0,
+        y: 0,
+        options: 0x2000,
+        rectangle: None,
+        dx: Some(vec![1, 2, 3, 4]),
+    }));
+    let mut edited = text(&doc);
+    if let TextRecord::ExtTextOut { dx, .. } = &mut edited {
+        *dx = Some(vec![7, 8]);
+    }
+    assert!(matches!(
+        doc.replace_typed(0, TypedRecord::Text(edited)),
+        Err(EditFailure::RecordLayout { .. })
+    ));
+    assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
 }
 
 #[test]
