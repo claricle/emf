@@ -47,16 +47,20 @@ Borrowed, allocation-free object views currently decode Solid/Hatch Brush, Font
 (including raw UTF-16 and suffix) and ImageAttributes. Other object subtypes remain
 explicitly opaque. Independently budgeted `ObjectDefinition::decode` additionally
 returns editable `ObjectData` for those four bodies, StringFormat (all header
-fields, counted tab stops and character ranges), and Image bitmap/metafile
-metadata. Bitmap bytes and nested metafiles remain raw, without decompression or
-recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
+fields, counted tab stops and character ranges), Path, and Image bitmap/metafile
+metadata. Path retains raw floating-point, signed integer and relative coordinate
+encodings, compressed point-type runs and alignment bytes. Relative coordinate
+widths and ignored flag bits survive typed edits; coordinate/type counts, run
+totals and alignment are validated before serialization. Bitmap bytes and nested
+metafiles remain raw, without decompression or recursive parsing. Unknown object/brush/image types remain opaque. ObjectData
 serialization derives edited counts under shared SerializeLimits.
 Editing assembled bytes and replacing an object is supported;
 there is no implicit object resegmentation.
 
 ## Remaining acceptance work
 
-Deeper Pen/Path/Region/CustomLineCap objects and image pixel/palette structures, nested object structures and effects remain opaque. Playback object
+Deeper Pen/Region/CustomLineCap objects, image pixel/palette structures, nested
+object structures and effects remain opaque. Playback object
 reference validity, enum-domain interpretation and complete document ordering are
 not validated. This checkpoint supplies reusable bounded native framing and editing;
 it does not claim full native EMF+ format acceptance or add a Ruby public API.
@@ -73,6 +77,9 @@ invalid counts and matrix flags, padding and resource budgets.
 `tests/emf_plus_objects.rs` covers typed object fields, exact/mutable roundtrips,
 StringFormat count validation, all independent resource limits, unexpanded image
 payloads and typed edits through continuation/comment boundary preservation.
+`tests/emf_plus_path.rs` covers all Path coordinate encodings, raw bit/width and
+RLE preservation, counted edits, malformed layouts, shared budgets and typed
+continuation edits with exact fragment, padding and segment preservation.
 
 ## Enclosing native Document API
 

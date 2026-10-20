@@ -6,7 +6,7 @@
 mod container;
 pub use container::{EmbedError, EmbeddedStream};
 mod object_data;
-pub use object_data::{ObjectData, StringFormat};
+pub use object_data::{ObjectData, Path, PathPointRun, PathPointTypes, StringFormat};
 mod text;
 pub use text::Text;
 mod drawing;

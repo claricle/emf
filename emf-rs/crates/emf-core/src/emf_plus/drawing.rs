@@ -76,21 +76,21 @@ impl PointData {
             Self::Relative(v) => v.len(),
         }
     }
-    fn len(&self) -> usize {
+    pub(super) fn len(&self) -> usize {
         match self {
             Self::Integer(v) => v.len().saturating_mul(4),
             Self::Float(v) => v.len().saturating_mul(8),
             Self::Relative(v) => v.iter().map(|p| p[0].len() + p[1].len()).sum(),
         }
     }
-    fn valid(&self, flags: u16) -> bool {
+    pub(super) fn valid(&self, flags: u16) -> bool {
         match self {
             Self::Integer(_) => flags & 0x4800 == 0x4000,
             Self::Float(_) => flags & 0x4800 == 0,
             Self::Relative(v) => flags & 0x0800 != 0 && v.iter().flatten().all(|n| n.valid()),
         }
     }
-    fn write(&self, out: &mut Vec<u8>) {
+    pub(super) fn write(&self, out: &mut Vec<u8>) {
         match self {
             Self::Integer(v) => {
                 for p in v {

@@ -4,6 +4,8 @@ use crate::{
     limits::{try_vec_with_capacity, Budget},
     LimitKind, ParseLimits, SerializeFailure, SerializeLimits,
 };
+mod path;
+pub use path::{Path, PathPointRun, PathPointTypes};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StringFormat {
@@ -26,6 +28,7 @@ pub struct StringFormat {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObjectData {
+    Path(Path),
     SolidBrush {
         version: u32,
         argb: u32,
@@ -91,6 +94,7 @@ impl ObjectDefinition {
             budget: &mut budget,
         };
         let value = match self.object_type {
+            3 => ObjectData::Path(path::read(&mut r)?),
             1 => {
                 let version = r.word()?;
                 match r.word()? {
@@ -230,6 +234,7 @@ fn opaque(def: &ObjectDefinition, budget: &mut Budget<'_>) -> Result<ObjectData,
 impl ObjectData {
     pub fn object_type(&self) -> u8 {
         match self {
+            Self::Path(_) => 3,
             Self::SolidBrush { .. } | Self::HatchBrush { .. } => 1,
             Self::BitmapImage { .. } | Self::MetafileImage { .. } => 5,
             Self::Font { .. } => 6,
@@ -243,6 +248,10 @@ impl ObjectData {
     pub fn serialize(&self, limits: &SerializeLimits) -> Result<Vec<u8>, SerializeFailure> {
         let overflow = || SerializeFailure::SizeOverflow;
         let (base, parts, elements): (usize, [usize; 3], u64) = match self {
+            Self::Path(v) => {
+                let (size, work) = v.layout()?;
+                (size, [0; 3], work)
+            }
             Self::SolidBrush { .. } => (12, [0; 3], 0),
             Self::HatchBrush { .. } => (20, [0; 3], 0),
             Self::ImageAttributes { .. } => (24, [0; 3], 0),
@@ -319,6 +328,7 @@ impl ObjectData {
         out.try_reserve_exact(size)
             .map_err(|_| SerializeFailure::AllocationFailed { bytes: size })?;
         match self {
+            Self::Path(v) => v.write(&mut out),
             Self::SolidBrush { version, argb } => words(&mut out, &[*version, 0, *argb]),
             Self::HatchBrush {
                 version,
