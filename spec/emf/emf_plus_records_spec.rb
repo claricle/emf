@@ -166,6 +166,40 @@ RSpec.describe Emf::EmfPlus::Records do
       expect(logical.split.map(&:to_binary).join).to eq(stream.byteslice(0, stream.bytesize - 12))
     end
 
+    it "keeps a plain object's nonzero padding when split without edits" do
+      plain = record(0x4008, "a\x91\x92\x93".b, flags: 0x0102, data_size: 1)
+      logical = described_class.call(decode_all(plain)).first
+
+      expect(logical.split.map(&:to_binary).join).to eq(plain)
+    end
+
+    it "keeps each chunk's padding and source comment when a chain is split without edits" do
+      padded = record(0x4008, [5].pack("V") + "aaaa\x77\x66\x55\x44".b, flags: 0x8500, data_size: 8) +
+               record(0x4008, [5].pack("V") + "b\x88\x99\xAA".b, flags: 0x8500, data_size: 5)
+      records = Emf::EmfPlus::Records.decode_all(Emf::EmfPlus::Parser.call(padded, comment_index: 7))
+      chunks = described_class.call(records).first.split
+
+      expect(chunks.map(&:to_binary).join).to eq(padded)
+      expect(chunks.map(&:comment_index)).to eq([7, 7])
+      expect(chunks.map(&:offset)).to eq([0, 24])
+    end
+
+    it "re-chunks to new sizes, marking every chunk continued, and joins back to the same data" do
+      logical = described_class.call(decode_all(record(0x4008, "abcdef\0\0", flags: 0x0102, data_size: 6))).first
+      chunks = logical.split([4, 2])
+
+      expect(chunks).to all(have_attributes(continued?: true, total_object_size: 6, emf_object_id: 2))
+      expect(described_class.call(chunks).first).to have_attributes(data: "abcdef", chunk_sizes: [4, 2])
+    end
+
+    it "rejects split sizes that do not cover the data exactly" do
+      logical = described_class.call(decode_all(stream)).first
+
+      expect { logical.split([4, 4]) }.to raise_error(ArgumentError, /12/)
+      expect { logical.split([12, 0]) }.to raise_error(ArgumentError)
+      expect { logical.split([]) }.to raise_error(ArgumentError)
+    end
+
     it "accepts the spec layout: a final chunk with C clear and no TotalObjectSize, and splits it back" do
       spec_layout = chunk("aaaa", 8) + record(0x4008, "bbbb", flags: 0x0500)
       logical = described_class.call(decode_all(spec_layout)).first

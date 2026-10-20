@@ -8,11 +8,12 @@ module Emf
     # clear (the layout the spec describes) also ends the chain.
     module ObjectChain
       # One object, possibly spread over several records. Chunk boundaries and
-      # flags are kept so `split` can reproduce the original records.
+      # source records are kept so `split` can return them unchanged.
       class LogicalObject
         attr_reader :object_type, :emf_object_id, :data, :chunk_sizes
 
         def initialize(chunks)
+          @chunks = chunks.freeze
           @object_type = chunks.first.object_type
           @emf_object_id = chunks.first.emf_object_id
           @data = chunks.map(&:object_data).join.b.freeze
@@ -22,22 +23,34 @@ module Emf
 
         def total_size = data.bytesize
 
+        # With the original chunk sizes the source records come back as read:
+        # padding, offsets and comment indexes included. Other sizes re-chunk
+        # the data with zero padding, every chunk continued.
         def split(sizes = chunk_sizes)
+          return @chunks.dup if sizes == chunk_sizes
+
+          check_sizes(sizes)
           offset = 0
           sizes.each_with_index.map do |size, index|
             chunk = data.byteslice(offset, size)
             offset += size
-            Records.decode(Parser.call(chunk_record(chunk, @chunk_flags.fetch(index, @chunk_flags.first))).first)
+            Records.decode(rechunked_frame(chunk, @chunks.fetch(index, @chunks.last)))
           end
         end
 
         private
 
-        def chunk_record(chunk, flags)
-          continued = flags.anybits?(Records::Object::CONTINUED_FLAG)
-          body = (continued ? [total_size].pack("V") : "".b) + chunk
-          padded = body + ("\0" * (-body.bytesize % 4))
-          [Records::Object::TYPE, flags, 12 + padded.bytesize, body.bytesize].pack("vvVV") + padded
+        def check_sizes(sizes)
+          return if sizes.any? && sizes.all? { |size| size.is_a?(Integer) && size.positive? } && sizes.sum == total_size
+
+          raise ArgumentError, "split sizes #{sizes.inspect} must be positive and sum to #{total_size}"
+        end
+
+        def rechunked_frame(chunk, source)
+          flags = @chunk_flags.first | Records::Object::CONTINUED_FLAG
+          Frame.new(type: Records::Object::TYPE, flags: flags, size: 0, data_size: 0, data: "".b,
+                    offset: source.offset, comment_index: source.comment_index)
+               .with_data([total_size].pack("V") + chunk)
         end
       end
 
