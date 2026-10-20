@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/emr/binary/class_field_accessors"
 
 module Emf
   module Binary
@@ -86,6 +87,8 @@ module Emf
         uint32 :dw_low_date_time
         uint32 :dw_high_date_time
       end
+
+      constants.each { |name| const_get(name).prepend Emf::Emr::Binary::ClassFieldAccessors }
     end
   end
 end

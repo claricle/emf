@@ -38,4 +38,27 @@ RSpec.describe "Emf::Emr::Binary::Record field accessors" do
 
     expect(per_record).to be < 180
   end
+
+  describe "shared nested primitives" do
+    it "defines no per-instance singleton methods on any Types class" do
+      Emf::Binary::Types.constants.each do |name|
+        expect(Emf::Binary::Types.const_get(name).new.singleton_methods)
+          .to be_empty, "#{name} has singleton accessors"
+      end
+    end
+
+    it "keeps PointL readers, writers and presence accessors working" do
+      point = Emf::Binary::Types::PointL.read([3, -4].pack("l<l<"))
+      point.x = 9
+
+      expect([point.x, point.y, point.x?]).to eq([9, -4, true])
+      expect(point.to_binary_s).to eq([9, -4].pack("l<l<"))
+    end
+
+    it "keeps array-of-record fields working" do
+      palette = Emf::Binary::Types::LogPalette.read([0x300, 1, 1, 2, 3, 4].pack("v2C4"))
+
+      expect(palette.pal_pal_entry[0].pe_blue).to eq(4)
+    end
+  end
 end
