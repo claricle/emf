@@ -38,7 +38,9 @@ It can fail under default parse resource limits.
 Each diagnostic is u32 kind/has-function/function/detail-kind, u64 offset/detail1/
 detail2. Kinds: 1 version, 2 declared size, 3 maximum record, 4 checksum,
 5 truncated header, 6 record too small, 7 truncated record, 8 invalid EOF,
-9 missing EOF, 10 malformed payload, 11 object issue. Numeric pairs retain the
+9 missing EOF, 10 malformed payload, 11 object issue, 12 DIB unsupported by WMF
+version. Kind 12 stores the WMF version in detail1, with detail-kind and detail2
+zero; the function and offset identify the DIB record. Numeric pairs retain the
 core variant's field order. Object detail kinds are 1 table full, 2 invalid
 reference, 3 wrong kind, 4 invalid RestoreDC. Detail1 is the index or sign-extended
 saved DC; wrong-kind detail2 packs expected in the low u32 and found in the high

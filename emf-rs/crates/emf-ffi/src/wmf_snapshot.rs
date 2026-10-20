@@ -264,6 +264,7 @@ fn object_kind(kind: ObjectKind) -> u64 {
 fn diagnostic(kind: &D) -> (u32, u32, u64, u64) {
     match *kind {
         D::UnsupportedVersion { version } => (1, 0, version.into(), 0),
+        D::DibUnsupportedByVersion { version } => (12, 0, version.into(), 0),
         D::HeaderSizeMismatch {
             declared_words,
             actual_words,

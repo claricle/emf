@@ -136,6 +136,29 @@ RSpec.describe "Native WMF bridge" do
     expect(Emf.serialize(parsed)).to eq(input)
   end
 
+  it "preserves newly typed native escape records as opaque Ruby records" do
+    passthrough = [0xDEADBEEF, 1, 0x80].pack("VvC")
+    color_table = [12, 0].pack("v2") + [0x11223344].pack("V")
+    postscript = "#{[36, 1, -1, 2, -3, 4, -5, 6].pack('V2l<6')}EPS!"
+    escapes = [
+      native_wmf_escape(0x11D8, passthrough, padding: "\xF7".b),
+      native_wmf_escape(0x0005, color_table),
+      native_wmf_escape(0x1014, postscript)
+    ]
+    input = native_wmf_bytes([*escapes, unknown])
+    expect(Emf::Wmf::Parser).not_to receive(:call)
+    parsed = Emf.parse(input)
+    expect(parsed.errors).to be_empty
+    expect(parsed.records.first(3).map(&:class)).to all(eq(Emf::Model::Wmf::Records::UnknownRecord))
+    expect(parsed.records.first(3).map(&:raw_bytes)).to eq(escapes)
+    expect(parsed.records[3].raw_bytes).to eq(unknown)
+    expect(Emf.serialize(parsed)).to eq(input)
+
+    reparsed = Emf.parse(Emf.serialize(parsed))
+    expect(reparsed.records.first(3).map(&:raw_bytes)).to eq(escapes)
+    expect(reparsed.records[3].raw_bytes).to eq(unknown)
+  end
+
   it "matches Ruby rejection of invalid headers, EOF boundaries and object state" do
     ordinary = native_wmf_bytes([move])
     placeable = native_wmf_bytes([move], placeable: true)

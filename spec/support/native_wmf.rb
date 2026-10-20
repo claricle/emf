@@ -17,4 +17,10 @@ module NativeWmfSupport
   def native_wmf_record(function, payload)
     [3 + (payload.bytesize / 2), function].pack("Vv") + payload
   end
+
+  def native_wmf_escape(subtype, data, padding: "\xA5".b)
+    body = [subtype, data.bytesize].pack("v2") + data
+    body += padding if data.bytesize.odd?
+    native_wmf_record(0x0626, body)
+  end
 end
