@@ -62,7 +62,19 @@ RSpec.describe Emf::Emr::Binary::DibHeader do
     it "honours biClrUsed and the bitfield masks" do
       expect(stretch_dibits(info_header(used: 2) + ("\x00" * 8)).dib_header_view.header.color_table_entries).to eq(2)
       masks = stretch_dibits(info_header(bit_count: 32, compression: 3) + ("\x00" * 12)).dib_header_view.header
-      expect(masks.color_table_bytes).to eq(12)
+      expect(masks).to have_attributes(bitfield_mask_count: 3, color_table_offset: 52, color_table_entries: 0, color_table_bytes: 0)
+    end
+
+    it "counts bitfield masks apart from a palette that follows them" do
+      header = info_header(bit_count: 16, compression: 6, used: 2)
+      view = stretch_dibits(header + ("\x00" * 24)).dib_header_view
+      expect(view.header).to have_attributes(bitfield_mask_count: 4, color_table_offset: 56, color_table_entries: 2, color_table_bytes: 8)
+      expect(stretch_dibits(header + ("\x00" * 23)).dib_header_view.reason).to eq(:color_table_past_bmi)
+    end
+
+    it "keeps V4/V5 masks inside the header" do
+      v5 = info_header(bit_count: 32, compression: 3, size: 124) + ("\x00" * 84)
+      expect(stretch_dibits(v5).dib_header_view.header).to have_attributes(kind: :v5, bitfield_mask_count: 0, color_table_offset: 124)
     end
 
     it "reads a core header with RGBTRIPLE entries" do
@@ -114,6 +126,15 @@ RSpec.describe Emf::Emr::Binary::DibHeader do
       view = with_bits(bmi, "\x00" * 7).dib_header_view
       expect(view).to be_valid
       expect(view.reason).to be_nil
+    end
+
+    it "skips the stride check for RLE8 and RLE4 runs shorter than stride * height" do
+      [[1, 8], [2, 4]].each do |compression, bit_count|
+        rle = info_header(width: 64, height: 64, bit_count: bit_count, compression: compression, used: 2) + ("\x00" * 8)
+        view = with_bits(rle, "\x00\x01".b * 2).dib_header_view
+        expect(view).to have_attributes(bits_valid?: true, bits_size: 4)
+        expect(with_bits(rle, "\x00" * 4, size: 900).dib_header_view.bits_reason).to eq(:bits_past_record)
+      end
     end
 
     it "treats BI_JPEG and BI_PNG data as compressed: no stride check and no colour table" do
