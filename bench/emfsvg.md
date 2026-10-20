@@ -65,3 +65,33 @@ ruby -I /path/to/emf/lib -I lib -S rspec \
 The result identifies the slowest selected conversion; it does not identify the
 unrecovered roughly 12-second workload. No timing threshold or speed claim follows
 from a small trial.
+
+## Compare saved backend reports
+
+After saving one Ruby and one native report, compare them with:
+
+```sh
+ruby bench/compare_emfsvg.rb \
+  --ruby tmp/bench/emfsvg-ruby.json \
+  --native tmp/bench/emfsvg-native.json \
+  --output tmp/bench/emfsvg-comparison.json
+```
+
+The comparator accepts only successful, well-formed schema-v1 conversion reports:
+their failure lists must be empty, each selected fixture must have passed its
+golden check, and each stage must contain the requested number of valid samples.
+It rejects reports unless parser revision and source, manifest and selected
+fixtures, consumer revision/source and clean tracked state, golden inventory,
+resolved worker sources, Ruby/OS/host environment, runtime gems, and benchmark
+method are compatible. The Ruby report may omit the `fiddle` gem that is needed
+by the native report. Incompatible, malformed, missing, or failed reports exit 2
+and do not produce a comparison.
+
+Each stage reports median times and `native_over_ruby_time`, calculated as the
+native median divided by the Ruby median. Values below 1 mean the native median
+was lower for that stage; values above 1 mean it was higher. The allocation ratio
+uses the same native-over-Ruby direction, and is null when the Ruby allocation
+baseline is zero. Allocation counts are Ruby object counts and exclude Rust
+allocations; they do not measure total allocation or memory use. The output is
+informational: small or concurrent trials remain descriptive and support no
+calibrated threshold or speed claim.
