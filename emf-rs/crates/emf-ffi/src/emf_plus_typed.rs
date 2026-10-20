@@ -1,4 +1,5 @@
 //! Normalized variable-sized payloads; one traversal defines both sizing and writing.
+mod object;
 use super::emf_plus_snapshot::overflow;
 use crate::Failure;
 use emf_core::emf_plus::{

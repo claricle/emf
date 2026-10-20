@@ -378,6 +378,11 @@ fn fixed_typed_families_preserve_word_bits_and_complex_families_keep_raw_frames(
                 typed
             }
             0x4039 => words(&[0; 16]),
+            0x4008 => {
+                let mut typed = object_prefix(cases.len(), cases.len(), None, true);
+                typed.extend(words(&[1, 1, 1, 0xdbc01002, 0x80ff0033]));
+                typed
+            }
             _ => Vec::new(),
         };
         cases.push((frame(kind, flags, &body, &[]), tag, typed));
@@ -755,13 +760,8 @@ fn normalized_tsgraphics_expands_scalars_and_distinguishes_optional_empty_palett
         }
         cases.push((frame(0x4039, flags, &body, b"RAW!"), 0x104, typed));
     }
-    // Unsupported core record types and pending Objects keep their raw payloads.
+    // Unsupported core record types keep their raw payloads.
     cases.push((frame(0x7fff, 0xbeef, b"raw!", &[]), 0, vec![]));
-    cases.push((
-        frame(0x4008, 0x0101, &words(&[0xdbc01002, 0, 0x80ff0033]), &[]),
-        0x105,
-        vec![],
-    ));
     assert_normalized_cases(cases);
 }
 
@@ -811,5 +811,700 @@ fn assert_normalized_cases(cases: Vec<(Vec<u8>, u32, Vec<u8>)>) {
         assert_eq!(emf_serialize(doc, &mut output, ptr::null_mut()), EMF_OK);
         assert_eq!(view(output), original);
         emf_document_free(doc);
+    }
+}
+
+fn object_prefix(first: usize, last: usize, total: Option<u32>, present: bool) -> Vec<u8> {
+    let mut bytes = words(&[u32::from(total.is_some()), total.unwrap_or(0)]);
+    count(&mut bytes, first as u64);
+    count(&mut bytes, last as u64);
+    bytes.extend(words(&[u32::from(present)]));
+    bytes
+}
+fn blob(bytes: &[u8]) -> Vec<u8> {
+    let mut out = vec![];
+    count(&mut out, bytes.len() as u64);
+    out.extend(bytes);
+    out
+}
+fn word_array(values: &[u32]) -> Vec<u8> {
+    let mut out = vec![];
+    count(&mut out, values.len() as u64);
+    out.extend(words(values));
+    out
+}
+fn add_object_case(
+    cases: &mut Vec<(Vec<u8>, u32, Vec<u8>)>,
+    value: emf_core::emf_plus::ObjectData,
+    expected: Vec<u8>,
+) {
+    let index = cases.len();
+    let object_type = value.object_type();
+    let body = value
+        .serialize(&emf_core::SerializeLimits::default())
+        .unwrap();
+    let mut typed = object_prefix(index, index, None, true);
+    typed.extend(words(&[7, object_type as u32]));
+    typed.extend(expected);
+    cases.push((
+        frame(0x4008, (object_type as u16) << 8 | 7, &body, b"RAW!"),
+        0x105,
+        typed,
+    ));
+}
+
+#[test]
+fn normalized_objects_cover_scalars_strings_images_unknown_and_redefinitions() {
+    use emf_core::emf_plus::*;
+    let mut cases = vec![];
+    let version = 0xdbc01002;
+    let bits = 0x7fc12345;
+    add_object_case(
+        &mut cases,
+        ObjectData::SolidBrush {
+            version,
+            argb: 0x80ff0033,
+        },
+        words(&[1, version, 0x80ff0033]),
+    );
+    add_object_case(
+        &mut cases,
+        ObjectData::HatchBrush {
+            version,
+            style: u32::MAX,
+            foreground: 0,
+            background: 0x80000000,
+        },
+        words(&[2, version, u32::MAX, 0, 0x80000000]),
+    );
+    let mut expected = words(&[9, version, bits, 3, u32::MAX, 0xa5b6]);
+    count(&mut expected, 3);
+    expected.extend([0, 0xd8, 65, 0, 0xff, 0xff]);
+    expected.extend(blob(&[0xa5, 0xb6]));
+    add_object_case(
+        &mut cases,
+        ObjectData::Font {
+            version,
+            em_size: bits,
+            size_unit: 3,
+            style: -1,
+            reserved: 0xa5b6,
+            family_name: vec![0xd800, 65, 0xffff],
+            suffix: vec![0xa5, 0xb6],
+        },
+        expected,
+    );
+    let format = StringFormat {
+        version,
+        flags: u32::MAX,
+        language: 1,
+        alignment: 2,
+        line_alignment: 3,
+        digit_substitution: 4,
+        digit_language: 5,
+        first_tab_offset: bits,
+        hotkey_prefix: -1,
+        leading_margin: 0x80000000,
+        trailing_margin: bits,
+        tracking: 9,
+        trimming: 10,
+        tab_stops: vec![bits, 0x80000000],
+        character_ranges: vec![[i32::MIN, -1], [0, i32::MAX]],
+    };
+    let mut expected = words(&[
+        10,
+        version,
+        u32::MAX,
+        1,
+        2,
+        3,
+        4,
+        5,
+        bits,
+        u32::MAX,
+        0x80000000,
+        bits,
+        9,
+        10,
+    ]);
+    expected.extend(word_array(&[bits, 0x80000000]));
+    count(&mut expected, 2);
+    expected.extend(words(&[0x80000000, u32::MAX, 0, 0x7fffffff]));
+    add_object_case(&mut cases, ObjectData::StringFormat(format), expected);
+    add_object_case(
+        &mut cases,
+        ObjectData::ImageAttributes {
+            version,
+            reserved1: 1,
+            wrap_mode: 2,
+            clamp_argb: 3,
+            object_clamp: -1,
+            reserved2: 4,
+        },
+        words(&[11, version, 1, 2, 3, u32::MAX, 4]),
+    );
+    for palette in [
+        None,
+        Some(Palette {
+            style_flags: u32::MAX,
+            entries: vec![],
+        }),
+        Some(Palette {
+            style_flags: 7,
+            entries: vec![0x80ff0033, 0],
+        }),
+    ] {
+        let pixel_format = if palette.is_some() {
+            0x00030803
+        } else {
+            0x0026200a
+        };
+        let mut expected = words(&[
+            12,
+            version,
+            u32::MAX,
+            0x80000000,
+            u32::MAX,
+            pixel_format,
+            u32::from(palette.is_some()),
+        ]);
+        if let Some(palette) = &palette {
+            expected.extend(words(&[palette.style_flags]));
+            expected.extend(word_array(&palette.entries));
+        }
+        expected.extend(blob(&[0xa5, 0xb6, 0, 0xff]));
+        add_object_case(
+            &mut cases,
+            ObjectData::PixelBitmap(PixelBitmap {
+                version,
+                width: -1,
+                height: i32::MIN,
+                stride: -1,
+                pixel_format,
+                palette,
+                pixels: vec![0xa5, 0xb6, 0, 0xff],
+            }),
+            expected,
+        );
+    }
+    let mut expected = words(&[13, version, u32::MAX, 2, 0x80000000, 0xdeadbeef, 1]);
+    expected.extend(blob(&[1, 2, 3, 4]));
+    add_object_case(
+        &mut cases,
+        ObjectData::BitmapImage {
+            version,
+            width: -1,
+            height: 2,
+            stride: i32::MIN,
+            pixel_format: 0xdeadbeef,
+            bitmap_type: 1,
+            data: vec![1, 2, 3, 4],
+        },
+        expected,
+    );
+    let mut expected = words(&[14, version, 3]);
+    expected.extend(blob(&[1, 2, 3]));
+    expected.extend(blob(&[0xa5]));
+    add_object_case(
+        &mut cases,
+        ObjectData::MetafileImage {
+            version,
+            metafile_type: 3,
+            data: vec![1, 2, 3],
+            suffix: vec![0xa5],
+        },
+        expected,
+    );
+    let mut expected = words(&[0, 127]);
+    expected.extend(blob(&[0xff, 0x80, 0, 1]));
+    add_object_case(
+        &mut cases,
+        ObjectData::Opaque {
+            object_type: 127,
+            bytes: vec![0xff, 0x80, 0, 1],
+        },
+        expected,
+    );
+    // Unknown brush subtype is normalized as an opaque body, preserving identity.
+    let unknown = words(&[version, 0x12345678, 1]);
+    let mut expected = words(&[0, 1]);
+    expected.extend(blob(&unknown));
+    add_object_case(
+        &mut cases,
+        ObjectData::Opaque {
+            object_type: 1,
+            bytes: unknown,
+        },
+        expected,
+    );
+    assert_normalized_cases(cases);
+}
+
+#[test]
+fn normalized_object_chains_emit_once_at_first_fragment_and_keep_raw_bytes() {
+    let body = words(&[0xdbc01002, 0, 0x80ff0033]);
+    let mut first = words(&[12]);
+    first.extend(&body[..5]);
+    let first = frame(0x4008, 0x8107, &first, b"PAD");
+    let final_frame = frame(0x4008, 0x0107, &body[5..], b"!");
+    let mut normalized = object_prefix(0, 1, Some(12), true);
+    normalized.extend(words(&[7, 1, 1, 0xdbc01002, 0x80ff0033]));
+    let continuation = object_prefix(0, 1, None, false);
+    // A C-set final fragment is also supported and retains its total-size word.
+    let mut c_set_final = words(&[12]);
+    c_set_final.extend(&body[5..]);
+    let c_set_final = frame(0x4008, 0x8107, &c_set_final, b"!");
+    for (last, expected) in [
+        (final_frame, continuation),
+        (c_set_final, object_prefix(0, 1, Some(12), false)),
+    ] {
+        assert_normalized_cases(vec![
+            (first.clone(), 0x105, normalized.clone()),
+            (last, 0x105, expected),
+        ]);
+    }
+}
+
+#[test]
+fn normalized_objects_cover_nested_paths_regions_gradients_caps_and_pen_brushes() {
+    use emf_core::emf_plus::*;
+    let version = 0xdbc01002;
+    let nan = 0x7fc12345;
+    let matrix = [nan, 0x80000000, 1, 2, 3, 4];
+    let mut cases = vec![];
+    let path = Path {
+        version,
+        flags: 0x4000,
+        points: PointData::Integer(vec![[i16::MIN, i16::MAX]]),
+        point_types: PathPointTypes::Plain(vec![0x83]),
+        alignment_padding: vec![0xa5, 0xb6, 0xc7],
+    };
+    let mut path_bytes = words(&[version, 0x4000, 1]);
+    count(&mut path_bytes, 1);
+    path_bytes.extend(words(&[0xffff8000, 32767, 0]));
+    path_bytes.extend(blob(&[0x83]));
+    path_bytes.extend(blob(&[0xa5, 0xb6, 0xc7]));
+    let mut expected = words(&[7]);
+    expected.extend(&path_bytes);
+    add_object_case(&mut cases, ObjectData::Path(path.clone()), expected);
+    let relative = Path {
+        version,
+        flags: 0x800,
+        points: PointData::Relative(vec![[
+            RelativeCoordinate::Seven(-64),
+            RelativeCoordinate::Fifteen(-16384),
+        ]]),
+        point_types: PathPointTypes::RunLength(vec![PathPointRun {
+            header: 0xc1,
+            point_type: 0xff,
+        }]),
+        alignment_padding: vec![0xe8, 0xf9, 0xaa],
+    };
+    let mut expected = words(&[7, version, 0x800, 2]);
+    count(&mut expected, 1);
+    expected.extend(words(&[7, (-64i32) as u32, 15, (-16384i32) as u32, 1]));
+    count(&mut expected, 1);
+    expected.extend([0xc1, 0xff]);
+    expected.extend(blob(&[0xe8, 0xf9, 0xaa]));
+    add_object_case(&mut cases, ObjectData::Path(relative), expected);
+    let float_path = Path {
+        version,
+        flags: 0,
+        points: PointData::Float(vec![[nan, 0x80000000]]),
+        point_types: PathPointTypes::Plain(vec![0]),
+        alignment_padding: vec![1, 2, 3],
+    };
+    let mut expected = words(&[7, version, 0, 0]);
+    count(&mut expected, 1);
+    expected.extend(words(&[nan, 0x80000000, 0]));
+    expected.extend(blob(&[0]));
+    expected.extend(blob(&[1, 2, 3]));
+    add_object_case(&mut cases, ObjectData::Path(float_path), expected);
+    let nodes = vec![
+        RegionNode::Binary { operation: 5 },
+        RegionNode::Binary { operation: 1 },
+        RegionNode::Rectangle([nan, 0x80000000, 1, 2]),
+        RegionNode::Path(path.clone()),
+        RegionNode::Binary { operation: 2 },
+        RegionNode::Empty,
+        RegionNode::Infinite,
+    ];
+    let mut expected = words(&[8, version]);
+    count(&mut expected, 7);
+    expected.extend(words(&[1, 5, 1, 1, 2, nan, 0x80000000, 1, 2, 3]));
+    expected.extend(&path_bytes);
+    expected.extend(words(&[1, 2, 4, 5]));
+    add_object_case(
+        &mut cases,
+        ObjectData::Region(Region { version, nodes }),
+        expected,
+    );
+    let cap = CustomLineCap {
+        version,
+        data: CustomLineCapData::Default(DefaultLineCap {
+            flags: 3,
+            base_cap: 1,
+            base_inset: nan,
+            stroke_start_cap: 2,
+            stroke_end_cap: 3,
+            stroke_join: 4,
+            stroke_miter_limit: 5,
+            width_scale: 6,
+            fill_hot_spot: [7, 8],
+            stroke_hot_spot: [9, 10],
+            fill_path: Some(path.clone()),
+            line_path: Some(path.clone()),
+        }),
+    };
+    let mut cap_bytes = words(&[version, 0, 3, 1, nan, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1]);
+    cap_bytes.extend(&path_bytes);
+    cap_bytes.extend(words(&[1]));
+    cap_bytes.extend(&path_bytes);
+    let mut expected = words(&[15]);
+    expected.extend(&cap_bytes);
+    add_object_case(&mut cases, ObjectData::CustomLineCap(cap.clone()), expected);
+    let arrow = CustomLineCap {
+        version,
+        data: CustomLineCapData::AdjustableArrow(ArrowLineCap {
+            width: nan,
+            height: 0x80000000,
+            middle_inset: 1,
+            fill_state: u32::MAX,
+            line_start_cap: 2,
+            line_end_cap: 3,
+            line_join: 4,
+            line_miter_limit: 5,
+            width_scale: 6,
+            fill_hot_spot: [7, 8],
+            line_hot_spot: [9, 10],
+        }),
+    };
+    let arrow_bytes = words(&[
+        version,
+        1,
+        nan,
+        0x80000000,
+        1,
+        u32::MAX,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+    ]);
+    let mut expected = words(&[15]);
+    expected.extend(&arrow_bytes);
+    add_object_case(
+        &mut cases,
+        ObjectData::CustomLineCap(arrow.clone()),
+        expected,
+    );
+    let linear = LinearGradient {
+        flags: 0x1a,
+        wrap_mode: -1,
+        rectangle: [nan, 0x80000000, 1, 2],
+        start_color: 3,
+        end_color: 4,
+        reserved: [5, 6],
+        transform: Some(matrix),
+        blends: vec![vec![[nan, 7], [0x80000000, 8]], vec![[9, 10], [11, 12]]],
+    };
+    let mut linear_bytes = words(&[0x1a, u32::MAX, nan, 0x80000000, 1, 2, 3, 4, 5, 6, 1]);
+    linear_bytes.extend(words(&matrix));
+    count(&mut linear_bytes, 2);
+    count(&mut linear_bytes, 2);
+    linear_bytes.extend(words(&[nan, 7, 0x80000000, 8]));
+    count(&mut linear_bytes, 2);
+    linear_bytes.extend(words(&[9, 10, 11, 12]));
+    let mut expected = words(&[5, version]);
+    expected.extend(&linear_bytes);
+    add_object_case(
+        &mut cases,
+        ObjectData::LinearGradientBrush {
+            version,
+            data: linear.clone(),
+        },
+        expected,
+    );
+    let gradient = PathGradient {
+        flags: 0x47,
+        wrap_mode: -1,
+        center_color: 1,
+        center_point: [nan, 0x80000000],
+        surrounding_colors: vec![2, 3],
+        boundary: GradientBoundary::Path(path),
+        transform: Some(matrix),
+        blend: Some(vec![]),
+        focus_scales: Some([nan, 0x80000000]),
+    };
+    let mut gradient_bytes = words(&[0x47, u32::MAX, 1, nan, 0x80000000]);
+    gradient_bytes.extend(word_array(&[2, 3]));
+    gradient_bytes.extend(words(&[0]));
+    gradient_bytes.extend(&path_bytes);
+    gradient_bytes.extend(words(&[1]));
+    gradient_bytes.extend(words(&matrix));
+    gradient_bytes.extend(words(&[1]));
+    count(&mut gradient_bytes, 0);
+    gradient_bytes.extend(words(&[1, nan, 0x80000000]));
+    let mut expected = words(&[4, version]);
+    expected.extend(&gradient_bytes);
+    add_object_case(
+        &mut cases,
+        ObjectData::PathGradientBrush {
+            version,
+            data: gradient.clone(),
+        },
+        expected,
+    );
+    let points_gradient = PathGradient {
+        flags: 0,
+        wrap_mode: 0,
+        center_color: 0,
+        center_point: [0, 0],
+        surrounding_colors: vec![],
+        boundary: GradientBoundary::Points(vec![[nan, 0x80000000]]),
+        transform: None,
+        blend: None,
+        focus_scales: None,
+    };
+    let mut expected = words(&[4, version, 0, 0, 0, 0, 0]);
+    count(&mut expected, 0);
+    expected.extend(words(&[1]));
+    count(&mut expected, 1);
+    expected.extend(words(&[nan, 0x80000000, 0, 0, 0]));
+    add_object_case(
+        &mut cases,
+        ObjectData::PathGradientBrush {
+            version,
+            data: points_gradient,
+        },
+        expected,
+    );
+    let texture = Texture {
+        flags: 2,
+        wrap_mode: -1,
+        transform: Some(matrix),
+        image: Some(TextureImage::Metafile {
+            version,
+            metafile_type: 4,
+            data: vec![0xa5],
+            suffix: vec![0xb6, 0xc7, 0xd8],
+        }),
+    };
+    let mut texture_bytes = words(&[2, u32::MAX, 1]);
+    texture_bytes.extend(words(&matrix));
+    texture_bytes.extend(words(&[1, 3, version, 4]));
+    texture_bytes.extend(blob(&[0xa5]));
+    texture_bytes.extend(blob(&[0xb6, 0xc7, 0xd8]));
+    let mut expected = words(&[3, version]);
+    expected.extend(&texture_bytes);
+    add_object_case(
+        &mut cases,
+        ObjectData::TextureBrush {
+            version,
+            data: texture.clone(),
+        },
+        expected,
+    );
+    for (brush, tag, brush_bytes) in [
+        (PenBrushData::Solid { argb: nan }, 0, words(&[nan])),
+        (
+            PenBrushData::Hatch {
+                style: 1,
+                foreground: 2,
+                background: 3,
+            },
+            1,
+            words(&[1, 2, 3]),
+        ),
+        (PenBrushData::Texture(texture), 2, texture_bytes),
+        (PenBrushData::PathGradient(gradient), 3, gradient_bytes),
+        (PenBrushData::LinearGradient(linear), 4, linear_bytes),
+    ] {
+        let pen = Pen {
+            version,
+            flags: 0x1fff,
+            unit: 1,
+            width: nan,
+            transform: Some(matrix),
+            start_cap: Some(-1),
+            end_cap: Some(i32::MIN),
+            join: Some(3),
+            miter_limit: Some(nan),
+            line_style: Some(4),
+            dashed_line_cap: Some(5),
+            dash_offset: Some(0x80000000),
+            dash_pattern: Some(vec![]),
+            alignment: Some(-1),
+            compound_line: Some(vec![nan, 0x80000000]),
+            custom_caps: vec![cap.clone(), arrow.clone()],
+            brush: PenBrush {
+                version,
+                data: brush,
+            },
+        };
+        let mut expected = words(&[6, version, 0x1fff, 1, nan, 1]);
+        expected.extend(words(&matrix));
+        expected.extend(words(&[
+            1,
+            u32::MAX,
+            1,
+            0x80000000,
+            1,
+            3,
+            1,
+            nan,
+            1,
+            4,
+            1,
+            5,
+            1,
+            0x80000000,
+            1,
+        ]));
+        count(&mut expected, 0);
+        expected.extend(words(&[1, u32::MAX, 1]));
+        expected.extend(word_array(&[nan, 0x80000000]));
+        count(&mut expected, 2);
+        expected.extend(&cap_bytes);
+        expected.extend(&arrow_bytes);
+        expected.extend(words(&[version, tag]));
+        expected.extend(brush_bytes);
+        add_object_case(&mut cases, ObjectData::Pen(pen), expected);
+    }
+    assert_normalized_cases(cases);
+}
+
+#[test]
+fn normalized_object_optional_empty_values_and_texture_image_variants() {
+    use emf_core::emf_plus::*;
+    let version = 0xdbc01002;
+    let mut cases = vec![];
+    let pixel = PixelBitmap {
+        version,
+        width: -1,
+        height: 0,
+        stride: i32::MIN,
+        pixel_format: 0x0026200a,
+        palette: None,
+        pixels: vec![],
+    };
+    let mut pixel_bytes = words(&[1, version, u32::MAX, 0, 0x80000000, 0x0026200a, 0]);
+    pixel_bytes.extend(blob(&[]));
+    let mut bitmap_bytes = words(&[2, version, 1, 2, 3, 4, 1]);
+    bitmap_bytes.extend(blob(&[0xa5, 0xb6, 0xc7, 0xd8]));
+    for (image, bytes) in [
+        (None, vec![]),
+        (Some(TextureImage::PixelBitmap(pixel)), pixel_bytes),
+        (
+            Some(TextureImage::Bitmap {
+                version,
+                width: 1,
+                height: 2,
+                stride: 3,
+                pixel_format: 4,
+                bitmap_type: 1,
+                data: vec![0xa5, 0xb6, 0xc7, 0xd8],
+            }),
+            bitmap_bytes,
+        ),
+    ] {
+        let mut expected = words(&[3, version, 0, 0, 0, u32::from(image.is_some())]);
+        expected.extend(bytes);
+        add_object_case(
+            &mut cases,
+            ObjectData::TextureBrush {
+                version,
+                data: Texture {
+                    flags: 0,
+                    wrap_mode: 0,
+                    transform: None,
+                    image,
+                },
+            },
+            expected,
+        );
+    }
+    let cap = CustomLineCap {
+        version,
+        data: CustomLineCapData::Default(DefaultLineCap {
+            flags: 0,
+            base_cap: 0,
+            base_inset: 0,
+            stroke_start_cap: 0,
+            stroke_end_cap: 0,
+            stroke_join: 0,
+            stroke_miter_limit: 0,
+            width_scale: 0,
+            fill_hot_spot: [0, 0],
+            stroke_hot_spot: [0, 0],
+            fill_path: None,
+            line_path: None,
+        }),
+    };
+    let mut expected = words(&[15, version]);
+    expected.extend(words(&[0; 15]));
+    add_object_case(&mut cases, ObjectData::CustomLineCap(cap), expected);
+    let pen = Pen {
+        version,
+        flags: 0,
+        unit: 0,
+        width: 0,
+        transform: None,
+        start_cap: None,
+        end_cap: None,
+        join: None,
+        miter_limit: None,
+        line_style: None,
+        dashed_line_cap: None,
+        dash_offset: None,
+        dash_pattern: None,
+        alignment: None,
+        compound_line: None,
+        custom_caps: vec![],
+        brush: PenBrush {
+            version,
+            data: PenBrushData::Solid { argb: 0 },
+        },
+    };
+    let mut expected = words(&[6, version, 0, 0, 0]);
+    expected.extend(words(&[0; 19]));
+    count(&mut expected, 0);
+    expected.extend(words(&[version, 0, 0]));
+    add_object_case(&mut cases, ObjectData::Pen(pen), expected);
+    assert_normalized_cases(cases);
+}
+
+#[test]
+fn invalid_object_layouts_and_incomplete_chains_fail_atomically() {
+    let mut first = words(&[12]);
+    first.extend([0, 1, 2, 3]);
+    for raw in [
+        frame(0x4008, 0x0107, &words(&[0xdbc01002, 0]), &[]),
+        frame(0x4008, 0x8107, &first, &[]),
+    ] {
+        unsafe {
+            let original = input(&[&raw]);
+            let doc = parse(&original);
+            let mut output = ptr::NonNull::dangling().as_ptr();
+            assert_eq!(
+                emf_document_emf_plus_snapshot_v1(
+                    doc,
+                    &options(1 << 20),
+                    ptr::null(),
+                    &mut output,
+                    ptr::null_mut()
+                ),
+                EMF_FORMAT_ERROR
+            );
+            assert!(output.is_null());
+            assert_eq!(emf_serialize(doc, &mut output, ptr::null_mut()), EMF_OK);
+            assert_eq!(view(output), original);
+            emf_document_free(doc);
+        }
     }
 }

@@ -1,7 +1,7 @@
 //! Independent read-only EMF+ snapshot schema; see emf-plus-snapshot-v1.md.
 use crate::emf_plus_typed::Sink;
 use crate::*;
-use emf_core::emf_plus::{Error, RecordData};
+use emf_core::emf_plus::{Error, ObjectData, ObjectDefinition, RecordData};
 
 pub const EMF_PLUS_SNAPSHOT_VERSION: u32 = 1;
 
@@ -34,9 +34,23 @@ fn family(data: &RecordData) -> (u32, usize) {
     }
 }
 
-fn typed_len(data: &RecordData) -> Result<usize, Failure> {
+fn typed_len(
+    data: &RecordData,
+    index: usize,
+    object: Option<&(ObjectDefinition, ObjectData)>,
+) -> Result<usize, Failure> {
     let mut sink = Sink { len: 0, out: None };
     match data {
+        RecordData::Object(fragment) => {
+            let (definition, value) = object.ok_or_else(|| {
+                Failure::new(EMF_INTERNAL_ERROR, None, "missing object definition")
+            })?;
+            sink.object_fragment(
+                fragment,
+                definition,
+                (index == definition.first_record).then_some(value),
+            )?;
+        }
         RecordData::Drawing(value) => sink.drawing(value)?,
         RecordData::Text(value) => sink.text(value)?,
         RecordData::Effect(value) => sink.effect(value)?,
@@ -100,18 +114,62 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             .ok_or_else(|| Failure::invalid("document is NULL"))?
             .document;
         // Extraction uses the existing bounded core parser, including comment scans,
-        // source copies, typed objects and work/record/allocation ceilings.
+        // source copies and work/record/allocation ceilings.
+        let parse_limits = limits(parse_limits)?;
         let embedded = document
-            .structured_emf_plus(&limits(parse_limits)?)
+            .structured_emf_plus(&parse_limits)
             .map_err(nested_error)?;
         let stream = &embedded.stream;
+        // Assemble and decode once per definition, including continuation chains.
+        // Reuse these values for both checked sizing and output writing.
+        let definitions = stream
+            .object_definitions(&parse_limits)
+            .map_err(nested_error)?;
+        let mut objects = Vec::new();
+        let metadata_bytes = definitions
+            .len()
+            .checked_mul(size_of::<(ObjectDefinition, ObjectData)>())
+            .ok_or_else(overflow)?;
+        if metadata_bytes > parse_limits.max_allocated_bytes {
+            return Err(emf_core::ParseFailure::LimitExceeded {
+                kind: emf_core::LimitKind::AllocatedBytes,
+                requested: metadata_bytes as u64,
+                limit: parse_limits.max_allocated_bytes as u64,
+            }
+            .into());
+        }
+        objects.try_reserve_exact(definitions.len()).map_err(|_| {
+            Failure::new(
+                EMF_ALLOCATION_FAILED,
+                None,
+                "EMF+ object metadata allocation failed",
+            )
+        })?;
+        for mut definition in definitions {
+            let value = definition.decode(&parse_limits).map_err(nested_error)?;
+            // Only identity and bounds are needed after decoding; release the
+            // assembled wire body rather than retaining a duplicate copy.
+            definition.bytes = Vec::new();
+            objects.push((definition, value));
+        }
         let lengths = stream.segment_lengths();
         let raw_len = lengths
             .iter()
             .try_fold(0usize, |n, len| n.checked_add(*len).ok_or_else(overflow))?;
-        let typed_total = stream.records.iter().try_fold(0usize, |n, record| {
-            n.checked_add(typed_len(&record.data)?).ok_or_else(overflow)
-        })?;
+        let mut object_index = 0;
+        let typed_total =
+            stream
+                .records
+                .iter()
+                .enumerate()
+                .try_fold(0usize, |n, (index, record)| {
+                    let object = objects.get(object_index);
+                    let len = typed_len(&record.data, index, object)?;
+                    if object.is_some_and(|(definition, _)| definition.last_record == index) {
+                        object_index += 1;
+                    }
+                    n.checked_add(len).ok_or_else(overflow)
+                })?;
         let total = lengths
             .len()
             .checked_mul(32)
@@ -168,6 +226,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
         let mut offset = 0usize;
         let mut first_segment = 0usize;
         let mut segment_end = lengths.first().copied().unwrap_or(0);
+        let mut object_index = 0;
         for (index, record) in stream.records.iter().enumerate() {
             let mut header = [0u8; 12];
             for byte in &mut header {
@@ -198,7 +257,8 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             bytes.extend_from_slice(&header[..8]);
             bytes.extend_from_slice(&(data_size as u32).to_le_bytes());
             let (tag, _) = family(&record.data);
-            let typed_len = typed_len(&record.data)?;
+            let object = objects.get(object_index);
+            let typed_len = typed_len(&record.data, index, object)?;
             bytes.extend_from_slice(&tag.to_le_bytes());
             word(&mut bytes, typed_len as u64);
             word(&mut bytes, size as u64);
@@ -208,6 +268,20 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             // Variable families use normalized core values. The remaining supported
             // families have fixed word layouts identical to their validated wire bodies.
             match &record.data {
+                RecordData::Object(fragment) => {
+                    let (definition, value) = object.ok_or_else(|| {
+                        Failure::new(EMF_INTERNAL_ERROR, None, "missing object definition")
+                    })?;
+                    Sink {
+                        len: 0,
+                        out: Some(&mut bytes),
+                    }
+                    .object_fragment(
+                        fragment,
+                        definition,
+                        (index == definition.first_record).then_some(value),
+                    )?;
+                }
                 RecordData::Drawing(value) => Sink {
                     len: 0,
                     out: Some(&mut bytes),
@@ -229,6 +303,9 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
                 }
                 .ts_graphics(value)?,
                 _ => bytes.extend_from_within(raw_start + 12..raw_start + 12 + typed_len),
+            }
+            if object.is_some_and(|(definition, _)| definition.last_record == index) {
+                object_index += 1;
             }
             offset += size;
         }
