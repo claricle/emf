@@ -3,9 +3,9 @@
 //! their source spans and remain opaque, even when the native core knows more.
 use super::*;
 use emf_core::wmf::{
-    geometry::GeometryRecord as G, objects::ObjectIssue, objects::ObjectKind,
-    region::RegionRecord as R, state::StateRecord as S, text::TextRecord as T, DiagnosticKind as D,
-    Document, Record, TypedRecord,
+    brush::BrushRecord as B, geometry::GeometryRecord as G, objects::ObjectIssue,
+    objects::ObjectKind, region::RegionRecord as R, state::StateRecord as S, text::TextRecord as T,
+    DiagnosticKind as D, Document, Record, TypedRecord,
 };
 
 const MAX_BYTES: usize = 200 * 1024 * 1024;
@@ -158,6 +158,7 @@ fn family(record: &Record) -> u32 {
         | Some(TypedRecord::Geometry(
             G::OffsetClipRgn { .. } | G::ExcludeClipRect { .. } | G::IntersectClipRect { .. },
         )) => 9,
+        Some(TypedRecord::Brush(_)) => 10,
         _ => 0,
     }
 }
@@ -315,6 +316,25 @@ fn payload(
                 }
             }
             _ => unreachable!(),
+        },
+        (10, Some(TypedRecord::Brush(b))) => match b {
+            B::CreatePatternBrush(b) => {
+                for value in [b.bitmap_type, b.width, b.height, b.width_bytes] {
+                    out.i32(value)?;
+                }
+                out.u32(u32::from(b.planes))?;
+                out.u32(u32::from(b.bits_pixel))?;
+                out.raw(&b.bits)?;
+                out.raw(&b.reserved)?;
+                out.u32(b.pattern.len() as u32)?;
+                out.raw(&b.pattern)?;
+            }
+            B::DibCreatePatternBrush(b) => {
+                out.u32(u32::from(b.style))?;
+                out.u32(u32::from(b.color_usage))?;
+                out.u32(b.target.len() as u32)?;
+                out.raw(&b.target)?;
+            }
         },
         (5, Some(TypedRecord::Text(t))) => {
             let (x, y, text, padding, options, rectangle, dx, suffix) = match t {
@@ -604,6 +624,20 @@ pub unsafe extern "C" fn emf_wmf_document_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn checks_brush_data_output_budget_before_allocating() {
+        let source = [
+            1, 0, 9, 0, 0, 3, 18, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0x42, 1, 3, 0, 0xff,
+            0xff, 0x80, 0, 3, 0, 0, 0, 0, 0,
+        ];
+        let doc = emf_core::wmf::parse(&source, &emf_core::ParseLimits::default()).unwrap();
+        let bytes = encode(&doc, 214, doc.source()).unwrap_or_else(|e| panic!("{:?}", e.message));
+        assert_eq!(bytes.len(), 214);
+        assert_eq!(
+            encode(&doc, 213, doc.source()).unwrap_err().status,
+            EMF_LIMIT_EXCEEDED
+        );
+    }
     #[test]
     fn checks_exact_output_budget_before_allocating() {
         let source = [

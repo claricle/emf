@@ -99,13 +99,17 @@ RSpec.describe "WMF object records" do
     expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
   end
 
-  it "reserves handles for opaque object creators without decoding their payloads" do
+  it "allocates and reuses handles for typed pattern brush creators" do
     select_one = object_record(0x012D, [1].pack("v"))
-    [0x01F9, 0x0142].each do |function|
-      creator = object_record(function, "\x00\x00".b)
+    pattern = object_record(0x7FF9, [-2, 1, 1, 2].pack("s<4") + [1, 1].pack("C2") +
+      "\x10\x20\x30\x40".b + ("\x55".b * 18) + "\xAA\xBB".b)
+    dib_pattern = object_record(0x7F42, [3, 0].pack("v2") + "\xDE\xAD\xBE\xEF".b)
+    [pattern, dib_pattern].each do |creator|
       bytes = object_file([creator, pen, select_one, delete_zero, brush, select_zero])
       metafile = Emf.parse(bytes)
-      expect(metafile.records.first.raw_bytes).to eq(creator)
+      expected_class = creator == pattern ? Emf::Model::Wmf::Records::CreatePatternBrush : Emf::Model::Wmf::Records::DibCreatePatternBrush
+      expect(metafile.records.first).to be_a(expected_class)
+      expect(metafile.records.first.type_id).to eq(creator.byteslice(4, 2).unpack1("v"))
       expect(Emf.serialize(metafile)).to eq(bytes)
     end
   end

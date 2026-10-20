@@ -35,6 +35,21 @@ RSpec.describe Emf::Native::WmfFields do
     [28, region_type].pack("Vv") + body
   end
   let(:region_descriptor) { { type: region_type, offset: offset, payload: region_payload, family: 9 } }
+  let(:pattern_type) { 0x01F9 }
+  let(:pattern_bytes) { "\xAA\xBB".b }
+  let(:pattern_payload) do
+    [-2, 3, 1, 2, 1, 1].pack("V6") + "\x10\x20\x30\x40".b + ("\x55".b * 18) + [pattern_bytes.bytesize].pack("V") + pattern_bytes
+  end
+  let(:pattern_raw) do
+    [20, pattern_type].pack("Vv") + [-2, 3, 1, 2].pack("s<4") + [1, 1].pack("C2") +
+      "\x10\x20\x30\x40".b + ("\x55".b * 18) + pattern_bytes
+  end
+  let(:pattern_descriptor) { { type: pattern_type, offset: offset, payload: pattern_payload, family: 10 } }
+  let(:dib_pattern_type) { 0x0142 }
+  let(:dib_target) { "\xDE\xAD\xBE\xEF".b }
+  let(:dib_pattern_payload) { [3, 0, dib_target.bytesize].pack("V3") + dib_target }
+  let(:dib_pattern_raw) { [8, dib_pattern_type].pack("Vv") + [3, 0].pack("v2") + dib_target }
+  let(:dib_pattern_descriptor) { { type: dib_pattern_type, offset: offset, payload: dib_pattern_payload, family: 10 } }
 
   it "rejects a supported state with a non-state native family" do
     record = descriptor.merge(family: 4)
@@ -131,6 +146,53 @@ RSpec.describe Emf::Native::WmfFields do
       [region_descriptor.merge(payload: [0xABCD, 0x12345678].pack("V2") + [-2, -32_768, 300, 400].pack("l<4") +
         [2, 32_769, 65_534, 1, 65_536, 65_535, 30, 40, 2, 10, 20, 50, 60].pack("V*")), region_raw],
       [region_descriptor, region_raw.byteslice(0, 12)]
+    ]
+
+    invalid.each do |record, raw_bytes|
+      expect { described_class.new(record, raw_bytes).call }.to raise_error(Emf::Error)
+    end
+  end
+
+  it "decodes native pattern brush fields and preserves exact bitmap bytes" do
+    record = described_class.new(pattern_descriptor, pattern_raw).call
+
+    expect(record).to be_a(Emf::Model::Wmf::Records::CreatePatternBrush)
+    expect([record.bitmap_type, record.width, record.height, record.width_bytes, record.planes, record.bits_pixel])
+      .to eq([-2, 3, 1, 2, 1, 1])
+    expect(record.bits).to eq("\x10\x20\x30\x40".b)
+    expect(record.reserved).to eq("\x55".b * 18)
+    expect(record.pattern).to eq(pattern_bytes)
+  end
+
+  it "rejects malformed family 10 pattern payloads, narrowing and raw bounds" do
+    invalid = [
+      [pattern_descriptor.merge(family: 9), pattern_raw],
+      [pattern_descriptor.merge(payload: pattern_payload.byteslice(0, 49)), pattern_raw],
+      [pattern_descriptor.merge(payload: [32_768].pack("V") + pattern_payload.byteslice(4..)), pattern_raw],
+      [pattern_descriptor.merge(payload: pattern_payload.byteslice(0, 16) + [256].pack("V") +
+        pattern_payload.byteslice(20..)), pattern_raw],
+      [pattern_descriptor.merge(payload: pattern_payload.byteslice(0, 46) + [3].pack("V") + pattern_bytes + "\x00\x00".b), pattern_raw],
+      [pattern_descriptor, pattern_raw.byteslice(0, 39)]
+    ]
+
+    invalid.each do |record, raw_bytes|
+      expect { described_class.new(record, raw_bytes).call }.to raise_error(Emf::Error)
+    end
+  end
+
+  it "decodes DIB pattern brush fields while preserving the opaque target" do
+    record = described_class.new(dib_pattern_descriptor, dib_pattern_raw).call
+
+    expect(record).to be_a(Emf::Model::Wmf::Records::DibCreatePatternBrush)
+    expect([record.style, record.color_usage, record.target]).to eq([3, 0, dib_target])
+  end
+
+  it "rejects malformed family 10 DIB pattern lengths and raw bounds" do
+    invalid = [
+      [dib_pattern_descriptor.merge(family: 8), dib_pattern_raw],
+      [dib_pattern_descriptor.merge(payload: dib_pattern_payload.byteslice(0, 11)), dib_pattern_raw],
+      [dib_pattern_descriptor.merge(payload: [65_536, 0, dib_target.bytesize].pack("V3") + dib_target), dib_pattern_raw],
+      [dib_pattern_descriptor, dib_pattern_raw.byteslice(0, 9)]
     ]
 
     invalid.each do |record, raw_bytes|

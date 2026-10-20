@@ -92,7 +92,7 @@ module Emf
         return decode_font(raw, function, offset) if function & 0xFF == 0xFB
         return decode_state(raw, function, offset) if Binary::STATE_RECORDS.key?(function & 0xFF)
 
-        codec = RegionCodec::RECORDS.key?(function & 0xFF) ? RegionCodec : PaletteCodec
+        codec = [PaletteCodec, RegionCodec, BrushCodec].find { |candidate| candidate::RECORDS.key?(function & 0xFF) }
         codec.decode(raw, function, offset) { |message| parse_error(offset, function, message) }
       end
 

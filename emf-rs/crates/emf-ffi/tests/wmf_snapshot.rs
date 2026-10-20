@@ -738,3 +738,135 @@ fn malformed_region_and_clipping_records_stay_opaque_without_hiding_eof() {
     assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
     assert_eq!(&bytes[bytes.len() - 4..], b"tail");
 }
+
+fn pattern_brush_body(width: i16, height: i16, stride: i16, bpp: u8) -> Vec<u8> {
+    let mut body: Vec<_> = [i16::MIN, width, height, stride]
+        .iter()
+        .flat_map(|n| n.to_le_bytes())
+        .collect();
+    body.extend_from_slice(&[1, bpp, 0, 0xff, 0x80, 0x7f]);
+    body.extend(0x80..0x92);
+    let length = (width as usize * usize::from(bpp)).div_ceil(16) * 2 * height as usize;
+    body.extend((0..length).map(|n| n as u8));
+    body
+}
+
+#[test]
+fn pattern_brush_payloads_preserve_signed_headers_raw_fields_and_source_suffix() {
+    let suffix = [0xde, 0xad, 0xbe, 0xef];
+    let mut cases = Vec::new();
+    for (width, height, stride, bpp) in [
+        (1, 1, i16::MIN, 255),
+        (i16::MAX, 1, -1, 1),
+        (1, i16::MAX, 0, 1),
+    ] {
+        let mut body = pattern_brush_body(width, height, stride, bpp);
+        let mut expected: Vec<_> = [i16::MIN, width, height, stride]
+            .iter()
+            .flat_map(|n| (*n as i32).to_le_bytes())
+            .collect();
+        expected.extend_from_slice(&1u32.to_le_bytes());
+        expected.extend_from_slice(&u32::from(bpp).to_le_bytes());
+        expected.extend_from_slice(&body[10..32]);
+        expected.extend_from_slice(&((body.len() - 32) as u32).to_le_bytes());
+        expected.extend_from_slice(&body[32..]);
+        body.extend_from_slice(&suffix);
+        cases.push((0xa7f9, body, expected));
+    }
+    for (style, usage) in [(3u16, u16::MAX), (u16::MAX, 2), (5, 1), (6, 0)] {
+        let target = [0, 0xff, 0x80, 0, 0xfe, 0xff]; // Malformed DIB remains raw and typed.
+        let mut body: Vec<_> = [style, usage]
+            .iter()
+            .flat_map(|n| n.to_le_bytes())
+            .collect();
+        body.extend_from_slice(&target);
+        let mut expected: Vec<_> = [u32::from(style), u32::from(usage), target.len() as u32]
+            .iter()
+            .flat_map(|n| n.to_le_bytes())
+            .collect();
+        expected.extend_from_slice(&target);
+        cases.push((0xab42, body, expected));
+    }
+    let mut records: Vec<_> = cases
+        .iter()
+        .map(|(function, body, _)| record(*function, body))
+        .collect();
+    records.push(record(0x7777, &[0x80, 0xff]));
+    records.push(record(0, &[]));
+    let input = source(&records, b"tail\0");
+    unsafe {
+        let doc = parse(&input);
+        let mut buffer = ptr::null_mut();
+        assert_eq!(emf_wmf_serialize(doc, &mut buffer, ptr::null_mut()), EMF_OK);
+        let mut data = ptr::null();
+        let mut length = 0;
+        assert_eq!(emf_buffer_view(buffer, &mut data, &mut length), EMF_OK);
+        assert_eq!(slice::from_raw_parts(data, length as usize), input);
+        emf_buffer_free(buffer);
+        let bytes = snapshot(doc);
+        let values = payloads(&bytes);
+        let mut descriptor = 120;
+        let mut source_offset = 18;
+        for (index, (function, body, expected)) in cases.iter().enumerate() {
+            assert_eq!(values[index], (u32::from(*function), 10, expected.clone()));
+            assert_eq!(u64_at(&bytes, descriptor + 8), source_offset as u64);
+            assert_eq!(u64_at(&bytes, descriptor + 16), (body.len() + 6) as u64);
+            assert_eq!(
+                &input[source_offset..source_offset + body.len() + 6],
+                records[index]
+            );
+            if function & 0xff == 0xf9 {
+                assert_eq!(&body[body.len() - 4..], suffix);
+                assert_eq!(expected.len(), 50 + body.len() - 32 - suffix.len());
+            }
+            descriptor += 40 + expected.len();
+            source_offset += body.len() + 6;
+        }
+        assert_eq!(values[cases.len()], (0x7777, 0, vec![]));
+        assert_eq!(values[cases.len() + 1], (0, 1, vec![]));
+        assert_eq!(u64_at(&bytes, 40), input.len() as u64);
+        assert_eq!(&bytes[bytes.len() - 5..], b"tail\0");
+    }
+}
+
+#[test]
+fn malformed_pattern_brush_headers_remain_opaque_with_complete_spans() {
+    let valid = pattern_brush_body(1, 1, -1, 1);
+    let mut records = Vec::new();
+    for (offset, word) in [(2, 0u16), (2, 0x8000), (4, 0), (4, 0xffff)] {
+        let mut body = valid.clone();
+        body[offset..offset + 2].copy_from_slice(&word.to_le_bytes());
+        records.push(record(0x01f9, &body));
+    }
+    for (offset, byte) in [(8, 0), (8, 2), (9, 0)] {
+        let mut body = valid.clone();
+        body[offset] = byte;
+        records.push(record(0x01f9, &body));
+    }
+    records.push(record(0x01f9, &valid[..30]));
+    records.push(record(0x01f9, &valid[..32]));
+    records.push(record(0x0142, &[0, 0]));
+    records.push(record(0x0142, &[3, 0, 0xff, 0xff]));
+    records.push(record(0x0142, &[5, 0, 3, 0, 0, 0]));
+    records.push(record(0, &[]));
+    let input = source(&records, b"tail");
+    let bytes = unsafe { snapshot(parse(&input)) };
+    let values = payloads(&bytes);
+    let mut offset = 18;
+    for (index, value) in values[..values.len() - 1].iter().enumerate() {
+        assert_eq!(value.1, 0);
+        assert!(value.2.is_empty());
+        assert_eq!(u64_at(&bytes, 120 + 40 * index + 8), offset as u64);
+        assert_eq!(
+            u64_at(&bytes, 120 + 40 * index + 16),
+            records[index].len() as u64
+        );
+        assert_eq!(
+            &input[offset..offset + records[index].len()],
+            records[index]
+        );
+        offset += records[index].len();
+    }
+    assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
+    assert_eq!(&bytes[bytes.len() - 4..], b"tail");
+}

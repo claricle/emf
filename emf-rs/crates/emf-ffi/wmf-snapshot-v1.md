@@ -67,7 +67,24 @@ length, then payload. The function includes the original high byte. Families:
   bytes following RegionSize for CreateRegion, or the known 4/8/2/4/8-byte wire
   prefix for FillRegion/FrameRegion/index/offset/rectangle variants respectively.
 
-Families 2–9 cover the existing Ruby WMF models only. Rust-only typed records
+- 10: pattern brushes. CreatePatternBrush (low function byte f9) has four
+  sign-extended i32 values in bitmap-type/width/height/width-bytes order, then
+  u32 planes/bits-pixel, exactly four raw ignored pointer bytes and 18 raw
+  reserved bytes, u32 pattern length, and the raw pattern (50 + length bytes).
+  Width-bytes is retained independently and can be zero or negative. Pattern
+  length is derived from positive width/height, one plane and nonzero bits-pixel:
+  ceil(width * bits-pixel / 16) * 2 * height. No suffix bytes or suffix length
+  appear in the payload; the complete source span retains bytes after the
+  32-byte wire header and pattern. DibCreatePatternBrush (42) has u32 style,
+  stored color-usage and target length, then raw target (12 + length bytes).
+  Style and color-usage zero-extend u16 values. Style 3 ignores color-usage when
+  interpreting a DIB, but the stored value survives unchanged; other styles
+  require color-usage at most 2. The target is the entire nonempty, even-length
+  wire remainder, including malformed or unsupported DIB data. No DIB decoding
+  is performed for this payload. Function high bytes and complete source spans
+  are retained for both variants. CreateBrushIndirect remains family 4.
+
+Families 2–10 cover the existing Ruby WMF models only. Rust-only typed records
 remain opaque. For Ruby compatibility, ExtTextOut DX consumes one i16 per
 character even with ETO_PDY set; the original flag and remaining bytes survive
 as suffix. The compatibility view uses the Rust typed decoder with only that
