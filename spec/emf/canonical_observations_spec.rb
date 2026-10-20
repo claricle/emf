@@ -119,13 +119,13 @@ RSpec.describe BackendParity do
       expect(hexes.uniq.size).to eq(2)
     end
 
-    it "flags a float32 NaN payload that BinData re-emits canonicalised" do
+    it "preserves a float32 NaN payload through BinData" do
       changed = bytes.dup
       target = Emf.parse(bytes).records.find { |r| r.wire.respond_to?(:xform) }
       changed[target.offset + 8, 4] = [0x7FC00001].pack("V")
       record = described_class::Observation.call(changed).dig("parse", "value", "records").find { |r| r["offset"] == target.offset }
       m11 = record.dig("wire", "value", "fields", "xform", "fields", "m11", "float", "wire_hex")
-      expect([record.fetch("matches_source"), m11]).to eq([false, "0000c07f"])
+      expect([record.fetch("matches_source"), m11]).to eq([true, "0100c07f"])
     end
 
     it "keeps non-UTF-8 binary strings exactly" do
