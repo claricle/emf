@@ -149,6 +149,53 @@ RSpec.describe EmfsvgBenchmark::CLI do
     expect(File).not_to exist(result_path)
   end
 
+  it "forces native in warm and cold conversions and fails instead of using the ambient Ruby backend" do
+    arguments = [*args, "--backend", "native"]
+    golden = File.join(checkout, "spec/fixtures/golden/image1.svg")
+    expected = File.binread(golden)
+    with_emf_backend_environment(backend: "ruby", library: File.join(directory, "missing-library")) do
+      expect(described_class.new(arguments).run).to eq(1)
+      expect(report.fetch("backend")).to eq("native")
+      expect(report.fetch("failures")).to contain_exactly(
+        include("failure" => include("class" => "Emf::Native::Unavailable")),
+        include("stage" => "cold_load", "run" => 0, "failure" => include("class" => "Emf::Native::Unavailable"))
+      )
+      expect(report.fetch("slowest_measured_case")).to be_nil
+      expect(report.dig("native_library", "path")).to eq(ENV.fetch("EMF_NATIVE_LIBRARY"))
+      expect(report.dig("method", "inseparable_boundaries").join).to include("ABI", "hydration", "Rust allocations")
+    end
+    expect(File.binread(golden)).to eq(expected)
+    expect(Open3.capture2("git", "status", "--porcelain", chdir: checkout).first).to eq("")
+  end
+
+  it "records an invalid native library identity and preserves both conversion failures" do
+    arguments = [*args, "--backend", "native"]
+    library = File.join(directory, "invalid-library")
+    File.binwrite(library, "not a native library")
+    with_emf_backend_environment(backend: "ruby", library: library) do
+      expect(described_class.new(arguments).run).to eq(1)
+      expect(report.fetch("native_library")).to include(
+        "path" => library, "resolved_path" => File.realpath(library),
+        "sha256" => Digest::SHA256.file(library).hexdigest, "size_bytes" => File.size(library)
+      )
+      expect(report.fetch("failures").size).to eq(2)
+      expect(report.fetch("failures").map { |failure| failure.dig("failure", "class") })
+        .to eq(["Emf::Native::Unavailable", "Emf::Native::Unavailable"])
+    end
+  end
+
+  it "forces Ruby in warm and cold conversions despite an unavailable ambient native backend" do
+    arguments = [*args, "--backend", "ruby"]
+    with_emf_backend_environment(backend: "native", library: File.join(directory, "missing-library")) do
+      expect(described_class.new(arguments).run).to eq(0)
+      expect(report.fetch("backend")).to eq("ruby")
+      expect(report.fetch("native_library")).to be_nil
+      expect(report.fetch("fixtures").fetch(0).fetch("validity")).to include("golden_identical" => true)
+      expect(report.dig("cold_load", "runs", 0)).to include("status" => "ok", "validity" => include("golden_identical" => true))
+      expect(report.dig("method", "inseparable_boundaries")).to eq([])
+    end
+  end
+
   it "rejects a different consumer revision" do
     expect { expect(described_class.new([*args, "--revision", "0" * 40]).run).to eq(2) }.to output(/revision differs/).to_stderr
     expect(File).not_to exist(result_path)

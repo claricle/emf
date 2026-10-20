@@ -4,6 +4,7 @@ require_relative "fields"
 require_relative "font_fields"
 require_relative "gradient_fields"
 require_relative "bitmap_fields"
+require_relative "lazy_wire"
 
 module Emf
   module Native
@@ -22,11 +23,12 @@ module Emf
 
       def call
         records = @snapshot.records.map { |record| hydrate_record(record) }
-        emf_plus = records.filter_map do |record|
-          wire = record.wire
-          next unless wire.is_a?(Emr::Binary::Records::Comment) && wire.cb_data >= 4 && wire.data.start_with?("EMF+")
+        emf_plus = @snapshot.records.filter_map do |record|
+          next unless record.fetch(:family) == 4
 
-          wire.data.to_s.byteslice(4..)
+          _klass, fields = comment_fields(record.fetch(:payload), @input.byteslice(record.fetch(:offset), record.fetch(:length)))
+          data = fields.fetch(:data)
+          data.byteslice(4..) if fields.fetch(:cb_data) >= 4 && data.start_with?("EMF+")
         end.join.b
         Model::Metafile.new(
           format: emf_plus.empty? ? :emf : :emf_plus, header: Header.new.call(@snapshot.header, @snapshot.raw_header), records: records,
@@ -52,9 +54,8 @@ module Emf
         end
 
         klass, fields = wire_fields(record, raw)
-        wire = klass.new(**fields, i_type: record.fetch(:type), n_size: record.fetch(:length))
-        Fields.preserve_text_scales(wire, record.fetch(:payload)) if [74, 75].include?(record.fetch(:family))
-        Model::Emr::Records::WireAdapter.new(wire: wire, offset: record.fetch(:offset))
+        source = LazyWire.new(klass, fields, raw, record)
+        Model::Emr::Records::WireAdapter.lazy(source: source, offset: offset)
       end
 
       def wire_fields(record, raw)

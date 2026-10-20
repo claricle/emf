@@ -11,7 +11,18 @@ EMFSVG_PATH=/path/to/emfsvg ruby bench/emfsvg.rb \
 
 The default consumer commit is `101356dcf673841fda0693076131bca7a0f34948`.
 `--revision SHA` selects another explicit pin. A different HEAD or tracked consumer
-changes exits 2 before measurements. Native is unavailable and exits 2. The adapter
+changes exits 2 before measurements. Both `--backend ruby` and `--backend native`
+force that parser backend in every warm and cold child, overriding `EMF_BACKEND`.
+For native conversion, supply the library explicitly:
+
+```sh
+EMFSVG_PATH=/path/to/emfsvg EMF_NATIVE_LIBRARY=/path/to/libemf_ffi.dylib \
+  ruby bench/emfsvg.rb --manifest spec/fixtures/manifest.json \
+  --backend native --output tmp/bench/emfsvg-native.json
+```
+
+An unavailable library, unsupported input or conversion error fails the run with
+exit 1 and a reported child error; native never falls back to Ruby. The adapter
 never updates golden files. It shares the parser benchmark's manifest selection,
 iteration, warmup, cold-run, timeout and output controls; see [README.md](README.md).
 For a small trial, add `--fixture 'spec/fixtures/simple/*' --iterations 2 --warmups 0
@@ -30,6 +41,12 @@ explicitly on the load path. They verify the resolved `Emf.parse` and
 `Emfsvg.from_bytes` source files. The report includes consumer revision and source
 digest, parser revision/source digest, input manifest and fixture hashes, golden
 hashes, Ruby/OS/CPU metadata, resolved source paths, and actual loaded gem versions.
+Native reports also identify the selected library path, SHA-256 and size; build
+profile and compiler remain unknown because the library exposes no build metadata.
+Native parsing, ABI snapshot transfer, Ruby model/wire hydration and SVG rendering
+share each conversion's timed region. Native adapter loading is included; Ruby
+allocation counts exclude Rust allocations. These are complete conversion timings,
+not isolated Rust parsing timings.
 Installed runtime gems must be supplied by the caller; this adapter does not resolve
 or validate the consumer gemspec constraints. To reproduce a run, provision the
 reported runtime gems and external font environment. In particular, font lookup
@@ -48,3 +65,33 @@ ruby -I /path/to/emf/lib -I lib -S rspec \
 The result identifies the slowest selected conversion; it does not identify the
 unrecovered roughly 12-second workload. No timing threshold or speed claim follows
 from a small trial.
+
+## Compare saved backend reports
+
+After saving one Ruby and one native report, compare them with:
+
+```sh
+ruby bench/compare_emfsvg.rb \
+  --ruby tmp/bench/emfsvg-ruby.json \
+  --native tmp/bench/emfsvg-native.json \
+  --output tmp/bench/emfsvg-comparison.json
+```
+
+The comparator accepts only successful, well-formed schema-v1 conversion reports:
+their failure lists must be empty, each selected fixture must have passed its
+golden check, and each stage must contain the requested number of valid samples.
+It rejects reports unless parser revision and source, manifest and selected
+fixtures, consumer revision/source and clean tracked state, golden inventory,
+resolved worker sources, Ruby/OS/host environment, runtime gems, and benchmark
+method are compatible. The Ruby report may omit the `fiddle` gem that is needed
+by the native report. Incompatible, malformed, missing, or failed reports exit 2
+and do not produce a comparison.
+
+Each stage reports median times and `native_over_ruby_time`, calculated as the
+native median divided by the Ruby median. Values below 1 mean the native median
+was lower for that stage; values above 1 mean it was higher. The allocation ratio
+uses the same native-over-Ruby direction, and is null when the Ruby allocation
+baseline is zero. Allocation counts are Ruby object counts and exclude Rust
+allocations; they do not measure total allocation or memory use. The output is
+informational: small or concurrent trials remain descriptive and support no
+calibrated threshold or speed claim.

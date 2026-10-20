@@ -3,6 +3,15 @@
 require "open3"
 
 module EmfsvgBenchmarkCheckout
+  def with_emf_backend_environment(backend:, library:)
+    previous = ENV.to_h.slice("EMF_BACKEND", "EMF_NATIVE_LIBRARY")
+    ENV["EMF_BACKEND"] = backend
+    ENV["EMF_NATIVE_LIBRARY"] = library
+    yield
+  ensure
+    %w[EMF_BACKEND EMF_NATIVE_LIBRARY].each { |key| ENV[key] = previous[key] }
+  end
+
   def create_emfsvg_checkout(directory)
     FileUtils.mkdir_p(File.join(directory, "lib"))
     FileUtils.mkdir_p(File.join(directory, "spec/fixtures/golden"))

@@ -14,15 +14,34 @@ module Emf
         class WireAdapter < Emf::Model::Record
           Emf::Model::Visitor.register_visit(:visit_emr_wire_record, self)
 
+          # Internal native construction path; the source owns copied Ruby data only.
+          def self.lazy(source:, offset: nil)
+            adapter = new(wire: nil, offset: offset)
+            adapter.instance_variable_set(:@wire_source, source)
+            adapter
+          end
+
           def initialize(wire:, offset: nil)
             @wire = wire
             @offset = offset
           end
 
-          attr_reader :wire, :offset
+          attr_reader :offset
+
+          def wire
+            return @wire if @wire
+
+            @wire = @wire_source.materialize
+            @wire_source = nil
+            @wire
+          end
+
+          def to_binary_s
+            @wire ? @wire.to_binary_s : @wire_source.to_binary_s
+          end
 
           def type_id
-            @wire.i_type
+            @wire ? @wire.i_type : @wire_source.type_id
           end
 
           def accept(visitor)
@@ -39,7 +58,7 @@ module Emf
           end
 
           def inspect
-            "#<#{self.class.name} type_id=#{type_id} (#{(@wire.class.name || '').split('::').last})>"
+            "#<#{self.class.name} type_id=#{type_id} (#{(wire.class.name || '').split('::').last})>"
           end
         end
       end
