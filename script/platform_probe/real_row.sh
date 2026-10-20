@@ -90,6 +90,16 @@ install_gem() { # install_gem HOME STAGE VERSION : same command as native_instal
     install emf --version "$3" --local --no-document)
 }
 
+# A Windows DLL's imports resolve against PATH and the msys toolchain dirs on the build host, so
+# a missing runtime DLL (libunwind.dll) passes the workload but fails on a user's machine.
+# shellcheck disable=SC2329  # invoked through step
+check_dll_closure() { # check_dll_closure HOME
+  local dll
+  dll=$(find "$1"/gems -path "*/lib/emf/native/*/emf_ffi.dll" 2>/dev/null | head -n 1)
+  [ -n "$dll" ] || { echo "no installed emf_ffi.dll under $1"; return 1; }
+  ruby "$here/dll_closure.rb" "$dll"
+}
+
 # shellcheck disable=SC2329  # invoked through step
 run_workload() { # run_workload HOME FIXTURE : cwd outside the checkout so nothing loads from lib/
   (cd "$out" && env -u RUBYOPT -u RUBYLIB -u BUNDLE_GEMFILE PATH="$isolated" GEM_HOME="$1" GEM_PATH="$1" \
@@ -146,6 +156,9 @@ package_steps() {
     --require-native --forbid-compiler --resolve-dependencies || return
   version=$(cd "$root" && ruby -e 'print Gem::Specification.load("emf.gemspec").version')
   step "install_gem" install.log install_gem "$nhome" "$nstage" "$version" || return
+  if [ "${RUNNER_OS:-}" = Windows ]; then
+    step "dll_closure" dll-closure.log check_dll_closure "$nhome" || return
+  fi
   cp "$root/spec/fixtures/emf/test-000.emf" "$out/fixture.emf"
   step "installed_workload" workload.log run_workload "$nhome" "$nhere/installed_workload.rb" "$nfixture"
   grep -E '^(installed gem|discovery)' "$out/workload.log" | while IFS= read -r line; do note "$line"; done
