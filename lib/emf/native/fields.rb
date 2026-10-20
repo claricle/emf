@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "palette_fields"
+require_relative "legacy_state_fields"
 
 module Emf
   module Native
@@ -67,7 +68,10 @@ module Emf
         69 => [Emr::Binary::Records::FlattenPath],
         70 => [Emr::Binary::Records::WidenPath],
         71 => [Emr::Binary::Records::SetIcmMode, [:mode, nil, "V", 4]],
-        72 => [Emr::Binary::Records::SetLayout, [:mode, nil, "V", 4]]
+        72 => [Emr::Binary::Records::SetLayout, [:mode, nil, "V", 4]],
+        91 => [Emr::Binary::Records::ExtFloodFill, [:start, %i[x y], "l<2", 8],
+               [:color, %i[red green blue reserved], "C4", 4], [:flood_fill_mode, nil, "V", 4]],
+        92 => [Emr::Binary::Records::SetTextJustification, [:n_break_extra, nil, "l<", 4], [:n_break_count, nil, "l<", 4]]
       }.freeze
 
       POINT_ARRAYS = {
@@ -139,20 +143,6 @@ module Emf
         points = payload.byteslice(24, count * width).unpack(format).each_slice(2).map { |x, y| { x: x, y: y } }
         types = payload.byteslice((24 + (count * width))..).unpack("C*")
         [klass, { rcl_bounds: bounds, count_field => count, points_field => points, ab_types: types }]
-      end
-
-      OPAQUE = {
-        68 => Emr::Binary::Records::ExtFloodFill,
-        73 => Emr::Binary::Records::SetTextJustification
-      }.freeze
-
-      def self.opaque(payload, family)
-        raise FormatError, "invalid native opaque payload length" if payload.bytesize < 8
-
-        count = payload.unpack1("Q<")
-        raise FormatError, "invalid native opaque payload length" unless payload.bytesize == 8 + count
-
-        [OPAQUE.fetch(family), { body: payload.byteslice(8..) }]
       end
 
       def self.ext_text(payload, family, raw)
@@ -359,7 +349,7 @@ module Emf
       end
 
       def self.call(payload, family)
-        return opaque(payload, family) if OPAQUE.key?(family)
+        return LegacyStateFields.call(payload, family) if [68, 73].include?(family)
 
         klass, *layouts = LAYOUTS.fetch(family)
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == layouts.sum { |_, _, _, length| length }

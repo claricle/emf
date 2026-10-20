@@ -115,9 +115,6 @@ pub fn serialize_with_limits(
                     .len()
                     .checked_add(region.trailing_bytes.len().div_ceil(16))
                     .ok_or(SerializeFailure::SizeOverflow)?,
-                RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
-                    body.len().div_ceil(16)
-                }
                 _ => 0,
             };
             if element_count != 0 {
@@ -352,8 +349,22 @@ pub fn serialize_with_limits(
             RecordData::SetLayout { mode } | RecordData::SetIcmMode { mode } => {
                 append(&mut out, *mode)
             }
-            RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
-                out.extend_from_slice(body)
+            RecordData::ExtFloodFill {
+                start,
+                color,
+                flood_fill_mode,
+            } => {
+                append(&mut out, start.x as u32);
+                append(&mut out, start.y as u32);
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+                append(&mut out, *flood_fill_mode);
+            }
+            RecordData::SetTextJustification {
+                break_extra,
+                break_count,
+            } => {
+                append(&mut out, *break_extra as u32);
+                append(&mut out, *break_count as u32);
             }
             RecordData::SetMetaRgn
             | RecordData::FlattenPath

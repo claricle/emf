@@ -631,13 +631,14 @@ pub enum RecordData {
     SetIcmMode {
         mode: u32,
     },
-    /// Opaque body matching the Ruby compatibility layout.
     ExtFloodFill {
-        body: Vec<u8>,
+        start: Point,
+        color: ColorRef,
+        flood_fill_mode: u32,
     },
-    /// Opaque body matching the Ruby compatibility layout.
     SetTextJustification {
-        body: Vec<u8>,
+        break_extra: i32,
+        break_count: i32,
     },
     SetMetaRgn,
     FlattenPath,
@@ -895,7 +896,8 @@ impl RecordData {
                 .checked_mul(4)?
                 .checked_add(ab_types.len())?
                 .checked_add(20),
-            Self::ExtFloodFill { body } | Self::SetTextJustification { body } => Some(body.len()),
+            Self::ExtFloodFill { .. } => Some(16),
+            Self::SetTextJustification { .. } => Some(8),
             Self::FillRgn { region, .. } => region.encoded_len()?.checked_add(24),
             Self::FrameRgn { region, .. } => region.encoded_len()?.checked_add(32),
             Self::InvertRgn { region, .. } | Self::PaintRgn { region, .. } => {

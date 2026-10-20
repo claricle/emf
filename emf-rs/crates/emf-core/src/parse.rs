@@ -657,18 +657,29 @@ fn decode_record(
         28 => Ok((RecordData::SetMetaRgn, 0)),
         65 => Ok((RecordData::FlattenPath, 0)),
         66 => Ok((RecordData::WidenPath, 0)),
-        53 | 120 => {
-            budget.charge_alloc(payload.len())?;
-            budget.charge_work((payload.len() as u64).div_ceil(16))?;
-            let mut body = try_vec_with_capacity(payload.len())?;
-            body.extend_from_slice(payload);
-            let data = if kind == 53 {
-                RecordData::ExtFloodFill { body }
-            } else {
-                RecordData::SetTextJustification { body }
-            };
-            Ok((data, payload.len()))
-        }
+        53 if payload.len() >= 16 => Ok((
+            RecordData::ExtFloodFill {
+                start: Point {
+                    x: r.i32()?,
+                    y: r.i32()?,
+                },
+                color: ColorRef {
+                    red: r.take(1)?[0],
+                    green: r.take(1)?[0],
+                    blue: r.take(1)?[0],
+                    reserved: r.take(1)?[0],
+                },
+                flood_fill_mode: r.u32()?,
+            },
+            16,
+        )),
+        120 if payload.len() >= 8 => Ok((
+            RecordData::SetTextJustification {
+                break_extra: r.i32()?,
+                break_count: r.i32()?,
+            },
+            8,
+        )),
         33 => Ok((RecordData::SaveDc, 0)),
         59 => Ok((RecordData::BeginPath, 0)),
         60 => Ok((RecordData::EndPath, 0)),

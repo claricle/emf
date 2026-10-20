@@ -744,12 +744,10 @@ RSpec.describe Emf::Native do
     [
       [16, Emf::Emr::Binary::Records::SetMapperFlags, { flags: 0xFFFFFFFF }],
       [28, Emf::Emr::Binary::Records::SetMetArgn, {}],
-      [53, Emf::Emr::Binary::Records::ExtFloodFill, { body: "\x00\xFFopaque".b }],
       [65, Emf::Emr::Binary::Records::FlattenPath, {}],
       [66, Emf::Emr::Binary::Records::WidenPath, {}],
       [98, Emf::Emr::Binary::Records::SetIcmMode, { mode: 0x80000000 }],
-      [115, Emf::Emr::Binary::Records::SetLayout, { mode: 0xFFFFFFFF }],
-      [120, Emf::Emr::Binary::Records::SetTextJustification, { body: "opaque\xFF\x00".b }]
+      [115, Emf::Emr::Binary::Records::SetLayout, { mode: 0xFFFFFFFF }]
     ]
   end
 

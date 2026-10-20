@@ -20,7 +20,7 @@ fn header() -> Vec<u8> {
 fn ruby_state_completion_records_decode_instead_of_staying_raw() {
     for kind in [16, 28, 53, 65, 66, 98, 115, 120] {
         let mut input = header();
-        input.extend(record(kind, &[0xff, 0x80, 0x00, 0xfe]));
+        input.extend(record(kind, &[0xff; 16]));
         let doc = parse(&input, &ParseLimits::default()).unwrap();
         assert_ne!(doc.records()[0].data(), &RecordData::Raw, "type {kind}");
         assert!(doc.diagnostics().is_empty());
@@ -36,6 +36,7 @@ fn state(kind: u32, value: u32) -> RecordData {
         66 => RecordData::WidenPath,
         98 => RecordData::SetIcmMode { mode: value },
         115 => RecordData::SetLayout { mode: value },
+        53 | 120 => semantic(kind, value as i32),
         _ => panic!("unexpected fixed state {kind}"),
     }
 }
@@ -82,59 +83,13 @@ fn fixed_fields_and_edits_preserve_suffix_siblings_header_and_tail() {
     }
 }
 
-fn opaque(kind: u32, body: &[u8]) -> RecordData {
-    match kind {
-        53 => RecordData::ExtFloodFill {
-            body: body.to_vec(),
-        },
-        120 => RecordData::SetTextJustification {
-            body: body.to_vec(),
-        },
-        _ => panic!("unexpected opaque state {kind}"),
-    }
-}
-
-#[test]
-fn opaque_ruby_bodies_decode_and_resize_without_losing_following_bytes() {
-    for kind in [53, 120] {
-        for original in [
-            &b""[..],
-            &b"\xff\x00\x80"[..],
-            &b"opaque body with extra bytes"[..],
-        ] {
-            let mut input = header();
-            input.extend(record(kind, original));
-            input.extend(siblings_and_tail());
-            let source = parse(&input, &ParseLimits::default()).unwrap();
-            assert_eq!(source.records()[0].data(), &opaque(kind, original));
-            assert_eq!(serialize(&source).unwrap(), input);
-            for replacement in [&b""[..], &b"\x80"[..], &b"longer\x00opaque\xffbody"[..]] {
-                let mut doc = source.clone();
-                doc.edit_record(0, opaque(kind, replacement)).unwrap();
-                let out = serialize(&doc).unwrap();
-                let mut expected = header();
-                expected.extend(record(kind, replacement));
-                expected.extend(siblings_and_tail());
-                let len = expected.len() as u32;
-                expected[48..52].copy_from_slice(&len.to_le_bytes());
-                expected[52..56].copy_from_slice(&5u32.to_le_bytes());
-                assert_eq!(out, expected);
-                let reparsed = parse(&out, &ParseLimits::default()).unwrap();
-                assert_eq!(reparsed.records()[0].data(), &opaque(kind, replacement));
-                assert!(reparsed.diagnostics().is_empty());
-                assert_eq!(serialize(&reparsed).unwrap(), out);
-            }
-        }
-    }
-}
-
 #[test]
 fn truncated_fixed_fields_stay_raw_with_diagnostics_and_continue_framing() {
     use emf_core::{Diagnostic, DiagnosticKind, EditFailure};
-    for kind in [16, 98, 115] {
-        for length in 0..4 {
+    for (kind, fixed) in [(16, 4), (98, 4), (115, 4), (53, 16), (120, 8)] {
+        for length in 0..fixed {
             let mut input = header();
-            input.extend(record(kind, &b"abc"[..length]));
+            input.extend(record(kind, &[0xff; 16][..length]));
             input.extend(siblings_and_tail());
             let mut doc = parse(&input, &ParseLimits::default()).unwrap();
             assert_eq!(doc.records()[0].data(), &RecordData::Raw);
@@ -187,61 +142,89 @@ fn unknown_ids_and_cross_family_edits_preserve_original_records() {
     }
 }
 
+fn semantic(kind: u32, value: i32) -> RecordData {
+    match kind {
+        53 => RecordData::ExtFloodFill {
+            start: emf_core::Point {
+                x: value,
+                y: i32::MAX,
+            },
+            color: emf_core::ColorRef {
+                red: 0x98,
+                green: 0xba,
+                blue: 0xdc,
+                reserved: 0xfe,
+            },
+            flood_fill_mode: u32::MAX,
+        },
+        120 => RecordData::SetTextJustification {
+            break_extra: value,
+            break_count: -1,
+        },
+        _ => unreachable!(),
+    }
+}
+
 #[test]
-fn opaque_body_copy_and_edited_serialization_respect_inclusive_budgets() {
-    use emf_core::{
-        serialize_with_limits, LimitKind, ParseFailure, RecordSpan, SerializeFailure,
-        SerializeLimits,
-    };
+fn semantic_state_edits_preserve_suffix_siblings_and_tail_with_checked_budgets() {
+    use emf_core::{serialize_with_limits, LimitKind, SerializeFailure, SerializeLimits};
     for kind in [53, 120] {
-        let body = [0xff; 33];
-        let mut input = header();
-        input.extend(record(kind, &body));
-        let allocation = input.len() + std::mem::size_of::<RecordSpan>() + body.len();
-        let work = 8
-            + (input.len() as u64).div_ceil(16)
-            + 1
-            + (8 + body.len() as u64).div_ceil(16)
-            + (body.len() as u64).div_ceil(16);
-        let mut limits = ParseLimits {
-            max_allocated_bytes: allocation - 1,
-            ..ParseLimits::default()
+        let fixed: Vec<u8> = if kind == 53 {
+            [0x80000000u32, 0x7fffffff, 0xfedcba98, u32::MAX]
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect()
+        } else {
+            [i32::MIN, -1]
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect()
         };
-        assert!(
-            matches!(parse(&input, &limits), Err(ParseFailure::LimitExceeded {
-            kind: LimitKind::AllocatedBytes, requested, ..
-        }) if requested == allocation as u64)
-        );
-        limits.max_allocated_bytes = allocation;
-        limits.max_work_units = work - 1;
-        assert!(
-            matches!(parse(&input, &limits), Err(ParseFailure::LimitExceeded {
-            kind: LimitKind::WorkUnits, requested, ..
-        }) if requested == work)
-        );
-        limits.max_work_units = work;
-        let mut doc = parse(&input, &limits).unwrap();
-        assert_eq!(doc.records()[0].data(), &opaque(kind, &body));
-        doc.edit_record(0, opaque(kind, &body)).unwrap();
-        let exact_work = 4 + (input.len() as u64).div_ceil(16) + (body.len() as u64).div_ceil(16);
-        let mut output_limits = SerializeLimits {
-            max_output_bytes: input.len(),
-            max_work_units: exact_work - 1,
-        };
-        assert!(
-            matches!(serialize_with_limits(&doc, &output_limits), Err(SerializeFailure::LimitExceeded {
-            kind: LimitKind::WorkUnits, requested, ..
-        }) if requested == exact_work)
-        );
-        output_limits.max_work_units = exact_work;
-        let out = serialize_with_limits(&doc, &output_limits).unwrap();
-        assert_eq!(out.len(), input.len());
-        assert_eq!(&out[120..], &body);
-        output_limits.max_output_bytes -= 1;
-        assert!(
-            matches!(serialize_with_limits(&doc, &output_limits), Err(SerializeFailure::LimitExceeded {
-            kind: LimitKind::OutputBytes, requested, ..
-        }) if requested == input.len() as u64)
-        );
+        for suffix in [b"".as_slice(), b"odd".as_slice(), b"\xffTAIL".as_slice()] {
+            let mut body = fixed.clone();
+            body.extend_from_slice(suffix);
+            let mut input = header();
+            input.extend(record(kind, &body));
+            input.extend(siblings_and_tail());
+            let mut doc = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(doc.records()[0].data(), &semantic(kind, i32::MIN));
+            assert!(doc.diagnostics().is_empty());
+            assert_eq!(serialize(&doc).unwrap(), input);
+            doc.edit_record(0, semantic(kind, -17)).unwrap();
+            let out = serialize(&doc).unwrap();
+            let mut expected = input.clone();
+            expected[48..52].copy_from_slice(&(out.len() as u32).to_le_bytes());
+            expected[52..56].copy_from_slice(&5u32.to_le_bytes());
+            expected[120..124].copy_from_slice(&(-17i32).to_le_bytes());
+            assert_eq!(out, expected);
+            let reparsed = parse(&out, &ParseLimits::default()).unwrap();
+            assert_eq!(reparsed.records()[0].data(), &semantic(kind, -17));
+            assert!(reparsed.diagnostics().is_empty());
+            assert_eq!(reparsed.trailing_bytes(), b"tail");
+            assert_eq!(serialize(&reparsed).unwrap(), out);
+            let work = 2 + 2 * doc.records().len() as u64 + (out.len() as u64).div_ceil(16);
+            let mut limits = SerializeLimits {
+                max_output_bytes: out.len(),
+                max_work_units: work,
+            };
+            assert_eq!(serialize_with_limits(&doc, &limits).unwrap(), out);
+            limits.max_work_units -= 1;
+            assert!(matches!(
+                serialize_with_limits(&doc, &limits),
+                Err(SerializeFailure::LimitExceeded {
+                    kind: LimitKind::WorkUnits,
+                    ..
+                })
+            ));
+            limits.max_work_units = work;
+            limits.max_output_bytes -= 1;
+            assert!(matches!(
+                serialize_with_limits(&doc, &limits),
+                Err(SerializeFailure::LimitExceeded {
+                    kind: LimitKind::OutputBytes,
+                    ..
+                })
+            ));
+        }
     }
 }

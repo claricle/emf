@@ -526,16 +526,17 @@ static int check_point_array_snapshots(void) {
 
 static int check_completion_snapshots(void) {
     const uint32_t kinds[] = {16, 28, 53, 65, 66, 98, 115, 120};
+    const uint32_t families[] = {66, 67, 91, 69, 70, 71, 72, 92};
+    const unsigned sizes[] = {4, 0, 16, 0, 0, 4, 4, 8};
     for (unsigned kind = 0; kind < 8; ++kind) {
         for (unsigned extra = 0; extra <= 4; extra += 4) {
-            int opaque = kind == 2 || kind == 7;
-            unsigned fixed = kind == 0 || kind == 5 || kind == 6 ? 4 : 0;
+            unsigned fixed = sizes[kind];
             unsigned wire_length = 8 + fixed + extra;
-            unsigned payload_length = opaque ? 8 + extra : fixed;
+            unsigned payload_length = fixed;
             make_fixture();
             put_u32(88, kinds[kind]);
             put_u32(92, wire_length);
-            if (fixed) put_u32(96, UINT32_MAX);
+            for (unsigned i = 0; i < fixed; i += 4) put_u32(96 + i, UINT32_MAX - i);
             memcpy(input + 96 + fixed, "\0\xffxx", extra);
             input_length = 88 + wire_length;
             emf_document *document = NULL;
@@ -545,20 +546,17 @@ static int check_completion_snapshots(void) {
             CHECK(emf_document_snapshot(document, &snapshot, &error) == EMF_OK);
             emf_document_free(document);
             const uint8_t *bytes = NULL, *body = NULL;
-            uint64_t length = 0, count = 0;
+            uint64_t length = 0;
             CHECK(emf_buffer_view(snapshot, &bytes, &length) == EMF_OK);
             CHECK(error == NULL && length <= SIZE_MAX);
             cursor c = {bytes, (size_t)length, 4};
             uint32_t word;
             CHECK(get_u32(&c, &word) && word == 2);
             CHECK(skip(&c, 48 + 112 + HEADER_SIZE));
-            CHECK(check_snapshot_record(&c, 0, 88, wire_length, kinds[kind], 66 + kind, payload_length) == 0);
-            if (opaque) {
-                CHECK(get_u64(&c, &count) && count == extra);
-                CHECK(take(&c, extra, &body));
-                CHECK(memcmp(body, input + 96, extra) == 0);
-            } else if (fixed) {
-                CHECK(get_u32(&c, &word) && word == UINT32_MAX);
+            CHECK(check_snapshot_record(&c, 0, 88, wire_length, kinds[kind], families[kind], payload_length) == 0);
+            if (fixed) {
+                CHECK(take(&c, fixed, &body));
+                CHECK(memcmp(body, input + 96, fixed) == 0);
             }
             CHECK(c.offset == c.length);
             emf_buffer_free(snapshot);

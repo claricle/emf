@@ -24,12 +24,12 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::ExtTextOutW(_) => 75,
         RecordData::SetMapperFlags { .. } => 66,
         RecordData::SetMetaRgn => 67,
-        RecordData::ExtFloodFill { .. } => 68,
+        RecordData::ExtFloodFill { .. } => 91,
         RecordData::FlattenPath => 69,
         RecordData::WidenPath => 70,
         RecordData::SetIcmMode { .. } => 71,
         RecordData::SetLayout { .. } => 72,
-        RecordData::SetTextJustification { .. } => 73,
+        RecordData::SetTextJustification { .. } => 92,
         RecordData::FillRgn { .. } => 76,
         RecordData::FrameRgn { .. } => 77,
         RecordData::InvertRgn { .. } => 78,
@@ -387,9 +387,8 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         | RecordData::SetIcmMode { .. }
         | RecordData::SetLayout { .. } => Ok(4),
         RecordData::SetMetaRgn | RecordData::FlattenPath | RecordData::WidenPath => Ok(0),
-        RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
-            body.len().checked_add(8).ok_or(Error::SizeOverflow)
-        }
+        RecordData::ExtFloodFill { .. } => Ok(16),
+        RecordData::SetTextJustification { .. } => Ok(8),
         RecordData::FillRgn { region, .. } => region_len(region, 20),
         RecordData::FrameRgn { region, .. } => region_len(region, 28),
         RecordData::InvertRgn { region, .. } | RecordData::PaintRgn { region, .. } => {
@@ -584,9 +583,21 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                 u32_field(&mut out, *mode)
             }
             RecordData::SetMetaRgn | RecordData::FlattenPath | RecordData::WidenPath => {}
-            RecordData::ExtFloodFill { body } | RecordData::SetTextJustification { body } => {
-                u64_field(&mut out, wire_len(body.len())?);
-                out.extend_from_slice(body);
+            RecordData::ExtFloodFill {
+                start,
+                color,
+                flood_fill_mode,
+            } => {
+                point(&mut out, *start);
+                out.extend_from_slice(&[color.red, color.green, color.blue, color.reserved]);
+                u32_field(&mut out, *flood_fill_mode);
+            }
+            RecordData::SetTextJustification {
+                break_extra,
+                break_count,
+            } => {
+                u32_field(&mut out, *break_extra as u32);
+                u32_field(&mut out, *break_count as u32);
             }
             RecordData::FillRgn {
                 bounds,
@@ -1267,43 +1278,33 @@ mod tests {
     }
 
     #[test]
-    fn completion_snapshots_preserve_opaque_bodies_and_fixed_fields() {
-        for (index, kind) in [16, 28, 53, 65, 66, 98, 115, 120].into_iter().enumerate() {
-            for body in [b"".as_slice(), b"\0\xffopaque".as_slice()] {
-                let opaque = kind == 53 || kind == 120;
-                let scalar = kind == 16 || kind == 98 || kind == 115;
-                let mut payload = if scalar {
-                    u32::MAX.to_le_bytes().to_vec()
-                } else {
-                    vec![]
-                };
-                payload.extend_from_slice(body);
-                let mut input = fixture_header(88);
-                record(&mut input, kind, &payload);
-                let document = parse(&input, &ParseLimits::default()).unwrap();
-                let encoded = encode(&document).unwrap();
-                let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
-                cursor.take(112 + 88);
-                assert_eq!(cursor.u64(), 0);
-                assert_eq!(cursor.u64(), 88);
-                assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
-                cursor.words(&[kind, 66 + index as u32]);
-                let length = if opaque {
-                    8 + body.len()
-                } else if scalar {
-                    4
-                } else {
-                    0
-                };
-                assert_eq!(cursor.u64(), length as u64);
-                if opaque {
-                    assert_eq!(cursor.u64(), body.len() as u64);
-                    assert_eq!(cursor.take(body.len()), body);
-                } else if scalar {
-                    assert_eq!(cursor.u32(), u32::MAX);
-                }
-                assert_eq!(cursor.position, encoded.len());
-            }
+    fn completion_snapshots_preserve_semantics_without_suffixes() {
+        for (kind, family, words) in [
+            (16, 66, vec![u32::MAX]),
+            (28, 67, vec![]),
+            (53, 91, vec![0x80000000, 0x7fffffff, 0xfedcba98, u32::MAX]),
+            (65, 69, vec![]),
+            (66, 70, vec![]),
+            (98, 71, vec![u32::MAX]),
+            (115, 72, vec![u32::MAX]),
+            (120, 92, vec![0x80000000, u32::MAX]),
+        ] {
+            let fixed: Vec<u8> = words.iter().flat_map(|v| u32::to_le_bytes(*v)).collect();
+            let mut payload = fixed.clone();
+            payload.extend_from_slice(b"suffix");
+            let mut input = fixture_header(88);
+            record(&mut input, kind, &payload);
+            let document = parse(&input, &ParseLimits::default()).unwrap();
+            let encoded = encode(&document).unwrap();
+            let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+            cursor.take(112 + 88);
+            assert_eq!(cursor.u64(), 0);
+            assert_eq!(cursor.u64(), 88);
+            assert_eq!(cursor.u64(), (payload.len() + 8) as u64);
+            cursor.words(&[kind, family]);
+            assert_eq!(cursor.u64(), fixed.len() as u64);
+            assert_eq!(cursor.take(fixed.len()), fixed);
+            assert_eq!(cursor.position, encoded.len());
         }
     }
 

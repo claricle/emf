@@ -68,7 +68,7 @@ module Emf
         when 33
           klass, fields = Fields.call(payload, 33)
           [klass, fields.merge(trailing: raw.byteslice(12..))]
-        when 5..44, 60..86 then scalar_fields(record, raw)
+        when 5..44, 60..86, 91, 92 then scalar_fields(record, raw)
         else raise FormatError, "unsupported native snapshot record family #{record.fetch(:family)}"
         end
       end
@@ -82,6 +82,14 @@ module Emf
         return Fields.region(record.fetch(:payload), family, raw) if (76..80).cover?(family)
 
         return Fields.ext_text(record.fetch(:payload), family, raw) if [74, 75].include?(family)
+
+        if [91, 92].include?(family)
+          klass, fields = Fields.call(record.fetch(:payload), family)
+          fixed = family == 91 ? 24 : 16
+          raise FormatError, "invalid native state record length" if raw.bytesize < fixed
+
+          return [klass, fields.merge(trailing: raw.byteslice(fixed..))]
+        end
 
         Fields.call(record.fetch(:payload), family)
       end
