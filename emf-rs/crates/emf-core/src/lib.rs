@@ -5,6 +5,7 @@
 //! bounded WMF framing with opaque drawing records and checked raw edits.
 
 mod detect;
+pub mod emf_plus;
 mod error;
 mod limits;
 mod model;
