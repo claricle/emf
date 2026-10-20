@@ -3,6 +3,7 @@
 require "fileutils"
 require "json"
 require "rubygems/package"
+require "stringio"
 require "tmpdir"
 require "spec_helper"
 require_relative "../../script/platform_probe/acceptance_report"
@@ -18,6 +19,49 @@ RSpec.describe PlatformAcceptance::Report do
   let(:probe_logs) { %w[build.log linkage.txt] }
   let(:modes) { %w[auto native] }
   let(:report) { described_class.new(@tmp).call }
+  let(:run_cli) do
+    lambda do |*arguments|
+      script = File.expand_path("../../script/platform_probe/acceptance_report.rb", __dir__)
+      original_program_name = $PROGRAM_NAME
+      original_arguments = ARGV.dup
+      original_stdout = $stdout
+      original_stderr = $stderr
+      original_verbose = $VERBOSE
+      output = StringIO.new
+      errors = StringIO.new
+      status = nil
+      begin
+        allow(Gem::Package).to receive(:new) do |path|
+          @cli_package_path = path
+          package
+        end
+        allow(package).to receive(:extract_files) do |directory, _pattern|
+          FileUtils.mkdir_p(File.join(directory, "lib/emf/native"))
+          metadata_revision = @cli_package_path.include?("/real/") ? real_revision : revision
+          provenance = { platform: platform, target: metadata_target, revision: metadata_revision, gem_version: "0.1.2" }
+          File.write(File.join(directory, "lib/emf/native/provenance.json"), JSON.generate(provenance))
+        end
+        $0 = script
+        ARGV.replace(arguments)
+        $stdout = output
+        $stderr = errors
+        $VERBOSE = false
+        load script
+      rescue SystemExit => e
+        status = e.status
+      ensure
+        $0 = original_program_name
+        ARGV.replace(original_arguments)
+        $stdout = original_stdout
+        $stderr = original_stderr
+        $VERBOSE = original_verbose
+      end
+      clean_errors = errors.string.lines.reject do |line|
+        line.include?("warning: already initialized constant") || line.include?("warning: previous definition")
+      end.join
+      [status, output.string, clean_errors]
+    end
+  end
   let(:package_spec) { double(name: "emf", platform: platform, version: Gem::Version.new("0.1.2")) }
   let(:package) { double(spec: package_spec) }
   let(:row) { report.fetch(:targets).find { |entry| entry[:target] == target }.fetch(:rubies).last }
@@ -108,6 +152,30 @@ RSpec.describe PlatformAcceptance::Report do
   it "rejects malformed expected revisions before scanning inventory" do
     expect { described_class.new("/missing/inventory", revision: "not-a-sha") }
       .to raise_error(ArgumentError, /full lowercase 40-character SHA/)
+  end
+
+  it "returns JSON and success exit status for matching and unspecified revisions" do
+    matching_status, matching_output, matching_errors = run_cli.call(@tmp, "--revision", revision, "--json")
+    expect([matching_status, matching_errors]).to eq([0, ""])
+    expect(JSON.parse(matching_output).fetch("conflicts")).to be_empty
+
+    default_status, default_output, default_errors = run_cli.call(@tmp, "--json")
+    expect([default_status, default_errors]).to eq([0, ""])
+    expect(JSON.parse(default_output).fetch("status")).to eq("OPEN")
+  end
+
+  it "returns JSON conflicts and failure exit status for a stale revision" do
+    stale = "c" * 40
+    status, output, errors = run_cli.call(@tmp, "--revision", stale, "--json")
+    expect([status, errors]).to eq([1, ""])
+    expect(JSON.parse(output).fetch("conflicts")).to include("revision mismatch: expected #{stale}, actual #{revision}")
+  end
+
+  it "rejects a malformed revision through the CLI before inventory collection" do
+    status, output, errors = run_cli.call(@tmp, "--revision", "not-a-sha", "--json")
+    expect(status).to eq(1)
+    expect(output).to be_empty
+    expect(errors).to include("revision must be a full lowercase 40-character SHA")
   end
 
   it "keeps truncated workload and omitted dependency controls open despite PASS summaries" do
