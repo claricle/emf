@@ -21,7 +21,28 @@ RSpec.describe Emf::Emr::Binary::FastFill do
     "SetViewportOrgEx" => [codes::SETVIEWPORTORGEX, 16, ->(w) { w.origin.x = -7 }],
     "RestoreDc" => [codes::RESTOREDC, 12, ->(w) { w.saved_dc = -7 }],
     "SetWorldTransform" => [codes::SETWORLDTRANSFORM, 32, ->(w) { w.xform.dy = -7.5 }],
-    "ModifyWorldTransform" => [codes::MODIFYWORLDTRANSFORM, 36, ->(w) { w.modify_mode = 7 }]
+    "ModifyWorldTransform" => [codes::MODIFYWORLDTRANSFORM, 36, ->(w) { w.modify_mode = 7 }],
+    "SetMapMode" => [codes::SETMAPMODE, 12, ->(w) { w.map_mode = 7 }],
+    "SetWindowExtEx" => [codes::SETWINDOWEXTEX, 16, ->(w) { w.extent.cx = -7 }],
+    "SetWindowOrgEx" => [codes::SETWINDOWORGEX, 16, ->(w) { w.origin.y = -7 }],
+    "SetViewportExtEx" => [codes::SETVIEWPORTEXTEX, 16, ->(w) { w.extent.cy = -7 }],
+    "SetPolyFillMode" => [codes::SETPOLYFILLMODE, 12, ->(w) { w.poly_fill_mode = 7 }],
+    "SetRop2" => [codes::SETROP2, 12, ->(w) { w.rop2 = 7 }],
+    "SetStretchBltMode" => [codes::SETSTRETCHBLTMODE, 12, ->(w) { w.stretch_mode = 7 }],
+    "SetBrushOrgEx" => [codes::SETBRUSHORGEX, 16, ->(w) { w.ptl_origin.x = -7 }],
+    "SaveDc" => [codes::SAVEDC, 8, ->(w) { w.n_size = 16 }],
+    "BeginPath" => [codes::BEGINPATH, 8, ->(w) { w.n_size = 16 }],
+    "EndPath" => [codes::ENDPATH, 8, ->(w) { w.n_size = 16 }],
+    "CloseFigure" => [codes::CLOSEFIGURE, 8, ->(w) { w.n_size = 16 }],
+    "FillPath" => [codes::FILLPATH, 24, ->(w) { w.rcl_bounds.left = -7 }],
+    "StrokeAndFillPath" => [codes::STROKEANDFILLPATH, 24, ->(w) { w.rcl_bounds.top = -7 }],
+    "StrokePath" => [codes::STROKEPATH, 24, ->(w) { w.rcl_bounds.right = -7 }],
+    "Rectangle" => [codes::RECTANGLE, 24, ->(w) { w.rcl_box.bottom = -7 }],
+    "IntersectClipRect" => [codes::INTERSECTCLIPRECT, 24, ->(w) { w.rcl_clip.left = -7 }],
+    "ExcludeClipRect" => [codes::EXCLUDECLIPRECT, 24, ->(w) { w.rcl_clip.top = -7 }],
+    "SetMiterLimit" => [codes::SETMITERLIMIT, 12, ->(w) { w.miter_limit = 7.5 }],
+    "SetIcmMode" => [codes::SETICMMODE, 12, ->(w) { w.mode = 7 }],
+    "SetLayout" => [codes::SETLAYOUT, 12, ->(w) { w.mode = 7 }]
   }
 
   extras = [0, 4, 8].freeze
@@ -79,10 +100,13 @@ RSpec.describe Emf::Emr::Binary::FastFill do
         expect(wire.to_binary_s).not_to eq(bytes)
       end
 
-      it "falls back to Raw with the BinData error when nSize is below the layout" do
-        parsed = parse_with(record_bytes(type, 8, 8))
-        expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records::Raw)
-        expect(parsed.errors.map(&:message)).to eq([short_read_message(klass, type)])
+      # an 8-byte layout has no short form below it
+      if size > 8
+        it "falls back to Raw with the BinData error when nSize is below the layout" do
+          parsed = parse_with(record_bytes(type, 8, 8))
+          expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records::Raw)
+          expect(parsed.errors.map(&:message)).to eq([short_read_message(klass, type)])
+        end
       end
 
       it "parses records at, above the layout size through the adapter" do
