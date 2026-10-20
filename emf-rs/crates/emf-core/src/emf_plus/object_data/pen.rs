@@ -1,5 +1,7 @@
 //! Pen optional data, MS-EMFPLUS 2.2.1.7 and 2.2.2.33–34.
-use super::{line_cap, linear_brush, words, CustomLineCap, LinearGradient, Reader};
+use super::{
+    line_cap, linear_brush, path_brush, words, CustomLineCap, LinearGradient, PathGradient, Reader,
+};
 use crate::{emf_plus::Error, SerializeFailure};
 
 /// Floating-point fields retain their IEEE bits. Option presence must match flags.
@@ -32,6 +34,7 @@ pub struct PenBrush {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PenBrushData {
+    PathGradient(PathGradient),
     LinearGradient(LinearGradient),
     Solid {
         argb: u32,
@@ -67,6 +70,13 @@ impl Pen {
             return Err(SerializeFailure::Inconsistent { offset: 0 });
         }
         let (brush_size, mut work) = match &self.brush.data {
+            PenBrushData::PathGradient(v) => {
+                let (size, work) = v.layout()?;
+                (
+                    size.checked_add(8).ok_or(SerializeFailure::SizeOverflow)?,
+                    work,
+                )
+            }
             PenBrushData::LinearGradient(v) => {
                 let (size, work) = v.layout()?;
                 (
@@ -159,6 +169,10 @@ impl Pen {
         }
         match &self.brush.data {
             PenBrushData::Solid { argb } => words(out, &[self.brush.version, 0, *argb]),
+            PenBrushData::PathGradient(v) => {
+                words(out, &[self.brush.version, 3]);
+                v.write(out);
+            }
             PenBrushData::LinearGradient(v) => {
                 words(out, &[self.brush.version, 4]);
                 v.write(out);
@@ -247,6 +261,10 @@ pub(super) fn read(r: &mut Reader<'_, '_, '_>) -> Result<Option<Pen>, Error> {
             style: r.word()?,
             foreground: r.word()?,
             background: r.word()?,
+        },
+        3 => match path_brush::read(r)? {
+            Some(v) => PenBrushData::PathGradient(v),
+            None => return Ok(None),
         },
         4 => match linear_brush::read(r)? {
             Some(v) => PenBrushData::LinearGradient(v),
