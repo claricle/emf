@@ -6,8 +6,7 @@ require "json"
 # Runs against the emf gem installed in GEM_HOME (never the checkout), forcing
 # the native backend: parse, dump, mutate, serialize, reparse.
 
-# Flip to true once gem-relative library discovery has landed in lib/emf/native.
-DISCOVERY_REQUIRED = false
+DISCOVERY_REQUIRED = true
 
 ENV["EMF_BACKEND"] = "native"
 spec = Gem::Specification.find_by_name("emf")
@@ -29,7 +28,6 @@ discovered =
 puts "discovery_without_env=#{discovered ? 'works' : 'unavailable'}"
 abort "gem-relative library discovery is required" if DISCOVERY_REQUIRED && !discovered
 
-ENV["EMF_NATIVE_LIBRARY"] = library
 abort "native backend NOT selected" unless Emf::Backend.send(:selected).instance_of?(Emf::Native::Adapter)
 
 bytes = File.binread(ARGV.fetch(0))

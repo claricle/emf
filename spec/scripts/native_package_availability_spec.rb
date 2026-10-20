@@ -74,8 +74,13 @@ RSpec.describe "native availability matrix against an installed platform gem" do
     expect(rows(@out)).to include("malformed_garbage/auto=native Emf::FormatError", "malformed_truncated/auto=native Emf::FormatError")
   end
 
-  it "reports a missing configured library as report-only" do
-    expect(rows(@out)).to include("library_not_configured/auto=ruby", "library_not_configured/native=none Emf::Native::Unavailable")
+  it "selects the bundled library by discovery in both modes when no override is set" do
+    expect(rows(@out)).to include("library_not_configured/auto=native", "library_not_configured/native=native")
+  end
+
+  it "refuses a damaged installed manifest or library: Ruby in auto mode, Unavailable when native is forced" do
+    names = %w[installed_checksum_mismatch installed_abi_mismatch installed_platform_mismatch installed_library_missing]
+    expect(rows(@out)).to include(*names.flat_map { |name| ["#{name}/auto=ruby", "#{name}/native=none Emf::Native::Unavailable"] })
   end
 
   it "fails when the library under test does not load" do

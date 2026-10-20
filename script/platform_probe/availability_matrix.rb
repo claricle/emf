@@ -10,6 +10,9 @@
 #   native : the same failures raise Emf::Native::Unavailable naming the cause;
 #   either : malformed input reaches the native parser and is never re-parsed
 #            by Ruby.
+# Rows with a nil library run with no EMF_NATIVE_LIBRARY, so the installed
+# gem's own platforms.json discovery is exercised; the "broken_install" rows
+# damage a private copy of GEM_HOME's manifest or bundled library.
 # Fixture libraries are derived from --library (truncation, a patched header
 # for the wrong architecture) or compiled with cc when one is on this script's
 # PATH (wrong ABI, missing dependent library); rows needing cc are skipped
@@ -123,7 +126,7 @@ module AvailabilityMatrix
 
   # One case: which library, whether Fiddle is hidden, which input, and the
   # expectation for each mode. An expectation is [backend, error_class, message pattern].
-  Scenario = Struct.new(:name, :library, :hide_fiddle, :input, :auto, :native, :report_only, keyword_init: true)
+  Scenario = Struct.new(:name, :library, :hide_fiddle, :input, :auto, :native, :gem_home, keyword_init: true)
 
   class Runner
     def initialize(gem_home:, library:, fixture:, directory:)
@@ -141,16 +144,17 @@ module AvailabilityMatrix
       [baseline, absent(load_failure), broken("corrupt_library", @fixtures.truncated, load_failure),
        broken("wrong_architecture", @fixtures.foreign_architecture, load_failure),
        dependent(load_failure), wrong_abi(unavailable), missing_fiddle(unavailable),
-       *malformed_inputs, not_configured(unavailable)].compact
+       *malformed_inputs, discovered, *broken_installs(unavailable)].compact
     end
 
     def run(scenario, mode)
-      env = CLEAN_ENV.merge("GEM_HOME" => @gem_home, "GEM_PATH" => @gem_home, "PATH" => File.dirname(@ruby),
+      home = scenario.gem_home || @gem_home
+      env = CLEAN_ENV.merge("GEM_HOME" => home, "GEM_PATH" => home, "PATH" => File.dirname(@ruby),
                             "EMF_BACKEND" => mode, "EMF_NATIVE_LIBRARY" => scenario.library)
       out, err, status = Open3.capture3(env, @ruby, *flags(scenario), "-e", CHILD, scenario.input, chdir: @directory)
       raise "#{scenario.name}/#{mode} child failed: #{err}#{out}" unless status.success?
 
-      observed(scenario, mode, JSON.parse(out.lines.last))
+      observed(scenario, mode, JSON.parse(out.lines.last), home)
     end
 
     private
@@ -164,8 +168,8 @@ module AvailabilityMatrix
       ["-I", shim]
     end
 
-    def observed(scenario, mode, report)
-      raise "emf resolved outside GEM_HOME: #{report['gem_dir']}" unless report["gem_dir"].start_with?(File.realpath(@gem_home))
+    def observed(scenario, mode, report, home)
+      raise "emf resolved outside GEM_HOME: #{report['gem_dir']}" unless report["gem_dir"].start_with?(File.realpath(home))
 
       backend = if report["ruby_called"] then "ruby"
                 elsif report["error_class"] == "Emf::Native::Unavailable" then "none"
@@ -213,9 +217,38 @@ module AvailabilityMatrix
       end
     end
 
-    # Reported, not asserted: gem-relative discovery has not landed in lib/emf/native.
-    def not_configured(unavailable)
-      scenario("library_not_configured", nil, report_only: true, auto: fallback, native: unavailable.call(/set EMF_NATIVE_LIBRARY/))
+    def discovered
+      scenario("library_not_configured", nil, auto: ["native", nil, nil], native: ["native", nil, nil])
+    end
+
+    def broken_installs(unavailable)
+      {
+        "installed_checksum_mismatch" => [->(dir) { edit_manifest(dir, "sha256" => "0" * 64) }, /library checksum mismatch/],
+        "installed_abi_mismatch" => [->(dir) { edit_manifest(dir, "abi_version" => 2) }, /manifest ABI version mismatch \(expected 1\)/],
+        "installed_platform_mismatch" => [->(dir) { edit_manifest(dir, "platform" => "x86_64-nonexistent_os") },
+                                          /manifest platform mismatch/],
+        "installed_library_missing" => [->(dir) { FileUtils.rm(bundled_library(dir)) }, /manifest could not load: .*No such file/]
+      }.map do |name, (damage, pattern)|
+        scenario(name, nil, gem_home: damaged_home(name, damage), auto: fallback, native: unavailable.call(pattern))
+      end
+    end
+
+    def damaged_home(name, damage)
+      home = File.join(@directory, "homes", name)
+      FileUtils.mkdir_p(File.dirname(home))
+      FileUtils.cp_r(@gem_home, home)
+      damage.call(File.join(Dir.glob(File.join(home, "gems", "emf-*")).fetch(0), "lib/emf/native"))
+      home
+    end
+
+    def edit_manifest(dir, changes)
+      path = File.join(dir, "platforms.json")
+      File.write(path, JSON.generate(JSON.parse(File.read(path)).merge(changes)))
+    end
+
+    def bundled_library(dir)
+      manifest = JSON.parse(File.read(File.join(dir, "platforms.json")))
+      File.join(dir, manifest.fetch("platform"), manifest.fetch("library"))
     end
   end
 
@@ -241,7 +274,7 @@ module AvailabilityMatrix
       problems << "backend #{row.backend}, expected #{backend}" unless row.backend == backend
       problems << "error #{row.error_class.inspect}, expected #{error_class.inspect}" unless row.error_class == error_class
       problems << "message #{row.message.inspect} !~ #{pattern.inspect}" if pattern && !row.message.to_s.match?(pattern)
-      @mismatches << "#{row.name}/#{mode}: #{problems.join('; ')}" unless problems.empty? || scenario.report_only
+      @mismatches << "#{row.name}/#{mode}: #{problems.join('; ')}" unless problems.empty?
       row
     end
 
