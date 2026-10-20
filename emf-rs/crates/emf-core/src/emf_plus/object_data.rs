@@ -118,11 +118,23 @@ impl ObjectDefinition {
         budget.check_input(self.bytes.len())?;
         budget.check_record_bytes(self.bytes.len())?;
         budget.charge_record(self.bytes.len())?;
+        self.decode_body(&mut budget)
+    }
+
+    /// Decode using cumulative accounting; the definition was already framed.
+    pub fn decode_with_budget(&self, budget: &mut Budget<'_>) -> Result<ObjectData, Error> {
+        budget.check_input(self.bytes.len())?;
+        budget.check_record_bytes(self.bytes.len())?;
+        budget.charge_work(1 + (self.bytes.len() as u64).div_ceil(16))?;
+        self.decode_body(budget)
+    }
+
+    fn decode_body(&self, budget: &mut Budget<'_>) -> Result<ObjectData, Error> {
         let mut r = Reader {
             bytes: &self.bytes,
             pos: 0,
             index: self.first_record,
-            budget: &mut budget,
+            budget,
         };
         let value = match self.object_type {
             2 => match pen::read(&mut r)? {
@@ -163,7 +175,7 @@ impl ObjectDefinition {
                         Some(data) => ObjectData::LinearGradientBrush { version, data },
                         None => return opaque(self, r.budget),
                     },
-                    _ => return opaque(self, &mut budget),
+                    _ => return opaque(self, r.budget),
                 }
             }
             5 => {
@@ -204,7 +216,7 @@ impl ObjectDefinition {
                             suffix: r.rest()?,
                         }
                     }
-                    _ => return opaque(self, &mut budget),
+                    _ => return opaque(self, r.budget),
                 }
             }
             6 => {
@@ -278,7 +290,7 @@ impl ObjectDefinition {
                 object_clamp: r.word()? as i32,
                 reserved2: r.word()?,
             },
-            _ => return opaque(self, &mut budget),
+            _ => return opaque(self, r.budget),
         };
         if r.remaining() != 0 {
             return Err(r.error());

@@ -7,15 +7,17 @@ This is partial structured **read** support, with no edit/apply API and no Ruby 
 
 Pass required `emf_plus_snapshot_options` with exact `struct_size` (16),
 `version = EMF_PLUS_SNAPSHOT_VERSION` (1), and an explicit `max_output_bytes`.
-The optional ABI 1 `emf_limits` bounds core extraction input, allocations,
-record count and work; NULL uses core defaults. Object assembly and each object
-decode also use these limits, with independent core budgets; they do not share
-one cumulative budget with extraction. Retained object metadata has a separate
-`max_allocated_bytes` ceiling. Output allocation is separately bounded by
-`max_output_bytes`; peak memory includes the extracted model, retained decoded
-objects, assembly temporaries and output. The per-decode ceiling is not an
-aggregate ceiling over all retained decoded objects. Exact output size is checked before reserving output.
-All allocations use the existing fallible core/owned-buffer conventions.
+The optional ABI 1 `emf_limits` bounds the complete snapshot operation; NULL uses
+core defaults. One cumulative budget covers extraction, object assembly, all object
+decodes, retained metadata and final output allocation. Allocation charges count
+requested buffer bytes, including temporary buffers and each growth request; freeing
+a buffer does not refund a charge. The output is also bounded by `max_output_bytes`.
+Record count counts framed EMF+ records once. Subsequent scans and object decodes
+charge work, and normalized sizing/writing charges one unit plus one per 16 bytes
+for each emitted field or byte slice. Snapshot table/source scans and raw output
+copying also charge work. Exact output size is checked before fallible reservation.
+This accounting does not measure allocator metadata, stack storage, physical RSS,
+or provide a process-wide OOM guarantee.
 The caller releases output with `emf_buffer_free`; output remains valid after
 freeing the document. Errors use the existing status/owned-error API.
 

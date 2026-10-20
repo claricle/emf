@@ -40,6 +40,10 @@ impl std::error::Error for EmbedError {}
 impl EmbeddedStream {
     pub(crate) fn extract(doc: &Document, limits: &ParseLimits) -> Result<Self, Error> {
         let mut budget = Budget::new(limits);
+        Self::extract_budget(doc, &mut budget)
+    }
+
+    pub(crate) fn extract_budget(doc: &Document, budget: &mut Budget<'_>) -> Result<Self, Error> {
         let mut source = Vec::new();
         let mut input_bytes = 0usize;
         // Account for scanning the enclosing record set, even when no comments match.
@@ -70,7 +74,7 @@ impl EmbeddedStream {
         for (_, data) in &source {
             segments.push(&data[4..]);
         }
-        let stream = parse_segments_budget(&segments, &mut budget)?;
+        let stream = parse_segments_budget(&segments, budget)?;
         Ok(Self { stream, source })
     }
 

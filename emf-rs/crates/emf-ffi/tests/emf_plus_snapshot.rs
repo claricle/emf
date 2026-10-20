@@ -1508,3 +1508,160 @@ fn invalid_object_layouts_and_incomplete_chains_fail_atomically() {
         }
     }
 }
+
+#[test]
+fn aggregate_budget_includes_retained_stages_and_output() {
+    let logical = (0..4)
+        .flat_map(|id| frame(0x4008, 0x7f00 | id, &vec![0x5a; 4096], &[]))
+        .collect::<Vec<_>>();
+    // Each standalone stage fits this cap: resetting between them bypassed the
+    // cumulative retained-buffer ceiling before the shared-budget integration.
+    let core_limits = emf_core::ParseLimits {
+        max_allocated_bytes: 100000,
+        max_work_units: 4000,
+        ..Default::default()
+    };
+    let core_doc = emf_core::parse(&input(&[&logical]), &Default::default()).unwrap();
+    let embedded = core_doc.structured_emf_plus(&core_limits).unwrap();
+    let definitions = embedded.stream.object_definitions(&core_limits).unwrap();
+    for definition in definitions {
+        definition.decode(&core_limits).unwrap();
+    }
+    unsafe {
+        let doc = parse(&input(&[&logical]));
+        let expected = snapshot(doc);
+        let mut limits = EmfLimits {
+            struct_size: size_of::<EmfLimits>() as u32,
+            version: 1,
+            max_input_bytes: 1000000,
+            max_record_bytes: 1000000,
+            max_records: 4,
+            max_allocated_bytes: 100000,
+            max_work_units: 1000000,
+        };
+        let mut output = ptr::dangling_mut();
+        assert_eq!(
+            emf_document_emf_plus_snapshot_v1(
+                doc,
+                &options(1000000),
+                &limits,
+                &mut output,
+                ptr::null_mut()
+            ),
+            EMF_LIMIT_EXCEEDED
+        );
+        assert!(output.is_null());
+        assert_eq!(snapshot(doc), expected);
+        limits.max_allocated_bytes = 1000000;
+        limits.max_work_units = 4000;
+        assert_eq!(
+            emf_document_emf_plus_snapshot_v1(
+                doc,
+                &options(1000000),
+                &limits,
+                &mut output,
+                ptr::null_mut()
+            ),
+            EMF_LIMIT_EXCEEDED
+        );
+        assert!(output.is_null());
+        // Find the exact inclusive allocation and work caps through ABI 1.
+        for work in [false, true] {
+            limits.max_allocated_bytes = 1000000;
+            limits.max_work_units = 1000000;
+            let (mut low, mut high) = (0, 1000000);
+            while low < high {
+                let mid = low + (high - low) / 2;
+                if work {
+                    limits.max_work_units = mid;
+                } else {
+                    limits.max_allocated_bytes = mid;
+                }
+                let mut output = ptr::dangling_mut();
+                let status = emf_document_emf_plus_snapshot_v1(
+                    doc,
+                    &options(1000000),
+                    &limits,
+                    &mut output,
+                    ptr::null_mut(),
+                );
+                if status == EMF_OK {
+                    assert_eq!(view(output), expected);
+                    high = mid;
+                } else {
+                    assert_eq!(status, EMF_LIMIT_EXCEEDED);
+                    assert!(output.is_null());
+                    low = mid + 1;
+                }
+            }
+            assert!(low > 0);
+            for (cap, status) in [(low - 1, EMF_LIMIT_EXCEEDED), (low, EMF_OK)] {
+                if work {
+                    limits.max_work_units = cap;
+                } else {
+                    limits.max_allocated_bytes = cap;
+                }
+                let mut output = ptr::dangling_mut();
+                assert_eq!(
+                    emf_document_emf_plus_snapshot_v1(
+                        doc,
+                        &options(1000000),
+                        &limits,
+                        &mut output,
+                        ptr::null_mut()
+                    ),
+                    status
+                );
+                if status == EMF_OK {
+                    assert_eq!(view(output), expected);
+                } else {
+                    assert!(output.is_null());
+                }
+            }
+        }
+        emf_document_free(doc);
+    }
+}
+
+#[test]
+fn empty_snapshot_output_is_in_the_cumulative_allocation_budget() {
+    unsafe {
+        let doc = parse(&input(&[]));
+        let expected = snapshot(doc);
+        assert_eq!(expected.len(), 40);
+        let mut limits = EmfLimits {
+            struct_size: size_of::<EmfLimits>() as u32,
+            version: 1,
+            max_input_bytes: 0,
+            max_record_bytes: 0,
+            max_records: 0,
+            max_allocated_bytes: 40,
+            max_work_units: 3,
+        };
+        for (allocated, work, status) in [
+            (39, 3, EMF_LIMIT_EXCEEDED),
+            (40, 2, EMF_LIMIT_EXCEEDED),
+            (40, 3, EMF_OK),
+        ] {
+            limits.max_allocated_bytes = allocated;
+            limits.max_work_units = work;
+            let mut output = ptr::dangling_mut();
+            assert_eq!(
+                emf_document_emf_plus_snapshot_v1(
+                    doc,
+                    &options(40),
+                    &limits,
+                    &mut output,
+                    ptr::null_mut()
+                ),
+                status
+            );
+            if status == EMF_OK {
+                assert_eq!(view(output), expected);
+            } else {
+                assert!(output.is_null());
+            }
+        }
+        emf_document_free(doc);
+    }
+}

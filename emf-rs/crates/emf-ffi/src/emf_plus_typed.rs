@@ -6,12 +6,15 @@ use emf_core::emf_plus::{
     Drawing, Effect, ImageSource, PointData, Rectangle, RelativeCoordinate, TSGraphics, Text,
 };
 
-pub(super) struct Sink<'a> {
+pub(super) struct Sink<'a, 'b, 'c> {
+    pub budget: &'b mut emf_core::ParseBudget<'c>,
     pub len: usize,
     pub out: Option<&'a mut Vec<u8>>,
 }
-impl Sink<'_> {
+impl Sink<'_, '_, '_> {
     fn bytes(&mut self, bytes: &[u8]) -> Result<(), Failure> {
+        self.budget
+            .charge_work(1 + (bytes.len() as u64).div_ceil(16))?;
         self.len = self.len.checked_add(bytes.len()).ok_or_else(overflow)?;
         if let Some(out) = &mut self.out {
             out.extend_from_slice(bytes);

@@ -3,7 +3,7 @@ use super::Sink;
 use crate::Failure;
 use emf_core::emf_plus::*;
 
-impl Sink<'_> {
+impl Sink<'_, '_, '_> {
     pub fn object_fragment(
         &mut self,
         fragment: &ObjectFragment,

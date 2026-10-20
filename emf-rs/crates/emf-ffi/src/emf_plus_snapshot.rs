@@ -36,10 +36,15 @@ fn family(data: &RecordData) -> (u32, usize) {
 
 fn typed_len(
     data: &RecordData,
+    budget: &mut emf_core::ParseBudget<'_>,
     index: usize,
     object: Option<&(ObjectDefinition, ObjectData)>,
 ) -> Result<usize, Failure> {
-    let mut sink = Sink { len: 0, out: None };
+    let mut sink = Sink {
+        len: 0,
+        out: None,
+        budget,
+    };
     match data {
         RecordData::Object(fragment) => {
             let (definition, value) = object.ok_or_else(|| {
@@ -55,7 +60,10 @@ fn typed_len(
         RecordData::Text(value) => sink.text(value)?,
         RecordData::Effect(value) => sink.effect(value)?,
         RecordData::TSGraphics(value) => sink.ts_graphics(value)?,
-        _ => return Ok(family(data).1),
+        _ => {
+            sink.budget.charge_work(1)?;
+            return Ok(family(data).1);
+        }
     }
     Ok(sink.len)
 }
@@ -116,37 +124,21 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
         // Extraction uses the existing bounded core parser, including comment scans,
         // source copies and work/record/allocation ceilings.
         let parse_limits = limits(parse_limits)?;
+        let mut budget = emf_core::ParseBudget::new(&parse_limits);
         let embedded = document
-            .structured_emf_plus(&parse_limits)
+            .structured_emf_plus_with_budget(&mut budget)
             .map_err(nested_error)?;
         let stream = &embedded.stream;
         // Assemble and decode once per definition, including continuation chains.
         // Reuse these values for both checked sizing and output writing.
         let definitions = stream
-            .object_definitions(&parse_limits)
+            .object_definitions_with_budget(&mut budget)
             .map_err(nested_error)?;
-        let mut objects = Vec::new();
-        let metadata_bytes = definitions
-            .len()
-            .checked_mul(size_of::<(ObjectDefinition, ObjectData)>())
-            .ok_or_else(overflow)?;
-        if metadata_bytes > parse_limits.max_allocated_bytes {
-            return Err(emf_core::ParseFailure::LimitExceeded {
-                kind: emf_core::LimitKind::AllocatedBytes,
-                requested: metadata_bytes as u64,
-                limit: parse_limits.max_allocated_bytes as u64,
-            }
-            .into());
-        }
-        objects.try_reserve_exact(definitions.len()).map_err(|_| {
-            Failure::new(
-                EMF_ALLOCATION_FAILED,
-                None,
-                "EMF+ object metadata allocation failed",
-            )
-        })?;
+        let mut objects = budget.vector::<(ObjectDefinition, ObjectData)>(definitions.len())?;
         for mut definition in definitions {
-            let value = definition.decode(&parse_limits).map_err(nested_error)?;
+            let value = definition
+                .decode_with_budget(&mut budget)
+                .map_err(nested_error)?;
             // Only identity and bounds are needed after decoding; release the
             // assembled wire body rather than retaining a duplicate copy.
             definition.bytes = Vec::new();
@@ -164,7 +156,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
                 .enumerate()
                 .try_fold(0usize, |n, (index, record)| {
                     let object = objects.get(object_index);
-                    let len = typed_len(&record.data, index, object)?;
+                    let len = typed_len(&record.data, &mut budget, index, object)?;
                     if object.is_some_and(|(definition, _)| definition.last_record == index) {
                         object_index += 1;
                     }
@@ -185,14 +177,24 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             .and_then(|n| n.checked_add(typed_total))
             .filter(|n| *n as u64 <= options.max_output_bytes && *n <= isize::MAX as usize)
             .ok_or_else(overflow)?;
-        let mut bytes = Vec::new();
-        bytes.try_reserve_exact(total).map_err(|_| {
-            Failure::new(
-                EMF_ALLOCATION_FAILED,
-                None,
-                "EMF+ snapshot allocation failed",
-            )
-        })?;
+        // Charge raw copying, table/record scans and both enclosing source scans.
+        // Normalized sizing/writing charges each Sink emission before examining it.
+        let scan_work = (document.records().len() as u64)
+            .checked_mul(2)
+            .and_then(|n| {
+                (stream.records.len() as u64)
+                    .checked_mul(2)
+                    .and_then(|r| n.checked_add(r))
+            })
+            .and_then(|n| {
+                (lengths.len() as u64)
+                    .checked_mul(3)
+                    .and_then(|r| n.checked_add(r))
+            })
+            .and_then(|n| n.checked_add((total as u64).div_ceil(16)))
+            .ok_or_else(overflow)?;
+        budget.charge_work(scan_work)?;
+        let mut bytes = budget.vector::<u8>(total)?;
         bytes.extend_from_slice(b"EPSN");
         bytes.extend_from_slice(&EMF_PLUS_SNAPSHOT_VERSION.to_le_bytes());
         for value in [
@@ -258,7 +260,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             bytes.extend_from_slice(&(data_size as u32).to_le_bytes());
             let (tag, _) = family(&record.data);
             let object = objects.get(object_index);
-            let typed_len = typed_len(&record.data, index, object)?;
+            let typed_len = typed_len(&record.data, &mut budget, index, object)?;
             bytes.extend_from_slice(&tag.to_le_bytes());
             word(&mut bytes, typed_len as u64);
             word(&mut bytes, size as u64);
@@ -275,6 +277,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
                     Sink {
                         len: 0,
                         out: Some(&mut bytes),
+                        budget: &mut budget,
                     }
                     .object_fragment(
                         fragment,
@@ -285,21 +288,25 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
                 RecordData::Drawing(value) => Sink {
                     len: 0,
                     out: Some(&mut bytes),
+                    budget: &mut budget,
                 }
                 .drawing(value)?,
                 RecordData::Text(value) => Sink {
                     len: 0,
                     out: Some(&mut bytes),
+                    budget: &mut budget,
                 }
                 .text(value)?,
                 RecordData::Effect(value) => Sink {
                     len: 0,
                     out: Some(&mut bytes),
+                    budget: &mut budget,
                 }
                 .effect(value)?,
                 RecordData::TSGraphics(value) => Sink {
                     len: 0,
                     out: Some(&mut bytes),
+                    budget: &mut budget,
                 }
                 .ts_graphics(value)?,
                 _ => bytes.extend_from_within(raw_start + 12..raw_start + 12 + typed_len),

@@ -27,7 +27,7 @@ impl Default for SerializeLimits {
     }
 }
 
-/// Configurable ceilings for one parse.
+/// Configurable ceilings for one parse or an explicitly shared multi-stage operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParseLimits {
     /// Largest accepted input. Matches the Ruby parser's 200 MiB cap.
@@ -56,8 +56,11 @@ impl Default for ParseLimits {
 }
 
 /// Running totals checked against a [`ParseLimits`].
+/// Charges are cumulative requests, including temporary buffers and repeated growth;
+/// releasing a buffer does not refund its charge. This bounds accounted operations,
+/// not allocator metadata, physical RSS, or the process allocation failure behavior.
 #[derive(Debug)]
-pub(crate) struct Budget<'a> {
+pub struct Budget<'a> {
     limits: &'a ParseLimits,
     records: usize,
     allocated: usize,
@@ -65,7 +68,7 @@ pub(crate) struct Budget<'a> {
 }
 
 impl<'a> Budget<'a> {
-    pub(crate) fn new(limits: &'a ParseLimits) -> Self {
+    pub fn new(limits: &'a ParseLimits) -> Self {
         Self {
             limits,
             records: 0,
@@ -115,7 +118,7 @@ impl<'a> Budget<'a> {
         self.charge_work(1 + (size as u64).div_ceil(16))
     }
 
-    pub(crate) fn charge_work(&mut self, units: u64) -> Result<(), ParseFailure> {
+    pub fn charge_work(&mut self, units: u64) -> Result<(), ParseFailure> {
         let work = self
             .work
             .checked_add(units)
@@ -155,7 +158,16 @@ impl<'a> Budget<'a> {
             .map_err(|_| ParseFailure::AllocationFailed { bytes })
     }
 
-    pub(crate) fn charge_alloc(&mut self, bytes: usize) -> Result<(), ParseFailure> {
+    /// Charge and fallibly reserve one exact buffer before it is populated.
+    pub fn vector<T>(&mut self, len: usize) -> Result<Vec<T>, ParseFailure> {
+        let bytes = len
+            .checked_mul(std::mem::size_of::<T>())
+            .ok_or(ParseFailure::ArithmeticOverflow { offset: 0 })?;
+        self.charge_alloc(bytes)?;
+        try_vec_with_capacity(len)
+    }
+
+    pub fn charge_alloc(&mut self, bytes: usize) -> Result<(), ParseFailure> {
         let total = self
             .allocated
             .checked_add(bytes)

@@ -1135,6 +1135,14 @@ impl Document {
         crate::emf_plus::EmbeddedStream::extract(self, limits)
     }
 
+    /// Extract EMF+ while retaining cumulative accounting for subsequent stages.
+    pub fn structured_emf_plus_with_budget(
+        &self,
+        budget: &mut crate::ParseBudget<'_>,
+    ) -> Result<crate::emf_plus::EmbeddedStream, crate::emf_plus::Error> {
+        crate::emf_plus::EmbeddedStream::extract_budget(self, budget)
+    }
+
     /// Apply a snapshot atomically using the existing selected comments.
     /// Earlier comments retain their logical capacities (clamped on shrink);
     /// the final comment receives the remainder. Empty comments stay selected.
