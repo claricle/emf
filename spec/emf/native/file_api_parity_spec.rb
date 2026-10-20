@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
 require "spec_helper"
-require "rbconfig"
+require_relative "../../support/native_library_context"
 require "tmpdir"
 
 RSpec.describe "File API backend parity" do
+  include_context "with native library"
+
   let(:following) { [17, 12, 7].pack("V3") }
   let(:eof) { [14, 20, 0, 0, 20].pack("V5") }
   let(:bytes) do
@@ -15,12 +17,6 @@ RSpec.describe "File API backend parity" do
     header + following + eof
   end
   let(:backends) { %w[ruby native] }
-  let(:library) do
-    ENV.fetch("EMF_TEST_NATIVE_LIBRARY") do
-      extension = RbConfig::CONFIG.fetch("host_os").include?("darwin") ? "dylib" : "so"
-      File.expand_path("../../../emf-rs/target/debug/libemf_ffi.#{extension}", __dir__)
-    end
-  end
 
   around do |example|
     previous = ENV.to_h.slice("EMF_BACKEND", "EMF_NATIVE_LIBRARY")

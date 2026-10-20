@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
 require "spec_helper"
-require "rbconfig"
+require_relative "../../support/native_library_context"
 
 RSpec.describe "EMF extended header preservation" do
+  include_context "with native library"
+
   let(:following) { [17, 12, 7].pack("V3") }
   let(:eof) { [14, 20, 0, 0, 20].pack("V5") }
   let(:extension_payload) { "GAPFDGAP!A\x00B\x00END".b }
@@ -23,12 +25,6 @@ RSpec.describe "EMF extended header preservation" do
         b_open_gl: 0xA5A5A5A5, trailing: trailing
       ).to_binary_s
       [size, wire]
-    end
-  end
-  let(:library) do
-    ENV.fetch("EMF_TEST_NATIVE_LIBRARY") do
-      extension = RbConfig::CONFIG.fetch("host_os").include?("darwin") ? "dylib" : "so"
-      File.expand_path("../../../emf-rs/target/debug/libemf_ffi.#{extension}", __dir__)
     end
   end
 

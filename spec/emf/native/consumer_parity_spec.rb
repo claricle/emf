@@ -2,11 +2,10 @@
 
 require "spec_helper"
 require_relative "../../support/native_consumer_parity"
+require_relative "../../support/native_library_context"
 
 RSpec.describe "Forced-backend public consumer parity" do
-  before do
-    expect(File.file?(NativeConsumerParity.library)).to be(true), "set EMF_TEST_NATIVE_LIBRARY to a usable native library"
-  end
+  include_context "with native library"
 
   shared_examples "proven backend dispatch" do
     it "uses the requested parsers without native fallback" do
