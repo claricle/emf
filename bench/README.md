@@ -41,8 +41,26 @@ trials. Times are `CLOCK_MONOTONIC` nanoseconds, with `GC.start` before each sta
 outside the timed region.
 
 Stages: `detect_format`, `parse`, `wire_first_traversal`, `wire_repeated_traversal`,
-`dump`, `serialize`, `parse_to_serialize`, `parse_file` (the only stage that includes
+`dump`, `serialize`, `mutation_to_serialize`, `parse_to_serialize`, `parse_file` (the only stage that includes
 file IO). Definitions are in the output's `method.stages`.
+
+`mutation_to_serialize` measures one representative public wire edit followed by
+`Emf.serialize`: the first EMF `SetMapMode` record (type 17) has `wire.map_mode`
+changed from 8 to 1, or from any other value to 8. Every warmup and timed trial
+starts with a fresh parse of the original bytes outside the timed region. The
+timer and allocation count cover the assignment and serialization; candidate
+selection, parsing, output hashing and reparsing verification are excluded.
+After every edit, the worker checks that serialized bytes changed and that
+reparsing preserves the edited value without parse errors. A failed supported
+edit fails the fixture. The fixture's `mutation` metadata records the record
+index (zero based), type, field, before/after values, edited output SHA-256 and
+reparsed value. The existing `serialize`, `parse_to_serialize` and round-trip
+validity checks continue to use unchanged models.
+
+Fixtures without an EMF `SetMapMode` record report `mutation.status` and that
+stage's `status` as `unsupported`, with a reason, empty timing samples and a null
+summary; their other stages still run. This workload covers one scalar EMF wire
+edit, not all record families, WMF edits or universal corpus mutation acceptance.
 
 For Ruby, wire parsing and model creation are interleaved in `Emf::Emr::Parser.call`, so they
 are not reported separately; `parse` covers both (and runs format detection twice).

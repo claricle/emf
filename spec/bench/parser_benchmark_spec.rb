@@ -65,6 +65,17 @@ RSpec.describe ParserBenchmark::CLI do
       end
     end
 
+    it "reports a verified representative wire edit separately from the unchanged round trip" do
+      fixture = report.fetch("fixtures").fetch(0)
+      expect(fixture.fetch("mutation")).to include(
+        "status" => "supported", "record_index" => 25, "type_id" => 17, "field" => "map_mode",
+        "before" => 8, "after" => 1, "output_changed" => true, "reparsed_value" => 1
+      )
+      expect(fixture.dig("mutation", "output_sha256")).not_to eq(fixture.fetch("sha256"))
+      expect(fixture.dig("validity", "round_trip_identical")).to be(true)
+      expect(fixture.dig("stages", "mutation_to_serialize", "samples_ns").size).to eq(2)
+    end
+
     it "explains inseparable boundaries instead of inventing stages" do
       method = report.fetch("method")
       expect(method.fetch("stages").keys).not_to include("wire_parse", "model_creation")
@@ -174,6 +185,98 @@ RSpec.describe ParserBenchmark::CLI do
       include("path" => garbage, "status" => "failed", "stage" => "cold_load", "run" => 0)
     )
     expect(report.fetch("slowest_measured_case")).to be_nil
+  end
+end
+
+RSpec.describe ParserBenchmark::WarmWorker do
+  let(:tmpdir) { Dir.mktmpdir("parser-benchmark-mutation") }
+  let(:path) { File.join(tmpdir, "input.emf") }
+  let(:header) do
+    Emf::Emr::Binary::Header.new(i_type: 1, n_size: 108, d_signature: 0x464D4520, n_version: 0x10000).to_binary_s
+  end
+  let(:eof) { [14, 20, 0, 0, 20].pack("V*") }
+  let(:bytes) { header + [17, 12, 8].pack("V*") + eof }
+  let(:worker) do
+    described_class.new(path: path, sha256: Digest::SHA256.hexdigest(bytes), iterations: 2, warmups: 1)
+  end
+
+  before { File.binwrite(path, bytes) }
+  after { FileUtils.remove_entry(tmpdir) }
+
+  it "measures a real edit on fresh models and preserves the original file and no-edit stages" do
+    outputs = []
+    edited_models = []
+    allow(Emf).to receive(:serialize).and_wrap_original do |original, metafile|
+      edited_models << metafile if metafile.records.first.wire.map_mode.to_i == 1
+      original.call(metafile).tap { |output| outputs << output }
+    end
+    result = worker.call
+    expected = header + [17, 12, 1].pack("V*") + eof
+
+    expect(result.fetch("status")).to eq("ok")
+    expect(outputs).to include(bytes, expected)
+    expect(outputs.uniq).to contain_exactly(bytes, expected)
+    expect(edited_models.map(&:object_id).uniq.size).to eq(3)
+    expect(Emf.parse(expected).records.first.wire.map_mode.to_i).to eq(1)
+    expect(result.fetch("mutation")).to include(
+      "record_index" => 0, "type_id" => 17, "before" => 8, "after" => 1,
+      "output_sha256" => Digest::SHA256.hexdigest(expected), "reparsed_value" => 1
+    )
+    expect(result.dig("stages", "mutation_to_serialize", "samples_ns").size).to eq(2)
+    expect(result.dig("validity", "round_trip_identical")).to be(true)
+    expect(File.binread(path)).to eq(bytes)
+  end
+
+  context "without a representative record" do
+    let(:bytes) { header + eof }
+
+    it "labels the mutation unsupported while measuring the other stages" do
+      result = worker.call
+
+      expect(result.fetch("status")).to eq("ok")
+      expect(result.fetch("mutation")).to include("status" => "unsupported", "reason" => /SetMapMode/)
+      expect(result.dig("stages", "mutation_to_serialize")).to include("status" => "unsupported", "samples_ns" => [])
+      expect(result.dig("stages", "parse", "samples_ns").size).to eq(2)
+      expect(result.dig("validity", "round_trip_identical")).to be(true)
+    end
+
+    it "writes an unsupported stage without fabricated timing statistics" do
+      manifest = File.join(tmpdir, "manifest.json")
+      output = File.join(tmpdir, "result.json")
+      File.write(manifest, JSON.generate("schema_version" => FixtureManifest::SCHEMA_VERSION, "fixtures" => [
+                                           { "path" => path, "sha256" => Digest::SHA256.hexdigest(bytes),
+                                             "size_bytes" => bytes.bytesize, "outcome" => "parsed" }
+                                         ]))
+      status = ParserBenchmark::CLI.new(["--manifest", manifest, "--output", output, "--iterations", "1",
+                                         "--warmups", "0", "--cold-runs", "0"]).run
+      fixture = JSON.parse(File.read(output)).fetch("fixtures").first
+
+      expect(status).to eq(0)
+      expect(fixture.dig("stages", "mutation_to_serialize")).to include(
+        "status" => "unsupported", "samples_ns" => [], "summary_ns" => nil
+      )
+      expect(fixture.dig("stages", "serialize", "samples_ns").size).to eq(1)
+    end
+  end
+
+  it "fails a supported edit when serialization discards the changed value" do
+    allow(Emf).to receive(:serialize).and_return(bytes)
+
+    expect(worker.call).to include("status" => "error", "error" => include("class" => "ParserBenchmark::MutationError"))
+  end
+
+  it "fails a supported edit when changed output reparses with the wrong value" do
+    allow(Emf).to receive(:serialize).and_return(header + [17, 12, 2].pack("V*") + eof)
+
+    expect(worker.call).to include("status" => "error", "error" => include(
+      "class" => "ParserBenchmark::MutationError", "message" => /reparsing/
+    ))
+  end
+
+  it "rejects changed source bytes before measuring any stage" do
+    File.binwrite(path, "#{bytes}changed")
+
+    expect(worker.call).to include("status" => "error", "error" => include("class" => "ParserBenchmark::InputMismatch"))
   end
 end
 

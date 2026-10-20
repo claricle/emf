@@ -28,6 +28,8 @@ module ParserBenchmark
     "wire_repeated_traversal" => "the same snapshot traversal repeated on the same metafile",
     "dump" => "Emf::Visitors::Dump over the parsed metafile, rendered to a string",
     "serialize" => "Emf.serialize(metafile) of the parsed metafile",
+    "mutation_to_serialize" => "SetMapMode wire.map_mode assignment and Emf.serialize on a fresh model; " \
+                               "parsing, candidate selection and output/reparse verification are outside timing",
     "parse_to_serialize" => "Emf.serialize(Emf.parse(bytes)) as one region",
     "parse_file" => "Emf.parse_file(path): includes the file read"
   }.freeze
@@ -102,6 +104,44 @@ module ParserBenchmark
   end
 
   class InputMismatch < StandardError; end
+  class MutationError < StandardError; end
+
+  # One representative public wire edit, not a claim of arbitrary edit support.
+  class WireMutation
+    attr_reader :metadata
+
+    def initialize(metafile)
+      index = metafile.records.index { |record| record.type_id == 17 } if %i[emf emf_plus].include?(metafile.format)
+      @metadata = if index
+                    before = metafile.records.fetch(index).wire.map_mode.to_i
+                    { "status" => "supported", "record_index" => index, "type_id" => 17, "field" => "map_mode",
+                      "before" => before, "after" => before == 8 ? 1 : 8 }
+                  else
+                    { "status" => "unsupported", "reason" => "No EMF SetMapMode record for the representative wire edit" }
+                  end
+    end
+
+    def supported?
+      metadata["status"] == "supported"
+    end
+
+    def apply(metafile)
+      metafile.records.fetch(metadata.fetch("record_index")).wire.map_mode = metadata.fetch("after")
+    end
+
+    def verify(bytes, original)
+      raise MutationError, "wire edit did not change serialized bytes" if bytes == original
+
+      reparsed = Emf.parse(bytes)
+      record = reparsed.records.fetch(metadata.fetch("record_index"))
+      value = record.wire.map_mode.to_i
+      unless reparsed.errors.empty? && record.type_id == metadata.fetch("type_id") && value == metadata.fetch("after")
+        raise MutationError, "serialized wire edit did not survive reparsing"
+      end
+
+      metadata.merge!("output_changed" => true, "output_sha256" => Digest::SHA256.hexdigest(bytes), "reparsed_value" => value)
+    end
+  end
 
   # Runs in a fresh child with a warm process: untimed warmups, then timed trials.
   class WarmWorker
@@ -123,7 +163,7 @@ module ParserBenchmark
       @warmups.times { trial }
       memory = [Memory.sample]
       samples = Array.new(@iterations) { trial.tap { memory << Memory.sample } }
-      result.merge("stages" => collect(samples), "memory" => memory_report(memory))
+      result.merge("mutation" => @mutation.metadata, "stages" => collect(samples), "memory" => memory_report(memory))
     rescue StandardError => e
       { "status" => "error", "error" => { "class" => e.class.name, "message" => e.message.byteslice(0, 2048).scrub } }
     end
@@ -132,6 +172,7 @@ module ParserBenchmark
 
     def validity
       metafile = Emf.parse(@bytes)
+      @mutation = WireMutation.new(metafile)
       { "record_count" => metafile.records.size, "parse_error_count" => metafile.errors.size,
         "format" => metafile.format.to_s, "round_trip_identical" => Emf.serialize(metafile) == @bytes }
     end
@@ -145,7 +186,17 @@ module ParserBenchmark
       measure(results, "serialize") { Emf.serialize(metafile) }
       measure(results, "parse_to_serialize") { Emf.serialize(Emf.parse(@bytes)) }
       measure(results, "parse_file") { Emf.parse_file(@path) }
+      measure_mutation(results) if @mutation.supported?
       results
+    end
+
+    def measure_mutation(results)
+      metafile = Emf.parse(@bytes)
+      bytes = measure(results, "mutation_to_serialize") do
+        @mutation.apply(metafile)
+        Emf.serialize(metafile)
+      end
+      @mutation.verify(bytes, @bytes)
     end
 
     def measure(results, stage)
@@ -164,6 +215,10 @@ module ParserBenchmark
 
     def collect(samples)
       STAGES.keys.to_h do |stage|
+        if stage == "mutation_to_serialize" && !@mutation.supported?
+          next [stage, @mutation.metadata.merge("samples_ns" => [], "allocated_objects" => [])]
+        end
+
         [stage, { "samples_ns" => samples.map { |s| s.fetch(stage).fetch("ns") },
                   "allocated_objects" => samples.map { |s| s.fetch(stage).fetch("allocated_objects") } }]
       end
@@ -431,14 +486,13 @@ module ParserBenchmark
 
     def build_report(selected)
       fixtures = selected.map { |entry| measure_fixture(entry) }
-      slowest = slowest_case(fixtures)
       cold = cold_load(selected)
       failures = fixtures.reject { |f| f["status"] == "ok" }.map { |f| f.slice("path", "status", "failure") }
       { "schema_version" => SCHEMA_VERSION, "kind" => "emf-parser-stage-baseline", "backend" => @options.backend,
         "generated_at" => Time.now.utc.iso8601, "command" => ["ruby", "bench/parser.rb", *@argv],
         **Provenance.new(@manifest).to_h, "native_library" => @backend_description.native_library, "inputs" => inputs(selected),
         "method" => method_description, "cold_load" => cold, "fixtures" => fixtures,
-        "slowest_measured_case" => slowest, "failures" => failures + ParserBenchmark.cold_failures(cold) }
+        "slowest_measured_case" => slowest_case(fixtures), "failures" => failures + ParserBenchmark.cold_failures(cold) }
     end
 
     def measure_fixture(entry)
@@ -449,11 +503,13 @@ module ParserBenchmark
       return identity.merge("status" => "failed", "failure" => result["safety_failure"]) if result["safety_failure"]
       return identity.merge("status" => "error", "failure" => result["error"]) unless result["status"] == "ok"
 
-      identity.merge("status" => "ok", "validity" => result["validity"], "memory" => result["memory"],
+      identity.merge("status" => "ok", "validity" => result["validity"], "memory" => result["memory"], "mutation" => result["mutation"],
                      "stages" => result["stages"].transform_values { |data| stage_report(data) })
     end
 
     def stage_report(data)
+      return data.slice("status", "reason", "samples_ns").merge("summary_ns" => nil) if data["status"] == "unsupported"
+
       { "samples_ns" => data["samples_ns"], "summary_ns" => Stats.summarize(data["samples_ns"]),
         "allocated_objects_median" => Stats.median(data["allocated_objects"].sort) }
     end
