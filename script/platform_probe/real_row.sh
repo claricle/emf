@@ -59,8 +59,13 @@ step() {
 
 # shellcheck disable=SC2329  # invoked through step
 build_cdylib() {
-  # A musl cdylib cannot link statically; Alpine's rustc defaults crt-static on.
-  case "$target" in *-musl) export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=-crt-static" ;; esac
+  case "$target" in
+    # A musl cdylib cannot link statically; Alpine's rustc defaults crt-static on.
+    *-musl) export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=-crt-static" ;;
+    # llvm-mingw links libunwind.dll dynamically, and a clean Windows ARM64 machine lacks it.
+    # Candidate only: the dll_closure step on a real runner decides whether this is enough.
+    aarch64-pc-windows-gnullvm) export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-static" ;;
+  esac
   (
     cd "$root/emf-rs" &&
     rustup toolchain install stable --profile minimal &&
