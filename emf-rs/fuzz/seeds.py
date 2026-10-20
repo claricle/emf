@@ -16,7 +16,6 @@ def validate(manifest):
     assert manifest["schema_version"] == 1
     baseline = json.loads((ROOT / "spec/fixtures/manifest.json").read_text())
     originals = {row["path"]: row for row in baseline["fixtures"]}
-    assert len(originals) == 229
     seen = set()
     counts = collections.Counter()
     for seed in manifest["seeds"]:
@@ -36,7 +35,10 @@ def validate(manifest):
         counts[seed["kind"]] += 1
         if path in originals:
             assert seed["sha256"] == originals[path]["sha256"]
-            expected = "original-corrupt" if "/emf-corrupted/" in path else "original-valid"
+            if "/wmf/" in path:
+                expected = "wmf"
+            else:
+                expected = "original-corrupt" if "/emf-corrupted/" in path else "original-valid"
             assert seed["kind"] == expected
     assert set(originals) <= seen, "original corpus seed missing"
     assert counts["original-valid"] == 208 and counts["original-corrupt"] == 21
