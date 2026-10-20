@@ -143,10 +143,10 @@ and corpus parity. Group names are proposed Rust modules.
 | `ForceUfiMapping` | `FORCEUFIMAPPING` | [`force_ufi_mapping.rb`](../lib/emf/emr/binary/records/force_ufi_mapping.rb) | `emf::color_palette` | Not started |
 | `SetLinkedUfis` | `SETLINKEDUFIS` | [`set_linked_ufis.rb`](../lib/emf/emr/binary/records/set_linked_ufis.rb) | `emf::color_palette` | Not started |
 | `ColorMatchToTargetW` | `COLORMATCHTOTARGETW` | [`colormatch_to_target_w.rb`](../lib/emf/emr/binary/records/colormatch_to_target_w.rb) | `emf::color_palette` | Not started |
-| `CreateColorspaceW` | `CREATECOLORSPACEW` | [`create_colorspace_w.rb`](../lib/emf/emr/binary/records/create_colorspace_w.rb) | `emf::color_palette` | Not started |
-| `CreateColorspace` | `CREATECOLORSPACE` | [`create_colorspace.rb`](../lib/emf/emr/binary/records/create_colorspace.rb) | `emf::color_palette` | Not started |
-| `SetColorspace` | `SETCOLORSPACE` | [`set_colorspace.rb`](../lib/emf/emr/binary/records/set_colorspace.rb) | `emf::color_palette` | Not started |
-| `DeleteColorspace` | `DELETECOLORSPACE` | [`delete_colorspace.rb`](../lib/emf/emr/binary/records/delete_colorspace.rb) | `emf::color_palette` | Not started |
+| `CreateColorspaceW` | `CREATECOLORSPACEW` | [`create_colorspace_w.rb`](../lib/emf/emr/binary/records/create_colorspace_w.rb) | `emf::color_palette` | In progress: native opaque `body` parity via snapshot family 0; [byte/edit controls](../spec/emf/native/colorspace_adapter_spec.rb); semantic fields remain open |
+| `CreateColorspace` | `CREATECOLORSPACE` | [`create_colorspace.rb`](../lib/emf/emr/binary/records/create_colorspace.rb) | `emf::color_palette` | In progress: native opaque `body` parity via snapshot family 0; [byte/edit controls](../spec/emf/native/colorspace_adapter_spec.rb); semantic fields remain open |
+| `SetColorspace` | `SETCOLORSPACE` | [`set_colorspace.rb`](../lib/emf/emr/binary/records/set_colorspace.rb) | `emf::color_palette` | In progress: native opaque `body` parity via snapshot family 0; [byte/edit controls](../spec/emf/native/colorspace_adapter_spec.rb); semantic fields remain open |
+| `DeleteColorspace` | `DELETECOLORSPACE` | [`delete_colorspace.rb`](../lib/emf/emr/binary/records/delete_colorspace.rb) | `emf::color_palette` | In progress: native opaque `body` parity via snapshot family 0; [byte/edit controls](../spec/emf/native/colorspace_adapter_spec.rb); semantic fields remain open |
 | `GlsRecord` | `GLSRECORD` | [`gls_record.rb`](../lib/emf/emr/binary/records/gls_record.rb) | `emf::opaque_extensions` | Not started |
 | `GlsBoundedRecord` | `GLSBOUNDEDRECORD` | [`gls_bounded_record.rb`](../lib/emf/emr/binary/records/gls_bounded_record.rb) | `emf::opaque_extensions` | Not started |
 | `PolyTextOutA` | `POLYTEXTOUTA` | [`poly_textout_a.rb`](../lib/emf/emr/binary/records/poly_textout_a.rb) | `emf::text` | Not started |
