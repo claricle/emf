@@ -220,6 +220,13 @@ module Emf
         end
       end
 
+      def self.preserve_small_text_scales(wire, raw)
+        [wire.ex_scale, wire.ey_scale].each_with_index do |scale, index|
+          scale.extend(TextScaleBits)
+          scale.native_bits = raw.byteslice(28 + (index * 4), 4)
+        end
+      end
+
       def self.text_buffers(buffers, fixed, raw)
         offsets = {}
         trailing = "".b

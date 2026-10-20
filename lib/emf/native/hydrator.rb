@@ -4,6 +4,7 @@ require_relative "fields"
 require_relative "font_fields"
 require_relative "gradient_fields"
 require_relative "bitmap_fields"
+require_relative "small_text_fields"
 require_relative "lazy_wire"
 
 module Emf
@@ -101,6 +102,8 @@ module Emf
         raise FormatError, "invalid native typed payload length" unless record.fetch(:payload).empty?
 
         type = record.fetch(:type)
+        return SmallTextFields.call(raw) if type == 108
+
         if !SUPPORTED_TYPES.include?(type) && Emr::Binary::Records.lookup(type) != Emr::Binary::Records::Raw
           raise FormatError, "native backend does not support typed EMR record #{type}"
         end
