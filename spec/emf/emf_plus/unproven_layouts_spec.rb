@@ -97,7 +97,12 @@ RSpec.describe "EMF+ layouts without corpus coverage" do
   end
 
   describe "SetTSClip" do
-    # C set: 4 bytes per rectangle (Size = NumRects * 4 + 12).
+    # C set: MS-EMFPLUS 2.3.8.1 (reference-docs/ms-emfplus/ch02-structures.md,
+    # "EmfPlusSetTSClip Record") says each rectangle takes 4 bytes
+    # (Size = NumRects * 4 + 12) yet also describes a variable 1-or-2-byte
+    # delta coding per point. It does not say which four values make a
+    # rectangle, the two-byte sign handling, or the first delta's origin, so
+    # the data stays raw.
     let(:packed) { "\x81\x82\x03\x04\x85\x86\x07\x08".b }
     let(:bytes) { record(0x403A, packed, flags: 0x8002) }
 
