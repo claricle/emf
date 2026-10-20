@@ -4,8 +4,8 @@ Status: partial format coverage. Typed record transport does not establish typed
 coverage of every nested bitmap or Escape payload. Issue 15 and plan 09 remain
 open until the residuals below have implementation and acceptance evidence.
 
-This inventory describes the implementation at `704d77a`. The normative local
-reference is [MS-WMF structures](../../reference-docs/ms-wmf/ch02-structures.md).
+This inventory describes the implementation at `704d77a`, with subsequent native
+bridge acceptance examples. The normative local reference is [MS-WMF structures](../../reference-docs/ms-wmf/ch02-structures.md).
 The scope is standard and Aldus placeable WMF, independently of EMF/EMF+.
 
 ## Headers, framing and edits
@@ -18,7 +18,7 @@ The scope is standard and Aldus placeable WMF, independently of EMF/EMF+.
 | Unknown function payloads and original function high bytes | Ruby `UnknownRecord` and typed `type_id`; Rust original record spans | Ruby parser and native WMF specs, including unknown zero-low-byte functions |
 | Edited file size, largest-record length, placeable checksum | Ruby serializer; Rust WMF serializer | Ruby parser specs and Rust WMF edit tests |
 | Object table capacity, create/select/delete validation | Ruby `lib/emf/wmf/binary.rb`; Rust `wmf/objects.rs` | `spec/emf/wmf/object_records_spec.rb`; Rust `tests/wmf_objects.rs`; native WMF rejection specs |
-| Resource bounds | Ruby input-byte/record-count limits; Rust shared parse/serialize budgets | Ruby parser limit specs; Rust `tests/wmf.rs` budget tests |
+| Resource bounds | Ruby input-byte/record-count limits; Rust shared parse/serialize budgets | Ruby parser limit specs and `spec/emf/native_wmf_limits_spec.rb`; Rust `tests/wmf.rs` budget tests |
 
 The Rust core can retain a malformed recognized record with diagnostics. The Ruby
 public parser and native hydrator enforce the Ruby compatibility contract and may
@@ -62,15 +62,24 @@ tests cover unknown siblings, typed high function bytes, trailing bytes, DC stat
 and Escape padding/suffix. Direct hydrator tests additionally cover optional
 bitmap forms and invalid source/family combinations.
 
-`spec/emf/native_wmf_spec.rb` adds public bridge parity for BitBlt with and without
-a source bitmap, including reserved words and an absent-source suffix. It checks
-typed field equality and exact serialization through both Ruby paths, with Ruby
-parsing prohibited during the native phase. This does not establish native
-bridge coverage of every optional bitmap function.
+`spec/emf/native_wmf_spec.rb` covers public bridge parity for BitBlt with and
+without a source bitmap. `spec/emf/native_wmf_optional_bitmap_spec.rb` extends
+that comparison to StretchBlt, DibBitBlt and DibStretchBlt, including reserved
+words, absent-source suffixes and signed coordinates. These examples compare
+typed fields and exact serialization against the Ruby fallback, with Ruby parsing
+prohibited during the native phase.
+
+`spec/emf/native_wmf_bitmap_controls_spec.rb` checks native rejection of malformed
+bitmap records and valid bitmap edits across all six transfer functions without
+Ruby retry. `spec/emf/native_wmf_unknown_identity_spec.rb` checks preservation of
+unknown function words above 0x7FFF through known-sibling edits in both containers.
+These generated bridge examples establish transport behavior; nested bitmap
+semantics and independent corpus acceptance remain separate requirements.
 
 Rust's advisory `DibUnsupportedByVersion` diagnostic for version 0x0100 is not
 surfaced in Ruby's model. Both the fallback and native Ruby paths accept and
-preserve that record; this inventory found no acceptance mismatch to fix.
+preserve that record, as checked by `spec/emf/native_wmf_version_spec.rb` for
+both supported header versions.
 
 ## Fixtures and independent evidence
 
@@ -90,8 +99,8 @@ pass is claimed here.
 
 ## Follow-up order
 
-1. Reconcile the fixture manifest through its existing owner; extend optional
-   bitmap bridge cases beyond BitBlt when claiming all-function parity.
+1. Reconcile the fixture manifest through its existing owner. Optional bitmap
+   bridge transport is covered by the generated parity examples above.
 2. Define the embedded-EMF Escape sequence API before implementation: validate the
    34-byte metadata, 8,192-byte segment limit, record count, total/remaining byte
    arithmetic and completion, with multi-segment and malformed examples.
@@ -108,4 +117,7 @@ these are additive capabilities rather than demonstrated codec defects.
 The preceding typed-record checkpoint passed 200 combined Ruby/native examples
 and 64 FFI tests. Those results apply to unchanged source at `704d77a`; this
 inventory does not claim a new full-format suite or final-head CI pass. Native
-parity checks require a library built from the matching Rust source.
+parity checks require a library built from the matching Rust source. The combined
+public bridge specs (the original plus the five focused files above) passed
+17 examples with no failures; the six new Ruby files passed changed-file lint.
+These checks do not replace final-head CI or independent corpus acceptance.
