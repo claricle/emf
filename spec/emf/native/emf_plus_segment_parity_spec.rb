@@ -96,4 +96,81 @@ RSpec.describe "EMF+ EPSN segment and public stream parity" do
       expect(results.first).not_to eq(input)
     end
   end
+
+  context "with normalized typed families and documented opaque fallbacks" do
+    let(:cases) { parity.typed_cases }
+    let(:transform_bytes) { [-0.0, 0, 0, 1, 5, 6].pack("e6") }
+    let(:palette_bytes) { [0x80FF0033, 0x00010203].pack("V2") }
+    let(:text_bytes) { [0xD800, 0x0061, 0xFFFF].pack("v3") }
+    let(:payloads) { [fixtures.plus_header, *cases.map(&:first), fixtures.plus_eof] }
+    let(:input) { parity.file(payloads) }
+
+    include_examples "matching EPSN segments"
+
+    it "encodes every represented family with exact normalized values and original frames" do
+      frames = parity.frames(snapshot_reader.call(input))
+      expect(frames.size).to eq(cases.size + 2)
+      expect(frames.first.values_at(:family, :typed)).to eq([1, fixtures.plus_header.byteslice(12..)])
+      expect(frames.last.values_at(:family, :typed)).to eq([2, "".b])
+      frames[1...-1].zip(cases).each do |frame, (raw, family, typed)|
+        expect(frame.values_at(:family, :typed, :raw)).to eq([family, typed, raw])
+      end
+      expect(parity.view(native_stream)).to eq(parity.view(ruby_stream))
+      expect(Emf.serialize(native_file)).to eq(input)
+    end
+
+    it "exposes typed object, effect, graphics, drawing and text values through both public backends" do
+      [ruby_stream, native_stream].each do |stream|
+        records = stream.records.map(&:record)
+        brush = Emf::EmfPlus::Objects.decode(stream.objects.lookup(1, at: records.size))
+        expect(brush.data.solid_color).to have_attributes(alpha: 128, red: 255, green: 0, blue: 51)
+        unknown = Emf::EmfPlus::Objects.decode(stream.objects.lookup(2, at: records.size))
+        expect(unknown).to be_a(Emf::EmfPlus::Objects::Opaque)
+        expect(unknown.to_binary).to eq("OBJ!")
+        expect(records.fetch(3).effect).to have_attributes(blur_radius: 2.5, expand_edge: 0xFFFFFFFF)
+        expect(records.fetch(4).effect).to be_a(Emf::EmfPlus::Effects::Opaque)
+        expect(records.fetch(4).effect.to_binary).to eq("FX!?")
+        graphics = records[5..7]
+        graphics.each do |record|
+          expect(record).to have_attributes(anti_alias_mode: 255, render_origin_x: -32_768,
+                                            render_origin_y: 32_767, text_contrast: 65_535)
+          expect(record.world_to_device.map(&:to_binary_s).join).to eq(transform_bytes)
+        end
+        expect(graphics.map(&:palette?)).to eq([false, true, true])
+        expect(graphics.map { |record| record.decoded_palette&.palette_count&.to_i }).to eq([nil, 0, 2])
+        expect(graphics.last.decoded_palette.palette_entries.map(&:to_binary_s).join).to eq(palette_bytes)
+        expect(records.fetch(8).rect).to have_attributes(x: -3, y: 4, width: 5, height: 6)
+        expect(records.fetch(8)).to have_attributes(brush_id: 0x80FF0033, solid_color?: true)
+        expect(records.fetch(9)).to have_attributes(font_object_id: 5, brush_id: 7, format_id: 8, length: 3)
+        expect(records.fetch(9).body.string_data.to_s).to eq(text_bytes)
+        expect(records.fetch(9).text).to eq("\uFFFDa\uFFFF")
+        expect(records.fetch(10)).to have_attributes(compressed?: true, rect_count: 1, rect_data: "RAW!", rects: [])
+      end
+    end
+
+    it "edits graphics state without changing typed neighbors, fallbacks, comment tails or the source" do
+      results = [ruby_stream, native_stream].map do |stream|
+        handle = stream.records.fetch(7)
+        edited = stream.edit { |editor| editor.replace(handle, handle.record.with(render_origin_x: -9)) }
+        expect(edited.emf_plus_stream.records.fetch(7).record.render_origin_x).to eq(-9)
+        expect(stream.records.fetch(7).record.render_origin_x).to eq(-32_768)
+        expect(stream).not_to be_dirty
+        expect(Emf.serialize(stream.source)).to eq(input)
+        edited.records.each_with_index do |record, index|
+          next if index == (handle.segment_index * 2) + 1
+
+          expect(record.to_binary_s).to eq(stream.source.records.fetch(index).to_binary_s)
+        end
+        expect(edited.emf_plus_stream.segments.map(&:tail)).to eq(stream.segments.map(&:tail))
+        expect(edited.emf_plus_stream.records.reject { |entry| entry.stream_index == 7 }.map { |entry| entry.record.to_binary }).to eq(
+          stream.records.reject { |entry| entry.stream_index == 7 }.map { |entry| entry.record.to_binary }
+        )
+        bytes = Emf.serialize(edited)
+        expect(parity.parse(bytes, "ruby", library).emf_plus_stream.records.fetch(7).record.render_origin_x).to eq(-9)
+        bytes
+      end
+      expect(results.last).to eq(results.first)
+      expect(results.first).not_to eq(input)
+    end
+  end
 end
