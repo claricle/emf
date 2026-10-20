@@ -61,16 +61,18 @@ selection propagate without Ruby retry. Malformed input is not an availability
 failure. Native default-delivery acceptance remains subject to the platform and
 performance gates.
 
-**Unfinished error-class contract:** `Loader#checked` currently raises
-`Emf::FormatError` for every nonzero ABI status, with copied native error detail.
-The intended policy remains `FORMAT_ERROR` / `LIMIT_EXCEEDED` → `FormatError`,
-`SERIALIZE_ERROR` → `SerializeError`, internal/allocation failure → `Emf::Error`,
-and binding-owned invalid arguments treated as an adapter defect. The bounded
-lifetime tests prove real parse failures and error cleanup, not status-specific
-internal/allocation mapping. Native ABI serialization is not called by the Ruby
-adapter, so its `SERIALIZE_ERROR` path is not measured here. Preserve this gap
-until implemented and exercised; do not count cleanup coverage as error-policy
-completion. Successful parse diagnostics become ordered `Emf::ParseError` values.
+**Implemented error-class contract:** `Loader#checked` and buffer-view failures
+map `FORMAT_ERROR` / `LIMIT_EXCEEDED` to `Emf::FormatError`,
+`SERIALIZE_ERROR` to `Emf::SerializeError`, and invalid argument,
+internal/allocation or unknown status to `Emf::Error`, with copied native detail.
+`spec/emf/native/loader_status_spec.rb` exercises all seven nonzero status cases,
+success cleanup and failures while copying error or buffer data (10 examples).
+These use controlled Fiddle-boundary responses; they do not inject an actual
+allocator failure or native panic. The real-library lifetime suite separately
+proves parse-error cleanup. Native ABI serialization is not called by the Ruby
+adapter, so its error mapping is boundary-tested rather than an end-to-end
+serialization failure. Successful parse diagnostics become ordered
+`Emf::ParseError` values.
 
 ## Implemented wire and lifetime contract
 
