@@ -94,6 +94,10 @@ outside the timed region.
 Stages: `detect_format`, `parse`, `wire_first_traversal`, `wire_repeated_traversal`,
 `dump`, `serialize`, `mutation_to_serialize`, `parse_to_serialize`, `parse_file` (the only stage that includes
 file IO). Definitions are in the output's `method.stages`.
+Dump and serialize each receive a separate freshly parsed model that has not been
+traversed; setup parsing is excluded from their timers. The traversal pair uses
+one model to distinguish first access from repeated access. `parse_to_serialize`
+includes parsing and serialization together.
 
 `mutation_to_serialize` measures one representative public wire edit followed by
 `Emf.serialize`: the first EMF `SetMapMode` record (type 17) has `wire.map_mode`
@@ -118,9 +122,10 @@ are not reported separately; `parse` covers both (and runs format detection twic
 `method.inseparable_boundaries` lists this in the output.
 
 For native, `parse` includes backend selection/loading, Rust parsing, ABI snapshot
-transfer and Ruby model/wire hydration. These costs are not timed separately.
+transfer and Ruby model hydration with deferred wire construction. These costs are not timed separately.
 The current adapter loads on each parse and serialize call; serialization uses the
-Ruby serializer. Wire traversal snapshots already hydrated BinData wires. Native
+Ruby serializer. First wire traversal includes deferred BinData construction and
+snapshots; repeated traversal reuses those wires. Native
 `parse_file` includes the same public parsing costs plus file IO. Fresh-process
 first-call timings include initial loading and hydration, separately from warm trials.
 
