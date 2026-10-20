@@ -51,7 +51,12 @@ remains open. No group above claims completion.
 
 The current registry has 119 autoloads: 118 numeric record types plus `Raw`.
 `SETCOLORADJUSTMENT` maps to `SetColorAdjustment` in the registry. `HEADER` is not a
-record registry entry; header parsing has separate acceptance criteria. Run
+record registry entry; header parsing has separate acceptance criteria. The focused
+[extended-header spec](../spec/emf/native/header_extension_spec.rb) exercises
+Ruby/native preservation for 88-, 100-, 108- and 124-byte layouts, explicit
+description/pixel-format offsets, opaque gaps and suffix bytes, and a following-record
+mutation. This proves only those bounded layouts and preservation behavior; complete
+header-variant and corpus parity remain open. Run
 `ruby script/record_coverage` using a supported project Ruby to check inventory
 identity against the plan; this is not semantic or corpus proof.
 The guard detects missing/extra/duplicate classes, numeric collisions, mismatched

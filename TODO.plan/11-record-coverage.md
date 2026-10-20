@@ -6,8 +6,12 @@ Source of truth: `lib/emf/emr/binary/records.rb` and its referenced wire files.
 This table lists each autoloaded record class, including `Raw`; it does not claim
 that every variant is implemented semantically or exercised by the fixture corpus.
 Header parsing is separate in `lib/emf/emr/binary/header.rb`. The initial header
-slice crosses the core, snapshot ABI and Ruby adapter; extended header variants
-remain open.
+slice crosses the core, snapshot ABI and Ruby adapter. Focused Ruby/native controls
+now cover 88-, 100-, 108- and 124-byte layouts, explicit description/pixel-format
+offsets, opaque gaps and suffix bytes, and mutation of the following record while
+preserving an extended header ([header extension spec](../spec/emf/native/header_extension_spec.rb)).
+This bounded preservation acceptance does not establish all header variants or
+full corpus parity; those remain open.
 
 The `In progress` rows distinguish typed fields from opaque compatibility bodies.
 The current [native family evidence](../docs/native-record-coverage.md) links models,
