@@ -1539,7 +1539,7 @@ fn aggregate_budget_includes_retained_stages_and_output() {
             max_allocated_bytes: 100000,
             max_work_units: 1000000,
         };
-        let mut output = ptr::dangling_mut();
+        let mut output = ptr::NonNull::dangling().as_ptr();
         assert_eq!(
             emf_document_emf_plus_snapshot_v1(
                 doc,
@@ -1577,7 +1577,7 @@ fn aggregate_budget_includes_retained_stages_and_output() {
                 } else {
                     limits.max_allocated_bytes = mid;
                 }
-                let mut output = ptr::dangling_mut();
+                let mut output = ptr::NonNull::dangling().as_ptr();
                 let status = emf_document_emf_plus_snapshot_v1(
                     doc,
                     &options(1000000),
@@ -1601,7 +1601,7 @@ fn aggregate_budget_includes_retained_stages_and_output() {
                 } else {
                     limits.max_allocated_bytes = cap;
                 }
-                let mut output = ptr::dangling_mut();
+                let mut output = ptr::NonNull::dangling().as_ptr();
                 assert_eq!(
                     emf_document_emf_plus_snapshot_v1(
                         doc,
@@ -1645,7 +1645,7 @@ fn empty_snapshot_output_is_in_the_cumulative_allocation_budget() {
         ] {
             limits.max_allocated_bytes = allocated;
             limits.max_work_units = work;
-            let mut output = ptr::dangling_mut();
+            let mut output = ptr::NonNull::dangling().as_ptr();
             assert_eq!(
                 emf_document_emf_plus_snapshot_v1(
                     doc,
