@@ -1,0 +1,96 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: script/build_native_gem --platform NAME --output DIR [--library PATH --abi-version N]
+#
+# Builds a platform gem (or, with --platform ruby, the source gem) from
+# emf.gemspec in a temporary staging tree. The repository is never modified:
+# the native library and platforms.json exist only in the staging copy.
+
+require "digest"
+require "fileutils"
+require "json"
+require "optparse"
+require "rubygems/package"
+require "tmpdir"
+
+class NativeGemBuilder
+  ROOT = File.expand_path("..", __dir__)
+  NATIVE_DIR = "lib/emf/native"
+
+  def initialize(platform:, output:, library: nil, abi_version: nil)
+    @platform = platform
+    @output = File.expand_path(output)
+    @library = library && File.expand_path(library)
+    @abi_version = abi_version
+  end
+
+  def build
+    validate
+    FileUtils.mkdir_p(@output)
+    Dir.mktmpdir("emf-native-gem") { |stage| build_in(stage) }
+  end
+
+  private
+
+  def source?
+    @platform == "ruby"
+  end
+
+  def validate
+    abort "--platform ruby builds the source gem and takes no --library" if source? && @library
+    return if source?
+
+    abort "--library is required unless --platform is ruby" unless @library
+    abort "library not found: #{@library}" unless File.file?(@library)
+    abort "--abi-version is required with --library" unless @abi_version
+  end
+
+  def build_in(stage)
+    spec = Dir.chdir(ROOT) { Gem::Specification.load("emf.gemspec") }
+    spec.files.each { |file| stage_file(stage, File.join(ROOT, file), file) }
+    spec = add_native(stage, spec) unless source?
+    gem_file = package(stage, spec)
+    FileUtils.mv(File.join(stage, gem_file), @output)
+    puts File.join(@output, gem_file)
+  end
+
+  def add_native(stage, spec)
+    name = File.basename(@library)
+    relative = File.join(NATIVE_DIR, @platform, name)
+    stage_file(stage, @library, relative)
+    manifest = File.join(NATIVE_DIR, "platforms.json")
+    File.write(File.join(stage, manifest), JSON.pretty_generate(manifest_data(name)) << "\n")
+    spec.platform = @platform
+    spec.files += [relative, manifest]
+    spec
+  end
+
+  def manifest_data(name)
+    { platform: @platform, library: name, sha256: Digest::SHA256.file(@library).hexdigest,
+      abi_version: Integer(@abi_version) }
+  end
+
+  def stage_file(stage, source, relative)
+    FileUtils.mkdir_p(File.dirname(File.join(stage, relative)))
+    FileUtils.cp(source, File.join(stage, relative))
+  end
+
+  def package(stage, spec)
+    Dir.chdir(stage) do
+      Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) { Gem::Package.build(spec, true) }
+    end
+  end
+end
+
+options = {}
+OptionParser.new do |o|
+  o.on("--platform NAME", "gem platform, or ruby for the source gem") { |v| options[:platform] = v }
+  o.on("--output DIR", "directory receiving the .gem") { |v| options[:output] = v }
+  o.on("--library PATH", "built native library (platform gems)") { |v| options[:library] = v }
+  o.on("--abi-version N", "ABI version the library reports") { |v| options[:abi_version] = v }
+end.parse!
+
+abort "--platform and --output are required" unless options[:platform] && options[:output]
+
+NativeGemBuilder.new(**options).build

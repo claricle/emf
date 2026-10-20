@@ -1,0 +1,108 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: script/check_native_package --directory DIR
+#
+# Opens every .gem in DIR and checks its contents against emf.gemspec and,
+# for platform gems, against the generated lib/emf/native/platforms.json.
+# Prints one line per violation and exits 1 if there is any.
+
+require "digest"
+require "json"
+require "optparse"
+require "rubygems/package"
+require "tmpdir"
+
+class NativePackageChecker
+  ROOT = File.expand_path("..", __dir__)
+  NATIVE_DIR = "lib/emf/native"
+  LIBRARY = /\.(so|dylib|dll)\z/
+  RUST_FILE = %r{(\A|/)(Cargo\.(toml|lock)|[^/]+\.rs)\z}
+
+  def initialize(directory)
+    @directory = directory
+    @source_files = Dir.chdir(ROOT) { Gem::Specification.load("emf.gemspec").files }
+  end
+
+  def violations
+    gems = Dir.glob(File.join(@directory, "*.gem"))
+    return ["no .gem files in #{@directory}"] if gems.empty?
+
+    gems.flat_map { |path| check(path) }
+  end
+
+  private
+
+  def check(path)
+    package = Gem::Package.new(path)
+    Dir.mktmpdir("emf-check") do |dir|
+      package.extract_files(dir)
+      problems = problems_for(package.spec, package.contents, dir)
+      problems.map { |problem| "#{File.basename(path)}: #{problem}" }
+    end
+  end
+
+  def problems_for(spec, contents, dir)
+    problems = missing_source_files(contents)
+    return problems + source_problems(spec, contents) if spec.platform.to_s == "ruby"
+
+    problems + native_problems(spec, contents, dir)
+  end
+
+  def missing_source_files(contents)
+    (@source_files - contents).map { |file| "missing #{file} listed by emf.gemspec" }
+  end
+
+  def source_problems(spec, contents)
+    problems = contents.grep(LIBRARY).map { |file| "source gem contains native library #{file}" }
+    problems += contents.grep(RUST_FILE).map { |file| "source gem contains Rust file #{file}" }
+    problems << "source gem declares extensions" unless spec.extensions.empty?
+    problems
+  end
+
+  def native_problems(spec, contents, dir)
+    platform = spec.platform.to_s
+    libraries = contents.grep(LIBRARY)
+    expected_dir = "#{NATIVE_DIR}/#{platform}/"
+    problems = []
+    problems << "expected exactly one native library, found #{libraries.size}" unless libraries.size == 1
+    problems += libraries.reject { |file| file.start_with?(expected_dir) }.map { |file| "library #{file} is outside #{expected_dir}" }
+    problems << "extensions declared" unless spec.extensions.empty?
+    problems + manifest_problems(dir, platform, libraries)
+  end
+
+  def manifest_problems(dir, platform, libraries)
+    manifest = File.join(dir, NATIVE_DIR, "platforms.json")
+    return ["missing #{NATIVE_DIR}/platforms.json"] unless File.file?(manifest)
+
+    data = JSON.parse(File.read(manifest))
+    problems = []
+    problems << "platforms.json platform #{data['platform'].inspect} != #{platform}" unless data["platform"] == platform
+    problems << "platforms.json has no abi_version" unless data["abi_version"].is_a?(Integer)
+    problems + library_problems(dir, data, platform, libraries)
+  rescue JSON::ParserError => e
+    ["platforms.json is not valid JSON: #{e.message}"]
+  end
+
+  def library_problems(dir, data, platform, libraries)
+    path = "#{NATIVE_DIR}/#{platform}/#{data['library']}"
+    return ["platforms.json library #{data['library'].inspect} is not packaged at #{path}"] unless libraries.include?(path)
+
+    actual = Digest::SHA256.file(File.join(dir, path)).hexdigest
+    actual == data["sha256"] ? [] : ["sha256 mismatch for #{path}: manifest #{data['sha256']}, actual #{actual}"]
+  end
+end
+
+options = {}
+OptionParser.new do |o|
+  o.on("--directory DIR", "directory holding the .gem files") { |v| options[:directory] = v }
+end.parse!
+abort "--directory is required" unless options[:directory]
+
+problems = NativePackageChecker.new(options[:directory]).violations
+if problems.empty?
+  puts "native package check passed"
+else
+  warn problems
+  exit 1
+end

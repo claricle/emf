@@ -1,0 +1,160 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: script/native_install_smoke --directory DIR --platform NAME
+#          [--abi-symbol SYMBOL] [--require-native] [--forbid-compiler]
+#          [--resolve-dependencies]
+#
+# Installs emf from the .gem files in DIR into an isolated GEM_HOME with
+# --local, then checks that RubyGems picked the NAME platform gem, that nothing
+# was compiled, and that the installed library loads through Fiddle and returns
+# the ABI version recorded in platforms.json.
+#
+# --require-native: fail instead of skipping when this Ruby cannot use NAME.
+# --resolve-dependencies: resolve runtime dependencies from .gem files in DIR
+# instead of ignoring them (DIR must then hold a bindata .gem).
+# --forbid-compiler: fail when cc, gcc, clang or rustc is on PATH. CI sets it
+# to prove a no-compiler install; it is off by default because developer
+# machines have a compiler. Without it the compiler is only reported, and the
+# "no extensions, nothing built" assertions still hold.
+
+require "fiddle"
+require "json"
+require "open3"
+require "optparse"
+require "rbconfig"
+require "rubygems/package"
+require "tmpdir"
+
+class NativeInstallSmoke
+  COMPILERS = %w[cc gcc clang rustc].freeze
+  CLEAN_ENV = %w[RUBYOPT RUBYLIB BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLER_SETUP GEM_HOME GEM_PATH].to_h { |k| [k, nil] }.freeze
+
+  def initialize(directory:, platform:, abi_symbol:, require_native:, forbid_compiler:, resolve_dependencies:)
+    @directory = File.expand_path(directory)
+    @platform = platform
+    @abi_symbol = abi_symbol
+    @require_native = require_native
+    @forbid_compiler = forbid_compiler
+    @resolve_dependencies = resolve_dependencies
+  end
+
+  def run
+    check_compiler
+    return skip unless runnable?
+
+    Dir.mktmpdir("emf-smoke") do |home|
+      install(home)
+      spec = installed_spec(home)
+      check_selection(spec, home)
+      check_library(spec)
+    end
+    puts "native install smoke passed (#{@platform})"
+  end
+
+  private
+
+  def fail!(message)
+    warn "native install smoke failed: #{message}"
+    exit 1
+  end
+
+  def compilers
+    COMPILERS.select { |tool| on_path?(tool) }
+  end
+
+  # PATHEXT is honoured on any host where it is set, so Windows compilers
+  # (gcc.exe, rustc.exe) are found and the check can be tested off Windows.
+  def on_path?(tool)
+    exts = ENV.fetch("PATHEXT", "").split(";").push("")
+    ENV.fetch("PATH", "").split(File::PATH_SEPARATOR).any? do |dir|
+      exts.any? { |ext| File.executable?(File.join(dir, tool + ext)) }
+    end
+  end
+
+  def check_compiler
+    found = compilers
+    fail!("compiler on PATH: #{found.join(', ')}") if @forbid_compiler && !found.empty?
+    puts "compilers on PATH: #{found.empty? ? 'none' : found.join(', ')}"
+  end
+
+  def runnable?
+    return true if @platform == "ruby" || Gem::Platform.new(@platform) === Gem::Platform.local # rubocop:disable Style/CaseEquality
+
+    fail!("#{@platform} does not match #{Gem::Platform.local}") if @require_native
+    false
+  end
+
+  def skip
+    puts "skipped: #{@platform} does not match #{Gem::Platform.local}"
+  end
+
+  def version
+    gems = Dir.glob(File.join(@directory, "emf-*.gem"))
+    fail!("no emf .gem files in #{@directory}") if gems.empty?
+    Gem::Package.new(gems.first).spec.version.to_s
+  end
+
+  def install(home)
+    env = CLEAN_ENV.merge("GEM_HOME" => home, "GEM_PATH" => home)
+    cmd = [RbConfig.ruby, "-rrubygems/gem_runner", "-e", "Gem::GemRunner.new.run(ARGV)",
+           "install", "emf", "--version", version, "--local", "--no-document"]
+    cmd << "--ignore-dependencies" unless @resolve_dependencies
+    out, status = Open3.capture2e(env, *cmd, chdir: @directory)
+    fail!("gem install failed: #{out}") unless status.success?
+  end
+
+  def installed_spec(home)
+    paths = Dir.glob(File.join(home, "specifications", "emf-*.gemspec"))
+    fail!("expected one installed emf, found #{paths.size}") unless paths.size == 1
+    Gem::Specification.load(paths.first)
+  end
+
+  def check_selection(spec, home)
+    fail!("RubyGems installed the #{spec.platform} gem, expected #{@platform}") unless spec.platform.to_s == @platform
+    fail!("installed gem declares extensions") unless spec.extensions.empty?
+    fail!("installed gem has a build directory") if Dir.glob(File.join(home, "extensions", "*", "*", "emf-*")).any?
+    fail!("bindata dependency missing from installed spec") unless spec.runtime_dependencies.any? { |d| d.name == "bindata" }
+  end
+
+  def check_library(spec)
+    manifest_path = File.join(spec.full_gem_path, "lib/emf/native/platforms.json")
+    if @platform == "ruby"
+      fail!("source gem installed a native manifest") if File.exist?(manifest_path)
+      return
+    end
+    check_abi(spec, JSON.parse(File.read(manifest_path)))
+  end
+
+  def check_abi(spec, manifest)
+    path = File.join(spec.full_gem_path, "lib/emf/native", @platform, manifest.fetch("library"))
+    fail!("installed library missing: #{path}") unless File.file?(path)
+    actual = abi_version(path)
+    fail!("ABI version #{actual}, platforms.json says #{manifest['abi_version']}") unless actual == manifest["abi_version"]
+    puts "library #{File.basename(path)} reports ABI #{actual}"
+  end
+
+  # Windows cannot delete a loaded DLL, so the handle is closed before the
+  # temporary GEM_HOME is removed.
+  def abi_version(path)
+    handle = Fiddle::Handle.new(path)
+    Fiddle::Function.new(handle[@abi_symbol], [], Fiddle::TYPE_INT).call
+  rescue Fiddle::DLError => e
+    fail!("#{path} does not export #{@abi_symbol.inspect}: #{e.message}")
+  ensure
+    handle&.close
+  end
+end
+
+options = { abi_symbol: "emf_abi_version", require_native: false, forbid_compiler: false, resolve_dependencies: false }
+OptionParser.new do |o|
+  o.on("--directory DIR") { |v| options[:directory] = v }
+  o.on("--platform NAME") { |v| options[:platform] = v }
+  o.on("--abi-symbol SYMBOL", "exported function returning the ABI version") { |v| options[:abi_symbol] = v }
+  o.on("--require-native") { options[:require_native] = true }
+  o.on("--forbid-compiler") { options[:forbid_compiler] = true }
+  o.on("--resolve-dependencies") { options[:resolve_dependencies] = true }
+end.parse!
+abort "--directory and --platform are required" unless options[:directory] && options[:platform]
+
+NativeInstallSmoke.new(**options).run
