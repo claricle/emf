@@ -151,6 +151,13 @@ RSpec.describe NativeComponentsBenchmark::Run do
 end
 
 RSpec.describe NativeComponentsBenchmark::Worker do
+  around do |example|
+    previous = ENV.fetch("EMF_BACKEND", nil)
+    example.run
+  ensure
+    ENV["EMF_BACKEND"] = previous
+  end
+
   let(:path) { File.join(ParserBenchmark::ROOT, "spec/fixtures/simple/image1.emf") }
   let(:bytes) { File.binread(path) }
   let(:worker) { described_class.new(path: path, sha256: Digest::SHA256.hexdigest(bytes), iterations: 1, warmups: 0, backend: "native") }
