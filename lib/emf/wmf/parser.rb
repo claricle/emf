@@ -12,6 +12,9 @@ module Emf
         header = read_header(bytes, start, placeable)
         limit = start + (header.size_words * 2)
         records = read_records(bytes, start + Binary::HEADER_BYTES, limit)
+        Binary.validate_objects(records, header.number_of_objects) do |record, message|
+          parse_error(record.offset, record.type_id, message)
+        end
         largest = records.map { |record| record_size(record) }.max
         raise FormatError, "WMF MaxRecord does not match largest record" unless header.max_record_words == largest
 
@@ -69,6 +72,7 @@ module Emf
           parse_error(offset, function, "invalid EOF length") unless raw.bytesize == 6
           return Model::Wmf::Records::Eof.new(offset: offset)
         end
+        return decode_object(raw, function, offset) if Binary::OBJECT_RECORDS.key?(function & 0xFF)
         return decode_point_array(raw, function, offset) if Binary::POINT_ARRAY_RECORDS.key?(function & 0xFF)
 
         record_class = Binary::FIXED_RECORDS[function & 0xFF]
@@ -78,6 +82,13 @@ module Emf
         parse_error(offset, function, "invalid fixed record length") unless raw.bytesize == 6 + (fields.length * 2)
         values = raw.byteslice(6..).unpack("s<*")
         record_class.new(**fields.zip(values).to_h, type_id: function, offset: offset)
+      end
+
+      def decode_object(raw, function, offset)
+        record_class = Binary::OBJECT_RECORDS.fetch(function & 0xFF)
+        parse_error(offset, function, "invalid object record length") unless raw.bytesize == 6 + record_class::PAYLOAD_BYTES
+        values = raw.byteslice(6..).unpack(record_class::WIRE_FORMAT)
+        record_class.new(**record_class::WIRE_FIELDS.zip(values).to_h, type_id: function, offset: offset)
       end
 
       def decode_point_array(raw, function, offset)
@@ -107,6 +118,8 @@ module Emf
 
       def record_size(record)
         return record.raw_bytes.bytesize / 2 if record.is_a?(Model::Wmf::Records::UnknownRecord)
+
+        return 3 + (record.class::PAYLOAD_BYTES / 2) if record.is_a?(Model::Wmf::Records::ObjectRecord)
 
         if record.is_a?(Model::Wmf::Records::PointArrayRecord)
           counts = record.is_a?(Model::Wmf::Records::PolyPolygon) ? record.points_per_polygon.length : 0

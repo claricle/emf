@@ -11,6 +11,10 @@ module Emf
 
         validate_eof(metafile.records)
         records = metafile.records.map { |record| serialize_record(record) }
+        capacity = Binary.uint16(metafile.header.number_of_objects, "NumberOfObjects")
+        Binary.validate_objects(metafile.records, capacity) do |_record, message|
+          raise SerializeError, "WMF #{message}"
+        end
         size = 9 + records.sum { |bytes| bytes.bytesize / 2 }
         raise SerializeError, "WMF input too large" if (size * 2) + metafile.trailing.bytesize > Binary::MAX_INPUT_BYTES
 
@@ -53,6 +57,7 @@ module Emf
         when Model::Wmf::Records::Eof then [3, 0].pack("Vv")
         when Model::Wmf::Records::PointRecord, Model::Wmf::Records::RectangleRecord, Model::Wmf::Records::OffsetRecord
           serialize_fixed(record)
+        when Model::Wmf::Records::ObjectRecord then serialize_object(record)
         when Model::Wmf::Records::PointArrayRecord then serialize_point_array(record)
         when Model::Wmf::Records::UnknownRecord then serialize_unknown(record)
         else raise SerializeError, "unsupported WMF record #{record.class}"
@@ -66,6 +71,18 @@ module Emf
 
         values = record.class::WIRE_FIELDS.map { |field| Binary.int16(record.public_send(field), field) }
         [3 + values.length, function, *values].pack("Vvs<*")
+      end
+
+      def serialize_object(record)
+        function = Binary.uint16(record.type_id, "RecordFunction")
+        expected = Binary::OBJECT_FUNCTIONS[record.class]
+        raise SerializeError, "WMF object RecordFunction mismatch" unless function & 0xFF == expected
+
+        values = record.class::WIRE_FIELDS.zip(record.class::WIRE_TYPES).map do |field, type|
+          Binary.public_send(type, record.public_send(field), field)
+        end
+        payload = values.pack(record.class::WIRE_FORMAT)
+        [3 + (payload.bytesize / 2), function].pack("Vv") + payload
       end
 
       def serialize_point_array(record)
@@ -105,7 +122,8 @@ module Emf
         raw = record.raw_bytes
         words, function = raw.unpack("Vv")
         unless raw.bytesize >= 6 && raw.bytesize.even? && words == raw.bytesize / 2 && function == record.type_id &&
-               !function.zero? && !Binary::FIXED_RECORDS.key?(function & 0xFF) && !Binary::POINT_ARRAY_RECORDS.key?(function & 0xFF)
+               !function.zero? && !Binary::OBJECT_RECORDS.key?(function & 0xFF) &&
+               !Binary::FIXED_RECORDS.key?(function & 0xFF) && !Binary::POINT_ARRAY_RECORDS.key?(function & 0xFF)
           raise SerializeError, "invalid raw WMF record"
         end
 

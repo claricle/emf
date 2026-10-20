@@ -223,3 +223,5 @@ module Emf
     end
   end
 end
+
+require "emf/model/wmf/object_records"
