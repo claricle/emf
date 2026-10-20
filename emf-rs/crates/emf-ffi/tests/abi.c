@@ -863,6 +863,47 @@ static void init_limits(emf_limits *limits) {
     limits->max_work_units = UINT64_C(1048576);
 }
 
+static int check_wmf(void) {
+    static const uint8_t wmf[] = {
+        1, 0, 9, 0, 0, 3, 16, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0,
+        4, 0, 0, 0, 3, 1, 8, 0, 3, 0, 0, 0, 0, 0, 0xde, 0xad
+    };
+    emf_wmf_document *document = NULL;
+    emf_buffer *original = NULL, *encoded = NULL;
+    emf_info info;
+    emf_record_descriptor records[2];
+    uint64_t count = 0, length = 0;
+    const uint8_t *data = NULL;
+    CHECK(emf_wmf_parse(wmf, sizeof(wmf), NULL, &document, NULL) == EMF_OK);
+    init_info(&info);
+    CHECK(emf_wmf_document_info(document, &info) == EMF_OK);
+    CHECK(info.format == EMF_FORMAT_WMF_STANDARD && info.header_bytes == 18);
+    CHECK(info.record_count == 2 && info.has_eof == 1 && info.trailing_bytes == 2);
+    CHECK(emf_wmf_record_batch(document, 0, 2, records, &count) == EMF_OK);
+    CHECK(count == 2 && records[0].type_id == 0x103 && records[1].family == 1);
+    CHECK(emf_wmf_record_bytes(document, 0, &original, NULL) == EMF_OK);
+    CHECK(emf_wmf_serialize(document, &encoded, NULL) == EMF_OK);
+    CHECK(emf_buffer_view(encoded, &data, &length) == EMF_OK);
+    CHECK(length == sizeof(wmf) && memcmp(data, wmf, sizeof(wmf)) == 0);
+    emf_buffer_free(encoded);
+    encoded = NULL;
+    static const uint8_t replacement[] = {2, 0, 99, 0};
+    CHECK(emf_wmf_replace_record(document, 0, 0x999, replacement, sizeof(replacement), NULL) == EMF_OK);
+    CHECK(emf_wmf_replace_record(document, 0, 0x10000, NULL, 0, NULL) == EMF_INVALID_ARGUMENT);
+    CHECK(emf_wmf_serialize(document, &encoded, NULL) == EMF_OK);
+    emf_wmf_document_free(document);
+    CHECK(emf_buffer_view(encoded, &data, &length) == EMF_OK);
+    CHECK(length == sizeof(wmf) + 2 && data[6] == 17);
+    CHECK(data[22] == 0x99 && data[23] == 9 && data[24] == 2 && data[26] == 99);
+    CHECK(data[length - 2] == 0xde && data[length - 1] == 0xad);
+    emf_buffer_free(encoded);
+    CHECK(emf_buffer_view(original, &data, &length) == EMF_OK);
+    CHECK(length == 8 && memcmp(data, wmf + 18, 8) == 0);
+    emf_buffer_free(original);
+    emf_wmf_document_free(NULL);
+    return 0;
+}
+
 int main(void) {
     CHECK(check_layout() == 0);
     CHECK(check_snapshot() == 0);
@@ -1057,6 +1098,7 @@ int main(void) {
     emf_document_free(document);
     emf_document_free(NULL);
     emf_buffer_free(NULL);
+    CHECK(check_wmf() == 0);
     puts("C ABI smoke: ok");
     return 0;
 }

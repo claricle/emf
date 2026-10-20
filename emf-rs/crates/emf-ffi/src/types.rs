@@ -78,3 +78,9 @@ pub struct EmfErrorInfo {
     pub message: *const u8,
     pub message_length: u64,
 }
+
+/// Owned WMF handle, distinct from an EMF document handle.
+#[repr(C)]
+pub struct WmfDocument {
+    pub(crate) document: emf_core::wmf::Document,
+}
