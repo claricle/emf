@@ -262,14 +262,18 @@ impl Document {
             return Err(EditFailure::RecordFamily { index });
         }
         let (function, mut body) = match &value {
-            TypedRecord::Bitmap(value) => bitmap::encode(value)?,
-            TypedRecord::Brush(value) => brush::encode(value)?,
-            TypedRecord::Escape(value) => escape::encode(value)?,
-            TypedRecord::Geometry(value) => geometry::encode(value)?,
-            TypedRecord::Region(value) => region::encode(value)?,
-            TypedRecord::State(value) => state::encode(value)?,
-            TypedRecord::Text(value) => text::encode(value)?,
-        };
+            TypedRecord::Bitmap(value) => bitmap::encode(value),
+            TypedRecord::Brush(value) => brush::encode(value),
+            TypedRecord::Escape(value) => escape::encode(value),
+            TypedRecord::Geometry(value) => geometry::encode(value),
+            TypedRecord::Region(value) => region::encode(value),
+            TypedRecord::State(value) => state::encode(value),
+            TypedRecord::Text(value) => text::encode(value),
+        }
+        .map_err(|error| match error {
+            EditFailure::RecordLayout { .. } => EditFailure::RecordLayout { index },
+            error => error,
+        })?;
         if function & 0xff != record.function & 0xff {
             return Err(EditFailure::RecordFamily { index });
         }

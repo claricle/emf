@@ -291,3 +291,28 @@ fn existing_standard_and_placeable_line_fixtures_roundtrip() {
         assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
     }
 }
+
+#[test]
+fn invalid_typed_edit_reports_target_index_and_preserves_document() {
+    use wmf::{geometry::GeometryRecord, TypedRecord};
+
+    let bytes = standard(
+        &[
+            record(0xfefe, &[0xaa, 0xbb]),
+            record(0x0324, &[2, 0, 1, 0, 2, 0, 3, 0, 4, 0]),
+            record(0, &[]),
+        ],
+        &[0xde, 0xad, 0xbe],
+    );
+    let mut doc = wmf::parse(&bytes, &ParseLimits::default()).unwrap();
+    let original = doc.records()[1].typed().unwrap().clone();
+    assert_eq!(
+        doc.replace_typed(
+            1,
+            TypedRecord::Geometry(GeometryRecord::Polygon { points: vec![] }),
+        ),
+        Err(EditFailure::RecordLayout { index: 1 })
+    );
+    assert_eq!(doc.records()[1].typed(), Some(&original));
+    assert_eq!(wmf::serialize(&doc).unwrap(), bytes);
+}
