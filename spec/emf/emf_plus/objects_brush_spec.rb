@@ -69,10 +69,10 @@ RSpec.describe Emf::EmfPlus::Objects::Brush do
     end
 
     context "with transform and image bytes" do
-      let(:data) { brush(2, head.call(2), matrix, "IMAGEDATA".b) }
+      let(:data) { brush(2, head.call(2), matrix, "IMG".b) }
 
-      it "decodes the transform and keeps the image bytes" do
-        expect([body.transform.dx, body.image]).to eq([5.0, "IMAGEDATA".b])
+      it "decodes the transform and keeps unparseable image bytes" do
+        expect([body.transform.dx, body.image]).to eq([5.0, "IMG".b])
       end
 
       it_behaves_like "a lossless brush"
