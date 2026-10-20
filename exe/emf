@@ -45,10 +45,22 @@ module Emf
       return unless mf.header
 
       h = mf.header
+      return wmf_info(h) if mf.format == :wmf
+
       puts "Bounds:    left=#{h.bounds.left} top=#{h.bounds.top} right=#{h.bounds.right} bottom=#{h.bounds.bottom}"
       puts "Frame:     left=#{h.frame.left} top=#{h.frame.top} right=#{h.frame.right} bottom=#{h.frame.bottom}"
       puts "Device:    #{h.device_pixels.cx}x#{h.device_pixels.cy} px (#{h.device_mm.cx / 100.0}x#{h.device_mm.cy / 100.0} mm)"
       puts "nRecords:  #{h.n_records}  nHandles: #{h.n_handles}  nBytes: #{h.n_bytes}"
+    end
+
+    def wmf_info(header)
+      puts "Type:      #{header.type}  Version: #{header.version}  Size: #{header.size_words} words"
+      puts "Objects:   #{header.number_of_objects}  MaxRecord: #{header.max_record_words} words  Members: #{header.number_of_members}"
+      return unless header.placeable
+
+      placeable = header.placeable
+      puts "Bounds:    left=#{placeable.left} top=#{placeable.top} right=#{placeable.right} bottom=#{placeable.bottom}"
+      puts "Units:     #{placeable.inch} per inch"
     end
 
     def dump(argv)

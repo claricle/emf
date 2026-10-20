@@ -32,6 +32,22 @@ RSpec.describe "Forced-backend public consumer parity" do
             expect(native_result.slice("exit", "output")).to eq(ruby_result.slice("exit", "output"))
             expect(ruby_result.fetch("output")).to include("byte-identical") if command == "round-trip"
           end
+
+          if command == "info" && fixture.start_with?("wmf/")
+            it "prints standard WMF fields and optional placeable bounds" do
+              NativeConsumerParity::BACKENDS.each do |backend|
+                output = NativeConsumerParity.run(backend, "cli", command, path).fetch("output")
+                expect(output).to include("Type:      2  Version: 768  Size: 27 words",
+                                          "Objects:   0  MaxRecord: 5 words  Members: 7")
+                if fixture == "wmf/placeable-line.wmf"
+                  expect(output).to include("Bounds:    left=-100 top=-200 right=300 bottom=400", "Units:     1440 per inch")
+                else
+                  expect(output).not_to include("Bounds:", "Units:")
+                end
+                expect(output).not_to include("Frame:", "Device:", "nRecords:")
+              end
+            end
+          end
         end
       end
 
