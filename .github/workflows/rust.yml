@@ -19,6 +19,8 @@ jobs:
             toolchain: "1.73.0"
           - os: macos-latest
             toolchain: stable
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/emf-rs/target
     defaults:
       run:
         working-directory: emf-rs
@@ -40,6 +42,10 @@ jobs:
       - name: Run linked C client
         run: sh crates/emf-ffi/tests/run-c-smoke.sh
 
+      - name: Replay stable fuzz corpus
+        if: matrix.toolchain == 'stable'
+        run: bash fuzz/check-stable.sh
+
       - name: Set up Ruby for native adapter specs
         if: matrix.toolchain == 'stable'
         uses: ruby/setup-ruby@v1
@@ -53,9 +59,10 @@ jobs:
         working-directory: .
         run: |
           case "$RUNNER_OS" in
-            Linux) library="$GITHUB_WORKSPACE/emf-rs/target/debug/libemf_ffi.so" ;;
-            macOS) library="$GITHUB_WORKSPACE/emf-rs/target/debug/libemf_ffi.dylib" ;;
+            Linux) library="$CARGO_TARGET_DIR/debug/libemf_ffi.so" ;;
+            macOS) library="$CARGO_TARGET_DIR/debug/libemf_ffi.dylib" ;;
             *) echo "unsupported native adapter host: $RUNNER_OS" >&2; exit 1 ;;
           esac
           test -f "$library"
-          EMF_TEST_NATIVE_LIBRARY="$library" bundle exec rspec spec/emf/native
+          EMF_TEST_NATIVE_LIBRARY="$library" bundle exec rspec \
+            spec/emf/native spec/emf/native_wmf*_spec.rb spec/emf/wmf
