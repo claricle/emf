@@ -10,11 +10,12 @@ module Emf
       # One object, possibly spread over several records. Chunk boundaries and
       # source records are kept so `split` can return them unchanged.
       class LogicalObject
-        attr_reader :object_type, :emf_object_id, :data, :chunk_sizes
+        attr_reader :object_type, :emf_object_id, :data, :chunk_sizes, :offset
 
         def initialize(chunks)
           @chunks = chunks.freeze
           @object_type = chunks.first.object_type
+          @offset = chunks.first.offset
           @emf_object_id = chunks.first.emf_object_id
           @data = chunks.map(&:object_data).join.b.freeze
           @chunk_sizes = chunks.map { |chunk| chunk.object_data.bytesize }.freeze
@@ -22,6 +23,10 @@ module Emf
         end
 
         def total_size = data.bytesize
+
+        # Joined ObjectData decoded by type; works for chained objects, which
+        # no single Records::Object chunk can describe.
+        def body = @body ||= Objects.decode(self)
 
         # With the original chunk sizes the source records come back as read:
         # padding, offsets and comment indexes included. Other sizes re-chunk

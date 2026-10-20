@@ -37,15 +37,15 @@ How the 58 was counted: a script matched the `EmfPlus<Name> = 0x40..` enumerator
 
 Counted from `RecordType` (ch02 section 2.1.1.1): **58 enumerators** (0x4001 to 0x403A, contiguous). Of those, 54 have a dedicated record section in 2.3.x (counted from `#### EmfPlus* Record` headings), 3 are reserved (`MUST NOT be used`), and 1 has an enumerator but no record section (`EmfPlusStrokeFillPath`). Section 2.3 names the text record `EmfPlusDrawDriverString`; the enumerator is spelled `EmfPlusDrawDriverstring`.
 
-Columns: Variable data = the record has a variable-length field beyond the 12-byte header (yes/no, from the `(variable)` fields in its section). Ruby status is `not started` for every row: `lib/emf/emf_plus/parser.rb` and `serializer.rb` raise, and `Metafile#emf_plus` is concatenated raw bytes. Fixtures = number of the 27 EMF+-bearing corpus fixtures containing the type, from the census run above. Class = proposed under `Emf::EmfPlus::Records`.
+Columns: Variable data = the record has a variable-length field beyond the 12-byte header (yes/no, from the `(variable)` fields in its section). Ruby status: `typed, byte-identical round-trip` means a class in `Emf::EmfPlus::Records` decodes every spec field and re-encodes the original bytes (synthetic specs plus every corpus record of that type); `not started` rows decode as `Records::Unknown` and still round-trip as raw frames. Object bodies (pens, brushes, images and other structures) stay opaque inside `Records::Object`. `Metafile#emf_plus` is unchanged. Fixtures = number of the 27 EMF+-bearing corpus fixtures containing the type, from the census run above. Class = proposed under `Emf::EmfPlus::Records`.
 
 ### Control (6)
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusHeader | 0x4001 | 2.3.3.3 | Flags D=0x0001 (EMF+ Dual); EmfPlusFlags V=0x00000001 (video reference DC) | no | not started | 27 | `Records::Header` |
-| EmfPlusEndOfFile | 0x4002 | 2.3.3.1 | unused | no | not started | 24 | `Records::EndOfFile` |
-| EmfPlusGetDC | 0x4004 | 2.3.3.2 | unused | no | not started | 27 | `Records::GetDC` |
+| EmfPlusHeader | 0x4001 | 2.3.3.3 | Flags D=0x0001 (EMF+ Dual); EmfPlusFlags V=0x00000001 (video reference DC) | no | typed, byte-identical round-trip | 27 | `Records::Header` |
+| EmfPlusEndOfFile | 0x4002 | 2.3.3.1 | unused | no | typed, byte-identical round-trip | 24 | `Records::EndOfFile` |
+| EmfPlusGetDC | 0x4004 | 2.3.3.2 | unused | no | typed, byte-identical round-trip | 27 | `Records::GetDC` |
 | EmfPlusMultiFormatStart (reserved, MUST NOT be used; keep as raw) | 0x4005 | 2.1.1.1 (enum only) | reserved | n/a | not started | 0 | `Records::MultiFormatStart` |
 | EmfPlusMultiFormatSection (reserved, MUST NOT be used; keep as raw) | 0x4006 | 2.1.1.1 (enum only) | reserved | n/a | not started | 0 | `Records::MultiFormatSection` |
 | EmfPlusMultiFormatEnd (reserved, MUST NOT be used; keep as raw) | 0x4007 | 2.1.1.1 (enum only) | reserved | n/a | not started | 0 | `Records::MultiFormatEnd` |
@@ -54,98 +54,98 @@ Columns: Variable data = the record has a variable-length field beyond the 12-by
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusComment | 0x4003 | 2.3.2.1 | unused (Windows writes 0-3) | yes | not started | 3 | `Records::Comment` |
+| EmfPlusComment | 0x4003 | 2.3.2.1 | unused (Windows writes 0-3) | yes | typed, byte-identical round-trip | 3 | `Records::Comment` |
 
 ### Object (1)
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusObject | 0x4008 | 2.3.5.1 | C=0x8000 (continued), ObjectType=0x7F00, ObjectID=0x00FF | yes | not started | 22 | `Records::Object` |
+| EmfPlusObject | 0x4008 | 2.3.5.1 | C=0x8000 (continued), ObjectType=0x7F00, ObjectID=0x00FF | yes | typed, byte-identical round-trip | 22 | `Records::Object` |
 
 ### Drawing (11)
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusClear | 0x4009 | 2.3.4.1 | unused | no | not started | 0 | `Records::Clear` |
-| EmfPlusDrawRects | 0x400B | 2.3.4.13 | C=0x4000, ObjectID=0x00FF (pen) | yes | not started | 4 | `Records::DrawRects` |
-| EmfPlusDrawLines | 0x400D | 2.3.4.10 | C=0x4000, L=0x2000 (close shape), P=0x0800, ObjectID=0x00FF (pen) | yes | not started | 2 | `Records::DrawLines` |
-| EmfPlusDrawEllipse | 0x400F | 2.3.4.7 | C=0x4000, ObjectID=0x00FF (pen) | yes | not started | 2 | `Records::DrawEllipse` |
-| EmfPlusDrawPie | 0x4011 | 2.3.4.12 | C=0x4000, ObjectID=0x00FF (pen) | yes | not started | 2 | `Records::DrawPie` |
-| EmfPlusDrawArc | 0x4012 | 2.3.4.2 | C=0x4000, ObjectID=0x00FF (pen) | yes | not started | 2 | `Records::DrawArc` |
-| EmfPlusDrawPath | 0x4015 | 2.3.4.11 | ObjectID=0x00FF (path) | no | not started | 15 | `Records::DrawPath` |
-| EmfPlusDrawClosedCurve | 0x4017 | 2.3.4.4 | C=0x4000, P=0x0800, ObjectID=0x00FF (pen) | yes | not started | 2 | `Records::DrawClosedCurve` |
-| EmfPlusDrawCurve | 0x4018 | 2.3.4.5 | C=0x4000, ObjectID=0x00FF (pen) | yes | not started | 2 | `Records::DrawCurve` |
-| EmfPlusDrawBeziers | 0x4019 | 2.3.4.3 | C=0x4000, P=0x0800, ObjectID=0x00FF (pen) | yes | not started | 2 | `Records::DrawBeziers` |
+| EmfPlusClear | 0x4009 | 2.3.4.1 | unused | no | typed, byte-identical round-trip | 0 | `Records::Clear` |
+| EmfPlusDrawRects | 0x400B | 2.3.4.13 | C=0x4000, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 4 | `Records::DrawRects` |
+| EmfPlusDrawLines | 0x400D | 2.3.4.10 | C=0x4000, L=0x2000 (close shape), P=0x0800, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawLines` |
+| EmfPlusDrawEllipse | 0x400F | 2.3.4.7 | C=0x4000, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawEllipse` |
+| EmfPlusDrawPie | 0x4011 | 2.3.4.12 | C=0x4000, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawPie` |
+| EmfPlusDrawArc | 0x4012 | 2.3.4.2 | C=0x4000, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawArc` |
+| EmfPlusDrawPath | 0x4015 | 2.3.4.11 | ObjectID=0x00FF (path) | no | typed, byte-identical round-trip | 15 | `Records::DrawPath` |
+| EmfPlusDrawClosedCurve | 0x4017 | 2.3.4.4 | C=0x4000, P=0x0800, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawClosedCurve` |
+| EmfPlusDrawCurve | 0x4018 | 2.3.4.5 | C=0x4000, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawCurve` |
+| EmfPlusDrawBeziers | 0x4019 | 2.3.4.3 | C=0x4000, P=0x0800, ObjectID=0x00FF (pen) | yes | typed, byte-identical round-trip | 2 | `Records::DrawBeziers` |
 | EmfPlusStrokeFillPath (enum only; payload undefined in ch02; keep as raw) | 0x4037 | 2.1.1.1 (enum only) | see section | n/a | not started | 0 | `Records::StrokeFillPath` |
 
 ### Fill (7)
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusFillRects | 0x400A | 2.3.4.20 | S=0x8000, C=0x4000 | yes | not started | 19 | `Records::FillRects` |
-| EmfPlusFillPolygon | 0x400C | 2.3.4.19 | S=0x8000, C=0x4000, P=0x0800 | yes | not started | 2 | `Records::FillPolygon` |
-| EmfPlusFillEllipse | 0x400E | 2.3.4.16 | S=0x8000, C=0x4000 | yes | not started | 2 | `Records::FillEllipse` |
-| EmfPlusFillPie | 0x4010 | 2.3.4.18 | S=0x8000, C=0x4000 | yes | not started | 2 | `Records::FillPie` |
-| EmfPlusFillRegion | 0x4013 | 2.3.4.21 | S=0x8000, ObjectID=0x00FF (region) | no | not started | 2 | `Records::FillRegion` |
-| EmfPlusFillPath | 0x4014 | 2.3.4.17 | S=0x8000, ObjectID=0x00FF (path) | no | not started | 10 | `Records::FillPath` |
-| EmfPlusFillClosedCurve | 0x4016 | 2.3.4.15 | S=0x8000, C=0x4000, W=0x2000 (winding), P=0x0800 | yes | not started | 2 | `Records::FillClosedCurve` |
+| EmfPlusFillRects | 0x400A | 2.3.4.20 | S=0x8000, C=0x4000 | yes | typed, byte-identical round-trip | 19 | `Records::FillRects` |
+| EmfPlusFillPolygon | 0x400C | 2.3.4.19 | S=0x8000, C=0x4000, P=0x0800 | yes | typed, byte-identical round-trip | 2 | `Records::FillPolygon` |
+| EmfPlusFillEllipse | 0x400E | 2.3.4.16 | S=0x8000, C=0x4000 | yes | typed, byte-identical round-trip | 2 | `Records::FillEllipse` |
+| EmfPlusFillPie | 0x4010 | 2.3.4.18 | S=0x8000, C=0x4000 | yes | typed, byte-identical round-trip | 2 | `Records::FillPie` |
+| EmfPlusFillRegion | 0x4013 | 2.3.4.21 | S=0x8000, ObjectID=0x00FF (region) | no | typed, byte-identical round-trip | 2 | `Records::FillRegion` |
+| EmfPlusFillPath | 0x4014 | 2.3.4.17 | S=0x8000, ObjectID=0x00FF (path) | no | typed, byte-identical round-trip | 10 | `Records::FillPath` |
+| EmfPlusFillClosedCurve | 0x4016 | 2.3.4.15 | S=0x8000, C=0x4000, W=0x2000 (winding), P=0x0800 | yes | typed, byte-identical round-trip | 2 | `Records::FillClosedCurve` |
 
 ### Text (2)
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusDrawString | 0x401C | 2.3.4.14 | S=0x8000 (BrushId is ARGB), ObjectID=0x00FF (font) | yes | not started | 3 | `Records::DrawString` |
-| EmfPlusDrawDriverString | 0x4036 | 2.3.4.6 | S=0x8000 (BrushId is ARGB), ObjectID=0x00FF (font) | yes | not started | 1 | `Records::DrawDriverString` |
+| EmfPlusDrawString | 0x401C | 2.3.4.14 | S=0x8000 (BrushId is ARGB), ObjectID=0x00FF (font) | yes | typed, byte-identical round-trip | 3 | `Records::DrawString` |
+| EmfPlusDrawDriverString | 0x4036 | 2.3.4.6 | S=0x8000 (BrushId is ARGB), ObjectID=0x00FF (font) | yes | typed, byte-identical round-trip | 1 | `Records::DrawDriverString` |
 
 ### Image (3)
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusDrawImage | 0x401A | 2.3.4.8 | C=0x4000, ObjectID=0x00FF (image) | yes | not started | 2 | `Records::DrawImage` |
-| EmfPlusDrawImagePoints | 0x401B | 2.3.4.9 | C=0x4000, E=0x2000 (effect), P=0x0800, ObjectID=0x00FF (image) | yes | not started | 11 | `Records::DrawImagePoints` |
-| EmfPlusSerializableObject | 0x4038 | 2.3.5.2 | unused | yes | not started | 2 | `Records::SerializableObject` |
+| EmfPlusDrawImage | 0x401A | 2.3.4.8 | C=0x4000, ObjectID=0x00FF (image) | yes | typed, byte-identical round-trip | 2 | `Records::DrawImage` |
+| EmfPlusDrawImagePoints | 0x401B | 2.3.4.9 | C=0x4000, E=0x2000 (effect), P=0x0800, ObjectID=0x00FF (image) | yes | typed, byte-identical round-trip | 11 | `Records::DrawImagePoints` |
+| EmfPlusSerializableObject | 0x4038 | 2.3.5.2 | unused | yes | typed, byte-identical round-trip | 2 | `Records::SerializableObject` |
 
 ### State (14)
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusSetRenderingOrigin | 0x401D | 2.3.6.6 | unused | no | not started | 2 | `Records::SetRenderingOrigin` |
-| EmfPlusSetAntiAliasMode | 0x401E | 2.3.6.1 | SmoothingMode=0x00FE, A=0x0001 | no | not started | 27 | `Records::SetAntiAliasMode` |
-| EmfPlusSetTextRenderingHint | 0x401F | 2.3.6.8 | TextRenderingHint=0x00FF | no | not started | 15 | `Records::SetTextRenderingHint` |
-| EmfPlusSetTextContrast | 0x4020 | 2.3.6.7 | TextContrast=0x0FFF (gamma x 1000) | no | not started | 3 | `Records::SetTextContrast` |
-| EmfPlusSetInterpolationMode | 0x4021 | 2.3.6.4 | InterpolationMode=0x00FF | no | not started | 23 | `Records::SetInterpolationMode` |
-| EmfPlusSetPixelOffsetMode | 0x4022 | 2.3.6.5 | PixelOffsetMode=0x00FF | no | not started | 23 | `Records::SetPixelOffsetMode` |
-| EmfPlusSetCompositingMode | 0x4023 | 2.3.6.2 | CompositingMode=0x00FF | no | not started | 0 | `Records::SetCompositingMode` |
-| EmfPlusSetCompositingQuality | 0x4024 | 2.3.6.3 | CompositingQuality=0x00FF | no | not started | 19 | `Records::SetCompositingQuality` |
-| EmfPlusSave | 0x4025 | 2.3.7.5 | unused | no | not started | 0 | `Records::Save` |
-| EmfPlusRestore | 0x4026 | 2.3.7.4 | unused | no | not started | 0 | `Records::Restore` |
-| EmfPlusBeginContainer | 0x4027 | 2.3.7.1 | PageUnit=0x00FF (UnitType) | no | not started | 0 | `Records::BeginContainer` |
-| EmfPlusBeginContainerNoParams | 0x4028 | 2.3.7.2 | unused | no | not started | 0 | `Records::BeginContainerNoParams` |
-| EmfPlusEndContainer | 0x4029 | 2.3.7.3 | unused | no | not started | 0 | `Records::EndContainer` |
-| EmfPlusSetTSGraphics | 0x4039 | 2.3.8.2 | V=0x0002 (VGA palette), T=0x0001 (Palette present) | yes | not started | 0 | `Records::SetTSGraphics` |
+| EmfPlusSetRenderingOrigin | 0x401D | 2.3.6.6 | unused | no | typed, byte-identical round-trip | 2 | `Records::SetRenderingOrigin` |
+| EmfPlusSetAntiAliasMode | 0x401E | 2.3.6.1 | SmoothingMode=0x00FE, A=0x0001 | no | typed, byte-identical round-trip | 27 | `Records::SetAntiAliasMode` |
+| EmfPlusSetTextRenderingHint | 0x401F | 2.3.6.8 | TextRenderingHint=0x00FF | no | typed, byte-identical round-trip | 15 | `Records::SetTextRenderingHint` |
+| EmfPlusSetTextContrast | 0x4020 | 2.3.6.7 | TextContrast=0x0FFF (gamma x 1000) | no | typed, byte-identical round-trip | 3 | `Records::SetTextContrast` |
+| EmfPlusSetInterpolationMode | 0x4021 | 2.3.6.4 | InterpolationMode=0x00FF | no | typed, byte-identical round-trip | 23 | `Records::SetInterpolationMode` |
+| EmfPlusSetPixelOffsetMode | 0x4022 | 2.3.6.5 | PixelOffsetMode=0x00FF | no | typed, byte-identical round-trip | 23 | `Records::SetPixelOffsetMode` |
+| EmfPlusSetCompositingMode | 0x4023 | 2.3.6.2 | CompositingMode=0x00FF | no | typed, byte-identical round-trip | 0 | `Records::SetCompositingMode` |
+| EmfPlusSetCompositingQuality | 0x4024 | 2.3.6.3 | CompositingQuality=0x00FF | no | typed, byte-identical round-trip | 19 | `Records::SetCompositingQuality` |
+| EmfPlusSave | 0x4025 | 2.3.7.5 | unused | no | typed, byte-identical round-trip | 0 | `Records::Save` |
+| EmfPlusRestore | 0x4026 | 2.3.7.4 | unused | no | typed, byte-identical round-trip | 0 | `Records::Restore` |
+| EmfPlusBeginContainer | 0x4027 | 2.3.7.1 | PageUnit=0x00FF (UnitType) | no | typed, byte-identical round-trip | 0 | `Records::BeginContainer` |
+| EmfPlusBeginContainerNoParams | 0x4028 | 2.3.7.2 | unused | no | typed, byte-identical round-trip | 0 | `Records::BeginContainerNoParams` |
+| EmfPlusEndContainer | 0x4029 | 2.3.7.3 | unused | no | typed, byte-identical round-trip | 0 | `Records::EndContainer` |
+| EmfPlusSetTSGraphics | 0x4039 | 2.3.8.2 | V=0x0002 (VGA palette), T=0x0001 (Palette present) | yes | typed, byte-identical round-trip | 0 | `Records::SetTSGraphics` |
 
 ### Clipping (6)
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusResetClip | 0x4031 | 2.3.1.2 | reserved | no | not started | 2 | `Records::ResetClip` |
-| EmfPlusSetClipRect | 0x4032 | 2.3.1.4 | CM=0x0F00 (CombineMode) | no | not started | 8 | `Records::SetClipRect` |
-| EmfPlusSetClipPath | 0x4033 | 2.3.1.3 | CM=0x0F00, ObjectID=0x00FF (path) | no | not started | 7 | `Records::SetClipPath` |
-| EmfPlusSetClipRegion | 0x4034 | 2.3.1.5 | CM=0x0F00, ObjectID=0x00FF (region) | no | not started | 11 | `Records::SetClipRegion` |
-| EmfPlusOffsetClip | 0x4035 | 2.3.1.1 | reserved | no | not started | 2 | `Records::OffsetClip` |
-| EmfPlusSetTSClip | 0x403A | 2.3.8.1 | C=0x8000 (4-byte rects), NumRects=0x7FFF | yes | not started | 0 | `Records::SetTSClip` |
+| EmfPlusResetClip | 0x4031 | 2.3.1.2 | reserved | no | typed, byte-identical round-trip | 2 | `Records::ResetClip` |
+| EmfPlusSetClipRect | 0x4032 | 2.3.1.4 | CM=0x0F00 (CombineMode) | no | typed, byte-identical round-trip | 8 | `Records::SetClipRect` |
+| EmfPlusSetClipPath | 0x4033 | 2.3.1.3 | CM=0x0F00, ObjectID=0x00FF (path) | no | typed, byte-identical round-trip | 7 | `Records::SetClipPath` |
+| EmfPlusSetClipRegion | 0x4034 | 2.3.1.5 | CM=0x0F00, ObjectID=0x00FF (region) | no | typed, byte-identical round-trip | 11 | `Records::SetClipRegion` |
+| EmfPlusOffsetClip | 0x4035 | 2.3.1.1 | reserved | no | typed, byte-identical round-trip | 2 | `Records::OffsetClip` |
+| EmfPlusSetTSClip | 0x403A | 2.3.8.1 | C=0x8000 (4-byte rects), NumRects=0x7FFF | yes | typed, byte-identical round-trip | 0 | `Records::SetTSClip` |
 
 ### Transform (7)
 
 | Type | Value | Spec | Flags (bit masks over the u16 Flags) | Variable data | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusSetWorldTransform | 0x402A | 2.3.9.6 | unused | no | not started | 27 | `Records::SetWorldTransform` |
-| EmfPlusResetWorldTransform | 0x402B | 2.3.9.2 | unused | no | not started | 14 | `Records::ResetWorldTransform` |
-| EmfPlusMultiplyWorldTransform | 0x402C | 2.3.9.1 | A=0x2000 (post-multiply) | no | not started | 7 | `Records::MultiplyWorldTransform` |
-| EmfPlusTranslateWorldTransform | 0x402D | 2.3.9.7 | A=0x2000 | no | not started | 2 | `Records::TranslateWorldTransform` |
-| EmfPlusScaleWorldTransform | 0x402E | 2.3.9.4 | A=0x2000 | no | not started | 0 | `Records::ScaleWorldTransform` |
-| EmfPlusRotateWorldTransform | 0x402F | 2.3.9.3 | A=0x2000 | no | not started | 2 | `Records::RotateWorldTransform` |
-| EmfPlusSetPageTransform | 0x4030 | 2.3.9.5 | PageUnit=0x00FF (UnitType) | no | not started | 25 | `Records::SetPageTransform` |
+| EmfPlusSetWorldTransform | 0x402A | 2.3.9.6 | unused | no | typed, byte-identical round-trip | 27 | `Records::SetWorldTransform` |
+| EmfPlusResetWorldTransform | 0x402B | 2.3.9.2 | unused | no | typed, byte-identical round-trip | 14 | `Records::ResetWorldTransform` |
+| EmfPlusMultiplyWorldTransform | 0x402C | 2.3.9.1 | A=0x2000 (post-multiply) | no | typed, byte-identical round-trip | 7 | `Records::MultiplyWorldTransform` |
+| EmfPlusTranslateWorldTransform | 0x402D | 2.3.9.7 | A=0x2000 | no | typed, byte-identical round-trip | 2 | `Records::TranslateWorldTransform` |
+| EmfPlusScaleWorldTransform | 0x402E | 2.3.9.4 | A=0x2000 | no | typed, byte-identical round-trip | 0 | `Records::ScaleWorldTransform` |
+| EmfPlusRotateWorldTransform | 0x402F | 2.3.9.3 | A=0x2000 | no | typed, byte-identical round-trip | 2 | `Records::RotateWorldTransform` |
+| EmfPlusSetPageTransform | 0x4030 | 2.3.9.5 | PageUnit=0x00FF (UnitType) | no | typed, byte-identical round-trip | 25 | `Records::SetPageTransform` |
 
 ## Object inventory
 
@@ -155,83 +155,83 @@ Variable data is derived from `(variable)` / array / optional fields in each obj
 
 | Object | ObjectType | Spec | Variable data | Optional/conditional fields | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EmfPlusBrush | 1 | 2.2.1.1 | yes | Type (BrushType) selects BrushData: solid, hatch, texture, path gradient, linear gradient | not started | 5 | `Objects::Brush` |
-| EmfPlusCustomLineCap | 9 | 2.2.1.2 | yes | Type (CustomLineCapDataType) selects default vs arrow data | not started | 0 | `Objects::CustomLineCap` |
-| EmfPlusFont | 6 | 2.2.1.3 | yes | - | not started | 4 | `Objects::Font` |
-| EmfPlusImage | 5 | 2.2.1.4 | yes | Type (ImageDataType) selects EmfPlusBitmap vs EmfPlusMetafile | not started | 11 | `Objects::Image` |
-| EmfPlusImageAttributes | 8 | 2.2.1.5 | no | - | not started | 11 | `Objects::ImageAttributes` |
-| EmfPlusPath | 3 | 2.2.1.6 | yes | PathPointFlags R: relative points + RLE point types; else C: int16 vs float points | not started | 19 | `Objects::Path` |
-| EmfPlusPen | 2 | 2.2.1.7 | yes | PenData then brush object; optional data selected by PenDataFlags | not started | 15 | `Objects::Pen` |
-| EmfPlusRegion | 4 | 2.2.1.8 | yes | RegionNodeCount + 1 nodes in a binary tree | not started | 11 | `Objects::Region` |
-| EmfPlusStringFormat | 7 | 2.2.1.9 | yes | StringFormatData holds TabStopCount floats then RangeCount ranges | not started | 3 | `Objects::StringFormat` |
+| EmfPlusBrush | 1 | 2.2.1.1 | yes | Type (BrushType) selects BrushData: solid, hatch, texture, path gradient, linear gradient | typed, byte-identical round-trip | 5 | `Objects::Brush` |
+| EmfPlusCustomLineCap | 9 | 2.2.1.2 | yes | Type (CustomLineCapDataType) selects default vs arrow data | typed, byte-identical round-trip | 0 | `Objects::CustomLineCap` |
+| EmfPlusFont | 6 | 2.2.1.3 | yes | - | typed, byte-identical round-trip | 4 | `Objects::Font` |
+| EmfPlusImage | 5 | 2.2.1.4 | yes | Type (ImageDataType) selects EmfPlusBitmap vs EmfPlusMetafile | typed, byte-identical round-trip | 11 | `Objects::Image` |
+| EmfPlusImageAttributes | 8 | 2.2.1.5 | no | - | typed, byte-identical round-trip | 11 | `Objects::ImageAttributes` |
+| EmfPlusPath | 3 | 2.2.1.6 | yes | PathPointFlags R: relative points + RLE point types; else C: int16 vs float points | typed, byte-identical round-trip | 19 | `Objects::Path` |
+| EmfPlusPen | 2 | 2.2.1.7 | yes | PenData then brush object; optional data selected by PenDataFlags | typed, byte-identical round-trip | 15 | `Objects::Pen` |
+| EmfPlusRegion | 4 | 2.2.1.8 | yes | RegionNodeCount + 1 nodes in a binary tree | typed, byte-identical round-trip | 11 | `Objects::Region` |
+| EmfPlusStringFormat | 7 | 2.2.1.9 | yes | StringFormatData holds TabStopCount floats then RangeCount ranges | typed, byte-identical round-trip | 3 | `Objects::StringFormat` |
 
 ### Structure object (47)
 
 | Object | Spec | Variable data | Presence conditions | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- | --- |
 | EmfPlusARGB | 2.2.2.1 | no | - | not started | not measured | `Structures::ARGB` |
-| EmfPlusBitmap | 2.2.2.2 | yes | Type: raw pixel data (BitmapData) vs EmfPlusCompressedImage | not started | not measured | `Structures::Bitmap` |
-| EmfPlusBitmapData | 2.2.2.3 | yes | Colors (palette) MUST be present when PixelFormat I flag is set | not started | not measured | `Structures::BitmapData` |
-| EmfPlusBlendColors | 2.2.2.4 | yes | - | not started | not measured | `Structures::BlendColors` |
-| EmfPlusBlendFactors | 2.2.2.5 | yes | - | not started | not measured | `Structures::BlendFactors` |
-| EmfPlusBoundaryPathData | 2.2.2.6 | yes | - | not started | not measured | `Structures::BoundaryPathData` |
-| EmfPlusBoundaryPointData | 2.2.2.7 | yes | - | not started | not measured | `Structures::BoundaryPointData` |
-| EmfPlusCharacterRange | 2.2.2.8 | no | - | not started | not measured | `Structures::CharacterRange` |
-| EmfPlusCompoundLineData | 2.2.2.9 | yes | - | not started | not measured | `Structures::CompoundLineData` |
-| EmfPlusCompressedImage | 2.2.2.10 | yes | - | not started | not measured | `Structures::CompressedImage` |
-| EmfPlusCustomEndCapData | 2.2.2.11 | yes | - | not started | not measured | `Structures::CustomEndCapData` |
-| EmfPlusCustomLineCapArrowData | 2.2.2.12 | no | - | not started | not measured | `Structures::CustomLineCapArrowData` |
-| EmfPlusCustomLineCapData | 2.2.2.13 | yes | OptionalData selected by CustomLineCapDataFlags | not started | not measured | `Structures::CustomLineCapData` |
-| EmfPlusCustomLineCapOptionalData | 2.2.2.14 | yes | FillData if FillPath flag; OutlineData if LinePath flag | not started | not measured | `Structures::CustomLineCapOptionalData` |
-| EmfPlusCustomStartCapData | 2.2.2.15 | yes | - | not started | not measured | `Structures::CustomStartCapData` |
-| EmfPlusDashedLineData | 2.2.2.16 | yes | - | not started | not measured | `Structures::DashedLineData` |
-| EmfPlusFillPath | 2.2.2.17 | yes | - | not started | not measured | `Structures::FillPath` |
-| EmfPlusFocusScaleData | 2.2.2.18 | no | - | not started | not measured | `Structures::FocusScaleData` |
-| EmfPlusGraphicsVersion | 2.2.2.19 | no | - | not started | not measured | `Structures::GraphicsVersion` |
-| EmfPlusHatchBrushData | 2.2.2.20 | no | - | not started | not measured | `Structures::HatchBrushData` |
+| EmfPlusBitmap | 2.2.2.2 | yes | Type: raw pixel data (BitmapData) vs EmfPlusCompressedImage | typed, byte-identical round-trip | not measured | `Structures::Bitmap` |
+| EmfPlusBitmapData | 2.2.2.3 | yes | Colors (palette) MUST be present when PixelFormat I flag is set | typed, byte-identical round-trip | not measured | `Structures::BitmapData` |
+| EmfPlusBlendColors | 2.2.2.4 | yes | - | typed, byte-identical round-trip | not measured | `Structures::BlendColors` |
+| EmfPlusBlendFactors | 2.2.2.5 | yes | - | typed, byte-identical round-trip | not measured | `Structures::BlendFactors` |
+| EmfPlusBoundaryPathData | 2.2.2.6 | yes | - | typed, byte-identical round-trip (nested EmfPlusPath kept raw) | not measured | `Structures::BoundaryPathData` |
+| EmfPlusBoundaryPointData | 2.2.2.7 | yes | - | typed, byte-identical round-trip | not measured | `Structures::BoundaryPointData` |
+| EmfPlusCharacterRange | 2.2.2.8 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::CharacterRange` |
+| EmfPlusCompoundLineData | 2.2.2.9 | yes | - | typed, byte-identical round-trip | not measured | `Structures::CompoundLineData` |
+| EmfPlusCompressedImage | 2.2.2.10 | yes | - | typed, byte-identical round-trip | not measured | `Structures::CompressedImage` |
+| EmfPlusCustomEndCapData | 2.2.2.11 | yes | - | typed, byte-identical round-trip | not measured | `Structures::CustomEndCapData` |
+| EmfPlusCustomLineCapArrowData | 2.2.2.12 | no | - | typed, byte-identical round-trip | not measured | `Structures::CustomLineCapArrowData` |
+| EmfPlusCustomLineCapData | 2.2.2.13 | yes | OptionalData selected by CustomLineCapDataFlags | typed, byte-identical round-trip | not measured | `Structures::CustomLineCapData` |
+| EmfPlusCustomLineCapOptionalData | 2.2.2.14 | yes | FillData if FillPath flag; OutlineData if LinePath flag | typed, byte-identical round-trip | not measured | `Structures::CustomLineCapOptionalData` |
+| EmfPlusCustomStartCapData | 2.2.2.15 | yes | - | typed, byte-identical round-trip | not measured | `Structures::CustomStartCapData` |
+| EmfPlusDashedLineData | 2.2.2.16 | yes | - | typed, byte-identical round-trip | not measured | `Structures::DashedLineData` |
+| EmfPlusFillPath | 2.2.2.17 | yes | - | typed, byte-identical round-trip | not measured | `Structures::FillPath` |
+| EmfPlusFocusScaleData | 2.2.2.18 | no | - | typed, byte-identical round-trip | not measured | `Structures::FocusScaleData` |
+| EmfPlusGraphicsVersion | 2.2.2.19 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::GraphicsVersion` |
+| EmfPlusHatchBrushData | 2.2.2.20 | no | - | typed, byte-identical round-trip | not measured | `Structures::HatchBrushData` |
 | EmfPlusInteger7 | 2.2.2.21 | no | - | not started | not measured | `Structures::Integer7` |
 | EmfPlusInteger15 | 2.2.2.22 | no | - | not started | not measured | `Structures::Integer15` |
-| EmfPlusLanguageIdentifier | 2.2.2.23 | no | - | not started | not measured | `Structures::LanguageIdentifier` |
-| EmfPlusLinearGradientBrushData | 2.2.2.24 | yes | OptionalData selected by BrushDataFlags | not started | not measured | `Structures::LinearGradientBrushData` |
-| EmfPlusLinearGradientBrushOptionalData | 2.2.2.25 | yes | Transform if BrushDataTransform; blend colors (PresetColors) xor blend factors (H and/or V) | not started | not measured | `Structures::LinearGradientBrushOptionalData` |
-| EmfPlusLinePath | 2.2.2.26 | yes | - | not started | not measured | `Structures::LinePath` |
-| EmfPlusMetafile | 2.2.2.27 | yes | Type (MetafileDataType) selects EMF/WMF/EMF+ payload; MetafileDataSize | not started | not measured | `Structures::Metafile` |
-| EmfPlusPalette | 2.2.2.28 | yes | - | not started | not measured | `Structures::Palette` |
-| EmfPlusPathGradientBrushData | 2.2.2.29 | yes | BoundaryData is path if BrushDataPath else point list; OptionalData by BrushDataFlags | not started | not measured | `Structures::PathGradientBrushData` |
-| EmfPlusPathGradientBrushOptionalData | 2.2.2.30 | yes | Transform; blend colors xor blend factors H; FocusScaleData if BrushDataFocusScales | not started | not measured | `Structures::PathGradientBrushOptionalData` |
-| EmfPlusPathPointType | 2.2.2.31 | no | - | not started | not measured | `Structures::PathPointType` |
-| EmfPlusPathPointTypeRLE | 2.2.2.32 | no | used instead of EmfPlusPathPointType when Path R flag set | not started | not measured | `Structures::PathPointTypeRLE` |
-| EmfPlusPenData | 2.2.2.33 | yes | OptionalData selected by PenDataFlags | not started | not measured | `Structures::PenData` |
-| EmfPlusPenOptionalData | 2.2.2.34 | yes | each field present iff its PenData flag is set (Transform, StartCap, EndCap, Join, MiterLimit, LineStyle, DashedLineCap, DashOffset, DashedLine, NonCenter, CompoundLine, CustomStartCap, CustomEndCap) | not started | not measured | `Structures::PenOptionalData` |
+| EmfPlusLanguageIdentifier | 2.2.2.23 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::LanguageIdentifier` |
+| EmfPlusLinearGradientBrushData | 2.2.2.24 | yes | OptionalData selected by BrushDataFlags | typed, byte-identical round-trip | not measured | `Structures::LinearGradientBrushData` |
+| EmfPlusLinearGradientBrushOptionalData | 2.2.2.25 | yes | Transform if BrushDataTransform; blend colors (PresetColors) xor blend factors (H and/or V) | typed, byte-identical round-trip | not measured | `Structures::LinearGradientBrushOptionalData` |
+| EmfPlusLinePath | 2.2.2.26 | yes | - | typed, byte-identical round-trip | not measured | `Structures::LinePath` |
+| EmfPlusMetafile | 2.2.2.27 | yes | Type (MetafileDataType) selects EMF/WMF/EMF+ payload; MetafileDataSize | typed, byte-identical round-trip | not measured | `Structures::Metafile` |
+| EmfPlusPalette | 2.2.2.28 | yes | - | typed, byte-identical round-trip | not measured | `Structures::Palette` |
+| EmfPlusPathGradientBrushData | 2.2.2.29 | yes | BoundaryData is path if BrushDataPath else point list; OptionalData by BrushDataFlags | typed, byte-identical round-trip | not measured | `Structures::PathGradientBrushData` |
+| EmfPlusPathGradientBrushOptionalData | 2.2.2.30 | yes | Transform; blend colors xor blend factors H; FocusScaleData if BrushDataFocusScales | typed, byte-identical round-trip | not measured | `Structures::PathGradientBrushOptionalData` |
+| EmfPlusPathPointType | 2.2.2.31 | no | - | typed, byte-identical round-trip | not measured | `Records::Primitives::PathPointType` |
+| EmfPlusPathPointTypeRLE | 2.2.2.32 | no | used instead of EmfPlusPathPointType when Path R flag set | typed, byte-identical round-trip | not measured | `Records::Primitives::PathPointTypeRLE` |
+| EmfPlusPenData | 2.2.2.33 | yes | OptionalData selected by PenDataFlags | typed, byte-identical round-trip | not measured | `Structures::PenData` |
+| EmfPlusPenOptionalData | 2.2.2.34 | yes | each field present iff its PenData flag is set (Transform, StartCap, EndCap, Join, MiterLimit, LineStyle, DashedLineCap, DashOffset, DashedLine, NonCenter, CompoundLine, CustomStartCap, CustomEndCap) | typed, byte-identical round-trip | not measured | `Structures::PenOptionalData` |
 | EmfPlusPoint | 2.2.2.35 | no | - | not started | not measured | `Structures::Point` |
 | EmfPlusPointF | 2.2.2.36 | no | - | not started | not measured | `Structures::PointF` |
 | EmfPlusPointR | 2.2.2.37 | yes | used instead of Point/PointF when R/P flag set (relative coordinates, Integer7/Integer15 encoding) | not started | not measured | `Structures::PointR` |
 | EmfPlusRect | 2.2.2.38 | no | - | not started | not measured | `Structures::Rect` |
 | EmfPlusRectF | 2.2.2.39 | no | - | not started | not measured | `Structures::RectF` |
-| EmfPlusRegionNode | 2.2.2.40 | yes | RegionNodeData absent for Empty/Infinite; children for combine types; path for Path type | not started | not measured | `Structures::RegionNode` |
-| EmfPlusRegionNodeChildNodes | 2.2.2.41 | yes | - | not started | not measured | `Structures::RegionNodeChildNodes` |
-| EmfPlusRegionNodePath | 2.2.2.42 | yes | - | not started | not measured | `Structures::RegionNodePath` |
-| EmfPlusSolidBrushData | 2.2.2.43 | no | - | not started | not measured | `Structures::SolidBrushData` |
-| EmfPlusStringFormatData | 2.2.2.44 | yes | both arrays optional; sizes from TabStopCount/RangeCount in the parent | not started | not measured | `Structures::StringFormatData` |
-| EmfPlusTextureBrushData | 2.2.2.45 | yes | OptionalData selected by BrushDataFlags | not started | not measured | `Structures::TextureBrushData` |
-| EmfPlusTextureBrushOptionalData | 2.2.2.46 | yes | Transform if BrushDataTransform; ImageObject present iff the record is large enough to hold it | not started | not measured | `Structures::TextureBrushOptionalData` |
+| EmfPlusRegionNode | 2.2.2.40 | yes | RegionNodeData absent for Empty/Infinite; children for combine types; path for Path type | typed, byte-identical round-trip | not measured | `Records::Primitives::RegionNode` |
+| EmfPlusRegionNodeChildNodes | 2.2.2.41 | yes | - | typed, byte-identical round-trip | not measured | `Records::Primitives::RegionNodeChildNodes` |
+| EmfPlusRegionNodePath | 2.2.2.42 | yes | - | typed, byte-identical round-trip | not measured | `Records::Primitives::RegionNodePath` |
+| EmfPlusSolidBrushData | 2.2.2.43 | no | - | typed, byte-identical round-trip | not measured | `Structures::SolidBrushData` |
+| EmfPlusStringFormatData | 2.2.2.44 | yes | both arrays optional; sizes from TabStopCount/RangeCount in the parent | typed, byte-identical round-trip | not measured | `Records::Primitives::StringFormatData` |
+| EmfPlusTextureBrushData | 2.2.2.45 | yes | OptionalData selected by BrushDataFlags | typed, byte-identical round-trip | not measured | `Structures::TextureBrushData` |
+| EmfPlusTextureBrushOptionalData | 2.2.2.46 | yes | Transform if BrushDataTransform; ImageObject present iff the record is large enough to hold it | typed, byte-identical round-trip (nested EmfPlusImage kept raw) | not measured | `Structures::TextureBrushOptionalData` |
 | EmfPlusTransformMatrix | 2.2.2.47 | no | - | not started | not measured | `Structures::TransformMatrix` |
 
 ### Image effect parameter block (11)
 
 | Object | GUID | Spec | Ruby status | Fixtures | Proposed class |
 | --- | --- | --- | --- | --- | --- |
-| BlurEffect | {633C80A4-1843-482B-9EF2-BE2834C5FDD4} | 2.2.3.1 | not started | not measured | `Effects::Blur` |
-| BrightnessContrastEffect | {D3A1DBE1-8EC4-4C17-9F4C-EA97AD1C343D} | 2.2.3.2 | not started | not measured | `Effects::BrightnessContrast` |
-| ColorBalanceEffect | {537E597D-251E-48DA-9664-29CA496B70F8} | 2.2.3.3 | not started | not measured | `Effects::ColorBalance` |
-| ColorCurveEffect | {DD6A0022-58E4-4A67-9D9B-D48EB881A53D} | 2.2.3.4 | not started | not measured | `Effects::ColorCurve` |
-| ColorLookupTableEffect | {A7CE72A9-0F7F-40D7-B3CC-D0C02D5C3212} | 2.2.3.5 | not started | not measured | `Effects::ColorLookupTable` |
-| ColorMatrixEffect | {718F2615-7933-40E3-A511-5F68FE14DD74} | 2.2.3.6 | not started | not measured | `Effects::ColorMatrix` |
-| HueSaturationLightnessEffect | {8B2DD6C3-EB07-4D87-A5F0-7108E26A9C5F} | 2.2.3.7 | not started | not measured | `Effects::HueSaturationLightness` |
-| LevelsEffect | {99C354EC-2A31-4F3A-8C34-17A803B33A25} | 2.2.3.8 | not started | not measured | `Effects::Levels` |
-| RedEyeCorrectionEffect | {74D29D05-69A4-4266-9549-3CC52836B632} | 2.2.3.9 | not started | not measured | `Effects::RedEyeCorrection` |
-| SharpenEffect | {63CBF3EE-C526-402C-8F71-62C540BF5142} | 2.2.3.10 | not started | not measured | `Effects::Sharpen` |
-| TintEffect | {1077AF00-2848-4441-9489-44AD4C2D7A2C} | 2.2.3.11 | not started | not measured | `Effects::Tint` |
+| BlurEffect | {633C80A4-1843-482B-9EF2-BE2834C5FDD4} | 2.2.3.1 | typed, byte-identical round-trip | not measured | `Effects::Blur` |
+| BrightnessContrastEffect | {D3A1DBE1-8EC4-4C17-9F4C-EA97AD1C343D} | 2.2.3.2 | typed, byte-identical round-trip | not measured | `Effects::BrightnessContrast` |
+| ColorBalanceEffect | {537E597D-251E-48DA-9664-29CA496B70F8} | 2.2.3.3 | typed, byte-identical round-trip | not measured | `Effects::ColorBalance` |
+| ColorCurveEffect | {DD6A0022-58E4-4A67-9D9B-D48EB881A53D} | 2.2.3.4 | typed, byte-identical round-trip | not measured | `Effects::ColorCurve` |
+| ColorLookupTableEffect | {A7CE72A9-0F7F-40D7-B3CC-D0C02D5C3212} | 2.2.3.5 | typed, byte-identical round-trip | not measured | `Effects::ColorLookupTable` |
+| ColorMatrixEffect | {718F2615-7933-40E3-A511-5F68FE14DD74} | 2.2.3.6 | typed, byte-identical round-trip | not measured | `Effects::ColorMatrix` |
+| HueSaturationLightnessEffect | {8B2DD6C3-EB07-4D87-A5F0-7108E26A9C5F} | 2.2.3.7 | typed, byte-identical round-trip | not measured | `Effects::HueSaturationLightness` |
+| LevelsEffect | {99C354EC-2A31-4F3A-8C34-17A803B33A25} | 2.2.3.8 | typed, byte-identical round-trip | not measured | `Effects::Levels` |
+| RedEyeCorrectionEffect | {74D29D05-69A4-4266-9549-3CC52836B632} | 2.2.3.9 | typed, byte-identical round-trip | not measured | `Effects::RedEyeCorrection` |
+| SharpenEffect | {63CBF3EE-C526-402C-8F71-62C540BF5142} | 2.2.3.10 | typed, byte-identical round-trip | not measured | `Effects::Sharpen` |
+| TintEffect | {1077AF00-2848-4441-9489-44AD4C2D7A2C} | 2.2.3.11 | typed, byte-identical round-trip | not measured | `Effects::Tint` |
 
 ## Conditional and version rules
 
