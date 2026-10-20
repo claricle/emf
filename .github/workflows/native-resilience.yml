@@ -1,0 +1,63 @@
+name: Native corrupt corpus resilience
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  corrupt-corpus:
+    name: Forced native corrupt corpus
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: 1
+      CARGO_TARGET_DIR: ${{ github.workspace }}/emf-rs/target
+      EMF_NATIVE_LIBRARY: ${{ github.workspace }}/emf-rs/target/release/libemf_ffi.so
+      # Existing supervised corrupt-corpus evidence peaked at 195.5 MiB and
+      # 1.047 seconds per child on arm64 macOS. Keep headroom for Linux/Ruby;
+      # the retained report records this runner's actual per-fixture peaks.
+      CORRUPT_WALL_SECONDS: 60
+      CORRUPT_RSS_LIMIT_MB: 1024
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby 3.4
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Install stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Build release native library
+        timeout-minutes: 15
+        run: timeout 900s cargo build --release --locked -p emf-ffi --manifest-path emf-rs/Cargo.toml
+
+      - name: Run supervised forced-native corrupt corpus
+        timeout-minutes: 23
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p tmp/native-resilience
+          test -f "$EMF_NATIVE_LIBRARY"
+          bundle exec ruby script/native_resilience \
+            --manifest spec/fixtures/manifest.json --backend native --scope corrupted \
+            --wall-seconds "$CORRUPT_WALL_SECONDS" --rss-limit-mb "$CORRUPT_RSS_LIMIT_MB" \
+            --report tmp/native-resilience/report.json 2>&1 | tee tmp/native-resilience/runner.log
+
+      - name: Retain resilience report on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-corrupt-resilience-${{ github.run_id }}
+          path: tmp/native-resilience/
+          if-no-files-found: warn
+          retention-days: 14

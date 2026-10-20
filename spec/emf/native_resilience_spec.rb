@@ -242,8 +242,8 @@ RSpec.describe NativeResilience do
   describe "script/native_resilience" do
     let(:script) { File.join(root, "script/native_resilience") }
 
-    def run_script(*args)
-      Open3.capture3(RbConfig.ruby, script, *args, chdir: root)
+    def run_script(*args, env: {})
+      Open3.capture3(env, RbConfig.ruby, script, *args, chdir: root)
     end
 
     it "refuses to run without an RSS limit and exits 2" do
@@ -273,6 +273,20 @@ RSpec.describe NativeResilience do
 
         expect(status.exitstatus).to eq(0)
         expect(out).to include("2/2 fixtures passed")
+      end
+    end
+
+    it "fails forced-native execution when the library is unavailable instead of falling back" do
+      Dir.mktmpdir do |dir|
+        report_path = File.join(dir, "report.json")
+        _out, _err, status = run_script("--backend", "native", "--rss-limit-mb", "1024",
+                                        "--manifest", matching_manifest(dir), "--report", report_path,
+                                        env: { "EMF_NATIVE_LIBRARY" => File.join(dir, "missing-library.so") })
+        report = JSON.parse(File.read(report_path))
+
+        expect(status.exitstatus).to eq(1)
+        expect(report).to include("backend" => "native", "totals" => { "fixtures" => 2, "passed" => 0, "failed" => 2 })
+        expect(report.fetch("results")).to all(include("reason" => "outcome_mismatch", "exception" => "Emf::Native::Unavailable"))
       end
     end
 
