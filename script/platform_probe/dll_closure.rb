@@ -87,11 +87,35 @@ module DllClosure
     SYSTEM_DLLS.include?(name) || SYSTEM_PATTERNS.any? { |pattern| pattern.match?(name) }
   end
 
-  # Imported DLL names (lowercased) that neither Windows nor the DLL's own directory provides.
+  # Imported DLL names (lowercased) that neither Windows nor the DLL's own directory provides,
+  # following shipped DLLs' imports in turn. Names found through a shipped DLL read "c.dll (via b.dll)".
   def self.missing(dll)
-    shipped = Dir.children(File.dirname(dll)).map(&:downcase)
-    ImportReader.new(File.binread(dll)).names.map(&:downcase).uniq
-                .reject { |name| system_dll?(name) || shipped.include?(name) }
+    shipped = shipped_files(File.dirname(dll))
+    queue = [dll]
+    seen = [File.basename(dll).downcase]
+    queue.each_with_object([]) do |path, found|
+      imports(path).reject { |name| system_dll?(name) }.each do |name|
+        if shipped.key?(name)
+          next if seen.include?(name)
+
+          seen << name
+          queue << shipped[name]
+        else
+          found << (path == dll ? name : "#{name} (via #{File.basename(path).downcase})")
+        end
+      end
+    end.uniq
+  end
+
+  def self.shipped_files(directory)
+    Dir.children(directory).map { |name| File.join(directory, name) }
+       .select { |path| File.file?(path) }.to_h { |path| [File.basename(path).downcase, path] }
+  end
+
+  def self.imports(path)
+    ImportReader.new(File.binread(path)).names.map(&:downcase).uniq
+  rescue MalformedPe => e
+    raise MalformedPe, "#{File.basename(path)}: #{e.message}"
   end
 
   def self.main(argv)

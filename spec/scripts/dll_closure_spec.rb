@@ -46,6 +46,10 @@ RSpec.describe DllClosure do
     File.join(@directory, "emf_ffi.dll").tap { |path| File.binwrite(path, pe_with_imports(names, **options)) }
   end
 
+  def write_sibling(name, imports)
+    File.binwrite(File.join(@directory, name), pe_with_imports(imports))
+  end
+
   it "reads imported DLL names from PE32+ and PE32 images" do
     [0x20b, 0x10b].each do |magic|
       reader = described_class::ImportReader.new(pe_with_imports(%w[KERNEL32.dll libunwind.dll], magic: magic))
@@ -67,9 +71,30 @@ RSpec.describe DllClosure do
 
   it "accepts a non-system import shipped beside the DLL" do
     dll = write_dll(%w[KERNEL32.dll libunwind.dll])
-    File.binwrite(File.join(@directory, "libunwind.dll"), "")
+    write_sibling("libunwind.dll", %w[KERNEL32.dll])
 
     expect(described_class.missing(dll)).to eq([])
+  end
+
+  it "names an import missing from a shipped sibling, and which sibling imports it" do
+    dll = write_dll(%w[KERNEL32.dll b.dll])
+    write_sibling("b.dll", %w[KERNEL32.dll c.dll])
+
+    expect(described_class.missing(dll)).to eq(["c.dll (via b.dll)"])
+  end
+
+  it "terminates on import cycles between shipped DLLs" do
+    dll = write_dll(%w[b.dll])
+    write_sibling("b.dll", %w[EMF_FFI.dll])
+
+    expect(described_class.missing(dll)).to eq([])
+  end
+
+  it "does not accept a directory named like a DLL as shipped" do
+    dll = write_dll(%w[KERNEL32.dll libunwind.dll])
+    Dir.mkdir(File.join(@directory, "libunwind.dll"))
+
+    expect(described_class.missing(dll)).to eq(["libunwind.dll"])
   end
 
   it "exits non-zero and names the import from the command line" do
