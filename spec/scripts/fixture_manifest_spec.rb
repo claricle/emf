@@ -150,6 +150,16 @@ RSpec.describe FixtureManifest do
     end
   end
 
+  it "passes a leading environment hash in the command to the supervised child" do
+    code = 'puts JSON.generate("outcome" => ENV["EMF_RUNNER_PROBE"], "unset" => ENV.key?("EMF_RUNNER_GONE"))'
+    command = [{ "EMF_RUNNER_PROBE" => "seen", "EMF_RUNNER_GONE" => nil }, RbConfig.ruby, "-rjson", "-e", code]
+    runner = described_class::Runner.new(timeout: 5, rss_limit_bytes: rss_limit, command: command)
+    ENV["EMF_RUNNER_GONE"] = "present"
+    expect(runner.call("unused")).to eq("outcome" => "seen", "unset" => false)
+  ensure
+    ENV.delete("EMF_RUNNER_GONE")
+  end
+
   describe "supervised capture" do
     it "records an over-RSS child as a safety failure, not an observation" do
       code = "a = 'x' * 120_000_000; sleep 30"

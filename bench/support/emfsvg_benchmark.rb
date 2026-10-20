@@ -155,7 +155,7 @@ module EmfsvgBenchmark
     def child(args, path)
       gem_paths = Gem.path
       gem_paths += Bundler.unbundled_env.fetch("GEM_PATH", "").split(File::PATH_SEPARATOR) if defined?(Bundler)
-      command = ["env", "-u", "BUNDLER_SETUP", "GEM_PATH=#{gem_paths.uniq.join(File::PATH_SEPARATOR)}",
+      command = [{ "GEM_PATH" => gem_paths.uniq.join(File::PATH_SEPARATOR), "BUNDLER_SETUP" => nil },
                  RbConfig.ruby, "-I", File.join(ParserBenchmark::ROOT, "lib"), "-I", File.join(@checkout.path, "lib"), SCRIPT,
                  "--emfsvg-path", @checkout.path, "--revision", @checkout.revision, "--backend", @options.backend, *args]
       supervised = ParserBenchmark.runner(@options, self.class::OUTPUT_LIMIT, command)

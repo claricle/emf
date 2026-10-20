@@ -80,7 +80,8 @@ module FixtureManifest
     end
 
     def call(path)
-      result = @supervisor.call([*@command, path])
+      env, *argv = @command.first.is_a?(Hash) ? @command : [{}, *@command]
+      result = @supervisor.call([*argv, path], env: env)
       return failure(FAILURE_KINDS.fetch(result.status, "process_failure"), details(result)) unless result.success?
 
       JSON.parse(result.output)
