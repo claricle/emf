@@ -370,9 +370,31 @@ Full corpus parity and performance acceptance remain open.
 
 Commit `6a9b2fc` adds semantic Rust models and checked edited serialization for
 FillRgn, FrameRgn, InvertRgn, PaintRgn and ExtSelectClipRgn. Four new region tests
-and 32 existing focused compatibility/framing checks passed. Native region
-hydration remains pending; these records continue through the Ruby fallback.
+and 32 existing focused compatibility/framing checks passed.
+Commit `881a472` adds snapshot families 76–80 and direct native hydration,
+with corrected Ruby wire layouts and typed region data. The focused checkpoint
+passed 75 native Ruby examples, workspace Rust tests, strict Clippy, formatting,
+the linked C smoke client and changed-file Ruby lint. Full corpus parity remains
+open. InvertRgn/PaintRgn no longer expose a nonexistent brush field;
+ExtSelectClipRgn exposes typed region data. Scalar and nested edits serialize
+directly; structural array edits require the corresponding explicit wire counts
+and sizes, consistent with existing counted Ruby wire records.
 
 Commit `8a9c7d5` adds bounded Ruby/Gem/Bundler diagnostics to benchmark dependency
 load errors. Its seven focused examples pass locally. This does not establish
 a fix for the two Ruby 3.2 CI failures; the next CI run must expose their cause.
+
+### Extended pen core and Ruby 3.2 benchmark startup
+
+Commit `39fd569` adds semantic ExtCreatePen parsing and checked edited
+serialization. Style entries, optional bitmap buffers, buffer order, padding,
+unknown scalar bits and record suffixes are retained. The core checkpoint
+passed 52 focused tests, strict core Clippy and formatting. The native bridge
+is in progress; this core-only checkpoint does not establish a passing FFI
+workspace or complete Ruby support.
+
+Commit `aa6a077` clears inherited `BUNDLER_SETUP` in benchmark child processes.
+An inherited setup path reproduced dependency-loading failure with Ruby 3.2.3
+and Bundler 2.4.19; the regression passed all seven benchmark examples after
+the fix. A Ruby 3.4 control and changed-file lint also passed. Current-head CI
+remains required before the Ruby 3.2 CI failure can be reported as resolved.
