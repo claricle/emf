@@ -4,6 +4,7 @@ require "spec_helper"
 require "json"
 require "open3"
 require "tmpdir"
+require "yaml"
 require_relative "../support/native_resilience"
 require_relative "../support/process_supervisor_helpers"
 
@@ -246,6 +247,22 @@ RSpec.describe NativeResilience do
       Open3.capture3(env, RbConfig.ruby, script, *args, chdir: root)
     end
 
+    let(:ruby_ceiling) { described_class::MEASURED_RSS_LIMIT_MB.fetch("ruby").to_s }
+
+    it "names the measured ceilings in its help without making them a default" do
+      out, _err, status = run_script("--help")
+
+      expect(status.exitstatus).to eq(0)
+      expect(out).to include("required; measured: native 1024, ruby 2048")
+    end
+
+    it "keeps the CI corrupt-corpus ceiling equal to the measured native ceiling" do
+      workflow = YAML.safe_load_file(File.join(root, ".github/workflows/native-resilience.yml"), aliases: true)
+      ceilings = workflow.fetch("jobs").values.filter_map { |job| job.dig("env", "CORRUPT_RSS_LIMIT_MB") }
+
+      expect(ceilings).to eq([described_class::MEASURED_RSS_LIMIT_MB.fetch("native")])
+    end
+
     it "refuses to run without an RSS limit and exits 2" do
       _out, err, status = run_script("--backend", "ruby")
 
@@ -256,7 +273,7 @@ RSpec.describe NativeResilience do
     it "exits 1 and writes a report when a fixture fails, with the pass/fail counts" do
       Dir.mktmpdir do |dir|
         report_path = File.join(dir, "nested/report.json")
-        _out, err, status = run_script("--backend", "ruby", "--rss-limit-mb", "2048", "--wall-seconds", "30",
+        _out, err, status = run_script("--backend", "ruby", "--rss-limit-mb", ruby_ceiling, "--wall-seconds", "30",
                                        "--manifest", stale_manifest(dir), "--report", report_path)
         report = JSON.parse(File.read(report_path))
 
@@ -268,7 +285,7 @@ RSpec.describe NativeResilience do
 
     it "exits 0 when every selected fixture matches its baseline" do
       Dir.mktmpdir do |dir|
-        out, _err, status = run_script("--backend", "ruby", "--rss-limit-mb", "2048", "--wall-seconds", "30",
+        out, _err, status = run_script("--backend", "ruby", "--rss-limit-mb", ruby_ceiling, "--wall-seconds", "30",
                                        "--manifest", matching_manifest(dir))
 
         expect(status.exitstatus).to eq(0)

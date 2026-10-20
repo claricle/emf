@@ -13,6 +13,10 @@ module NativeResilience
   CORRUPT_PREFIX = "spec/fixtures/emf-corrupted/"
   BACKENDS = %w[native ruby].freeze
   SCOPES = %w[corrupted all].freeze
+  # Measured per-fixture RSS ceilings in MiB (arm64 macOS, 2026-10-20): native children peaked at
+  # 195.5 MiB over all 229 fixtures, Ruby children at ~957 MiB for the full parse/serialize/reparse
+  # pipeline on the largest corrupt fixture. The flag stays required; these are the values CI passes.
+  MEASURED_RSS_LIMIT_MB = { "native" => 1024, "ruby" => 2048 }.freeze
 
   class ConfigurationError < ArgumentError; end
 

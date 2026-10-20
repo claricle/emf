@@ -18,7 +18,8 @@ parser = OptionParser.new do |opts|
   opts.on("--backend NAME", NativeResilience::BACKENDS, "native (default) or ruby control") { |value| options[:backend] = value }
   opts.on("--scope NAME", NativeResilience::SCOPES, "corrupted (default) or all") { |value| options[:scope] = value }
   opts.on("--wall-seconds N", Integer, "Per-fixture wall limit, 1..60 (default 60)") { |value| options[:wall_seconds] = value }
-  opts.on("--rss-limit-mb MB", Integer, "Per-fixture process-group RSS ceiling in MiB (required)") do |value|
+  opts.on("--rss-limit-mb MB", Integer, "Per-fixture process-group RSS ceiling in MiB (required; measured: " \
+                                        "#{NativeResilience::MEASURED_RSS_LIMIT_MB.map { |k, v| "#{k} #{v}" }.join(', ')})") do |value|
     options[:rss_limit_mb] = value
   end
   opts.on("--report PATH", "Write the JSON report here") { |value| options[:report] = value }
