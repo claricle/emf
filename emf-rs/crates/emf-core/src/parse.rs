@@ -1207,6 +1207,9 @@ fn decode_extended_pen(
     // Wire offsets include the eight-byte record header.
     let span = |offset: usize, len: usize| {
         let start = offset.checked_sub(8)?;
+        // Empty bitmap buffers can retain offsets into the fixed pen fields.
+        // They consume no bytes; preserve their presence at the data boundary.
+        let start = if len == 0 { start.max(fixed) } else { start };
         let end = start.checked_add(len)?;
         (offset % 4 == 0 && start >= fixed && end <= payload.len()).then_some(start..end)
     };

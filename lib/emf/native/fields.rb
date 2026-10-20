@@ -290,7 +290,9 @@ module Emf
           if presence[kind] == 1
             raise FormatError, "invalid native extended pen alignment" unless (cursor % 4).zero?
 
-            offsets[kind] = cursor
+            # Empty buffers can retain offsets into fixed fields without consuming bytes.
+            original = raw.byteslice(12 + (kind * 8), 4).unpack1("V")
+            offsets[kind] = bytes.empty? && (8...fixed).cover?(original) ? original : cursor
           end
           buffers[:"#{prefix}_padding"] = padding
           buffers[:"#{prefix}_bitmap"] = bytes
