@@ -1,5 +1,8 @@
 //! Test-only SHA-256 (FIPS 180-4), keeping the standalone corpus test dependency-free.
 
+use std::cmp::Ordering;
+use std::fmt::Write;
+
 pub fn digest(input: &[u8]) -> String {
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
@@ -23,12 +26,10 @@ pub fn digest(input: &[u8]) -> String {
         let mut block = [0u8; 64];
         for (i, byte) in block.iter_mut().enumerate() {
             let offset = block_index * 64 + i;
-            *byte = if offset < input.len() {
-                input[offset]
-            } else if offset == input.len() {
-                0x80
-            } else {
-                0
+            *byte = match offset.cmp(&input.len()) {
+                Ordering::Less => input[offset],
+                Ordering::Equal => 0x80,
+                Ordering::Greater => 0,
             };
         }
         if block_index == blocks - 1 {
@@ -71,7 +72,11 @@ pub fn digest(input: &[u8]) -> String {
             *value = value.wrapping_add(add);
         }
     }
-    state.iter().map(|word| format!("{word:08x}")).collect()
+    let mut output = String::with_capacity(64);
+    for word in state {
+        write!(&mut output, "{word:08x}").expect("writing to String cannot fail");
+    }
+    output
 }
 
 #[test]

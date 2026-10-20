@@ -48,13 +48,16 @@ RSpec.describe "native small text hydration" do
     expect(parsed.records[1].wire.to_binary_s).to eq(following)
   end
 
-  it "leaves a short type 108 record raw and rejects other unsupported typed records" do
+  it "leaves a short type 108 record raw and preserves opaque typed records" do
     short = [108, 16].pack("V2") + "short!!!".b
     parsed = Emf.parse(header + short + eof)
     expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records::Raw)
     expect(Emf.serialize(parsed)).to eq(header + short + eof)
 
-    unsupported = [96, 12].pack("V2") + "RAWW".b
-    expect { Emf.parse(header + unsupported + eof) }.to raise_error(Emf::FormatError, /does not support typed EMR record 96/)
+    opaque = [96, 12].pack("V2") + "RAWW".b
+    parsed = Emf.parse(header + opaque + eof)
+    expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records::PolyTextOutA)
+    expect(parsed.records.first.wire.to_binary_s).to eq(opaque)
+    expect(Emf.serialize(parsed)).to eq(header + opaque + eof)
   end
 end
