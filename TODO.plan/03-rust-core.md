@@ -104,8 +104,13 @@ cargo test --manifest-path emf-rs/Cargo.toml -p emf-core --test fixture_parity
 ```
 
 Formatting, Clippy and standalone core tests run against the implemented workspace.
-The `fixture_parity` integration target remains to be added; its command is a
-planned acceptance check, not a passing result. Current bounded test results
+The `fixture_parity` integration target is implemented in PR #33. Its planned
+command above passed three tests: all 208 valid EMF fixtures serialize exactly,
+all 231 fixture files match the checked-in hash/length inventory, and independent
+SHA-256 known-answer controls pass. This establishes standalone unchanged-byte
+preservation, not complete typed-field or malformed-input parity. Index
+regeneration and corpus-selection rules are documented in
+`emf-rs/crates/emf-core/tests/support/README.md`. Current bounded test results
 are recorded in [progress](10-progress.md).
 Acceptance requires all 208 valid fixtures to retain exact bytes, complete typed
 coverage against the inventory, reviewed malformed-input differences, passing

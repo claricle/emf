@@ -421,3 +421,26 @@ The integrated checkpoint passed 130 affected Ruby examples (seed 13541),
 smoke client. The WMF worker's seven changed Ruby files lint clean; eight new
 regressions failed against the previous implementation. Current-head CI, complete
 registry/corpus parity and performance/platform acceptance remain open.
+
+### Standalone corpus and public EMF+ stream checkpoint
+
+PR #33 (`1d34087`, dependent on PR #32) integrates the remaining opaque native
+Ruby class mappings, standalone Rust fixture checks and public Ruby EMF+ stream
+representation. The stream provides lazy access, immutable edits that rebuild
+only changed comments, a time-indexed 64-slot object table and GetDC spans.
+Effect association currently handles only an immediately preceding
+SerializableObject; ambiguous associations remain diagnostic. Records spanning
+comments remain raw with a stream error. These boundaries remain open format
+acceptance gaps.
+
+The composed native adapter/stream/object-table/link command passed 132 examples,
+zero failures (seed 47027). The standalone core fixture target passed three tests,
+including exact serialization of 208 valid EMF fixtures and integrity of all 231
+fixture files. The EMF+ implementation checks separately passed 1,146 examples;
+model checks passed 22. These results verify their stated scopes only.
+
+Whole-issue acceptance remains incomplete: full native/Ruby canonical corpus
+comparison, current corrupted-input resource outcomes, downstream native golden
+acceptance, end-to-end performance target and the complete platform distribution
+matrix must still be evidenced. PR #32/#33 required final-head CI and dependency
+integration remain delivery requirements.

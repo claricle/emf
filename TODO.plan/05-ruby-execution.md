@@ -1,6 +1,6 @@
 # Ruby implementation and integration sequence
 
-Status: **Not started**. This expands package 05 into executable Ruby tasks; its
+Status: **In progress**. This expands package 05 into executable Ruby tasks; its
 effort is included in the existing **3–4 engineering days**, not added to the
 [overall estimate](00-overview.md). Baseline harness work belongs to
 [package 02](02-baseline-and-parity.md); packaging and new-format
@@ -121,3 +121,20 @@ of the suite's parent override. Native-dependent integration cases require a
 usable library and must fail clearly if it is absent. Ruby availability tests
 must pass with the native assets removed. These are future acceptance commands;
 this planning PR has not implemented or run them.
+
+## Implemented checkpoints and remaining acceptance
+
+Backend selection, setup-only fallback, direct native model hydration and lazy
+mutable wires are implemented. Preservation controls in
+`spec/emf/backend_parity_spec.rb`, `spec/emf/native/backend_spec.rb`,
+`spec/emf/native/adapter_spec.rb` and `spec/emf/native/lazy_wire_spec.rb` exercise
+these contracts. They do not establish every R1–R5 exit condition.
+
+PR #33 adds compatible classes for the remaining registered opaque record
+families without parsing their bodies again through the Ruby parser. Its composed
+adapter/EMF+ stream/object-table/link check passed 132 examples with zero failures
+(seed 47027), using an actual release native library. Standalone Rust corpus
+identity is recorded in [03](03-rust-core.md). Complete Ruby/native valid-corpus
+observations, visitor/CLI parity, corrupted-input equivalence and the pinned
+downstream native golden suite remain acceptance work; do not infer them from
+the adapter examples or unchanged Rust serialization alone.
