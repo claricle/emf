@@ -10,7 +10,16 @@ RSpec.describe Emf::Emr::Binary::FastFill do
     "DeleteObject" => [codes::DELETEOBJECT, 12, ->(w) { w.ih_object = 7 }],
     "MoveToEx" => [codes::MOVETOEX, 16, ->(w) { w.origin.x = -7 }],
     "LineTo" => [codes::LINETO, 16, ->(w) { w.origin.y = -7 }],
-    "CreateBrushIndirect" => [codes::CREATEBRUSHINDIRECT, 24, ->(w) { w.color.green = 7 }]
+    "CreateBrushIndirect" => [codes::CREATEBRUSHINDIRECT, 24, ->(w) { w.color.green = 7 }],
+    "SetBkColor" => [codes::SETBKCOLOR, 12, ->(w) { w.color.red = 7 }],
+    "SetPixelV" => [codes::SETPIXELV, 20, ->(w) { w.ptl_pixel.x = -7 }],
+    "CreatePen" => [codes::CREATEPEN, 28, ->(w) { w.width.y = -7 }],
+    "SetBkMode" => [codes::SETBKMODE, 12, ->(w) { w.bk_mode = 7 }],
+    "SetTextColor" => [codes::SETTEXTCOLOR, 12, ->(w) { w.color.blue = 7 }],
+    "SetTextAlign" => [codes::SETTEXTALIGN, 12, ->(w) { w.text_align_mode = 7 }],
+    "Ellipse" => [codes::ELLIPSE, 24, ->(w) { w.rcl_box.bottom = -7 }],
+    "SetViewportOrgEx" => [codes::SETVIEWPORTORGEX, 16, ->(w) { w.origin.x = -7 }],
+    "RestoreDc" => [codes::RESTOREDC, 12, ->(w) { w.saved_dc = -7 }]
   }
 
   extras = [0, 4, 8].freeze

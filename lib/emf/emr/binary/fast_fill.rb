@@ -66,7 +66,10 @@ module Emf
 
         ENABLED_TYPES = [
           TypeCodes::SELECTOBJECT, TypeCodes::MOVETOEX, TypeCodes::LINETO,
-          TypeCodes::DELETEOBJECT, TypeCodes::CREATEBRUSHINDIRECT
+          TypeCodes::DELETEOBJECT, TypeCodes::CREATEBRUSHINDIRECT,
+          TypeCodes::SETBKCOLOR, TypeCodes::SETPIXELV, TypeCodes::CREATEPEN,
+          TypeCodes::SETBKMODE, TypeCodes::SETTEXTCOLOR, TypeCodes::SETTEXTALIGN,
+          TypeCodes::ELLIPSE, TypeCodes::SETVIEWPORTORGEX, TypeCodes::RESTOREDC
         ].freeze
         BY_TYPE = ENABLED_TYPES.to_h { |type_id| [type_id, new(Records.lookup(type_id))] }.freeze
         private_constant :ENABLED_TYPES, :BY_TYPE
