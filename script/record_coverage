@@ -1,0 +1,80 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Checks inventory identity, not semantic implementation or corpus coverage.
+class RecordCoverage
+  def initialize(root, plan: nil, registry: nil, type_codes: nil)
+    @root = root
+    plan ||= File.read(File.join(root, "TODO.plan/11-record-coverage.md"))
+    registry ||= File.read(File.join(root, "lib/emf/emr/binary/records.rb"))
+    type_codes ||= File.read(File.join(root, "lib/emf/emr/binary/type_codes.rb"))
+    @autoloads = registry.scan(/^\s*autoload :(\w+), "([^"]+)"/)
+    @registrations = registry.scan(/^\s*Binary::TypeCodes::(\w+)\s*=>\s*:(\w+),?/)
+    @unsupported = registry.lines.grep(/^\s*autoload\b/).size != @autoloads.size ||
+                   registry.lines.grep(/^\s*Binary::TypeCodes::/).size != @registrations.size
+    @codes = type_codes.scan(/^\s*(\w+)\s*=\s*(\d+)\s*$/).to_h
+    @rows = plan.lines.grep(/^\| `/).map do |line|
+      cells = line.split("|").map(&:strip)
+      [cells[1].delete("`"), cells[2].delete("`"), cells[3][/\]\(([^)]+)\)/, 1]]
+    end
+  end
+
+  def errors
+    registry_errors + inventory_errors
+  end
+
+  private
+
+  def registry_errors
+    problems = syntax_errors
+    problems.concat(duplicates(@autoloads.map(&:first), "autoload"))
+    problems.concat(duplicates(@registrations.map(&:last), "registered class"))
+    problems.concat(duplicates(@rows.map(&:first), "inventory class"))
+    numeric_codes = @registrations.filter_map do |constant, _name|
+      value = @codes[constant]
+      problems << "undefined type-code constant #{constant}" unless value
+      value&.to_i
+    end
+    problems.concat(duplicates(numeric_codes, "numeric type code"))
+    problems
+  end
+
+  def syntax_errors
+    problems = []
+    problems << "unsupported registry declaration syntax" if @unsupported
+    problems << "empty registry or inventory" if @autoloads.empty? || @registrations.empty? || @rows.empty?
+    problems
+  end
+
+  def inventory_errors
+    expected = @autoloads.to_h.transform_values { |path| "../lib/#{path}.rb" }
+    constants = @registrations.to_h.invert.merge("Raw" => "unknown types")
+    problems = identity_errors(expected, constants)
+    @rows.each do |name, constant, path|
+      next unless expected.key?(name)
+
+      problems << "wrong type-code constant for #{name}: #{constant}" unless constants[name] == constant
+      problems << "wrong source path for #{name}: #{path}" unless expected[name] == path
+      problems << "missing source file for #{name}" unless File.file?(File.expand_path(expected.fetch(name), File.join(@root, "TODO.plan")))
+    end
+    problems
+  end
+
+  def identity_errors(expected, constants)
+    (expected.keys - @rows.map(&:first)).map { |name| "missing inventory class #{name}" } +
+      (@rows.map(&:first) - expected.keys).map { |name| "unknown inventory class #{name}" } +
+      (constants.keys - expected.keys).map { |name| "registered class without autoload #{name}" } +
+      (expected.keys - constants.keys).map { |name| "autoload without registration #{name}" }
+  end
+
+  def duplicates(values, label)
+    values.tally.filter_map { |value, count| "duplicate #{label} #{value}" if count > 1 }
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  problems = RecordCoverage.new(File.expand_path("..", __dir__)).errors
+  abort problems.join("\n") unless problems.empty?
+
+  puts "Record coverage inventory matches registry (identity only; semantic and corpus coverage remain separate)."
+end
