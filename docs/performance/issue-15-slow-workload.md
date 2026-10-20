@@ -102,11 +102,53 @@ row times three wall-clock phases in one process:
   - Until this is fixed, issue acceptance criterion 3 (the round-trip suite stays
     green) fails, and no current-revision round-trip timing exists for five of
     the six candidates.
+  - Fixed by commit `0e25e2f`, integrated as `acc2590`: an assigned body keeps its
+    size until `n_size` is set, and an explicit size is still validated. The run
+    below confirms it.
+
+## emfsvg round-trip golden suite, all 208 fixtures
+
+The pinned consumer's `spec/round_trip_golden_spec.rb` ran once against
+integration head `9dce2d6ff88791c000ae9db86d9f5592d16e114a`. The run used the
+same machine, with `EMF_BACKEND=ruby`, and the loaded path was checked as this
+checkout's `lib/emf.rb`. It ran in an exclusive window, from 16:30:41Z to
+16:34:54Z.
+
+```sh
+RUBYOPT=-I<emf>/lib EMF_BACKEND=ruby bundle exec rspec spec/round_trip_golden_spec.rb \
+  --format json --out round-trip-golden.json --format progress
+```
+
+| Outcome | Count |
+| --- | --- |
+| Examples | 209 (208 fixtures plus the regression-floor example) |
+| Failures | 0 (exit status 0) |
+| Byte-equal round trips | 9 |
+| Pending, "round-trip not yet byte-equal" | 199 |
+| Wall time, peak RSS | 248.8 s, 616 MiB |
+
+- The 9 byte-equal fixtures are `test-023`, `test-030`, `test-038`, `test-124`,
+  `test-155`, `test-161`, `test-162`, `test-163` and `test-181`.
+- The regression-floor example passes.
+- No fixture raises any more: the font error above is gone from every golden SVG
+  with text.
+- The pending outcomes are how the consumer itself classifies SVG features it
+  does not yet round-trip byte for byte. They are not emf failures.
+- The slowest round trips are `test-031` (20.0 s), `test-172` (9.2 s) and
+  `test-105` (7.3 s). Against the released gem those took 88.4 s, 17.9 s and
+  15.9 s in the six-candidate trial above. That trial measured three phases per
+  fixture, so the figures compare in order of magnitude only.
+- 70 of the 208 fixtures take more than one second.
+- Not checked: whether the released gem round-trips any additional fixture
+  byte-equal. That would need a second full run against 0.1.0, which was not
+  run.
+
+The JSON report (SHA-256 `c7cd1c3cae0d0b5d...`), progress log, `time -l` output
+and run identity are local evidence in
+`/private/tmp/emf-execution/p07-consumer-acceptance/`.
 
 ## Open
 
-- Fix the consumer font-construction regression, then rerun the six-candidate
-  round trip on the fixed revision.
 - The native backend measurements over the same fixtures need a library built
   from the final head; the build hold blocks them.
 - The calibrated runner, noise policy and the under-one-second target are still
