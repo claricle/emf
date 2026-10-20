@@ -42,10 +42,14 @@ RSpec.describe "Emf::Emr::Parser EXTTEXTOUT span validation" do
       cases = {
         "oversize nChars" => { count: 2_147_483_651, off_string: 76, off_dx: 84 },
         "offString beyond the record" => { count: 3, off_string: 2_919_235_660, off_dx: 0 },
-        "offDx beyond the record" => { count: 3, off_string: 80, off_dx: 4_000_000 },
+        "offDx beyond the record" => { count: 3, off_string: 76, off_dx: 4_000_000 },
         "string span past nSize" => { count: 60, off_string: 84, off_dx: 0 },
-        "Dx span past nSize" => { count: 5, off_string: 0, off_dx: 100 }
+        "Dx span past nSize" => { count: 5, off_string: 76, off_dx: 100 },
+        "overlapping string and Dx spans" => { count: 4, off_string: 78, off_dx: 76 },
+        "Dx span that fits at 4 bytes per char but not 8 with ETO_PDY" =>
+          { count: 5, off_string: 76, off_dx: 88, options: 0x2000 }
       }
+      cases["misaligned string offset"] = { count: 3, off_string: 77, off_dx: 0 } if width == 2
       cases.each do |label, args|
         it "keeps #{label} Raw with a ParseError and a byte-identical round trip" do
           bytes = file(text_record(type, **args))
@@ -66,6 +70,22 @@ RSpec.describe "Emf::Emr::Parser EXTTEXTOUT span validation" do
         expect(metafile.records.first.wire).to be_a(text_class(type))
       end
 
+      it "parses a Dx span that fits at 8 bytes per char with ETO_PDY typed with no error" do
+        bytes = file(text_record(type, count: 3, off_string: 76, off_dx: 88, options: 0x2000))
+        metafile = Emf.parse(bytes)
+
+        expect(metafile.errors).to be_empty
+        expect(metafile.records.first.wire).to be_a(text_class(type))
+      end
+
+      it "parses a record with non-overlapping adjacent spans typed with no error" do
+        bytes = file(text_record(type, count: 4, off_string: 76, off_dx: 76 + (4 * width)))
+        metafile = Emf.parse(bytes)
+
+        expect(metafile.errors).to be_empty
+        expect(metafile.records.first.wire).to be_a(text_class(type))
+      end
+
       it "parses an ETO_NO_RECT record typed with no error" do
         body = "ab".b.ljust(4, "\x00") + dx_values(2)
         bytes = file(text_record(type, count: 2 / width, off_string: 60, off_dx: 64, options: 0x100, body: body))
@@ -73,6 +93,14 @@ RSpec.describe "Emf::Emr::Parser EXTTEXTOUT span validation" do
 
         expect(metafile.errors).to be_empty
         expect(metafile.records.first.wire).to be_a(text_class(type))
+      end
+
+      if width == 1
+        it "parses an odd string offset typed with no error" do
+          bytes = file(text_record(type, count: 3, off_string: 77, off_dx: 0))
+
+          expect(Emf.parse(bytes).errors).to be_empty
+        end
       end
 
       it "parses nChars 0 with zero offsets typed with no error" do
