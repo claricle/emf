@@ -40,10 +40,12 @@ step() {
 build_cdylib() {
   # A musl cdylib cannot link statically; Alpine's rustc defaults crt-static on.
   case "$target" in *-musl) export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=-crt-static" ;; esac
-  cd "$root/emf-rs" &&
+  (
+    cd "$root/emf-rs" &&
     rustup toolchain install stable --profile minimal &&
     rustup target add "$target" &&
     cargo +stable build --locked --release -p emf-ffi --target "$target"
+  )
 }
 
 # Writes a PATH holding only ruby, so no cc/gcc/clang/rustc shim can leak into the install.
