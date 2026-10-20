@@ -1,7 +1,40 @@
-//! Bounded standard/placeable WMF framing with opaque record preservation.
+//! Bounded standard/placeable WMF parsing with opaque record preservation.
 //!
-//! This module decodes container headers, not drawing record semantics. Record
-//! sizes are measured in 16-bit words on the wire; offsets and spans use bytes.
+//! Record sizes are measured in 16-bit words on the wire; offsets and spans use
+//! bytes. Unsupported and malformed bounded records remain available verbatim.
+
+pub mod bitmap;
+pub mod brush;
+pub mod dib;
+pub mod escape;
+pub mod geometry;
+pub mod objects;
+pub mod region;
+pub mod state;
+pub mod text;
+
+/// Typed record families. Original bytes remain authoritative until an edit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TypedRecord {
+    Bitmap(bitmap::BitmapRecord),
+    Brush(brush::BrushRecord),
+    Escape(escape::EscapeRecord),
+    Geometry(geometry::GeometryRecord),
+    Region(region::RegionRecord),
+    State(state::StateRecord),
+    Text(text::TextRecord),
+}
+
+pub(crate) enum DecodeError {
+    Malformed,
+    Resource(crate::ParseFailure),
+}
+
+impl From<crate::ParseFailure> for DecodeError {
+    fn from(value: crate::ParseFailure) -> Self {
+        Self::Resource(value)
+    }
+}
 
 use crate::limits::{try_vec_with_capacity, Budget};
 use crate::reader::{u16_at, u32_at, Reader};
@@ -52,12 +85,25 @@ pub struct Diagnostic {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DiagnosticKind {
-    PlaceableChecksumMismatch { expected: u16, found: u16 },
-    TruncatedRecordHead { available: usize },
-    RecordSizeTooSmall { size_words: u32 },
-    TruncatedRecord { claimed: usize, available: usize },
+    PlaceableChecksumMismatch {
+        expected: u16,
+        found: u16,
+    },
+    TruncatedRecordHead {
+        available: usize,
+    },
+    RecordSizeTooSmall {
+        size_words: u32,
+    },
+    TruncatedRecord {
+        claimed: usize,
+        available: usize,
+    },
     InvalidEof,
     MissingEof,
+    /// Record framing is valid, but the recognized payload is malformed.
+    MalformedRecord,
+    Object(objects::ObjectIssue),
 }
 
 /// Original record span plus an optional replacement payload.
@@ -68,6 +114,9 @@ pub struct Record {
     size: usize,
     function: u16,
     replacement: Option<(u16, Vec<u8>)>,
+    typed: Option<TypedRecord>,
+    consumed: usize,
+    object_index: Option<u16>,
 }
 
 impl Record {
@@ -86,6 +135,13 @@ impl Record {
     }
     pub fn is_edited(&self) -> bool {
         self.replacement.is_some()
+    }
+    pub fn typed(&self) -> Option<&TypedRecord> {
+        self.typed.as_ref()
+    }
+    /// Lowest free object slot allocated by this original creator record.
+    pub fn object_index(&self) -> Option<u16> {
+        self.object_index
     }
     pub fn is_eof(&self) -> bool {
         self.function == META_EOF && self.size_words == 3
@@ -191,8 +247,87 @@ impl Document {
             .ok_or(EditFailure::SizeOverflow)?;
         u32::try_from(size / 2).map_err(|_| EditFailure::SizeOverflow)?;
         record.replacement = Some((function, body));
+        record.typed = None;
         Ok(())
     }
+
+    /// Replace a decoded record of the same wire function, preserving its
+    /// original unconsumed suffix. Failed edits leave the document unchanged.
+    pub fn replace_typed(&mut self, index: usize, value: TypedRecord) -> Result<(), EditFailure> {
+        let record = self
+            .records
+            .get(index)
+            .ok_or(EditFailure::RecordIndex { index })?;
+        if record.typed.is_none() {
+            return Err(EditFailure::RecordFamily { index });
+        }
+        let (function, mut body) = match &value {
+            TypedRecord::Bitmap(value) => bitmap::encode(value)?,
+            TypedRecord::Brush(value) => brush::encode(value)?,
+            TypedRecord::Escape(value) => escape::encode(value)?,
+            TypedRecord::Geometry(value) => geometry::encode(value)?,
+            TypedRecord::Region(value) => region::encode(value)?,
+            TypedRecord::State(value) => state::encode(value)?,
+            TypedRecord::Text(value) => text::encode(value)?,
+        };
+        if function & 0xff != record.function & 0xff {
+            return Err(EditFailure::RecordFamily { index });
+        }
+        let suffix = self
+            .record_body(record)
+            .ok_or(EditFailure::RecordLayout { index })?
+            .get(record.consumed..)
+            .ok_or(EditFailure::RecordLayout { index })?;
+        let total = body
+            .len()
+            .checked_add(suffix.len())
+            .ok_or(EditFailure::SizeOverflow)?;
+        let bytes = total
+            .checked_add(RECORD_HEADER_BYTES)
+            .ok_or(EditFailure::SizeOverflow)?;
+        if total % 2 != 0 || u32::try_from(bytes / 2).is_err() {
+            return Err(EditFailure::SizeOverflow);
+        }
+        if let TypedRecord::Bitmap(value) = &value {
+            if !bitmap::validate_layout(value, record.function, total / 2) {
+                return Err(EditFailure::RecordLayout { index });
+            }
+        }
+        body.try_reserve_exact(suffix.len())
+            .map_err(|_| EditFailure::SizeOverflow)?;
+        body.extend_from_slice(suffix);
+        let record = &mut self.records[index];
+        record.replacement = Some((record.function, body));
+        record.typed = Some(value);
+        Ok(())
+    }
+}
+
+fn decode_typed(
+    function: u16,
+    body: &[u8],
+    budget: &mut Budget<'_>,
+) -> Result<Option<(TypedRecord, usize)>, DecodeError> {
+    if let Some((value, consumed)) = state::decode(function, body, budget)? {
+        return Ok(Some((TypedRecord::State(value), consumed)));
+    }
+    if let Some((value, consumed)) = geometry::decode(function, body, budget)? {
+        return Ok(Some((TypedRecord::Geometry(value), consumed)));
+    }
+    if let Some((value, consumed)) = text::decode(function, body, budget)? {
+        return Ok(Some((TypedRecord::Text(value), consumed)));
+    }
+    if let Some((value, consumed)) = region::decode(function, body, budget)? {
+        return Ok(Some((TypedRecord::Region(value), consumed)));
+    }
+    if let Some((value, consumed)) = bitmap::decode(function, body, budget)? {
+        return Ok(Some((TypedRecord::Bitmap(value), consumed)));
+    }
+    if let Some((value, consumed)) = escape::decode(function, body, budget)? {
+        return Ok(Some((TypedRecord::Escape(value), consumed)));
+    }
+    Ok(brush::decode(function, body, budget)?
+        .map(|(value, consumed)| (TypedRecord::Brush(value), consumed)))
 }
 
 /// Decode supported headers and frame records. Bad record framing stops at the
@@ -266,6 +401,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
     source.extend_from_slice(input);
     let mut records = Vec::new();
     let mut found_eof = false;
+    let mut objects = objects::ObjectTable::new(header.num_objects);
     while !reader.is_empty() {
         let offset = reader.position();
         let available = reader.remaining();
@@ -311,6 +447,42 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         budget.check_record_bytes(size)?;
         budget.charge_record(size)?;
         budget.reserve_one(&mut records)?;
+        let decoded = match decode_typed(
+            function,
+            &input[offset + RECORD_HEADER_BYTES..offset + size],
+            &mut budget,
+        ) {
+            Ok(decoded) => decoded,
+            Err(DecodeError::Malformed) => {
+                push_diagnostic(
+                    &mut budget,
+                    &mut diagnostics,
+                    offset,
+                    Some(function),
+                    DiagnosticKind::MalformedRecord,
+                )?;
+                None
+            }
+            Err(DecodeError::Resource(error)) => return Err(error),
+        };
+        let (typed, consumed) = match decoded {
+            Some((value, consumed)) => (Some(value), consumed),
+            None => (None, 0),
+        };
+        let (object_index, issues) = objects.apply(
+            function,
+            &input[offset + RECORD_HEADER_BYTES..offset + size],
+            &mut budget,
+        )?;
+        for issue in issues.into_iter().flatten() {
+            push_diagnostic(
+                &mut budget,
+                &mut diagnostics,
+                offset,
+                Some(function),
+                DiagnosticKind::Object(issue),
+            )?;
+        }
         reader.skip(size)?;
         records.push(Record {
             offset,
@@ -318,6 +490,9 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             size,
             function,
             replacement: None,
+            typed,
+            consumed,
+            object_index,
         });
         if function == META_EOF {
             if size_words == 3 {
