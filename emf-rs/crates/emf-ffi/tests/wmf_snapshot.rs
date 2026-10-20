@@ -89,7 +89,7 @@ fn typed_values_and_opaque_records_have_independent_owned_payloads() {
         record(0x0214, &[0xff, 0xff, 0, 0x80]),
         record(0x0324, &[2, 0, 1, 0, 0xff, 0xff, 0, 0x80, 0xff, 0x7f]),
         record(0x02fa, &[1, 0, 0xfe, 0xff, 3, 0, 0x12, 0x34, 0x56, 0x78]),
-        record(0x001e, &[]), // SaveDC remains opaque.
+        record(0x001e, &[]), // SaveDC has an empty typed payload.
         record(0x7777, &[0x80, 0xff]),
         record(0, &[]),
     ];
@@ -98,7 +98,7 @@ fn typed_values_and_opaque_records_have_independent_owned_payloads() {
     let values = payloads(&bytes);
     assert_eq!(
         values.iter().map(|v| v.1).collect::<Vec<_>>(),
-        [2, 3, 4, 0, 0, 1]
+        [2, 3, 4, 13, 0, 1]
     );
     assert_eq!(
         values[0].2,
@@ -196,7 +196,7 @@ fn font_fields_and_raw_face_name_preserve_source_suffix_and_advisory_function() 
     let records = [
         record(0x02fb, &body),
         record(0xa7fb, &body), // The high function byte is advisory.
-        record(0x001e, &[]),   // SaveDC remains opaque.
+        record(0x001e, &[]),   // SaveDC has an empty typed payload.
         record(0x7777, &[0x80, 0xff]),
         record(0x02fb, &[0; 48]), // A short font is malformed and remains opaque.
         record(0, &[]),
@@ -225,7 +225,7 @@ fn font_fields_and_raw_face_name_preserve_source_suffix_and_advisory_function() 
             assert_eq!(values[index], (function, 7, expected.clone()));
             assert_eq!(&values[index].2[52..], &face_name);
         }
-        assert_eq!(values[2], (0x001e, 0, vec![]));
+        assert_eq!(values[2], (0x001e, 13, vec![]));
         assert_eq!(values[3], (0x7777, 0, vec![]));
         assert_eq!(values[4], (0x02fb, 0, vec![]));
         assert_eq!(values[5], (0, 1, vec![]));
@@ -250,7 +250,7 @@ fn font_fields_and_raw_face_name_preserve_source_suffix_and_advisory_function() 
 }
 
 #[test]
-fn other_state_records_remain_opaque() {
+fn dc_state_records_receive_normalized_payloads() {
     let records = [
         record(0x001e, &[]),           // SaveDC.
         record(0x0127, &[0xff, 0xff]), // RestoreDC.
@@ -259,10 +259,9 @@ fn other_state_records_remain_opaque() {
     ];
     let bytes = unsafe { snapshot(parse(&source(&records, b""))) };
     let values = payloads(&bytes);
-    for value in &values[..3] {
-        assert_eq!(value.1, 0);
-        assert!(value.2.is_empty());
-    }
+    assert_eq!(values[0], (0x001e, 13, vec![]));
+    assert_eq!(values[1], (0x0127, 13, (-1i32).to_le_bytes().to_vec()));
+    assert_eq!(values[2], (0x0105, 13, vec![]));
     assert_eq!(values[3], (0, 1, vec![]));
 }
 
@@ -469,7 +468,7 @@ fn palette_fields_are_unsigned_in_wire_order_and_preserve_complete_source_spans(
             );
         }
         for value in &values[cases.len()..values.len() - 1] {
-            assert_eq!(value.1, 0);
+            assert_eq!(value.1, if value.0 == 0x001e { 13 } else { 0 });
             assert!(value.2.is_empty());
         }
         assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
@@ -632,7 +631,7 @@ fn region_and_clipping_fields_preserve_nested_wire_order_and_source_spans() {
                 )
             );
         }
-        assert_eq!(values[cases.len()], (0x001e, 0, vec![]));
+        assert_eq!(values[cases.len()], (0x001e, 13, vec![]));
         assert_eq!(values[cases.len() + 1], (0x7777, 0, vec![]));
         assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
         let mut descriptor = 120;
@@ -1034,6 +1033,189 @@ fn bitmap_truncated_headers_and_empty_required_images_remain_opaque() {
         );
         offset += records[index].len();
     }
+    assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
+    assert_eq!(&bytes[bytes.len() - 4..], b"tail");
+}
+
+#[test]
+fn remaining_geometry_dc_and_escape_preserve_normalized_values_and_source_spans() {
+    let signed = vec![(-32768i32) as u32, u32::MAX, 32767, 0];
+    let mut cases = vec![
+        (
+            0xab10,
+            region_words(&[0x8000, 0xffff, 0x7fff, 0]),
+            12,
+            signed.clone(),
+        ),
+        (
+            0xcd12,
+            region_words(&[0x8000, 0xffff, 0x7fff, 0]),
+            12,
+            signed.clone(),
+        ),
+        (
+            0xef19,
+            region_words(&[0xffff, 0xffff, 0x8000, 0x7fff]),
+            12,
+            vec![u32::MAX, (-32768i32) as u32, 32767],
+        ),
+        (
+            0xab1f,
+            region_words(&[0xffff, 0x8000, 0xffff, 0x8000]),
+            12,
+            vec![0x8000ffff, u32::MAX, (-32768i32) as u32],
+        ),
+        (
+            0xcd48,
+            region_words(&[1, 0xffff, 0x8000, 0x8000, 0xffff]),
+            12,
+            vec![1, 0x8000ffff, (-32768i32) as u32, u32::MAX],
+        ),
+        (
+            0xef48,
+            region_words(&[0, 0, 0, 0x7fff, 0]),
+            12,
+            vec![0, 0, 32767, 0],
+        ),
+        (
+            0xab1d,
+            region_words(&[0xffff, 0xffff, 0x8000, 0xffff, 0x7fff, 0]),
+            12,
+            [vec![u32::MAX], signed].concat(),
+        ),
+        (0xcd1e, vec![], 13, vec![]),
+        (
+            0xef27,
+            region_words(&[0x8000]),
+            13,
+            vec![(-32768i32) as u32],
+        ),
+        (0xab27, region_words(&[0x7fff]), 13, vec![32767]),
+        (0xcd05, vec![], 13, vec![]),
+    ]
+    .into_iter()
+    .map(|(f, body, family, words)| {
+        (
+            f,
+            body,
+            family,
+            words
+                .iter()
+                .flat_map(|n| n.to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+    })
+    .collect::<Vec<_>>();
+    // Unknown subfunctions and malformed subtype interiors remain inert raw data.
+    for data in [
+        vec![],
+        vec![0, 0xff],
+        vec![0, 0xff, 0x80],
+        vec![0xff; 65535],
+    ] {
+        let mut body = region_words(&[0xffff, data.len() as u16]);
+        body.extend_from_slice(&data);
+        if data.len() % 2 != 0 {
+            body.push(0xa7);
+        }
+        let mut expected = 0xffffu32.to_le_bytes().to_vec();
+        expected.extend_from_slice(&(data.len() as u64).to_le_bytes());
+        expected.extend_from_slice(&data);
+        cases.push((0xef26, body, 13, expected));
+    }
+    let suffix = [0xde, 0xad, 0xbe, 0xef];
+    let mut records = cases
+        .iter()
+        .map(|(f, body, _, _)| {
+            let mut body = body.clone();
+            body.extend_from_slice(&suffix);
+            record(*f, &body)
+        })
+        .collect::<Vec<_>>();
+    records.extend([record(0x7777, &[0x80, 0xff]), record(0, &[])]);
+    let input = source(&records, b"remaining-tail\0");
+    unsafe {
+        let doc = parse(&input);
+        let mut buffer = ptr::null_mut();
+        assert_eq!(emf_wmf_serialize(doc, &mut buffer, ptr::null_mut()), EMF_OK);
+        let mut data = ptr::null();
+        let mut length = 0;
+        assert_eq!(emf_buffer_view(buffer, &mut data, &mut length), EMF_OK);
+        assert_eq!(slice::from_raw_parts(data, length as usize), input);
+        emf_buffer_free(buffer);
+        let bytes = snapshot(doc);
+        let values = payloads(&bytes);
+        let mut descriptor = 120;
+        let mut offset = 18;
+        for (index, (f, body, family, expected)) in cases.iter().enumerate() {
+            assert_eq!(values[index], (u32::from(*f), *family, expected.clone()));
+            assert_eq!(u64_at(&bytes, descriptor + 8), offset as u64);
+            assert_eq!(u64_at(&bytes, descriptor + 16), records[index].len() as u64);
+            assert_eq!(
+                &input[offset..offset + records[index].len()],
+                records[index]
+            );
+            assert_eq!(
+                &input[offset + 6 + body.len()..offset + records[index].len()],
+                suffix
+            );
+            descriptor += 40 + expected.len();
+            offset += records[index].len();
+        }
+        assert_eq!(values[cases.len()], (0x7777, 0, vec![]));
+        assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
+        assert_eq!(&bytes[bytes.len() - 15..], b"remaining-tail\0");
+    }
+}
+
+#[test]
+fn remaining_malformed_records_stay_opaque_and_leave_following_records_visible() {
+    let mut records = Vec::new();
+    for (function, minimum) in [
+        (0x0410, 8),
+        (0x0412, 8),
+        (0x0419, 8),
+        (0x041f, 8),
+        (0x0548, 10),
+        (0x061d, 12),
+        (0x0127, 2),
+    ] {
+        for size in (0..minimum).step_by(2) {
+            records.push(record(function, &vec![0; size]));
+        }
+    }
+    records.push(record(0x0548, &region_words(&[2, 0, 0, 0, 0])));
+    for body in [
+        vec![],
+        region_words(&[0xffff]),
+        region_words(&[0xffff, 3]),
+        region_words(&[0xffff, 3, 0x80ff]),
+        region_words(&[0xffff, 0xffff, 0, 0]),
+    ] {
+        records.push(record(0xab26, &body));
+    }
+    records.extend([record(0x001e, &[]), record(0, &[])]);
+    let input = source(&records, b"tail");
+    let bytes = unsafe { snapshot(parse(&input)) };
+    let values = payloads(&bytes);
+    let mut offset = 18;
+    for (index, value) in values[..values.len() - 2].iter().enumerate() {
+        assert_eq!(
+            *value,
+            (
+                u32::from(u16::from_le_bytes(records[index][4..6].try_into().unwrap())),
+                0,
+                vec![]
+            )
+        );
+        assert_eq!(u64_at(&bytes, 120 + index * 40 + 8), offset as u64);
+        assert_eq!(
+            u64_at(&bytes, 120 + index * 40 + 16),
+            records[index].len() as u64
+        );
+        offset += records[index].len();
+    }
+    assert_eq!(values[values.len() - 2], (0x001e, 13, vec![]));
     assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
     assert_eq!(&bytes[bytes.len() - 4..], b"tail");
 }

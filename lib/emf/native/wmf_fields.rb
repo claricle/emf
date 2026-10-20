@@ -5,6 +5,7 @@ require_relative "wmf_palette_fields"
 require_relative "wmf_region_fields"
 require_relative "wmf_brush_fields"
 require_relative "wmf_bitmap_fields"
+require_relative "wmf_remaining_fields"
 
 module Emf
   module Native
@@ -35,6 +36,9 @@ module Emf
       private
 
       def prefix_record
+        if Wmf::GeometryCodec::RECORDS.key?(@function) || Wmf::DcEscapeCodec::RECORDS.key?(@function)
+          return WmfRemainingFields.new(@record, @raw).call
+        end
         return WmfBitmapFields.new(@record, @raw).call if Wmf::BitmapCodec::RECORDS.key?(@function)
 
         return WmfBrushFields.new(@record, @raw).call if Wmf::BrushCodec::RECORDS.key?(@function)

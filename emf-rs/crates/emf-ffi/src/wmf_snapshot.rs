@@ -160,6 +160,16 @@ fn family(record: &Record) -> u32 {
         )) => 9,
         Some(TypedRecord::Brush(_)) => 10,
         Some(TypedRecord::Bitmap(_)) => 11,
+        Some(TypedRecord::Geometry(
+            G::ScaleWindowExt { .. }
+            | G::ScaleViewportExt { .. }
+            | G::FloodFill { .. }
+            | G::SetPixel { .. }
+            | G::ExtFloodFill { .. }
+            | G::PatBlt { .. },
+        )) => 12,
+        Some(TypedRecord::State(S::SaveDc | S::RestoreDc(_) | S::SetRelAbs))
+        | Some(TypedRecord::Escape(_)) => 13,
         _ => 0,
     }
 }
@@ -410,6 +420,58 @@ fn payload(
             if let Some(bytes) = image {
                 out.raw(bytes)?;
             }
+        }
+        (12, Some(TypedRecord::Geometry(g))) => match g {
+            G::ScaleWindowExt {
+                y_denom,
+                y_num,
+                x_denom,
+                x_num,
+            }
+            | G::ScaleViewportExt {
+                y_denom,
+                y_num,
+                x_denom,
+                x_num,
+            } => {
+                for value in [y_denom, y_num, x_denom, x_num] {
+                    out.i32(*value)?;
+                }
+            }
+            G::FloodFill { color, y, x } | G::SetPixel { color, y, x } => {
+                out.u32(*color)?;
+                out.i32(*y)?;
+                out.i32(*x)?;
+            }
+            G::ExtFloodFill { mode, color, y, x } => {
+                out.u32(u32::from(*mode))?;
+                out.u32(*color)?;
+                out.i32(*y)?;
+                out.i32(*x)?;
+            }
+            G::PatBlt {
+                raster_operation,
+                height,
+                width,
+                y_left,
+                x_left,
+            } => {
+                out.u32(*raster_operation)?;
+                for value in [height, width, y_left, x_left] {
+                    out.i32(*value)?;
+                }
+            }
+            _ => unreachable!(),
+        },
+        (13, Some(TypedRecord::State(s))) => match s {
+            S::SaveDc | S::SetRelAbs => (),
+            S::RestoreDc(saved_dc) => out.i32(*saved_dc)?,
+            _ => unreachable!(),
+        },
+        (13, Some(TypedRecord::Escape(escape))) => {
+            out.u32(u32::from(escape.escape_function))?;
+            out.u64(escape.data.len() as u64)?;
+            out.raw(&escape.data)?;
         }
         (5, Some(TypedRecord::Text(t))) => {
             let (x, y, text, padding, options, rectangle, dx, suffix) = match t {
@@ -699,6 +761,33 @@ pub unsafe extern "C" fn emf_wmf_document_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn remaining_payload_expansion_is_charged_at_exact_output_boundary() {
+        // ScaleWindowExt contributes 16 bytes, SaveDC 0, RestoreDC 4,
+        // SetRelAbs 0, Escape 15; six descriptors including EOF cost 240.
+        let mut source = vec![1, 0, 9, 0, 0, 3, 38, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0];
+        for (function, body) in [
+            (0x0410u16, vec![0; 8]),
+            (0x001e, vec![]),
+            (0x0127, vec![0xff, 0xff]),
+            (0x0105, vec![]),
+            (0xab26, vec![0xff, 0xff, 3, 0, 0, 0xff, 0x80, 0xa7]),
+            (0, vec![]),
+        ] {
+            source.extend_from_slice(&((6 + body.len()) as u32 / 2).to_le_bytes());
+            source.extend_from_slice(&function.to_le_bytes());
+            source.extend_from_slice(&body);
+        }
+        let size = source.len() as u32 / 2;
+        source[6..10].copy_from_slice(&size.to_le_bytes());
+        let doc = emf_core::wmf::parse(&source, &emf_core::ParseLimits::default()).unwrap();
+        let bytes = encode(&doc, 395, doc.source()).unwrap_or_else(|e| panic!("{:?}", e.message));
+        assert_eq!(bytes.len(), 395);
+        assert_eq!(
+            encode(&doc, 394, doc.source()).unwrap_err().status,
+            EMF_LIMIT_EXCEEDED
+        );
+    }
     #[test]
     fn checks_brush_data_output_budget_before_allocating() {
         let source = [

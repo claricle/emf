@@ -108,7 +108,24 @@ length, then payload. The function includes the original high byte. Families:
   Bitmap interiors remain opaque, including malformed or unsupported DIB data.
   All six variants retain complete function words and source spans.
 
-Families 2–11 cover the existing Ruby WMF models only. Rust-only typed records
+- 12: remaining scalar geometry, each field exactly four bytes in WMF wire order.
+  ScaleWindowExt (10) and ScaleViewportExt (12) have sign-extended i32
+  y-denominator/y-numerator/x-denominator/x-numerator. FloodFill (19) and
+  SetPixel (1f) have u32 color and i32 y/x. ExtFloodFill (48) has u32 mode/color
+  and i32 y/x; mode zero-extends u16 and must be 0 or 1. PatBlt (1d) has u32
+  raster-operation and i32 height/width/y-left/x-left. The complete source span
+  retains suffixes after the 8/8/10/12-byte wire prefixes respectively.
+- 13: DC state and inert Escape transport. SaveDc (1e) and reserved SetRelAbs
+  (05) have empty payloads; their entire wire body remains in the source span.
+  RestoreDc (27) has one sign-extended i32 saved-DC value and retains source
+  bytes after its two-byte wire prefix. Escape (26) has u32 subfunction,
+  u64 counted data length, and exactly that many raw bytes. Subfunction zero-
+  extends u16; the length excludes the odd-length alignment byte and suffix.
+  Both alignment and suffix remain verbatim in the complete source span after
+  the four-byte wire header and counted bytes. Escape subtype interiors are
+  never executed or interpreted. All variants preserve the complete function.
+
+Families 2–13 cover the existing Ruby WMF models only. Rust-only typed records
 remain opaque. For Ruby compatibility, ExtTextOut DX consumes one i16 per
 character even with ETO_PDY set; the original flag and remaining bytes survive
 as suffix. The compatibility view uses the Rust typed decoder with only that
