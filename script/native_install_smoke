@@ -122,9 +122,18 @@ class NativeInstallSmoke
   def check_abi(spec, manifest)
     path = File.join(spec.full_gem_path, "lib/emf/native", @platform, manifest.fetch("library"))
     fail!("installed library missing: #{path}") unless File.file?(path)
-    actual = Fiddle::Function.new(Fiddle::Handle.new(path)[@abi_symbol], [], Fiddle::TYPE_INT).call
+    actual = abi_version(path)
     fail!("ABI version #{actual}, platforms.json says #{manifest['abi_version']}") unless actual == manifest["abi_version"]
     puts "library #{File.basename(path)} reports ABI #{actual}"
+  end
+
+  # Windows cannot delete a loaded DLL, so the handle is closed before the
+  # temporary GEM_HOME is removed.
+  def abi_version(path)
+    handle = Fiddle::Handle.new(path)
+    Fiddle::Function.new(handle[@abi_symbol], [], Fiddle::TYPE_INT).call
+  ensure
+    handle&.close
   end
 end
 
