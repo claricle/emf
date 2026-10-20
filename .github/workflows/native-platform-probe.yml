@@ -53,6 +53,16 @@ jobs:
           # The intended platform name is a candidate; the probe reports what
           # Gem::Platform.local says on this runner.
           - { target: aarch64-pc-windows-gnullvm, platform: aarch64-mingw-ucrt, runner: windows-11-arm, kind: setup-ruby, experimental: true }
+        # ruby/setup-ruby does not provide Ruby 3.1 on Windows ARM. Keep the
+        # supported Ruby 3.4 ARM probe while retaining 3.1 coverage elsewhere.
+        exclude:
+          - ruby: "3.1"
+            row:
+              target: aarch64-pc-windows-gnullvm
+              platform: aarch64-mingw-ucrt
+              runner: windows-11-arm
+              kind: setup-ruby
+              experimental: true
     env:
       OUT_DIR: probe-out/${{ matrix.row.target }}-ruby${{ matrix.ruby }}
       EXPECTED_RUBY: ${{ matrix.ruby }}
