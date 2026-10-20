@@ -8,6 +8,7 @@ module Emf
     module Binary
       module Records
         class RealizePalette < Emf::Emr::Binary::Record
+          rest :trailing
         end
       end
     end

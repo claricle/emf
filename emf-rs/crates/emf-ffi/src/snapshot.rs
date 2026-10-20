@@ -13,6 +13,11 @@ pub(crate) enum Error {
 
 pub(crate) fn family(data: &RecordData) -> u32 {
     match data {
+        RecordData::SelectPalette { .. } => 82,
+        RecordData::CreatePalette { .. } => 83,
+        RecordData::SetPaletteEntries { .. } => 84,
+        RecordData::ResizePalette { .. } => 85,
+        RecordData::RealizePalette => 86,
         RecordData::ExtCreatePen(_) => 81,
         RecordData::ExtTextOutA(_) => 74,
         RecordData::ExtTextOutW(_) => 75,
@@ -272,6 +277,15 @@ fn text_payload<T>(
 
 fn payload_len(data: &RecordData) -> Result<usize, Error> {
     match data {
+        RecordData::RealizePalette => Ok(0),
+        RecordData::SelectPalette { .. } => Ok(4),
+        RecordData::ResizePalette { .. } => Ok(8),
+        RecordData::CreatePalette { entries, .. }
+        | RecordData::SetPaletteEntries { entries, .. } => entries
+            .len()
+            .checked_mul(4)
+            .and_then(|len| len.checked_add(16))
+            .ok_or(Error::SizeOverflow),
         RecordData::ExtCreatePen(pen) => pen_len(pen),
         RecordData::ExtTextOutA(text) => text_len(text),
         RecordData::ExtTextOutW(text) => text_len(text),
@@ -436,6 +450,33 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
         u32_field(&mut out, family(record.data()));
         u64_field(&mut out, wire_len(payload_len(record.data())?)?);
         match record.data() {
+            RecordData::RealizePalette => {}
+            RecordData::SelectPalette { ih_pal } => u32_field(&mut out, *ih_pal),
+            RecordData::ResizePalette {
+                ih_pal,
+                entry_count,
+            } => {
+                u32_field(&mut out, *ih_pal);
+                u32_field(&mut out, *entry_count);
+            }
+            RecordData::CreatePalette {
+                ih_pal,
+                version,
+                entries,
+            } => {
+                u32_field(&mut out, *ih_pal);
+                u32_field(&mut out, u32::from(*version));
+                palette_entries(&mut out, entries)?;
+            }
+            RecordData::SetPaletteEntries {
+                ih_pal,
+                start,
+                entries,
+            } => {
+                u32_field(&mut out, *ih_pal);
+                u32_field(&mut out, *start);
+                palette_entries(&mut out, entries)?;
+            }
             RecordData::ExtCreatePen(pen) => pen_payload(&mut out, pen)?,
             RecordData::ExtTextOutA(text) => {
                 text_payload(&mut out, text, |out, value| out.push(*value))?
@@ -772,6 +813,16 @@ fn header(out: &mut Vec<u8>, value: &EmfHeader) {
     u32_field(out, pixel.map_or(0, |p| p.off_pixel_format));
     u32_field(out, pixel.map_or(0, |p| p.b_open_gl));
     size(out, value.micrometers.unwrap_or(Size { cx: 0, cy: 0 }));
+}
+
+// Families 83/84: handle, version/start word, u64 entry count, raw
+// entry bytes (red, green, blue, palette flags; no color conversion).
+fn palette_entries(out: &mut Vec<u8>, entries: &[emf_core::PaletteEntry]) -> Result<(), Error> {
+    u64_field(out, wire_len(entries.len())?);
+    for entry in entries {
+        out.extend_from_slice(&[entry.red, entry.green, entry.blue, entry.flags]);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

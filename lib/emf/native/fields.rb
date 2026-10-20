@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "palette_fields"
+
 module Emf
   module Native
     module Fields

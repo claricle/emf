@@ -7,9 +7,14 @@ module Emf
   module Emr
     module Binary
       module Records
-        # Stub: preserves full body bytes. Full layout lands with TODO 10.
         class ResizePalette < Emf::Emr::Binary::Record
-          rest :body
+          uint32 :ih_pal
+          uint32 :entry_count
+          rest :trailing
+
+          def body
+            to_binary_s.byteslice(8..)
+          end
         end
       end
     end
