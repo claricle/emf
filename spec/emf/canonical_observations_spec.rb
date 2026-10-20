@@ -164,14 +164,33 @@ RSpec.describe BackendParity do
     it "captures a marked subset to an explicit output and refuses to overwrite" do
       Dir.mktmpdir do |dir|
         output = File.join(dir, "out.json")
-        _out, err, status = Open3.capture3(RbConfig.ruby, script, "--output", output, "--only", "fixtures/simple/")
+        args = ["--output", output, "--rss-limit-mb", "512"]
+        _out, err, status = Open3.capture3(RbConfig.ruby, script, *args, "--only", "fixtures/simple/")
         artifact = JSON.parse(File.read(output))
         expect([status.success?, err]).to eq([true, ""])
         expect(artifact).to include("subset" => true, "counts" => { "simple" => 1 })
+        expect(artifact.fetch("limits")).to include("rss_limit_bytes" => 512 * 1024 * 1024)
         expect(artifact.dig("fixtures", 0, "observation", "parse", "status")).to eq("ok")
         expect(artifact.fetch("revision")).to include("git_sha")
-        _out, _err, again = Open3.capture3(RbConfig.ruby, script, "--output", output)
+        _out, _err, again = Open3.capture3(RbConfig.ruby, script, *args)
         expect(again.success?).to be(false)
+      end
+    end
+
+    it "exits with usage when the RSS ceiling is missing" do
+      Dir.mktmpdir do |dir|
+        output = File.join(dir, "out.json")
+        _out, err, status = Open3.capture3(RbConfig.ruby, script, "--output", output)
+        expect([status.exitstatus, err]).to match([1, /--rss-limit-mb MB/])
+        expect(File.exist?(output)).to be(false)
+      end
+    end
+
+    it "rejects a timeout above the supervisor wall limit" do
+      Dir.mktmpdir do |dir|
+        _out, err, status = Open3.capture3(RbConfig.ruby, script, "--output", File.join(dir, "o.json"),
+                                           "--rss-limit-mb", "512", "--timeout", "120")
+        expect([status.success?, err]).to match([false, /--timeout must be within 1..60/])
       end
     end
   end

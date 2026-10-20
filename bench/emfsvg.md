@@ -6,7 +6,7 @@ available on PATH:
 ```sh
 EMFSVG_PATH=/path/to/emfsvg ruby bench/emfsvg.rb \
   --manifest spec/fixtures/manifest.json --backend ruby \
-  --output tmp/bench/emfsvg-ruby.json
+  --output tmp/bench/emfsvg-ruby.json --rss-limit-mb 512
 ```
 
 The default consumer commit is `101356dcf673841fda0693076131bca7a0f34948`.
@@ -18,7 +18,7 @@ For native conversion, supply the library explicitly:
 ```sh
 EMFSVG_PATH=/path/to/emfsvg EMF_NATIVE_LIBRARY=/path/to/libemf_ffi.dylib \
   ruby bench/emfsvg.rb --manifest spec/fixtures/manifest.json \
-  --backend native --output tmp/bench/emfsvg-native.json
+  --backend native --output tmp/bench/emfsvg-native.json --rss-limit-mb 512
 ```
 
 An unavailable library, unsupported input or conversion error fails the run with
@@ -28,7 +28,10 @@ iteration, warmup, cold-run, timeout and output controls; see [README.md](README
 For a small trial, add `--fixture 'spec/fixtures/simple/*' --iterations 2 --warmups 0
 --cold-runs 1`. The default is 20 timed samples after five discarded warmups.
 
-Each fixture has a bounded child process. `from_bytes` measures parsing and SVG
+Each fixture has a child process under a wall deadline (`--timeout`, 1 to 60 seconds) and a
+required RSS ceiling (`--rss-limit-mb`), both recorded in the report's `method`. A child
+that exceeds either, including one whose warm iterations outrun the deadline, fails its
+fixture with no partial timings. `from_bytes` measures parsing and SVG
 rendering using bytes read outside the timed region; `from_file` includes the file
 read. Every result must equal the pinned consumer's golden SVG bytes. Comparison
 and forced GC occur outside timing. Allocations and sampled process memory follow

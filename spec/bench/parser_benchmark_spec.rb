@@ -18,7 +18,7 @@ RSpec.describe ParserBenchmark::CLI do
   let(:report) { JSON.parse(File.read(result_path)) }
   let(:fast_args) do
     ["--manifest", manifest, "--backend", "ruby", "--output", result_path, "--fixture", "spec/fixtures/simple/*",
-     "--iterations", "2", "--warmups", "0", "--cold-runs", "1"]
+     "--iterations", "2", "--warmups", "0", "--cold-runs", "1", "--rss-limit-mb", "512"]
   end
 
   after { FileUtils.remove_entry(tmpdir) }
@@ -33,7 +33,8 @@ RSpec.describe ParserBenchmark::CLI do
       manifest = File.join(@dir, "manifest.json")
       File.write(manifest, JSON.generate(source))
       @status = described_class.new(["--manifest", manifest, "--backend", "ruby", "--output", path, "--fixture",
-                                     "spec/fixtures/simple/*", "--iterations", "2", "--warmups", "0", "--cold-runs", "1"]).run
+                                     "spec/fixtures/simple/*", "--iterations", "2", "--warmups", "0", "--cold-runs", "1",
+                                     "--rss-limit-mb", "512"]).run
       @report = JSON.parse(File.read(path))
     end
 
@@ -52,7 +53,8 @@ RSpec.describe ParserBenchmark::CLI do
       expect(fixture.fetch("sha256")).to eq(Digest::SHA256.file(File.join(ParserBenchmark::ROOT, fixture.fetch("path"))).hexdigest)
       expect(report.fetch("revision")).to include("git_sha", "parser_source_sha256", "manifest_matches_sources")
       expect(report.fetch("environment")).to include("ruby", "gems", "os", "cpu_count")
-      expect(report.fetch("method")).to include("iterations" => 2, "warmups" => 0)
+      expect(report.fetch("method")).to include("iterations" => 2, "warmups" => 0, "child_timeout_seconds" => 60,
+                                                "child_rss_limit_bytes" => 512 * 1024 * 1024)
     end
 
     it "reports exactly the declared stages with one sample per iteration" do
@@ -159,6 +161,43 @@ RSpec.describe ParserBenchmark::CLI do
     ENV["EMF_BACKEND"] = previous
   end
 
+  def option_value(args, name, value)
+    args.dup.tap { |a| a[a.index(name) + 1] = value }
+  end
+
+  it "requires an RSS ceiling and a positive one" do
+    without = fast_args.each_slice(2).to_h.except("--rss-limit-mb").to_a.flatten
+    expect { expect(described_class.new(without).run).to eq(2) }.to output(/--rss-limit-mb is required/).to_stderr
+    expect { expect(described_class.new(option_value(fast_args, "--rss-limit-mb", "0")).run).to eq(2) }
+      .to output(/--rss-limit-mb must be a positive integer/).to_stderr
+    expect(File).not_to exist(result_path)
+  end
+
+  %w[0 61].each do |seconds|
+    it "rejects a --timeout of #{seconds} seconds outside the supervisor range" do
+      expect { expect(described_class.new([*fast_args, "--timeout", seconds]).run).to eq(2) }
+        .to output(/--timeout must be within 1..60 seconds/).to_stderr
+      expect(File).not_to exist(result_path)
+    end
+  end
+
+  it "reports a fixture child over the RSS ceiling as an rss_exceeded failure" do
+    expect(described_class.new(option_value(fast_args, "--rss-limit-mb", "1")).run).to eq(1)
+    expect(report.fetch("fixtures").fetch(0)).to include("status" => "failed", "failure" => include("kind" => "rss_exceeded"))
+    expect(report.fetch("failures")).to include(
+      include("path" => "spec/fixtures/simple/image1.emf", "failure" => include("kind" => "rss_exceeded"))
+    )
+  end
+
+  it "reports warm iterations that outrun the deadline as a timeout without partial timings" do
+    args = option_value(fast_args, "--iterations", "100000000") + ["--timeout", "1"]
+    expect(described_class.new(args).run).to eq(1)
+    fixture = report.fetch("fixtures").fetch(0)
+    expect(fixture).to include("status" => "failed", "failure" => include("kind" => "timeout"))
+    expect(fixture).not_to have_key("stages")
+    expect(report.dig("method", "child_timeout_seconds")).to eq(1)
+  end
+
   it "requires the manifest and output options" do
     expect { expect(described_class.new(["--backend", "ruby"]).run).to eq(2) }.to output(/--manifest is required/).to_stderr
   end
@@ -248,7 +287,7 @@ RSpec.describe ParserBenchmark::WarmWorker do
                                              "size_bytes" => bytes.bytesize, "outcome" => "parsed" }
                                          ]))
       status = ParserBenchmark::CLI.new(["--manifest", manifest, "--output", output, "--iterations", "1",
-                                         "--warmups", "0", "--cold-runs", "0"]).run
+                                         "--warmups", "0", "--cold-runs", "0", "--rss-limit-mb", "512"]).run
       fixture = JSON.parse(File.read(output)).fetch("fixtures").first
 
       expect(status).to eq(0)
@@ -292,7 +331,7 @@ RSpec.describe ParserBenchmark::Run do
     ParserBenchmark::Options.new(**ParserBenchmark::CLI::DEFAULTS,
                                  manifest: manifest,
                                  output: result_path, fixtures: ["spec/fixtures/simple/*"],
-                                 iterations: 1, warmups: 0, cold_runs: 2)
+                                 iterations: 1, warmups: 0, cold_runs: 2, rss_limit_bytes: 512 * 1024 * 1024)
   end
   let(:runner) { described_class.new(options, []) }
 

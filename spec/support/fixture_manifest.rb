@@ -3,8 +3,8 @@
 require "bindata"
 require "digest"
 require "json"
-require "io/wait"
 require "rbconfig"
+require_relative "process_supervisor"
 
 module FixtureManifest
   SCHEMA_VERSION = 2
@@ -58,87 +58,62 @@ module FixtureManifest
     end
   end
 
+  # The ceiling has no default: choose it by measuring the valid corpus on the target runner.
+  def rss_limit_bytes_from_env(env = ENV)
+    megabytes = env.fetch("EMF_MANIFEST_RSS_LIMIT_MB", nil)
+    megabytes.to_i * 1024 * 1024 if megabytes&.match?(/\A[1-9]\d*\z/)
+  end
+
   def exception(error)
     { "class" => error.class.name, "message" => error.message.byteslice(0, 2048).encode("UTF-8", invalid: :replace, undef: :replace) }
   end
 
+  # Captures one fixture in a child run under ProcessSupervisor's wall, RSS and output limits.
   class Runner
-    def initialize(timeout: 5, output_limit: 16_384, command: nil)
-      @timeout = timeout
-      @output_limit = output_limit
+    FAILURE_KINDS = { timed_out: "timeout", output_limit: "output_limit",
+                      rss_exceeded: "rss_exceeded", monitor_failed: "monitor_failed" }.freeze
+
+    def initialize(rss_limit_bytes:, timeout: 5, output_limit: 16_384, command: nil)
+      @supervisor = ProcessSupervisor.new(wall_seconds: timeout, rss_limit_bytes: rss_limit_bytes,
+                                          output_limit: output_limit)
       @command = command || [RbConfig.ruby, "-I", File.expand_path("../../lib", __dir__), __FILE__, "--observe"]
     end
 
     def call(path)
-      reader, writer = IO.pipe
-      pid = Process.spawn(*@command, path, out: writer, err: writer, pgroup: true)
-      writer.close
-      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeout
-      output = read_output(reader, deadline)
-      status = wait_status(pid, deadline)
-      return failure("process_failure", "exit_status" => status.exitstatus, "signal" => status.termsig) unless status.success?
+      env, *argv = @command.first.is_a?(Hash) ? @command : [{}, *@command]
+      result = @supervisor.call([*argv, path], env: env)
+      return failure(FAILURE_KINDS.fetch(result.status, "process_failure"), details(result)) unless result.success?
 
-      JSON.parse(output)
-    rescue ReadFailure => e
-      failure(e.message)
+      JSON.parse(result.output)
     rescue JSON::ParserError
       failure("invalid_observation")
-    ensure
-      writer&.close unless writer&.closed?
-      reader&.close
-      reap(pid) if pid
     end
 
     private
 
-    class ReadFailure < StandardError; end
+    def details(result)
+      return {} unless %i[exited signaled].include?(result.status)
 
-    def read_output(reader, deadline)
-      output = +""
-      loop do
-        remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        raise ReadFailure, "timeout" if remaining <= 0 || !reader.wait_readable(remaining)
-
-        chunk = reader.read_nonblock(4096, exception: false)
-        return output if chunk.nil?
-        next if chunk == :wait_readable
-
-        output << chunk
-        raise ReadFailure, "output_limit" if output.bytesize > @output_limit
-      end
-    end
-
-    def wait_status(pid, deadline)
-      loop do
-        result = Process.wait2(pid, Process::WNOHANG)
-        return result.last if result
-        raise ReadFailure, "timeout" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-
-        sleep 0.01
-      end
+      { "exit_status" => result.exit_code, "signal" => result.signal }
     end
 
     def failure(kind, details = {})
       { "detected_format" => nil, "outcome" => nil, "safety_failure" => { "kind" => kind }.merge(details) }
     end
-
-    def reap(pid)
-      Process.kill("KILL", -pid)
-      Process.wait(pid)
-    rescue Errno::ESRCH, Errno::ECHILD
-      nil
-    end
   end
 
   class Inventory
-    def initialize(root)
+    def initialize(root, rss_limit_bytes: FixtureManifest.rss_limit_bytes_from_env)
       @root = File.expand_path(root)
+      @rss_limit_bytes = rss_limit_bytes
     end
 
     def generate
       entries = FixtureManifest.fixtures(@root)
       verify_counts(entries)
-      runner = Runner.new(timeout: 15, output_limit: 16_384)
+      raise ArgumentError, "set EMF_MANIFEST_RSS_LIMIT_MB to the per-fixture RSS ceiling in MiB" unless @rss_limit_bytes
+
+      runner = Runner.new(timeout: 15, output_limit: 16_384, rss_limit_bytes: @rss_limit_bytes)
       {
         "schema_version" => SCHEMA_VERSION,
         "capture" => CAPTURE_METADATA,

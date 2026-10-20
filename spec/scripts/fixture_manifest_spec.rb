@@ -2,9 +2,14 @@
 
 require "spec_helper"
 require "tempfile"
+require "tmpdir"
 require_relative "../support/fixture_manifest"
+require_relative "../support/process_supervisor_helpers"
 
 RSpec.describe FixtureManifest do
+  include ProcessSupervisorHelpers
+
+  let(:rss_limit) { 512 * 1024 * 1024 }
   let(:root) { File.expand_path("../..", __dir__) }
   let(:inventory) { described_class::Inventory.new(root) }
   let(:manifest) { JSON.parse(File.read(File.join(root, "spec/fixtures/manifest.json"))) }
@@ -84,7 +89,7 @@ RSpec.describe FixtureManifest do
     parsed = described_class.observe(File.join(root, "spec/fixtures/simple/image1.emf"))
     expect(parsed).to eq("detected_format" => "emf", "outcome" => "parsed")
     recovered = manifest.fetch("fixtures").find { |entry| entry["outcome"] == "recovered" }
-    expect(described_class::Runner.new.call(File.join(root, recovered.fetch("path")))).to eq(
+    expect(described_class::Runner.new(rss_limit_bytes: rss_limit).call(File.join(root, recovered.fetch("path")))).to eq(
       "detected_format" => "emf", "outcome" => "recovered"
     )
     Tempfile.create("invalid-emf") do |file|
@@ -109,7 +114,8 @@ RSpec.describe FixtureManifest do
   it "generates schema metadata with the explicit baseline observation limits" do
     observation = { "detected_format" => "emf", "outcome" => "parsed" }
     runner = instance_double(described_class::Runner, call: observation)
-    expect(described_class::Runner).to receive(:new).with(timeout: 15, output_limit: 16_384).and_return(runner)
+    inventory = described_class::Inventory.new(root, rss_limit_bytes: rss_limit)
+    expect(described_class::Runner).to receive(:new).with(timeout: 15, output_limit: 16_384, rss_limit_bytes: rss_limit).and_return(runner)
 
     generated = inventory.generate
     expect(generated.fetch("schema_version")).to eq(2)
@@ -127,7 +133,7 @@ RSpec.describe FixtureManifest do
 
   it "bounds hanging children, including children that close their output early" do
     ["sleep 10", "$stdout.close; $stderr.close; sleep 10"].each do |code|
-      runner = described_class::Runner.new(timeout: 0.15, command: [RbConfig.ruby, "-e", code])
+      runner = described_class::Runner.new(timeout: 1, rss_limit_bytes: rss_limit, command: ruby(code))
       expect(runner.call("unused")).to include("outcome" => nil, "safety_failure" => { "kind" => "timeout" })
     end
   end
@@ -139,8 +145,72 @@ RSpec.describe FixtureManifest do
       "puts 'not json'" => "invalid_observation"
     }
     cases.each do |code, kind|
-      runner = described_class::Runner.new(timeout: 2, output_limit: 1024, command: [RbConfig.ruby, "-e", code])
+      runner = described_class::Runner.new(timeout: 2, output_limit: 1024, rss_limit_bytes: rss_limit, command: ruby(code))
       expect(runner.call("unused").fetch("safety_failure")).to include("kind" => kind)
+    end
+  end
+
+  it "passes a leading environment hash in the command to the supervised child" do
+    code = 'puts JSON.generate("outcome" => ENV["EMF_RUNNER_PROBE"], "unset" => ENV.key?("EMF_RUNNER_GONE"))'
+    command = [{ "EMF_RUNNER_PROBE" => "seen", "EMF_RUNNER_GONE" => nil }, RbConfig.ruby, "-rjson", "-e", code]
+    runner = described_class::Runner.new(timeout: 5, rss_limit_bytes: rss_limit, command: command)
+    ENV["EMF_RUNNER_GONE"] = "present"
+    expect(runner.call("unused")).to eq("outcome" => "seen", "unset" => false)
+  ensure
+    ENV.delete("EMF_RUNNER_GONE")
+  end
+
+  describe "supervised capture" do
+    it "records an over-RSS child as a safety failure, not an observation" do
+      code = "a = 'x' * 120_000_000; sleep 30"
+      runner = described_class::Runner.new(timeout: 5, rss_limit_bytes: 64 * 1024 * 1024, command: ruby(code))
+      expect(runner.call("unused")).to eq(
+        "detected_format" => nil, "outcome" => nil, "safety_failure" => { "kind" => "rss_exceeded" }
+      )
+    end
+
+    it "records a failed RSS probe as a safety failure" do
+      Dir.mktmpdir("emf-failing-ps-") do |dir|
+        File.write(File.join(dir, "ps"), "#!/bin/sh\nexit 1\n")
+        File.chmod(0o700, File.join(dir, "ps"))
+        runner = described_class::Runner.new(timeout: 5, rss_limit_bytes: rss_limit,
+                                             command: [RbConfig.ruby, "--disable-gems", "-e", "sleep 30"])
+        result = with_path(dir) { runner.call("unused") }
+        expect(result).to include("outcome" => nil, "safety_failure" => { "kind" => "monitor_failed" })
+      end
+    end
+
+    it "does not launder a clean zero exit with valid JSON when a limit was breached" do
+      code = "a = 'x' * 120_000_000; sleep 0.3; puts '{\"detected_format\":\"emf\",\"outcome\":\"parsed\"}'"
+      runner = described_class::Runner.new(timeout: 5, rss_limit_bytes: 64 * 1024 * 1024, command: ruby(code))
+      expect(runner.call("unused").fetch("safety_failure")).to eq("kind" => "rss_exceeded")
+    end
+
+    it "reports exit status and signal for crashed children" do
+      runner = described_class::Runner.new(timeout: 2, rss_limit_bytes: rss_limit, command: ruby("exit 9"))
+      expect(runner.call("unused").fetch("safety_failure")).to eq(
+        "kind" => "process_failure", "exit_status" => 9, "signal" => nil
+      )
+    end
+
+    it "requires an explicit RSS ceiling and never invents one" do
+      expect { described_class::Runner.new(rss_limit_bytes: nil) }.to raise_error(ArgumentError, /rss_limit_bytes/)
+      expect(described_class.rss_limit_bytes_from_env({})).to be_nil
+      expect(described_class.rss_limit_bytes_from_env("EMF_MANIFEST_RSS_LIMIT_MB" => "0")).to be_nil
+      expect(described_class.rss_limit_bytes_from_env("EMF_MANIFEST_RSS_LIMIT_MB" => "256")).to eq(256 * 1024 * 1024)
+      expect { described_class::Inventory.new(root, rss_limit_bytes: nil).generate }
+        .to raise_error(ArgumentError, /EMF_MANIFEST_RSS_LIMIT_MB/)
+    end
+
+    it "captures real fixtures exactly as the unsupervised runner did" do
+      runner = described_class::Runner.new(timeout: 15, rss_limit_bytes: rss_limit)
+      expected = {
+        "spec/fixtures/simple/image1.emf" => { "detected_format" => "emf", "outcome" => "parsed" },
+        "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-13-105759.emf" => { "detected_format" => "emf", "outcome" => "recovered" },
+        "spec/fixtures/wmf/placeable-line.wmf" => { "detected_format" => "wmf", "outcome" => "parsed" },
+        "spec/fixtures/emf-ea/EA-test-file-001.emf" => { "detected_format" => "emf", "outcome" => "parsed" }
+      }
+      expect(expected.keys.to_h { |path| [path, runner.call(File.join(root, path))] }).to eq(expected)
     end
   end
 end

@@ -158,8 +158,8 @@ module EmfsvgBenchmark
       command = [{ "GEM_PATH" => gem_paths.uniq.join(File::PATH_SEPARATOR), "BUNDLER_SETUP" => nil },
                  RbConfig.ruby, "-I", File.join(ParserBenchmark::ROOT, "lib"), "-I", File.join(@checkout.path, "lib"), SCRIPT,
                  "--emfsvg-path", @checkout.path, "--revision", @checkout.revision, "--backend", @options.backend, *args]
-      runner = FixtureManifest::Runner.new(timeout: @options.timeout, output_limit: self.class::OUTPUT_LIMIT, command: command)
-      defined?(Bundler) ? Bundler.with_unbundled_env { runner.call(path) } : runner.call(path)
+      supervised = ParserBenchmark.runner(@options, self.class::OUTPUT_LIMIT, command)
+      defined?(Bundler) ? Bundler.with_unbundled_env { supervised.call(path) } : supervised.call(path)
     end
 
     def cold_load(selected)
@@ -217,7 +217,8 @@ module EmfsvgBenchmark
 
     def parser(options)
       super.tap do |opts|
-        opts.banner = "Usage: EMFSVG_PATH=/path/to/emfsvg ruby bench/emfsvg.rb --manifest FILE --backend ruby --output FILE"
+        opts.banner = "Usage: EMFSVG_PATH=/path/to/emfsvg ruby bench/emfsvg.rb " \
+                      "--manifest FILE --backend ruby --output FILE --rss-limit-mb MB"
         opts.on("--emfsvg-path PATH", "Pinned emfsvg checkout (or EMFSVG_PATH)") { |value| @consumer_path = value }
         opts.on("--revision SHA", "Expected emfsvg commit (default #{PINNED_REVISION})") { |value| @revision = value }
       end
