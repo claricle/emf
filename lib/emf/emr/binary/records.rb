@@ -99,7 +99,7 @@ module Emf
         autoload :StretchBlt, "emf/emr/binary/records/stretch_blt"
         autoload :MaskBlt, "emf/emr/binary/records/mask_blt"
         autoload :PlgBlt, "emf/emr/binary/records/plg_blt"
-        autoload :SetDIBitsToDevice, "emf/emr/binary/records/set_dibits_to_device"
+        autoload :SetDibitsToDevice, "emf/emr/binary/records/set_dibits_to_device"
         autoload :AlphaBlend, "emf/emr/binary/records/alpha_blend"
         autoload :TransparentBlt, "emf/emr/binary/records/transparent_blt"
         autoload :SetLayout, "emf/emr/binary/records/set_layout"
@@ -218,7 +218,7 @@ module Emf
           Binary::TypeCodes::STRETCHBLT => :StretchBlt,
           Binary::TypeCodes::MASKBLT => :MaskBlt,
           Binary::TypeCodes::PLGBLT => :PlgBlt,
-          Binary::TypeCodes::SETDIBITSTODEVICE => :SetDIBitsToDevice,
+          Binary::TypeCodes::SETDIBITSTODEVICE => :SetDibitsToDevice,
           Binary::TypeCodes::ALPHABLEND => :AlphaBlend,
           Binary::TypeCodes::SETLAYOUT => :SetLayout,
           Binary::TypeCodes::TRANSPARENTBLT => :TransparentBlt,
