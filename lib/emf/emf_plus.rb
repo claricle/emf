@@ -10,5 +10,7 @@ module Emf
     autoload :ObjectChain, "emf/emf_plus/object_chain"
     autoload :Objects, "emf/emf_plus/objects"
     autoload :Effects, "emf/emf_plus/effects"
+    autoload :Stream, "emf/emf_plus/stream"
+    autoload :StaleStreamError, "emf/error"
   end
 end

@@ -16,4 +16,8 @@ module Emf
   end
 
   class SerializeError < Error; end
+
+  module EmfPlus
+    class StaleStreamError < Error; end
+  end
 end
