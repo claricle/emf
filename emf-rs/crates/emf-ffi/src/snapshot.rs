@@ -35,7 +35,7 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::InvertRgn { .. } => 78,
         RecordData::PaintRgn { .. } => 79,
         RecordData::ExtSelectClipRgn { .. } => 80,
-        RecordData::Raw => 0,
+        RecordData::Raw | RecordData::Bitmap(_) | RecordData::GradientFill(_) => 0,
         RecordData::Eof(_) => 1,
         RecordData::SetMapMode { .. } => 2,
         RecordData::Polyline { .. } => 3,
@@ -397,7 +397,7 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
         RecordData::ExtSelectClipRgn { region, .. } => region
             .as_ref()
             .map_or(Ok(8), |region| region_len(region, 8)),
-        RecordData::Raw => Ok(0),
+        RecordData::Raw | RecordData::Bitmap(_) | RecordData::GradientFill(_) => Ok(0),
         RecordData::ScaleViewportExtEx { .. } | RecordData::ScaleWindowExtEx { .. } => Ok(16),
         RecordData::SetWorldTransform { .. } => Ok(24),
         RecordData::ModifyWorldTransform { .. } => Ok(28),
@@ -633,7 +633,7 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
                     region_payload(&mut out, region)?;
                 }
             }
-            RecordData::Raw => {}
+            RecordData::Raw | RecordData::Bitmap(_) | RecordData::GradientFill(_) => {}
             RecordData::ScaleViewportExtEx { scale } | RecordData::ScaleWindowExtEx { scale } => {
                 for value in [scale.x_num, scale.x_denom, scale.y_num, scale.y_denom] {
                     i32_field(&mut out, value);
@@ -1015,6 +1015,21 @@ mod tests {
             assert_eq!(cursor.u64(), count);
         }
         cursor
+    }
+
+    #[test]
+    fn bitmap_and_gradient_core_records_export_as_compatible_raw_families() {
+        for (kind, length) in [(93, 24), (118, 28)] {
+            let mut input = fixture_header(88);
+            record(&mut input, kind, &vec![0; length]);
+            let document = emf_core::parse(&input, &emf_core::ParseLimits::default()).unwrap();
+            assert!(!matches!(document.records()[0].data(), RecordData::Raw));
+            assert_eq!(family(document.records()[0].data()), 0);
+            assert_eq!(payload_len(document.records()[0].data()).unwrap(), 0);
+            let bytes = encode(&document).unwrap();
+            assert_eq!(bytes.len(), 56 + 112 + 88 + 40);
+            assert_eq!(emf_core::serialize(&document).unwrap(), input);
+        }
     }
 
     #[test]
