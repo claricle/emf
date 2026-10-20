@@ -122,7 +122,7 @@ are not reported separately; `parse` covers both (and runs format detection twic
 `method.inseparable_boundaries` lists this in the output.
 
 For native, `parse` includes backend selection/loading, Rust parsing, ABI snapshot
-transfer and Ruby model hydration with deferred wire construction. These costs are not timed separately.
+transfer and Ruby model hydration with deferred wire construction. These costs are not timed separately in `bench/parser.rb`; the component diagnostic below separates the available adapter boundaries.
 The current adapter loads on each parse and serialize call; serialization uses the
 Ruby serializer. First wire traversal includes deferred BinData construction and
 snapshots; repeated traversal reuses those wires. Native
@@ -136,3 +136,35 @@ that result is never claimed to be it.
 Memory is per child: Linux reads `VmRSS`/`VmHWM` from `/proc` (true peak); elsewhere
 `ps` RSS is sampled between trials and can miss short spikes. `allocated_objects`
 counts Ruby objects, not bytes or Rust allocations.
+
+
+## Native component diagnostic
+
+Use the same manifest and process limits to locate costs inside the native EMF
+adapter. This command requires a native library and always forces the native
+backend; it cannot fall back to Ruby.
+
+```sh
+EMF_NATIVE_LIBRARY=/absolute/path/to/libemf_ffi.dylib bundle exec ruby bench/native_components.rb --manifest spec/fixtures/manifest.json --fixture spec/fixtures/simple/image1.emf --iterations 20 --warmups 5 --rss-limit-mb 512 --output tmp/bench/native-components.json
+```
+
+The report separates `parse_handle`, `snapshot_copy`, `snapshot_decode`,
+`hydration` and `cleanup`, with an instrumented `component_total` and a separate
+public `Emf.parse` measurement (`public_parse`). Components reuse a loader created
+outside timing; public parsing includes backend selection and loading. The parse
+boundary includes FFI and handle setup, snapshot copying includes ABI buffer
+cleanup, and document cleanup includes block unwinding. The component total
+includes instrumentation overhead; the public measurement is a separate sample,
+so it must not be added to that total.
+
+Validation checks byte identity against the input and public Ruby/native output,
+then exercises the representative SetMapMode edit after document cleanup when
+that record exists. Validation and mutation are outside the timers. Fixture,
+source and library identities accompany the results. Deadlines, RSS limits and
+failure reporting use the parser benchmark's supervisor; a failed fixture never
+produces accepted partial timings.
+
+This diagnostic supports EMF and EMF+ snapshots, with no cold runs or
+per-component allocation measurements. WMF inputs fail explicitly. It measures
+adapter boundaries rather than isolated Rust kernels, and does not measure a
+native serialization kernel or establish a speedup.
