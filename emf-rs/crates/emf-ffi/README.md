@@ -5,6 +5,11 @@ The public contract is [include/emf.h](include/emf.h). Run the Rust boundary
 tests with `cargo test -p emf-ffi` and the independent C client with
 `sh crates/emf-ffi/tests/run-c-smoke.sh`.
 
+On Apple targets the build script gives the shared library the stable install
+name `@rpath/libemf_ffi.dylib`, preventing the build directory from changing its
+identity and signature. This applies only to the cdylib; consumers may still load
+the library by its installed absolute path.
+
 ABI version 1 provides format detection, immutable parsed EMF documents, document
 counts, record descriptor batches, owned raw record buffers, byte-preserving
 serialization, and owned errors. Detection recognizes WMF signatures; parsing
