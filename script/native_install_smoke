@@ -139,12 +139,14 @@ class NativeInstallSmoke
   def abi_version(path)
     handle = Fiddle::Handle.new(path)
     Fiddle::Function.new(handle[@abi_symbol], [], Fiddle::TYPE_INT).call
+  rescue Fiddle::DLError => e
+    fail!("#{path} does not export #{@abi_symbol.inspect}: #{e.message}")
   ensure
     handle&.close
   end
 end
 
-options = { abi_symbol: "emf_ffi_abi_version", require_native: false, forbid_compiler: false, resolve_dependencies: false }
+options = { abi_symbol: "emf_abi_version", require_native: false, forbid_compiler: false, resolve_dependencies: false }
 OptionParser.new do |o|
   o.on("--directory DIR") { |v| options[:directory] = v }
   o.on("--platform NAME") { |v| options[:platform] = v }

@@ -84,6 +84,11 @@ RSpec.describe "native gem packaging scripts" do
     expect([status.exitstatus, out]).to match([0, /reports ABI 1/])
   end
 
+  it "names the real exported ABI symbol by default and reports a missing symbol as a failure" do
+    _out, err, status = script.call("native_install_smoke", "--directory", @good, "--platform", @platform, "--require-native")
+    expect([status.exitstatus, err]).to match([1, /native install smoke failed: .*does not export "emf_abi_version"/])
+  end
+
   it "fails the install when dependencies must be resolved and bindata is not in the directory" do
     _out, err, status = script.call("native_install_smoke", "--directory", @good, "--platform", @platform,
                                     "--abi-symbol", "emf_probe_abi_version", "--require-native", "--resolve-dependencies")
