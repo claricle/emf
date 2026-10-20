@@ -162,6 +162,22 @@ RSpec.describe "EMF+ record edits" do
       expect(decode(raw).with(emf_object_id: 3).to_binary).to eq(record(0x400B, body + ("\0" * 4), flags: 3, data_size: 4 + 32 + 4))
     end
 
+    it "keeps unknown payload that precedes alignment padding, judged by DataSize" do
+      data = [0x11223344].pack("V") + "\x91\x92\x00\x00".b
+      edited = decode(record(0x4009, data, data_size: 6)).with(flags: 1)
+
+      expect(edited.data_size).to eq(6)
+      expect(edited.to_binary).to eq(record(0x4009, data, flags: 1, data_size: 6))
+    end
+
+    it "keeps a zero-valued unknown payload byte that lies inside DataSize" do
+      data = [0x11223344].pack("V") + "\x00\x00\x00\x00".b
+      edited = decode(record(0x4009, data, data_size: 5)).with(flags: 1)
+
+      expect(edited.data_size).to eq(5)
+      expect(edited.to_binary).to eq(record(0x4009, data, flags: 1, data_size: 5))
+    end
+
     it "round-trips an empty edit byte-for-byte" do
       raw = record(0x4003, "abcde\0\0\0", data_size: 5)
 

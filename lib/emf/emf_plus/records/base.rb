@@ -35,9 +35,10 @@ module Emf
         #   body fields:  any BinData field of the body. Length fields and
         #                 their arrays are independent, so a variable-length
         #                 edit sets both (item_count: 3, rect_data: {...}).
-        # Size and DataSize are recomputed. Trailing bytes that are only
-        # alignment padding are dropped (the new Size re-pads); anything else
-        # is unknown data, kept after the body and counted in DataSize.
+        # Size and DataSize are recomputed. Trailing bytes beyond the original
+        # DataSize are alignment padding and are dropped (the new Size re-pads);
+        # trailing bytes inside it are unknown data, kept after the body and
+        # counted in DataSize.
         # Changing a flag that selects the body layout (compressed, relative)
         # keeps the other fields; array elements of the newly selected layout
         # start zeroed unless the same call supplies them.
@@ -89,13 +90,9 @@ module Emf
         end
 
         def edited_frame(new_flags, new_body)
-          kept = padding? ? "".b : trailing
+          kept = trailing.byteslice(0, data_size - body.num_bytes)
           Frame.new(type: type, flags: new_flags, size: Frame::HEADER_BYTES, data_size: 0, data: "",
                     offset: offset, comment_index: comment_index).with_data(new_body.to_binary_s + kept)
-        end
-
-        def padding?
-          trailing.bytesize < 4 && trailing.each_byte.all?(&:zero?)
         end
 
         def read_body(frame)
