@@ -53,6 +53,7 @@ module EmfsvgBenchmark
     end
 
     def call
+      ENV["EMF_BACKEND"] = @backend
       started = ParserBenchmark::Clock.now
       require "emfsvg"
       loaded_ns = ParserBenchmark::Clock.now - started
@@ -156,7 +157,7 @@ module EmfsvgBenchmark
       gem_paths += Bundler.unbundled_env.fetch("GEM_PATH", "").split(File::PATH_SEPARATOR) if defined?(Bundler)
       command = [{ "GEM_PATH" => gem_paths.uniq.join(File::PATH_SEPARATOR), "BUNDLER_SETUP" => nil },
                  RbConfig.ruby, "-I", File.join(ParserBenchmark::ROOT, "lib"), "-I", File.join(@checkout.path, "lib"), SCRIPT,
-                 "--emfsvg-path", @checkout.path, "--revision", @checkout.revision, *args]
+                 "--emfsvg-path", @checkout.path, "--revision", @checkout.revision, "--backend", @options.backend, *args]
       runner = FixtureManifest::Runner.new(timeout: @options.timeout, output_limit: self.class::OUTPUT_LIMIT, command: command)
       defined?(Bundler) ? Bundler.with_unbundled_env { runner.call(path) } : runner.call(path)
     end
@@ -171,7 +172,13 @@ module EmfsvgBenchmark
     end
 
     def method_description
-      super.merge("stages" => STAGES, "inseparable_boundaries" => [],
+      boundaries = []
+      if @options.backend == "native"
+        boundaries = @backend_description.inseparable_boundaries.first(1)
+        boundaries << "Backend selection and native adapter loading occur inside each conversion; " \
+                      "Ruby allocated_objects excludes Rust allocations."
+      end
+      super.merge("stages" => STAGES, "inseparable_boundaries" => boundaries,
                   "file_io" => "from_bytes excludes file IO; from_file includes the file read",
                   "golden_policy" => "Exact bytes checked after each timed region; mismatches fail the fixture. No golden is rewritten.",
                   "dependencies" => "Children retain configured and unbundled gem directories outside Bundler; " \
@@ -221,7 +228,7 @@ module EmfsvgBenchmark
       $stdout.reopen(File::NULL, "w")
       $stderr.reopen(File::NULL, "w")
       worker = Worker.new(checkout: @checkout, cold: options.worker == "cold", path: options.path,
-                          sha256: options.sha256, iterations: options.iterations, warmups: options.warmups)
+                          sha256: options.sha256, iterations: options.iterations, warmups: options.warmups, backend: options.backend)
       output.write(JSON.generate(worker.call))
       output.close
       0

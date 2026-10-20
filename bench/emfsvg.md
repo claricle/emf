@@ -11,7 +11,18 @@ EMFSVG_PATH=/path/to/emfsvg ruby bench/emfsvg.rb \
 
 The default consumer commit is `101356dcf673841fda0693076131bca7a0f34948`.
 `--revision SHA` selects another explicit pin. A different HEAD or tracked consumer
-changes exits 2 before measurements. Native is unavailable and exits 2. The adapter
+changes exits 2 before measurements. Both `--backend ruby` and `--backend native`
+force that parser backend in every warm and cold child, overriding `EMF_BACKEND`.
+For native conversion, supply the library explicitly:
+
+```sh
+EMFSVG_PATH=/path/to/emfsvg EMF_NATIVE_LIBRARY=/path/to/libemf_ffi.dylib \
+  ruby bench/emfsvg.rb --manifest spec/fixtures/manifest.json \
+  --backend native --output tmp/bench/emfsvg-native.json
+```
+
+An unavailable library, unsupported input or conversion error fails the run with
+exit 1 and a reported child error; native never falls back to Ruby. The adapter
 never updates golden files. It shares the parser benchmark's manifest selection,
 iteration, warmup, cold-run, timeout and output controls; see [README.md](README.md).
 For a small trial, add `--fixture 'spec/fixtures/simple/*' --iterations 2 --warmups 0
@@ -30,6 +41,12 @@ explicitly on the load path. They verify the resolved `Emf.parse` and
 `Emfsvg.from_bytes` source files. The report includes consumer revision and source
 digest, parser revision/source digest, input manifest and fixture hashes, golden
 hashes, Ruby/OS/CPU metadata, resolved source paths, and actual loaded gem versions.
+Native reports also identify the selected library path, SHA-256 and size; build
+profile and compiler remain unknown because the library exposes no build metadata.
+Native parsing, ABI snapshot transfer, Ruby model/wire hydration and SVG rendering
+share each conversion's timed region. Native adapter loading is included; Ruby
+allocation counts exclude Rust allocations. These are complete conversion timings,
+not isolated Rust parsing timings.
 Installed runtime gems must be supplied by the caller; this adapter does not resolve
 or validate the consumer gemspec constraints. To reproduce a run, provision the
 reported runtime gems and external font environment. In particular, font lookup
