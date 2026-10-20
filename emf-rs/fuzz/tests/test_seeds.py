@@ -14,7 +14,7 @@ class SeedManifestTest(unittest.TestCase):
 
     def test_complete_original_corpus_and_extensions(self):
         self.assertEqual(validate(self.manifest), {
-            "original-valid": 208, "original-corrupt": 21, "wmf": 2, "synthetic": 6})
+            "original-valid": 208, "original-corrupt": 21, "wmf": 18, "synthetic": 6})
 
     def test_missing_original_rejected(self):
         del self.manifest["seeds"][0]

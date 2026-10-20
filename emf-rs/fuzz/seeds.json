@@ -2844,6 +2844,198 @@
         "serialize",
         "ffi"
       ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-geometry-standard.wmf",
+      "sha256": "dc817a68e8b93c0884333625fc56c454fb5f6d46dcdd490eca6fc339a117a1ba",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-geometry-placeable.wmf",
+      "sha256": "0d9cd821e20cf6bee2b08bb8ce402356cb47f218433933ba5185e51db49e33d7",
+      "size_bytes": 66,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-text-standard.wmf",
+      "sha256": "7544db4c3eab9513570e4b41af416ad63c84c72434a3ccff2e0302605c532873",
+      "size_bytes": 46,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-text-placeable.wmf",
+      "sha256": "f732fd597610820089cd430f65318dfd4d08ee8dcd0ae6d08d5faaf7134f3442",
+      "size_bytes": 68,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-bitmap-standard.wmf",
+      "sha256": "9c379300cc4d9456786708e63dfab0533978e53abe70ab7b1238e1c46e122399",
+      "size_bytes": 94,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-bitmap-placeable.wmf",
+      "sha256": "74349deb27bd0f0665279e0fd70b42c6f005ac76f4b09db59e656bf5cd17fd22",
+      "size_bytes": 116,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-unknown-standard.wmf",
+      "sha256": "ed56343bfee3f0df7304e690768f981133f5a399f275719cca38a98d37d98548",
+      "size_bytes": 38,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/valid-unknown-placeable.wmf",
+      "sha256": "ac77dce7597c24aef9b12f99163d82cee587914b9e46bc7276f79295e8c7ddbf",
+      "size_bytes": 60,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: workload-repetitions-1; Ruby outcome: parsed (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/header-size.wmf",
+      "sha256": "f0d8090c44d7882a43aa921416afe58ce5c49fb5b88379a0a325ce920b7757e0",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set standard header size at byte 2 to 8 words; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/file-size.wmf",
+      "sha256": "7662db66c627bc4892099295e2f978efb6d590678c70604f3a5fdf69d4cd6e69",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set standard file size at byte 6 to 8 words; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/max-record.wmf",
+      "sha256": "b42d4321621f5b0de5e816d38980075725ea4f59dc87c16ca6c2583d58bdb067",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set maximum record size at byte 12 to zero; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/zero-record.wmf",
+      "sha256": "35d4d0426e103321f9145997b992c92000d72fe600c01b585cc22b02bf7723b9",
+      "size_bytes": 44,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set first record size at byte 18 to zero; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/missing-eof.wmf",
+      "sha256": "44bd1f0c32f91a8a1aed56a1651e5a2bec1d6b0062a7bd782736aafa10a09daa",
+      "size_bytes": 38,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: remove final 6-byte EOF record and repair standard file size; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/negative-text-count.wmf",
+      "sha256": "004b084ceb1deaecc54f79ea6960cec08f6a5a6c59b58c193fd07d6182af31ea",
+      "size_bytes": 46,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set text count at byte 24 to signed -1; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/placeable-checksum.wmf",
+      "sha256": "add409bf94d49a7353acf99d2e63e32e3d083a34aa155a9d1b15497287bdbef9",
+      "size_bytes": 66,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: XOR placeable checksum byte 20 with 1; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
+    },
+    {
+      "path": "emf-rs/fuzz/seeds/wmf-resilience/bitmap-short-record.wmf",
+      "sha256": "722f8176d6c3704d9d9025db5e5e9347c34f68b579d999754890ca6627ed3b94",
+      "size_bytes": 94,
+      "kind": "wmf",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set first bitmap record size at byte 18 to 3 words; Ruby outcome: rejected (native recovery may differ).",
+      "targets": [
+        "parse",
+        "serialize",
+        "ffi"
+      ]
     }
   ]
 }

@@ -96,6 +96,27 @@ RSpec.describe WmfResilienceSeeds do
     end
   end
 
+  it "registers every generated input unchanged for all fuzz targets" do
+    root = File.expand_path("../..", __dir__)
+    manifest = JSON.parse(File.read(File.join(root, "emf-rs/fuzz/seeds.json")))
+    registered = manifest.fetch("seeds").select do |entry|
+      entry.fetch("path").start_with?("emf-rs/fuzz/seeds/wmf-resilience/")
+    end
+
+    expect(registered.length).to eq(seeds.length)
+    seeds.each do |seed|
+      path = "emf-rs/fuzz/seeds/wmf-resilience/#{seed.fetch('name')}.wmf"
+      entry = registered.find { |row| row.fetch("path") == path }
+      expect(entry).to include(
+        "kind" => "wmf", "sha256" => Digest::SHA256.hexdigest(seed.fetch("bytes")),
+        "size_bytes" => seed.fetch("bytes").bytesize
+      )
+      expect(entry.fetch("targets")).to match_array(%w[parse serialize ffi])
+      expect(entry.fetch("provenance")).to include("synthetic WMF", seed.fetch("recipe"))
+      expect(File.binread(File.join(root, path))).to eq(seed.fetch("bytes"))
+    end
+  end
+
   it "runs the command-line writer and reports the absolute manifest path" do
     script = File.expand_path("../../script/wmf_resilience_seeds", __dir__)
     Dir.mktmpdir do |output_dir|
