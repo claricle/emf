@@ -94,12 +94,9 @@ module Emf
         Fields.call(record.fetch(:payload), family)
       end
 
-      def require_length(payload, length)
-        raise FormatError, "invalid native typed payload length" unless payload.bytesize == length
-      end
-
       def raw_fields(record, raw)
-        require_length(record.fetch(:payload), 0)
+        raise FormatError, "invalid native typed payload length" unless record.fetch(:payload).empty?
+
         type = record.fetch(:type)
         if !SUPPORTED_TYPES.include?(type) && Emr::Binary::Records.lookup(type) != Emr::Binary::Records::Raw
           raise FormatError, "native backend does not support typed EMR record #{type}"
@@ -109,7 +106,8 @@ module Emf
       end
 
       def eof_fields(payload, raw)
-        require_length(payload, 12)
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 12
+
         entries, offset, last = payload.unpack("V3")
         raise FormatError, "native backend does not support extended or paletted EOF records" unless entries.zero? && raw.bytesize == 20
 
@@ -120,7 +118,8 @@ module Emf
         raise FormatError, "invalid native COMMENT payload" if payload.bytesize < 8
 
         count = payload.unpack1("Q<")
-        require_length(payload, 8 + count)
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 8 + count
+
         data = payload.byteslice(8..) + (raw.byteslice((12 + count)..) || "".b)
         [Emr::Binary::Records::Comment, { cb_data: count, data: data }]
       end
