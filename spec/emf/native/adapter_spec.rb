@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "emf/native/fields"
 require "rbconfig"
 require "open3"
 
