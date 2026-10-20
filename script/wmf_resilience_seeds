@@ -1,0 +1,37 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require_relative "support/wmf_resilience_seeds"
+
+module WmfResilienceSeeds
+  class CLI
+    def initialize(argv)
+      @argv = argv
+    end
+
+    def run
+      output_dir = nil
+      parser = OptionParser.new do |options|
+        options.banner = "Usage: script/wmf_resilience_seeds --output-dir DIR"
+        options.on("--output-dir DIR", "Directory for synthetic WMF seeds and manifest") { |value| output_dir = value }
+        options.on("-h", "--help", "Show this help") do
+          puts options
+          return 0
+        end
+      end
+      parser.parse!(@argv)
+      raise ArgumentError, "unexpected arguments: #{@argv.join(' ')}" unless @argv.empty?
+      raise ArgumentError, "--output-dir is required" if output_dir.nil? || output_dir.empty?
+
+      WmfResilienceSeeds.write(output_dir: output_dir)
+      puts File.expand_path(File.join(output_dir, MANIFEST_FILENAME))
+      0
+    rescue ArgumentError, OptionParser::ParseError => e
+      warn e.message
+      1
+    end
+  end
+end
+
+exit WmfResilienceSeeds::CLI.new(ARGV).run if $PROGRAM_NAME == __FILE__
