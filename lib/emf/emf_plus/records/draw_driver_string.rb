@@ -12,6 +12,9 @@ module Emf
         SOLID_COLOR_FLAG = 0x8000
         OBJECT_ID_MASK = 0x00FF
         CMAP_LOOKUP = 0x00000001
+        VERTICAL = 0x00000002
+        REALIZED_ADVANCE = 0x00000004
+        LIMIT_SUBPIXEL = 0x00000008
 
         class DrawDriverStringBody < BinData::Record
           endian :little
@@ -32,9 +35,22 @@ module Emf
         def brush_id = body.brush_id
         def options_flags = body.options_flags
         def cmap_lookup? = options_flags.anybits?(CMAP_LOOKUP)
+        def vertical? = options_flags.anybits?(VERTICAL)
+        def realized_advance? = options_flags.anybits?(REALIZED_ADVANCE)
+        def limit_subpixel? = options_flags.anybits?(LIMIT_SUBPIXEL)
         def matrix_present? = body.matrix_present == 1
         def glyph_count = body.glyph_count
         def glyphs = body.glyphs.to_a
+
+        # Glyphs are UTF-16 code units only under CmapLookup; otherwise they are
+        # font glyph indices and carry no text.
+        def text
+          return unless cmap_lookup?
+
+          glyphs.pack("v*").force_encoding(Encoding::UTF_16LE)
+                .encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
+        end
+
         def glyph_positions = body.glyph_positions.map { |p| [p.x, p.y] }
         def transform_matrix = matrix_present? ? body.transform_matrix.to_a : nil
       end
