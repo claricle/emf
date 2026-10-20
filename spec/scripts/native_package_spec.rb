@@ -99,6 +99,16 @@ RSpec.describe "native gem packaging scripts" do
     expect([status.exitstatus, err, out]).to match([1, /compiler on PATH: cc/, ""])
   end
 
+  it "finds a Windows compiler through PATHEXT when --forbid-compiler is given" do
+    with_compiler = Dir.mktmpdir("emf-fake-gcc", @tmp)
+    FileUtils.touch(File.join(with_compiler, "gcc.exe"))
+    File.chmod(0o755, File.join(with_compiler, "gcc.exe"))
+    out, err, status = Open3.capture3({ "PATH" => with_compiler, "PATHEXT" => ".exe" }, RbConfig.ruby,
+                                      File.join(root, "script/native_install_smoke"),
+                                      "--directory", @good, "--platform", @platform, "--forbid-compiler")
+    expect([status.exitstatus, err, out]).to match([1, /compiler on PATH: gcc/, ""])
+  end
+
   it "rejects a platform gem missing its library" do
     dir = rebuild.call(platform_gem) do |extracted, spec|
       FileUtils.rm(Dir.glob(File.join(extracted, "lib/emf/native", spec.platform.to_s, "*")))

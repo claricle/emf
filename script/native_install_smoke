@@ -60,8 +60,15 @@ class NativeInstallSmoke
   end
 
   def compilers
-    COMPILERS.select do |tool|
-      ENV.fetch("PATH", "").split(File::PATH_SEPARATOR).any? { |dir| File.executable?(File.join(dir, tool)) }
+    COMPILERS.select { |tool| on_path?(tool) }
+  end
+
+  # PATHEXT is honoured on any host where it is set, so Windows compilers
+  # (gcc.exe, rustc.exe) are found and the check can be tested off Windows.
+  def on_path?(tool)
+    exts = ENV.fetch("PATHEXT", "").split(";").push("")
+    ENV.fetch("PATH", "").split(File::PATH_SEPARATOR).any? do |dir|
+      exts.any? { |ext| File.executable?(File.join(dir, tool + ext)) }
     end
   end
 
