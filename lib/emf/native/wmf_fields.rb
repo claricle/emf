@@ -2,6 +2,7 @@
 
 require_relative "wmf_text_fields"
 require_relative "wmf_palette_fields"
+require_relative "wmf_region_fields"
 
 module Emf
   module Native
@@ -35,7 +36,11 @@ module Emf
         return font if @function == 0xFB
         return state(Wmf::Binary::STATE_RECORDS.fetch(@function)) if Wmf::Binary::STATE_RECORDS.key?(@function)
 
-        WmfPaletteFields.new(@record, @raw).call
+        if Wmf::RegionCodec::RECORDS.key?(@function)
+          WmfRegionFields.new(@record, @raw).call
+        else
+          WmfPaletteFields.new(@record, @raw).call
+        end
       end
 
       def font

@@ -53,7 +53,8 @@ module Emf
       end
 
       def serialize_record(record)
-        return PaletteCodec.encode(record) if PaletteCodec::FUNCTIONS.key?(record.class)
+        codec = Binary.prefix_codec(record)
+        return codec.encode(record) if codec
 
         case record
         when Model::Wmf::Records::Eof then [3, 0].pack("Vv")

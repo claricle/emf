@@ -2,6 +2,7 @@
 
 require "emf/wmf/text_codec"
 require "emf/wmf/palette_codec"
+require "emf/wmf/region_codec"
 
 module Emf
   module Wmf
@@ -52,7 +53,7 @@ module Emf
         0x49 => Model::Wmf::Records::SetLayout
       }.freeze
       STATE_FUNCTIONS = STATE_RECORDS.invert.freeze
-      PREFIX_FUNCTIONS = ([0xFB] + STATE_RECORDS.keys + PaletteCodec::RECORDS.keys).freeze
+      PREFIX_FUNCTIONS = ([0xFB] + STATE_RECORDS.keys + PaletteCodec::RECORDS.keys + RegionCodec::RECORDS.keys).freeze
 
       OBJECT_RECORDS = {
         0xFA => Model::Wmf::Records::CreatePenIndirect,
@@ -65,9 +66,13 @@ module Emf
       OBJECT_CREATORS = [0xFA, 0xFC, 0xFB, 0xF7, 0xF9, 0xFF, 0x42].freeze
       TEXT_FUNCTIONS = [0x21, 0x32].freeze
       TYPED_FUNCTIONS = (FIXED_RECORDS.keys + POINT_ARRAY_RECORDS.keys + OBJECT_RECORDS.keys + STATE_RECORDS.keys +
-                         TEXT_FUNCTIONS + PaletteCodec::RECORDS.keys + [0xFB]).freeze
+                         TEXT_FUNCTIONS + PaletteCodec::RECORDS.keys + RegionCodec::RECORDS.keys + [0xFB]).freeze
 
       module_function
+
+      def prefix_codec(record)
+        [PaletteCodec, RegionCodec].find { |codec| codec::FUNCTIONS.key?(record.class) }
+      end
 
       def checksum(bytes)
         bytes.unpack("v10").reduce(0, :^)
@@ -99,6 +104,8 @@ module Emf
             index = slots.index(false)
             yield record, "object table capacity exceeded" unless index
             slots[index] = function
+          elsif record.is_a?(Model::Wmf::Records::FillRegion)
+            validate_region_references(record, slots) { |message| yield record, message }
           elsif record.is_a?(Model::Wmf::Records::ObjectReference)
             validate_object_reference(record, capacity, slots) { |message| yield record, message }
           end
@@ -112,7 +119,17 @@ module Emf
 
         yield "invalid object reference #{index}" unless index < capacity && slots[index]
         yield "object reference #{index} is not a palette" if record.is_a?(Model::Wmf::Records::SelectPalette) && slots[index] != 0xF7
+        yield "object reference #{index} is not a region" if record.is_a?(Model::Wmf::Records::RegionReference) && slots[index] != 0xFF
         slots[index] = false if record.is_a?(Model::Wmf::Records::DeleteObject)
+      end
+
+      def validate_region_references(record, slots)
+        region = record.region_index
+        brush = record.brush_index
+        yield "invalid region reference #{region}" unless region < slots.length && slots[region]
+        yield "object reference #{region} is not a region" unless slots[region] == 0xFF
+        yield "invalid brush reference #{brush}" unless brush < slots.length && slots[brush]
+        yield "object reference #{brush} is not a brush" unless [0xFC, 0xF9, 0x42].include?(slots[brush])
       end
 
       def int16(value, name)

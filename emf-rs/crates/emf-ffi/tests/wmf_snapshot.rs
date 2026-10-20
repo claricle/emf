@@ -513,3 +513,228 @@ fn palette_entry_count_reaches_unsigned_wire_maximum() {
     }
     assert_eq!(values[1], (0, 1, vec![]));
 }
+
+fn region_words(values: &[u16]) -> Vec<u8> {
+    values.iter().flat_map(|v| v.to_le_bytes()).collect()
+}
+
+fn nested_region_body() -> Vec<u8> {
+    // Header22 + scan12 + scan16 + empty scan8 = 58 bytes.
+    region_words(&[
+        0xffff, 6, 0xffff, 0xffff, 58, 3, 4, 0x8000, 0xffff, 0x7fff, 0, 2, 0x8000, 0xffff, 0x8001,
+        0xffff, 2, 4, 0, 0x7fff, 0, 1, 0xfffe, 0xffff, 4, 0, 0xffff, 0x8000, 0,
+    ])
+}
+
+#[test]
+fn region_and_clipping_fields_preserve_nested_wire_order_and_source_spans() {
+    let cases: Vec<(u16, Vec<u8>, Vec<u32>)> = vec![
+        (
+            0x7fff,
+            nested_region_body(),
+            vec![
+                0xffff,
+                u32::MAX,
+                (-32768i32) as u32,
+                u32::MAX,
+                32767,
+                0,
+                3,
+                0x8000,
+                0xffff,
+                1,
+                0x8001,
+                0xffff,
+                0,
+                0x7fff,
+                2,
+                0,
+                1,
+                0xfffe,
+                0xffff,
+                0xffff,
+                0x8000,
+                0,
+            ],
+        ),
+        (
+            0xab28,
+            region_words(&[0xffff, 0x8000]),
+            vec![0xffff, 0x8000],
+        ),
+        (
+            0xcd29,
+            region_words(&[0x8001, 0xffff, 0x8000, 0x7fff]),
+            vec![0x8001, 0xffff, (-32768i32) as u32, 32767],
+        ),
+        (0xef2a, region_words(&[0xffff]), vec![0xffff]),
+        (0x002b, region_words(&[0x8000]), vec![0x8000]),
+        (0xab2c, region_words(&[0xffff]), vec![0xffff]),
+        (
+            0xcd20,
+            region_words(&[0x8000, 0x7fff]),
+            vec![(-32768i32) as u32, 32767],
+        ),
+        (
+            0xef15,
+            region_words(&[0x8000, 0xffff, 0x7fff, 0]),
+            vec![(-32768i32) as u32, u32::MAX, 32767, 0],
+        ),
+        (
+            0x0016,
+            region_words(&[0x7fff, 0, 0xffff, 0x8000]),
+            vec![32767, 0, u32::MAX, (-32768i32) as u32],
+        ),
+        (
+            0x00ff,
+            region_words(&[0, 6, 0, 0, 22, 0, 0, 0, 0, 0, 0]),
+            vec![0, 0, 0, 0, 0, 0, 0],
+        ),
+    ];
+    let suffix = [0xde, 0xad, 0xbe, 0xef];
+    let mut records: Vec<_> = cases
+        .iter()
+        .map(|(function, prefix, _)| {
+            let mut body = prefix.clone();
+            body.extend_from_slice(&suffix);
+            record(*function, &body)
+        })
+        .collect();
+    records.extend([
+        record(0x001e, &[]),
+        record(0x7777, &[0x80, 0xff]),
+        record(0, &[]),
+    ]);
+    let input = source(&records, b"region-tail\0");
+    unsafe {
+        let doc = parse(&input);
+        let mut buffer = ptr::null_mut();
+        assert_eq!(emf_wmf_serialize(doc, &mut buffer, ptr::null_mut()), EMF_OK);
+        let mut data = ptr::null();
+        let mut length = 0;
+        assert_eq!(emf_buffer_view(buffer, &mut data, &mut length), EMF_OK);
+        assert_eq!(slice::from_raw_parts(data, length as usize), input);
+        emf_buffer_free(buffer);
+        let bytes = snapshot(doc);
+        let values = payloads(&bytes);
+        for (index, (function, _, expected)) in cases.iter().enumerate() {
+            assert_eq!(
+                values[index],
+                (
+                    u32::from(*function),
+                    9,
+                    expected.iter().flat_map(|n| n.to_le_bytes()).collect()
+                )
+            );
+        }
+        assert_eq!(values[cases.len()], (0x001e, 0, vec![]));
+        assert_eq!(values[cases.len() + 1], (0x7777, 0, vec![]));
+        assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
+        let mut descriptor = 120;
+        let mut source_offset = 18;
+        for (index, original) in records.iter().enumerate() {
+            let offset = u64_at(&bytes, descriptor + 8) as usize;
+            let length = u64_at(&bytes, descriptor + 16) as usize;
+            assert_eq!(offset, source_offset);
+            assert_eq!(length, original.len());
+            assert_eq!(&input[offset..offset + length], original);
+            if index < cases.len() {
+                assert_eq!(
+                    &input[offset + 6 + cases[index].1.len()..offset + length],
+                    suffix
+                );
+            }
+            descriptor += 40 + values[index].2.len();
+            source_offset += length;
+        }
+        assert_eq!(u64_at(&bytes, 40), input.len() as u64);
+        assert_eq!(&bytes[bytes.len() - 12..], b"region-tail\0");
+    }
+}
+
+#[test]
+fn region_nested_counts_reach_signed_wire_size_boundary() {
+    // Largest single scan and largest scan array that fit signed RegionSize.
+    for (scans, lines) in [(1u16, 8184u16), (4093, 0)] {
+        let points = lines * 2;
+        let mut body = region_words(&[
+            0xffff, 6, 0xffff, 0xffff, 32766, scans, points, 0x8000, 0xffff, 0x7fff, 0,
+        ]);
+        let mut expected = vec![
+            0xffff,
+            u32::MAX,
+            (-32768i32) as u32,
+            u32::MAX,
+            32767,
+            0,
+            u32::from(scans),
+        ];
+        for _ in 0..scans {
+            body.extend(region_words(&[points, 0x8000, 0xffff]));
+            expected.extend([0x8000, 0xffff, u32::from(lines)]);
+            for line in 0..lines {
+                body.extend(region_words(&[line, 0xffff]));
+                expected.extend([u32::from(line), 0xffff]);
+            }
+            body.extend_from_slice(&points.to_le_bytes());
+        }
+        assert_eq!(body.len(), 32766);
+        body.extend_from_slice(&[0xaa, 0xbb]);
+        let input = source(&[record(0x06ff, &body), record(0, &[])], b"");
+        let bytes = unsafe { snapshot(parse(&input)) };
+        let values = payloads(&bytes);
+        assert_eq!((values[0].0, values[0].1), (0x06ff, 9));
+        assert_eq!(values[0].2.len(), expected.len() * 4);
+        for (index, value) in expected.iter().enumerate() {
+            assert_eq!(u32_at(&values[0].2, index * 4), *value, "field {index}");
+        }
+        assert_eq!(values[1], (0, 1, vec![]));
+        assert_eq!(u64_at(&bytes, 136), (body.len() + 6) as u64);
+    }
+}
+
+#[test]
+fn malformed_region_and_clipping_records_stay_opaque_without_hiding_eof() {
+    let mut records = Vec::new();
+    for (offset, value) in [
+        (2, 5u16),
+        (8, 21),
+        (8, 56),
+        (8, 60),
+        (8, 0x8000),
+        (10, 0xffff),
+        (10, 4),
+        (12, 2),
+        (12, 0x8000),
+        (22, 3),
+        (22, 200),
+        (32, 4),
+    ] {
+        let mut body = nested_region_body();
+        body[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+        records.push(record(0xabff, &body));
+    }
+    for (function, size) in [
+        (0x06ff, 20),
+        (0x0228, 2),
+        (0x0429, 6),
+        (0x012a, 0),
+        (0x012b, 0),
+        (0x012c, 0),
+        (0x0220, 2),
+        (0x0415, 6),
+        (0x0416, 6),
+    ] {
+        records.push(record(function, &vec![0; size]));
+    }
+    records.push(record(0, &[]));
+    let input = source(&records, b"tail");
+    let bytes = unsafe { snapshot(parse(&input)) };
+    let values = payloads(&bytes);
+    for value in &values[..values.len() - 1] {
+        assert_eq!(value.1, 0);
+        assert!(value.2.is_empty());
+    }
+    assert_eq!(values.last().unwrap(), &(0, 1, vec![]));
+    assert_eq!(&bytes[bytes.len() - 4..], b"tail");
+}

@@ -101,13 +101,24 @@ RSpec.describe "WMF object records" do
 
   it "reserves handles for opaque object creators without decoding their payloads" do
     select_one = object_record(0x012D, [1].pack("v"))
-    [0x01F9, 0x06FF, 0x0142].each do |function|
+    [0x01F9, 0x0142].each do |function|
       creator = object_record(function, "\x00\x00".b)
       bytes = object_file([creator, pen, select_one, delete_zero, brush, select_zero])
       metafile = Emf.parse(bytes)
       expect(metafile.records.first.raw_bytes).to eq(creator)
       expect(Emf.serialize(metafile)).to eq(bytes)
     end
+  end
+
+  it "decodes CreateRegion while reserving its object handle" do
+    payload = [0, 6].pack("v s<") + [0].pack("V") + [22, 0, 0].pack("s<3") + [0, 0, 0, 0].pack("s<4")
+    region = object_record(0x06FF, payload)
+    bytes = object_file([region, object_record(0x012D, [0].pack("v"))])
+
+    records = Emf.parse(bytes).records
+    expect(records.first).to be_a(Emf::Model::Wmf::Records::CreateRegion)
+    expect(records[1].object_index).to eq(0)
+    expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
   end
 
   it "decodes CreatePalette while reserving its object handle" do

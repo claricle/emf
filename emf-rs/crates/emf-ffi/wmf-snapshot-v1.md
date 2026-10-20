@@ -51,8 +51,23 @@ length, then payload. The function includes the original high byte. Families:
   are zero-extended. No suffix length or suffix bytes are included. The complete
   source span retains bytes after the known WMF prefix: 4 + 4 * count bytes for
   array variants, two bytes for SelectPalette/ResizePalette, zero for RealizePalette.
+- 9: region and clipping records. CreateRegion (low function byte ff) has u32
+  next-in-chain/object-count, four sign-extended i32 bounds in left/top/right/bottom
+  order, then u32 scan-count. Each scan has u32 top/bottom/line-count followed by
+  line-count pairs of u32 left/right endpoints. Scan coordinates and endpoints
+  zero-extend u16 values. The payload has 28 + sum(12 + 8 * line-count) bytes.
+  Wire ObjectType is fixed at 6; RegionSize, ScanCount, maxScan and repeated scan
+  point counts are derived from the region. Next-in-chain and object-count
+  retain their ignored wire values. FillRegion (28) has u32 region-index/brush-index;
+  FrameRegion (29) adds sign-extended i32 height/width. InvertRegion (2a), PaintRegion
+  (2b) and SelectClipRegion (2c) each have one u32 object index. OffsetClipRgn (20)
+  has sign-extended i32 y/x; ExcludeClipRect (15) and IntersectClipRect (16) have
+  sign-extended i32 bottom/right/top/left. All indices zero-extend u16 values.
+  No suffix length or suffix bytes are included. The complete source span retains
+  bytes following RegionSize for CreateRegion, or the known 4/8/2/4/8-byte wire
+  prefix for FillRegion/FrameRegion/index/offset/rectangle variants respectively.
 
-Families 2–8 cover the existing Ruby WMF models only. Rust-only typed records
+Families 2–9 cover the existing Ruby WMF models only. Rust-only typed records
 remain opaque. For Ruby compatibility, ExtTextOut DX consumes one i16 per
 character even with ETO_PDY set; the original flag and remaining bytes survive
 as suffix. The compatibility view uses the Rust typed decoder with only that

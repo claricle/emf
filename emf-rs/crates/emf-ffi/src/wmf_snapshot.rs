@@ -4,8 +4,8 @@
 use super::*;
 use emf_core::wmf::{
     geometry::GeometryRecord as G, objects::ObjectIssue, objects::ObjectKind,
-    state::StateRecord as S, text::TextRecord as T, DiagnosticKind as D, Document, Record,
-    TypedRecord,
+    region::RegionRecord as R, state::StateRecord as S, text::TextRecord as T, DiagnosticKind as D,
+    Document, Record, TypedRecord,
 };
 
 const MAX_BYTES: usize = 200 * 1024 * 1024;
@@ -153,6 +153,11 @@ fn family(record: &Record) -> u32 {
             | S::RealizePalette
             | S::ResizePalette(_),
         )) => 8,
+        Some(TypedRecord::Region(_))
+        | Some(TypedRecord::State(S::SelectClipRegion(_)))
+        | Some(TypedRecord::Geometry(
+            G::OffsetClipRgn { .. } | G::ExcludeClipRect { .. } | G::IntersectClipRect { .. },
+        )) => 9,
         _ => 0,
     }
 }
@@ -245,6 +250,70 @@ fn payload(
             }
             S::SelectPalette(index) | S::ResizePalette(index) => out.u32(u32::from(*index))?,
             S::RealizePalette => (),
+            _ => unreachable!(),
+        },
+        (9, Some(TypedRecord::Region(r))) => match r {
+            R::CreateRegion(region) => {
+                out.u32(u32::from(region.next_in_chain))?;
+                out.u32(region.object_count)?;
+                for value in [
+                    region.bounds.left,
+                    region.bounds.top,
+                    region.bounds.right,
+                    region.bounds.bottom,
+                ] {
+                    out.i32(value)?;
+                }
+                out.u32(region.scans.len() as u32)?;
+                for scan in &region.scans {
+                    out.u32(u32::from(scan.top))?;
+                    out.u32(u32::from(scan.bottom))?;
+                    out.u32(scan.lines.len() as u32)?;
+                    for line in &scan.lines {
+                        out.u32(u32::from(line.left))?;
+                        out.u32(u32::from(line.right))?;
+                    }
+                }
+            }
+            R::FillRegion { region, brush } => {
+                out.u32(u32::from(*region))?;
+                out.u32(u32::from(*brush))?;
+            }
+            R::FrameRegion {
+                region,
+                brush,
+                height,
+                width,
+            } => {
+                out.u32(u32::from(*region))?;
+                out.u32(u32::from(*brush))?;
+                out.i32(*height)?;
+                out.i32(*width)?;
+            }
+            R::InvertRegion(index) | R::PaintRegion(index) => out.u32(u32::from(*index))?,
+        },
+        (9, Some(TypedRecord::State(S::SelectClipRegion(index)))) => out.u32(u32::from(*index))?,
+        (9, Some(TypedRecord::Geometry(g))) => match g {
+            G::OffsetClipRgn { y, x } => {
+                out.i32(*y)?;
+                out.i32(*x)?;
+            }
+            G::ExcludeClipRect {
+                bottom,
+                right,
+                top,
+                left,
+            }
+            | G::IntersectClipRect {
+                bottom,
+                right,
+                top,
+                left,
+            } => {
+                for value in [bottom, right, top, left] {
+                    out.i32(*value)?;
+                }
+            }
             _ => unreachable!(),
         },
         (5, Some(TypedRecord::Text(t))) => {

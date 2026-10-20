@@ -92,7 +92,8 @@ module Emf
         return decode_font(raw, function, offset) if function & 0xFF == 0xFB
         return decode_state(raw, function, offset) if Binary::STATE_RECORDS.key?(function & 0xFF)
 
-        PaletteCodec.decode(raw, function, offset) { |message| parse_error(offset, function, message) }
+        codec = RegionCodec::RECORDS.key?(function & 0xFF) ? RegionCodec : PaletteCodec
+        codec.decode(raw, function, offset) { |message| parse_error(offset, function, message) }
       end
 
       def decode_state(raw, function, offset)
@@ -146,7 +147,8 @@ module Emf
       end
 
       def record_size(record)
-        return PaletteCodec.byte_size(record) / 2 if PaletteCodec::FUNCTIONS.key?(record.class)
+        codec = Binary.prefix_codec(record)
+        return codec.byte_size(record) / 2 if codec
 
         return record.raw_bytes.bytesize / 2 if record.is_a?(Model::Wmf::Records::UnknownRecord)
         return TextCodec.byte_size(record) / 2 if record.is_a?(Model::Wmf::Records::TextOut)

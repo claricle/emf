@@ -24,6 +24,17 @@ RSpec.describe Emf::Native::WmfFields do
   let(:palette_payload) { [0x0300, 2, 1, 2, 3, 4, 5, 6, 7, 8].pack("V*") }
   let(:palette_raw) { [9, palette_type].pack("Vv") + [0x0300, 2].pack("v2") + [1, 2, 3, 4, 5, 6, 7, 8].pack("C*") }
   let(:palette_descriptor) { { type: palette_type, offset: offset, payload: palette_payload, family: 8 } }
+  let(:region_type) { 0x06FF }
+  let(:region_payload) do
+    [0xABCD, 0x12345678].pack("V2") + [-2, -32_768, 300, 400].pack("l<4") +
+      [2, 32_769, 65_534, 1, 32_770, 65_535, 30, 40, 2, 10, 20, 50, 60].pack("V*")
+  end
+  let(:region_raw) do
+    body = [0xABCD, 6, 0x5678, 0x1234, 50, 2, 4, 0xFFFE, 0x8000, 300, 400,
+            2, 0x8001, 0xFFFE, 0x8002, 0xFFFF, 2, 4, 30, 40, 10, 20, 50, 60, 4].pack("v*")
+    [28, region_type].pack("Vv") + body
+  end
+  let(:region_descriptor) { { type: region_type, offset: offset, payload: region_payload, family: 9 } }
 
   it "rejects a supported state with a non-state native family" do
     record = descriptor.merge(family: 4)
@@ -91,6 +102,35 @@ RSpec.describe Emf::Native::WmfFields do
       [palette_descriptor.merge(payload: [0x10000, 0].pack("V2")), [6, palette_type].pack("Vv")],
       [palette_descriptor.merge(payload: [0, 2, 1, 2, 3, 4, 256, 0, 0, 0].pack("V*")), palette_raw],
       [palette_descriptor, palette_raw.byteslice(0, 17)]
+    ]
+
+    invalid.each do |record, raw_bytes|
+      expect { described_class.new(record, raw_bytes).call }.to raise_error(Emf::Error)
+    end
+  end
+
+  it "decodes native CreateRegion scan data and preserves its raw suffix" do
+    suffix = "\xAA\xBB".b
+    raw_with_suffix = [29, region_type].pack("Vv") + region_raw.byteslice(6..) + suffix
+    record = described_class.new(region_descriptor, raw_with_suffix).call
+
+    expect(record).to be_a(Emf::Model::Wmf::Records::CreateRegion)
+    expect([record.next_in_chain, record.object_count, record.bounds.to_a]).to eq([0xABCD, 0x12345678, [-2, -32_768, 300, 400]])
+    expect(record.scans.map { |scan| [scan.top, scan.bottom, scan.lines.map(&:to_a)] })
+      .to eq([[32_769, 65_534, [[32_770, 65_535]]], [30, 40, [[10, 20], [50, 60]]]])
+    expect(record.suffix).to eq(suffix)
+  end
+
+  it "rejects malformed family 9 fields, scan counts and raw bounds" do
+    invalid = [
+      [region_descriptor.merge(family: 8), region_raw],
+      [region_descriptor.merge(payload: region_payload.byteslice(0, 59)), region_raw],
+      [region_descriptor.merge(payload: [0x10000].pack("V") + region_payload.byteslice(4..)), region_raw],
+      [region_descriptor.merge(payload: [0xABCD, 0x12345678].pack("V2") +
+        [32_768, -32_768, 300, 400].pack("l<4") + region_payload.byteslice(24..)), region_raw],
+      [region_descriptor.merge(payload: [0xABCD, 0x12345678].pack("V2") + [-2, -32_768, 300, 400].pack("l<4") +
+        [2, 32_769, 65_534, 1, 65_536, 65_535, 30, 40, 2, 10, 20, 50, 60].pack("V*")), region_raw],
+      [region_descriptor, region_raw.byteslice(0, 12)]
     ]
 
     invalid.each do |record, raw_bytes|
