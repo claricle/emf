@@ -6,6 +6,7 @@
 
 mod detect;
 mod error;
+mod gradient;
 mod limits;
 mod model;
 mod parse;
@@ -25,3 +26,5 @@ pub use model::{
 pub use parse::parse;
 pub use reader::Reader;
 pub use serialize::{serialize, serialize_with_limits};
+
+pub use gradient::{GradientFill, GradientMesh, TriVertex};

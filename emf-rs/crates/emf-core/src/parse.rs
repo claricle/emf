@@ -85,7 +85,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=22 | 24..=68 | 70..=75 | 82..=92 | 95 | 98 | 115 | 120
+                2..=22 | 24..=68 | 70..=75 | 82..=92 | 95 | 98 | 115 | 118 | 120
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -231,6 +231,7 @@ fn decode_record(
     let malformed = || Ok((RecordData::Raw, 0));
     let mut r = Reader::new(payload);
     match kind {
+        118 => crate::gradient::decode(payload, budget),
         52 => Ok((RecordData::RealizePalette, 0)),
         48 if payload.len() >= 4 => Ok((RecordData::SelectPalette { ih_pal: r.u32()? }, 4)),
         51 if payload.len() >= 8 => Ok((
