@@ -19,6 +19,7 @@ module Emf
           validate(@record.fetch(:family) == 1 && @payload.empty? && @raw.bytesize == 6)
           return Model::Wmf::Records::Eof.new(offset: @offset)
         end
+        return font if @function == 0xFB
         return state(Wmf::Binary::STATE_RECORDS.fetch(@function)) if Wmf::Binary::STATE_RECORDS.key?(@function)
         return fixed(Wmf::Binary::OBJECT_RECORDS.fetch(@function), 4) if Wmf::Binary::OBJECT_RECORDS.key?(@function)
         return WmfTextFields.new(@record, @raw).call if Wmf::Binary::TEXT_FUNCTIONS.include?(@function)
@@ -29,6 +30,19 @@ module Emf
       end
 
       private
+
+      def font
+        klass = Model::Wmf::Records::CreateFontIndirect
+        prefix_size = 6 + klass::PAYLOAD_BYTES
+        validate(@record.fetch(:family) == 7 && @payload.bytesize == 84 &&
+                 @raw.bytesize >= prefix_size && @raw.bytesize.even?)
+        signed = @payload.byteslice(0, 20).unpack("l<5")
+        bytes = @payload.byteslice(20, 32).unpack("V8")
+        validate(signed.all? { |value| value.between?(-0x8000, 0x7FFF) } && bytes.all? { |value| value <= 0xFF })
+        values = signed + bytes + [@payload.byteslice(52, 32)]
+        fields = klass::WIRE_FIELDS.zip(values).to_h
+        klass.new(**fields, type_id: @type, offset: @offset, suffix: @raw.byteslice(prefix_size..))
+      end
 
       def state(klass)
         fields = klass::WIRE_FIELDS

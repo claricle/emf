@@ -101,8 +101,10 @@ RSpec.describe "WMF object records" do
 
   it "reserves handles for opaque object creators without decoding their payloads" do
     select_one = object_record(0x012D, [1].pack("v"))
-    [0x00F7, 0x01F9, 0x02FB, 0x06FF, 0x0142].each do |function|
-      creator = object_record(function, "\x00\x00".b)
+    palette_payload = [0x0300, 0].pack("v2")
+    [0x00F7, 0x01F9, 0x06FF, 0x0142].each do |function|
+      payload = function == 0x00F7 ? palette_payload : "\x00\x00".b
+      creator = object_record(function, payload)
       bytes = object_file([creator, pen, select_one, delete_zero, brush, select_zero])
       metafile = Emf.parse(bytes)
       expect(metafile.records.first.raw_bytes).to eq(creator)

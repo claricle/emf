@@ -58,6 +58,7 @@ module Emf
         when Model::Wmf::Records::PointRecord, Model::Wmf::Records::RectangleRecord, Model::Wmf::Records::OffsetRecord
           serialize_fixed(record)
         when Model::Wmf::Records::StateRecord then serialize_state(record)
+        when Model::Wmf::Records::CreateFontIndirect then serialize_font(record)
         when Model::Wmf::Records::ObjectRecord then serialize_object(record)
         when Model::Wmf::Records::TextOut then TextCodec.encode(record)
         when Model::Wmf::Records::PointArrayRecord then serialize_point_array(record)
@@ -87,6 +88,22 @@ module Emf
           Binary.public_send(type, record.public_send(field), field)
         end
         payload = values.pack(record.class::WIRE_FORMAT) + record.suffix.b
+        [3 + (payload.bytesize / 2), function].pack("Vv") + payload
+      end
+
+      def serialize_font(record)
+        function = Binary.uint16(record.type_id, "RecordFunction")
+        raise SerializeError, "WMF font RecordFunction mismatch" unless function & 0xFF == 0xFB
+        unless record.face_name.is_a?(String) && record.face_name.bytesize == 32
+          raise SerializeError, "WMF font face_name must be a String with 32 bytes"
+        end
+        unless record.suffix.is_a?(String) && record.suffix.bytesize.even?
+          raise SerializeError, "WMF font suffix must be a String with even length"
+        end
+
+        values = record.class::SIGNED_FIELDS.map { |field| Binary.int16(record.public_send(field), field) }
+        values += record.class::BYTE_FIELDS.map { |field| Binary.uint8(record.public_send(field), field) }
+        payload = [*values, record.face_name.b].pack(record.class::WIRE_FORMAT) + record.suffix.b
         [3 + (payload.bytesize / 2), function].pack("Vv") + payload
       end
 

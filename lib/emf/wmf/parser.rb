@@ -72,6 +72,7 @@ module Emf
           parse_error(offset, function, "invalid EOF length") unless raw.bytesize == 6
           return Model::Wmf::Records::Eof.new(offset: offset)
         end
+        return decode_font(raw, function, offset) if function & 0xFF == 0xFB
         return decode_state(raw, function, offset) if Binary::STATE_RECORDS.key?(function & 0xFF)
         return decode_object(raw, function, offset) if Binary::OBJECT_RECORDS.key?(function & 0xFF)
         if Binary::TEXT_FUNCTIONS.include?(function & 0xFF)
@@ -92,6 +93,15 @@ module Emf
         record_class = Binary::STATE_RECORDS.fetch(function & 0xFF)
         prefix_size = 6 + record_class::PAYLOAD_BYTES
         parse_error(offset, function, "invalid state record length") if raw.bytesize < prefix_size
+        values = raw.byteslice(6, record_class::PAYLOAD_BYTES).unpack(record_class::WIRE_FORMAT)
+        fields = record_class::WIRE_FIELDS.zip(values).to_h
+        record_class.new(**fields, type_id: function, offset: offset, suffix: raw.byteslice(prefix_size..))
+      end
+
+      def decode_font(raw, function, offset)
+        record_class = Model::Wmf::Records::CreateFontIndirect
+        prefix_size = 6 + record_class::PAYLOAD_BYTES
+        parse_error(offset, function, "invalid font record length") if raw.bytesize < prefix_size
         values = raw.byteslice(6, record_class::PAYLOAD_BYTES).unpack(record_class::WIRE_FORMAT)
         fields = record_class::WIRE_FIELDS.zip(values).to_h
         record_class.new(**fields, type_id: function, offset: offset, suffix: raw.byteslice(prefix_size..))
@@ -134,6 +144,7 @@ module Emf
         return TextCodec.byte_size(record) / 2 if record.is_a?(Model::Wmf::Records::TextOut)
 
         return 3 + ((record.class::PAYLOAD_BYTES + record.suffix.bytesize) / 2) if record.is_a?(Model::Wmf::Records::StateRecord)
+        return 3 + ((record.class::PAYLOAD_BYTES + record.suffix.bytesize) / 2) if record.is_a?(Model::Wmf::Records::CreateFontIndirect)
         return 3 + (record.class::PAYLOAD_BYTES / 2) if record.is_a?(Model::Wmf::Records::ObjectRecord)
 
         if record.is_a?(Model::Wmf::Records::PointArrayRecord)

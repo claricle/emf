@@ -225,5 +225,6 @@ module Emf
 end
 
 require "emf/model/wmf/object_records"
+require "emf/model/wmf/font_record"
 require "emf/model/wmf/text_records"
 require "emf/model/wmf/state_records"

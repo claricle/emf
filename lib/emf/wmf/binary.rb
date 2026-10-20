@@ -63,7 +63,7 @@ module Emf
       OBJECT_CREATORS = [0xFA, 0xFC, 0xFB, 0xF7, 0xF9, 0xFF, 0x42].freeze
       TEXT_FUNCTIONS = [0x21, 0x32].freeze
       TYPED_FUNCTIONS = (FIXED_RECORDS.keys + POINT_ARRAY_RECORDS.keys + OBJECT_RECORDS.keys + STATE_RECORDS.keys +
-                         TEXT_FUNCTIONS).freeze
+                         TEXT_FUNCTIONS + [0xFB]).freeze
 
       module_function
 
@@ -75,6 +75,10 @@ module Emf
         return value if value.is_a?(Integer) && range.cover?(value)
 
         raise SerializeError, "WMF #{name} out of range: #{value.inspect}"
+      end
+
+      def uint8(value, name)
+        integer(value, 0..0xFF, name)
       end
 
       def uint16(value, name)

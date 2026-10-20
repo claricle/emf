@@ -181,6 +181,75 @@ fn scalar_state_fields_are_unsigned_in_wire_order_with_complete_source_spans() {
 }
 
 #[test]
+fn font_fields_and_raw_face_name_preserve_source_suffix_and_advisory_function() {
+    let signed = [i16::MIN, i16::MAX, -1, 0, -12345];
+    let unsigned = [0x80u8, 0xff, 0xfe, 0x81, 0x82, 0x83, 0x84, 0xf5];
+    let face_name = [
+        b'F', b'o', b'n', b't', 0, 0xff, 0x80, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+        16, 17, 18, 19, 20, 21, 22, 23, 24, 0xfe,
+    ];
+    let suffix = [0xde, 0xad, 0xbe, 0xef];
+    let mut body: Vec<_> = signed.iter().flat_map(|n| n.to_le_bytes()).collect();
+    body.extend_from_slice(&unsigned);
+    body.extend_from_slice(&face_name);
+    body.extend_from_slice(&suffix);
+    let records = [
+        record(0x02fb, &body),
+        record(0xa7fb, &body), // The high function byte is advisory.
+        record(0x001e, &[]),   // SaveDC remains opaque.
+        record(0x7777, &[0x80, 0xff]),
+        record(0x02fb, &[0; 48]), // A short font is malformed and remains opaque.
+        record(0, &[]),
+    ];
+    let input = source(&records, b"tail\0");
+    unsafe {
+        let doc = parse(&input);
+        let mut buffer = ptr::null_mut();
+        assert_eq!(emf_wmf_serialize(doc, &mut buffer, ptr::null_mut()), EMF_OK);
+        let mut data = ptr::null();
+        let mut length = 0;
+        assert_eq!(emf_buffer_view(buffer, &mut data, &mut length), EMF_OK);
+        assert_eq!(slice::from_raw_parts(data, length as usize), input);
+        emf_buffer_free(buffer);
+
+        let bytes = snapshot(doc);
+        let values = payloads(&bytes);
+        let mut expected: Vec<_> = signed
+            .iter()
+            .flat_map(|n| i32::from(*n).to_le_bytes())
+            .collect();
+        expected.extend(unsigned.iter().flat_map(|n| u32::from(*n).to_le_bytes()));
+        expected.extend_from_slice(&face_name);
+        assert_eq!(expected.len(), 84);
+        for (index, function) in [0x02fb, 0xa7fb].into_iter().enumerate() {
+            assert_eq!(values[index], (function, 7, expected.clone()));
+            assert_eq!(&values[index].2[52..], &face_name);
+        }
+        assert_eq!(values[2], (0x001e, 0, vec![]));
+        assert_eq!(values[3], (0x7777, 0, vec![]));
+        assert_eq!(values[4], (0x02fb, 0, vec![]));
+        assert_eq!(values[5], (0, 1, vec![]));
+
+        let mut descriptor = 120;
+        let mut source_offset = 18;
+        for (index, original) in records.iter().enumerate() {
+            let offset = u64_at(&bytes, descriptor + 8) as usize;
+            let length = u64_at(&bytes, descriptor + 16) as usize;
+            assert_eq!(offset, source_offset);
+            assert_eq!(length, original.len());
+            assert_eq!(&input[offset..offset + length], original);
+            if index < 2 {
+                assert_eq!(&input[offset + 56..offset + length], &suffix);
+            }
+            descriptor += 40 + values[index].2.len();
+            source_offset += length;
+        }
+        assert_eq!(u64_at(&bytes, 40), input.len() as u64);
+        assert_eq!(&bytes[bytes.len() - 5..], b"tail\0");
+    }
+}
+
+#[test]
 fn other_state_records_remain_opaque() {
     let records = [
         record(0x001e, &[]),           // SaveDC.
@@ -188,7 +257,7 @@ fn other_state_records_remain_opaque() {
         record(0x0105, &[0xde, 0xad]), // Reserved SetRelAbs.
         record(0x0035, &[]),           // RealizePalette.
         record(0x0139, &[2, 0]),       // ResizePalette.
-        record(0x02fb, &[0; 50]),      // CreateFontIndirect.
+        record(0x0234, &[0, 0]),       // SelectPalette.
         record(0, &[]),
     ];
     let bytes = unsafe { snapshot(parse(&source(&records, b""))) };

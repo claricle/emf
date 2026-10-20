@@ -144,6 +144,7 @@ fn family(record: &Record) -> u32 {
         )) => 4,
         Some(TypedRecord::Text(_)) => 5,
         Some(TypedRecord::State(s)) if scalar_state(s).is_some() => 6,
+        Some(TypedRecord::State(S::CreateFontIndirect(_))) => 7,
         _ => 0,
     }
 }
@@ -199,6 +200,30 @@ fn payload(
             for value in &values[..len] {
                 out.u32(*value)?;
             }
+        }
+        (7, Some(TypedRecord::State(S::CreateFontIndirect(font)))) => {
+            for value in [
+                font.height,
+                font.width,
+                font.escapement,
+                font.orientation,
+                font.weight,
+            ] {
+                out.i32(value)?;
+            }
+            for value in [
+                font.italic,
+                font.underline,
+                font.strike_out,
+                font.char_set,
+                font.out_precision,
+                font.clip_precision,
+                font.quality,
+                font.pitch_and_family,
+            ] {
+                out.u32(u32::from(value))?;
+            }
+            out.raw(&font.face_name)?;
         }
         (5, Some(TypedRecord::Text(t))) => {
             let (x, y, text, padding, options, rectangle, dx, suffix) = match t {

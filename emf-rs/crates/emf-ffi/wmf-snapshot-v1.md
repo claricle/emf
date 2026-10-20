@@ -35,8 +35,15 @@ length, then payload. The function includes the original high byte. Families:
   only these fields, with no suffix length or suffix bytes. The complete source
   span includes any suffix; Ruby retains it from the original record body after
   the known wire prefix (two bytes for single u16 fields, four bytes otherwise).
+- 7: CreateFontIndirect, exactly 84 bytes: five sign-extended i32 fields in
+  height/width/escapement/orientation/weight order, eight zero-extended u32 fields
+  in italic/underline/strike-out/char-set/out-precision/clip-precision/quality/
+  pitch-and-family order, then exactly 32 raw face-name bytes. All face-name
+  bytes survive, including NUL and bytes after it. No suffix length or suffix
+  bytes are included; the complete source span retains any bytes after the
+  known 50-byte WMF font prefix.
 
-Families 2–6 cover the existing Ruby WMF models only. Rust-only typed records
+Families 2–7 cover the existing Ruby WMF models only. Rust-only typed records
 remain opaque. For Ruby compatibility, ExtTextOut DX consumes one i16 per
 character even with ETO_PDY set; the original flag and remaining bytes survive
 as suffix. The compatibility view uses the Rust typed decoder with only that
