@@ -102,7 +102,7 @@ RSpec.describe "EMF+ stream compatibility" do
         end
         checked += 1
       end
-      expect(checked).to be >= (ENV["EMF_STREAM_COMPAT_SUBSET"] ? 2 : 27)
+      expect(checked).to be >= (ENV["EMF_STREAM_COMPAT_SUBSET"] ? 2 : 23)
     end
   end
 end

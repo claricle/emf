@@ -273,9 +273,9 @@ Each rule needs a stated outcome before step 8 can close. "Outcome" is the inten
 - Two places where ch02 and the corpus disagree, both to be settled with a second independent source before they are treated as normative: (1) the ch02 layout diagram puts `TotalObjectSize` before `DataSize`; the corpus puts it after. (2) ch02 says `C` is "never set in the final record"; in both corpus chains the final chunk also has `C` set. A decoder must therefore end a chain by `TotalObjectSize`, not by a clear `C`.
 - Typed model implication: a reassembled object spans several records and possibly several comments. The typed object must keep each chunk's record boundary so that unchanged output is byte-identical.
 
-## Representation gate — implemented (decided 2026-10-20, supervisor)
+## Representation gate — implemented
 
-Decided 2026-10-20 (supervisor) at 13:00Z by the Codex supervisor under Hassan's standing delegation; implemented and tested at 97c5885 on `feat/emfplus-representation`. Constraint from package 09 step 5, kept: `Metafile#emf_plus` (raw String) and the CLI/dump byte representation are unchanged.
+Implemented and tested at 97c5885 on `feat/emfplus-representation`. Constraint from package 09 step 5, kept: `Metafile#emf_plus` (raw String) and the CLI/dump byte representation are unchanged.
 
 Measured starting point (before the implementation):
 
