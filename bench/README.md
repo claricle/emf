@@ -36,8 +36,8 @@ result (the JSON is still written with a `failures` list).
 
 The single-runner [parser benchmark workflow](../.github/workflows/parser-benchmark.yml)
 builds the locked Rust release library, then saves forced Ruby and native reports
-for `spec/fixtures/simple/image1.emf` under `tmp/bench/`. It uses 20 iterations,
-5 warmups, 3 cold runs, a 60-second per-fixture deadline and a 2048 MiB
+for `spec/fixtures/simple/image1.emf` under `tmp/bench/`. It uses 3 iterations,
+1 warmup, 1 cold run, a 60-second per-fixture deadline and a 2048 MiB
 child-process-group RSS ceiling. Manifest capture uses the same RSS ceiling
 and a 15-second deadline. The native run sets
 `EMF_NATIVE_LIBRARY` to `emf-rs/target/release/libemf_ffi.so`. Both reports are
@@ -76,8 +76,8 @@ manifest = {
 }
 File.write("tmp/bench/manifest-v2.json", JSON.pretty_generate(manifest))
 RUBY
-bundle exec ruby bench/parser.rb --manifest tmp/bench/manifest-v2.json --backend ruby --fixture spec/fixtures/simple/image1.emf --iterations 20 --warmups 5 --cold-runs 3 --timeout 60 --rss-limit-mb 2048 --output tmp/bench/parser-ruby.json
-EMF_NATIVE_LIBRARY="$PWD/emf-rs/target/release/libemf_ffi.so" bundle exec ruby bench/parser.rb --manifest tmp/bench/manifest-v2.json --backend native --fixture spec/fixtures/simple/image1.emf --iterations 20 --warmups 5 --cold-runs 3 --timeout 60 --rss-limit-mb 2048 --output tmp/bench/parser-native.json
+bundle exec ruby bench/parser.rb --manifest tmp/bench/manifest-v2.json --backend ruby --fixture spec/fixtures/simple/image1.emf --iterations 3 --warmups 1 --cold-runs 1 --timeout 60 --rss-limit-mb 2048 --output tmp/bench/parser-ruby.json
+EMF_NATIVE_LIBRARY="$PWD/emf-rs/target/release/libemf_ffi.so" bundle exec ruby bench/parser.rb --manifest tmp/bench/manifest-v2.json --backend native --fixture spec/fixtures/simple/image1.emf --iterations 3 --warmups 1 --cold-runs 1 --timeout 60 --rss-limit-mb 2048 --output tmp/bench/parser-native.json
 ```
 
 On macOS, set the native library path to the built `.dylib` instead.

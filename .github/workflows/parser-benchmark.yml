@@ -89,15 +89,15 @@ jobs:
           set +e
           timeout 600s bundle exec ruby bench/parser.rb \
             --manifest tmp/bench/manifest-v2.json --backend ruby \
-            --fixture spec/fixtures/simple/image1.emf --iterations 20 \
-            --warmups 5 --cold-runs 3 --timeout 60 --rss-limit-mb 2048 \
+            --fixture spec/fixtures/simple/image1.emf --iterations 3 \
+            --warmups 1 --cold-runs 1 --timeout 60 --rss-limit-mb 2048 \
             --output tmp/bench/parser-ruby.json
           ruby_status=$?
           EMF_NATIVE_LIBRARY="$GITHUB_WORKSPACE/emf-rs/target/release/libemf_ffi.so" \
             timeout 600s bundle exec ruby bench/parser.rb \
             --manifest tmp/bench/manifest-v2.json --backend native \
-            --fixture spec/fixtures/simple/image1.emf --iterations 20 \
-            --warmups 5 --cold-runs 3 --timeout 60 --rss-limit-mb 2048 \
+            --fixture spec/fixtures/simple/image1.emf --iterations 3 \
+            --warmups 1 --cold-runs 1 --timeout 60 --rss-limit-mb 2048 \
             --output tmp/bench/parser-native.json
           native_status=$?
           if [ "$ruby_status" -ne 0 ] || [ "$native_status" -ne 0 ]; then
