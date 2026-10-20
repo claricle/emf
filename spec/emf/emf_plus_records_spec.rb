@@ -278,4 +278,31 @@ RSpec.describe Emf::EmfPlus::Records do
       end
     end
   end
+
+  # The corpus check above globs only valid directories. Of the four
+  # emf-corrupted fixtures that carry EMF+, two still decode and must
+  # re-encode exactly; the other two must fail with a precise framing error.
+  describe "against the corrupted EMF+ fixtures" do
+    def emf_plus_of(name)
+      Emf.parse(File.binread(File.expand_path("../fixtures/emf-corrupted/#{name}", __dir__))).emf_plus
+    end
+
+    %w[bad_corrupted_2014-12-13-132605.emf bad_corrupted_2017-02-11-230400.emf].each do |name|
+      it "re-encodes #{name} to the original Metafile#emf_plus bytes" do
+        bytes = emf_plus_of(name)
+        expect(described_class.decode_all(Emf::EmfPlus::Parser.call(bytes)).map(&:to_binary).join.b).to eq(bytes.b)
+      end
+    end
+
+    {
+      "bad_corrupted_2014-12-07-163010.emf" => "EMF+ record DataSize 4009754664 exceeds Size 52 - 12 at offset 60452",
+      "bad_corrupted_2017-02-12-010400.emf" => "EMF+ record Size 0 < 12 at offset 17832"
+    }.each do |name, message|
+      it "rejects #{name} with a framing error" do
+        bytes = emf_plus_of(name)
+        expect { described_class.decode_all(Emf::EmfPlus::Parser.call(bytes)) }
+          .to raise_error(Emf::ParseError, Regexp.new(Regexp.escape(message)))
+      end
+    end
+  end
 end
