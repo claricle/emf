@@ -180,3 +180,12 @@ zero safety failures or backend exceptions. No fixture outcome changed.
 `116efa7477dba266e7ab396afb92c682771c5764bd5e41abb8077907cf3718d5`;
 `ruby script/fixture_manifest --check` passes. This refresh establishes inventory
 acceptance, not current-source canonical roundtrip or native parity acceptance.
+
+The subsequent canonical capture at clean `67a6fc54a9f590808d79c6eaf59ab72a6e463f64`
+completed in 180.27 seconds. All 231 isolated children exited normally. **229
+inputs serialized byte-identically and retained identical reparsed models, file
+serialization and file reparsing**; the same two malformed headers were explicit
+`Emf::FormatError` rejections. All input identities matched the manifest. Child
+limits were 60 seconds, 1 GiB RSS and 64 MiB output: observed maxima were
+11.40 seconds, 899,809,280 bytes RSS and 57,794,180 bytes output. This qualifies
+the current Ruby corpus; it does not establish full native corpus parity.
