@@ -11,6 +11,7 @@ module RecordVariants
   ETO_PDY = 0x2000
   TEXT_BOUNDS = [-5, -6, 70, 80].freeze
   TEXT_RECT = [1, -2, 300, 400].freeze
+  FAR_STRING_DESCRIPTOR = ([1, 2, 3, 4096, 0].pack("l<2V3") + ("\0" * 20)).b.freeze
 
   module TextBuilders
     def align4(bytes)
@@ -104,7 +105,7 @@ module RecordVariants
       pending_derived(:truncated, POLY_TEXT_DIAGNOSTIC)
       malformed("count exceeds descriptors", poly_header(5), pad("\0" * 40), pending: POLY_TEXT_DIAGNOSTIC)
       malformed("string offset beyond record", poly_header(1),
-                pad([1, 2, 3, 4096, 0].pack("l<2V3") + ([0] * 16).pack("C*") + [0].pack("V")), pending: POLY_TEXT_DIAGNOSTIC)
+                pad(FAR_STRING_DESCRIPTOR), pending: POLY_TEXT_DIAGNOSTIC)
     end
   end
 

@@ -11,7 +11,7 @@ require_relative "native_corpus_parity"
 # and the typed-field assertion share one source.
 module RecordVariants
   Field = Struct.new(:path, :pack, :value)
-  Variant = Struct.new(:record, :name, :type, :fields, :size, :kind, :pending, :raw_class)
+  Variant = Struct.new(:record, :name, :type, :fields, :byte_size, :kind, :pending, :raw_class)
 
   UINT_MAX = 0xFFFF_FFFF
   INT_MIN = -2**31
@@ -92,18 +92,18 @@ module RecordVariants
     end
 
     def valid(label, *fields, pending: nil)
-      add(label, fields.flatten, :valid, nil, pending)
+      add(label, fields.flatten, :valid, pending: pending)
     end
 
     # Well-formed framing whose body the parsers must treat identically but
     # whose fields are not asserted (bounds-check and recovery controls).
     def malformed(label, *fields, size: nil, pending: nil, raw: false)
-      add(label, fields.flatten, :malformed, size, pending, raw)
+      add(label, fields.flatten, :malformed, size: size, pending: pending, raw: raw)
     end
 
     private
 
-    def add(label, fields, kind, size, pending, raw = false)
+    def add(label, fields, kind, pending:, size: nil, raw: false)
       @variants << Variant.new(name, label, type, fields, size, kind, pending, raw)
     end
   end
@@ -118,7 +118,7 @@ module RecordVariants
 
   def record_bytes(variant)
     body = variant.fields.filter_map { |field| [field.value].pack(field.pack) if field.pack }.join.b
-    size = variant.size || (8 + body.bytesize)
+    size = variant.byte_size || (8 + body.bytesize)
     [variant.type, size].pack("V2") + body
   end
 

@@ -24,7 +24,7 @@ RSpec.shared_examples "record variants" do |names|
   end
 
   def expect_variant(observed, variant, backend, expected_class)
-    expect(observed.lazy).to be(backend == "native"), "#{backend} did not take its own parse path"
+    expect(observed.parsed_lazily).to be(backend == "native"), "#{backend} did not take its own parse path"
     return unless variant.kind == :valid
 
     expect(observed.wire).to be_a(expected_class), "#{backend}: #{observed.wire.class}"

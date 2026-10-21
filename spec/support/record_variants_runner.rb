@@ -4,7 +4,7 @@ require_relative "record_variants"
 
 # Runs one synthetic input through a backend and reduces it to comparable data.
 module RecordVariants
-  Observed = Struct.new(:metafile, :section, :serialized, :errors, :wire, :wire_bytes, :lazy)
+  Observed = Struct.new(:metafile, :section, :serialized, :errors, :wire, :wire_bytes, :parsed_lazily)
 
   # Canonical field walk that tolerates diagnostics, used for malformed controls.
   class Section < BackendParity::ParseSection
