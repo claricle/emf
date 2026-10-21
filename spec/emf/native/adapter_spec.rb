@@ -842,13 +842,7 @@ RSpec.describe Emf::Native do
         expect(Emf.serialize(native)).to eq(input)
         expect(native.records).to eq(ruby.records)
         expect(ruby.errors).to be_empty
-        if type.between?(96, 97)
-          expect(native.errors.size).to eq(1)
-          expect(native.errors.first).to have_attributes(offset: header.bytesize, record_code: type)
-          expect(native.errors.first.message).to include("native parse diagnostic 4")
-        else
-          expect(native.errors).to be_empty
-        end
+        expect(native.errors).to be_empty
         [ruby, native].each do |parsed|
           expect(parsed.records.first.wire.class).to eq(klass)
           expect(parsed.records.first.wire.body.to_s).to eq(body)

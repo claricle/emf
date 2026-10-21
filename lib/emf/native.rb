@@ -13,6 +13,7 @@ module Emf
       require_relative "native/snapshot"
       require_relative "native/header"
       require_relative "native/hydrator"
+      require_relative "native/header_errors"
       Adapter.new(Loader.new(path))
     rescue LoadError => e
       raise Unavailable, "native backend dependencies could not load: #{e.message}"
@@ -27,10 +28,16 @@ module Emf
         input = bytes.b
         return parse_wmf(input) if %i[wmf_apm wmf_standard].include?(Detector.call(input))
 
+        parse_emf(input)
+      end
+
+      def parse_emf(input)
         @loader.document(input) do |document|
           snapshot = Snapshot.new(@loader.snapshot(document))
           Hydrator.new(snapshot, input).call
         end
+      rescue FormatError => e
+        raise HeaderErrors.translate(e, input)
       end
 
       def parse_wmf(input)
