@@ -4,7 +4,14 @@ module Emf
   module Model
     module Wmf
       module Records
+        # Typed bitmap interior (Emf::Wmf::BitmapImage.of); raw `bitmap` stays authoritative.
+        module TypedImage
+          def typed_image = Emf::Wmf::BitmapImage.of(self)
+        end
+
         class BitBlt < Record
+          include TypedImage
+
           def initialize(raster_operation:, source_y:, source_x:, height:, width:, destination_y:, destination_x:, bitmap: nil,
                          reserved: 0, suffix: "".b, offset: nil, type_id: 0x0922)
             super(type_id: type_id, offset: offset)
@@ -25,6 +32,8 @@ module Emf
         end
 
         class DibBitBlt < Record
+          include TypedImage
+
           def initialize(raster_operation:, source_y:, source_x:, height:, width:, destination_y:, destination_x:, bitmap: nil,
                          reserved: 0, suffix: "".b, offset: nil, type_id: 0x0940)
             super(type_id: type_id, offset: offset)
@@ -45,6 +54,8 @@ module Emf
         end
 
         class StretchBlt < Record
+          include TypedImage
+
           def initialize(raster_operation:, source_height:, source_width:, source_y:, source_x:, destination_height:,
                          destination_width:, destination_y:, destination_x:, bitmap: nil, reserved: 0, suffix: "".b, offset: nil,
                          type_id: 0x0B23)
@@ -68,6 +79,8 @@ module Emf
         end
 
         class DibStretchBlt < Record
+          include TypedImage
+
           def initialize(raster_operation:, source_height:, source_width:, source_y:, source_x:, destination_height:,
                          destination_width:, destination_y:, destination_x:, bitmap: nil, reserved: 0, suffix: "".b, offset: nil,
                          type_id: 0x0B41)
@@ -91,6 +104,8 @@ module Emf
         end
 
         class SetDibToDev < Record
+          include TypedImage
+
           def initialize(color_usage:, scan_count:, start_scan:, source_y:, source_x:, height:, width:, destination_y:,
                          destination_x:, bitmap:, suffix: "".b, offset: nil, type_id: 0x0D33)
             super(type_id: type_id, offset: offset)
@@ -112,6 +127,8 @@ module Emf
         end
 
         class StretchDib < Record
+          include TypedImage
+
           def initialize(raster_operation:, color_usage:, source_height:, source_width:, source_y:, source_x:, destination_height:,
                          destination_width:, destination_y:, destination_x:, bitmap:, suffix: "".b, offset: nil, type_id: 0x0F43)
             super(type_id: type_id, offset: offset)

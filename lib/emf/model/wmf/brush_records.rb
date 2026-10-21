@@ -32,6 +32,12 @@ module Emf
           end
 
           attr_accessor :style, :color_usage, :target
+
+          # BS_PATTERN (style 3) ignores the stored color usage and always uses RGB colors.
+          def effective_color_usage = style == 3 ? 0 : color_usage
+
+          # Packed DIB view of the raw target (Emf::Wmf::Dib::Image), or nil if unsupported.
+          def target_dib = Emf::Wmf::Dib.parse(target, effective_color_usage)
         end
       end
     end

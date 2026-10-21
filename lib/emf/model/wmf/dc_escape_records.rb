@@ -52,6 +52,14 @@ module Emf
           end
 
           attr_accessor :escape_function, :data, :padding, :suffix
+
+          # Read-only typed views; each returns nil when the subtype or layout does not match.
+          def typed_payload = Emf::Wmf::EscapeViews.typed_payload(self)
+          def typed_counted_payload = Emf::Wmf::EscapeViews.typed_counted_payload(self)
+          def typed_special_passthrough2_payload = Emf::Wmf::EscapeViews.typed_special_passthrough2_payload(self)
+
+          # Validated 0x000F segment; raises Emf::Wmf::EmbeddedEmf::Invalid with a reason.
+          def embedded_emf_segment = Emf::Wmf::EmbeddedEmf.segment(self)
         end
       end
     end
