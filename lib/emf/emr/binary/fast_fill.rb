@@ -38,8 +38,35 @@ module Emf
 
           wire = call(template, nil)
           objs = wire.instance_variable_get(:@field_objs)
-          attrs.each { |name, value| objs[slots[name]].assign(value) unless value.nil? }
+          attrs.each { |name, value| assign(objs[slots[name]], value) unless value.nil? }
           wire
+        end
+
+        STRUCT_SLOTS = {}.compare_by_identity
+        private_constant :STRUCT_SLOTS
+
+        # Same result as `target.assign(value)` on a fresh (clear) target. A
+        # nested struct takes a symbol-keyed Hash of its own fields or a struct
+        # of exactly its class leaf by leaf, skipping BinData's clear and
+        # stringified-hash round trip; any other value goes through BinData.
+        def assign(target, value)
+          return target.assign(value) unless target.respond_to?(:field_names)
+
+          slots = (STRUCT_SLOTS[target.class] ||= slots(target))
+          if value.instance_of?(Hash) && value.each_key.all? { |name| slots.key?(name) }
+            objs = target.instance_variable_get(:@field_objs)
+            value.each { |name, leaf| assign(objs[slots[name]], leaf) unless leaf.nil? }
+          elsif value.instance_of?(target.class)
+            objs = target.instance_variable_get(:@field_objs)
+            slots.each_value { |index| assign(objs[index], source_field(value, index)) }
+          else
+            target.assign(value)
+          end
+        end
+
+        def source_field(struct, index)
+          struct.send(:instantiate_obj_at, index)
+          struct.instance_variable_get(:@field_objs)[index]
         end
 
         # BinData extends each array with its initial_length behavior; dup
