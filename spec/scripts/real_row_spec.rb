@@ -24,10 +24,10 @@ RSpec.describe "script/platform_probe/real_row.sh" do
     end
   end
 
-  it "links the Windows ARM64 gnullvm library statically and keeps the caller's flags" do
+  it "selects Rust static unwind linkage on Windows ARM64 and keeps caller flags" do
     log, = build_command("aarch64-pc-windows-gnullvm", rustflags: "-C debuginfo=0")
 
-    expect(log).to include("RUSTFLAGS=-C debuginfo=0 -C link-arg=-static")
+    expect(log).to include("RUSTFLAGS=-C debuginfo=0 -C target-feature=+crt-static -C link-arg=-static\n")
     expect(log).to include("ARGS=+stable build --locked --release -p emf-ffi --target aarch64-pc-windows-gnullvm")
   end
 

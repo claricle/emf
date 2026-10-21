@@ -62,9 +62,9 @@ build_cdylib() {
   case "$target" in
     # A musl cdylib cannot link statically; Alpine's rustc defaults crt-static on.
     *-musl) export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=-crt-static" ;;
-    # llvm-mingw links libunwind.dll dynamically, and a clean Windows ARM64 machine lacks it.
-    # Candidate only: the dll_closure step on a real runner decides whether this is enough.
-    aarch64-pc-windows-gnullvm) export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-static" ;;
+    # Rust selects the static unwind archive via crt-static; a linker-only -static
+    # leaves std's explicit dynamic unwind dependency on Windows ARM64 unchanged.
+    aarch64-pc-windows-gnullvm) export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=+crt-static -C link-arg=-static" ;;
   esac
   (
     cd "$root/emf-rs" &&
