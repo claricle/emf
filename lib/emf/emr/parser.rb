@@ -99,9 +99,24 @@ module Emf
       # Bounds the whole-file parse: a 100 MB EMF is unusual; refuse bigger.
       MAX_INPUT_BYTES = 200 * 1024 * 1024
 
+      REGION_DATA_OFFSETS = { 71 => 32, 72 => 40, 73 => 28, 74 => 28, 75 => 16 }.freeze
+
       def variable_array_sane?(type_id, n_size, head, payload)
-        sized_arrays_sane?(type_id, n_size, head, payload) &&
+        region_data_sane?(type_id, n_size, head, payload) &&
+          sized_arrays_sane?(type_id, n_size, head, payload) &&
           ext_text_out_sane?(type_id, n_size, head, payload)
+      end
+
+      def region_data_sane?(type_id, n_size, head, payload)
+        data_offset = REGION_DATA_OFFSETS[type_id]
+        return true unless data_offset
+
+        bytes = head + payload
+        length_offset = type_id == 75 ? 8 : 24
+        return false if bytes.bytesize < length_offset + 4
+
+        length = read_uint32(bytes, length_offset)
+        length <= n_size - data_offset
       end
 
       def sized_arrays_sane?(type_id, n_size, head, payload)

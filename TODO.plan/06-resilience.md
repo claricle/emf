@@ -133,3 +133,18 @@ the command and verdict are recorded in
 - Supervisor tests demonstrate wall/RSS enforcement and child cleanup. No success can be recorded for a killed or timed-out process.
 - All fuzz targets build and execute their declared smoke budgets with the seed manifest checked; every discovered failure blocks the affected entry point until minimized and fixed.
 - Resilience evidence is collected independently for each delivered platform in [08-platform-delivery.md](08-platform-delivery.md); unsupported supervision or OOM behavior remains an explicit delivery gap.
+
+### Region allocation recovery — 2026-10-21
+
+Malformed region records 71–75 now validate their declared region byte length
+against the enclosing record before typed decoding. RegionData validates the
+rectangle count against that bounded length before BinData creates array entries.
+This closes the observed 83-byte PaintRgn allocation reproducer, including its
+oversized nested byte-length declaration. Invalid records remain Raw with a
+ParseError, preserve all input bytes, and allow subsequent records to parse.
+
+Focused verification: 18 examples, zero failures (seed 48328), including the
+original reproducer, oversized byte lengths for all five types, oversized counts,
+valid region layouts and truncated-tail preservation. This is one resilience
+criterion; it does not complete fuzz, whole-corpus or whole-issue qualification.
+Evidence: `/private/tmp/emf-execution/p06-region-allocation-bound/checks.log`.

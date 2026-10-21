@@ -103,3 +103,19 @@ The retained local Apple Silicon throwaway-probe artifact lacks its real-library
 - The source gem installs and runs Ruby without Rust or a compiled dependency; platform gems include their binaries through a verified gemspec file list.
 - Availability failures follow the agreed auto/forced-native behavior; malformed parser input does not cause hidden fallback.
 - Release validation preserves manual dispatch and OIDC; provenance is tied to the tested revision. Publication remains a separate release action.
+
+### Hosted ARM and musl acceptance — 2026-10-21
+
+Exact published revision `ba7a0ed4cd077ae9c55e1b6595974302700a1d5e`, run
+`39587437154`, completed the previously blocked Windows ARM Ruby 3.4 and both
+musl Ruby 3.4 rows. Windows job `119179734931` succeeded with actual DLL closure,
+source/native package creation, clean installation, installed workload, discovery
+without an environment override, and native availability. Musl ARM job
+`119179734560` and x86 job `119179734725` also succeeded with their actual
+source/native/install/load checks. These results close these three specific rows;
+they do not establish every proposed platform row or whole-issue completion.
+
+Retained evidence: `/private/tmp/emf-execution/pr33-current-head-acceptance/ba7a0ed-transfer.json`,
+`ba7a0ed-arm-terminal/{job.json,job.log,audit.json}`, and the referenced musl logs.
+No replacement CI run was dispatched. Newer source revisions require their own
+applicable checks; these results remain bound to the revision above.

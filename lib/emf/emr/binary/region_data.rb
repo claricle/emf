@@ -15,8 +15,16 @@ module Emf
         uint32 :count_rects
         uint32 :rgn_size
         rectl :bounds
-        array :rectangles, type: :rectl, initial_length: :count_rects
+        array :rectangles, type: :rectl, initial_length: :bounded_rectangle_count
         string :trailing, read_length: -> { [eval_parameter(:byte_length) - 32 - (count_rects * 16), 0].max }
+
+        def bounded_rectangle_count
+          length = eval_parameter(:byte_length)
+          count = count_rects.to_i
+          raise BinData::ValidityError, "region rectangles exceed declared region data length" if length < 32 || count * 16 > length - 32
+
+          count
+        end
       end
     end
   end
