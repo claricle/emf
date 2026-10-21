@@ -86,6 +86,112 @@ module Emf
         end
       end
 
+      # Source of a FastFill's generated `build_attrs`, same result as
+      # WireCopy.build: every known key is fetched into a local first (an
+      # unknown key makes the count disagree and returns nil before any
+      # copy), then each non-nil value is assigned straight into the copy.
+      # A nested struct given as the same struct class is copied leaf by
+      # leaf inline; any other value goes through WireCopy.assign.
+      class BuildSource
+        ABSENT = Object.new.freeze
+
+        def initialize(template, slots)
+          @struct_classes = []
+          @templates = []
+          @copy = copy_lines(template, "wire", "nil")
+          objs = template.instance_variable_get(:@field_objs)
+          @fetches = []
+          @counts = []
+          @assigns = []
+          slots.each_with_index do |(name, index), position|
+            value = "v#{position}"
+            @fetches << "#{value} = attrs.fetch(:#{name}, ABSENT)"
+            @counts << "seen += 1 unless ABSENT.equal?(#{value})"
+            @assigns << assign(objs[index], index, value)
+          end
+        end
+
+        # A module holding `build_attrs` and the constants it refers to.
+        def to_module
+          source = to_s
+          classes = @struct_classes
+          Module.new.tap do |mod|
+            mod.const_set(:STRUCTS, classes.freeze)
+            mod.const_set(:ABSENT, ABSENT)
+            mod.const_set(:TEMPLATES, @templates.freeze)
+            mod.module_eval(source, __FILE__, __LINE__)
+          end
+        end
+
+        def to_s
+          <<~RUBY
+            def build_attrs(attrs)
+              #{@fetches.join("\n  ")}
+              seen = 0
+              #{@counts.join("\n  ")}
+              return unless seen == attrs.size
+              #{@copy.join("\n  ")}
+              objs = wire.instance_variable_get(:@field_objs)
+              #{@assigns.join("\n  ")}
+              wire
+            end
+          RUBY
+        end
+
+        private
+
+        # Straight-line twin of WireCopy.call: dup of every struct and leaf of
+        # the template, parents pointed into the copy, field lists rebuilt.
+        def copy_lines(struct, var, parent)
+          @templates << struct
+          lines = ["#{var} = TEMPLATES[#{@templates.size - 1}].dup", "#{var}.instance_variable_set(:@parent, #{parent})"]
+          children = struct.instance_variable_get(:@field_objs).each_with_index.map do |field, index|
+            child = "#{var}_#{index}"
+            lines.concat(field.respond_to?(:field_names) ? copy_lines(field, child, var) : leaf_lines(field, child, var))
+            child
+          end
+          lines << "#{var}.instance_variable_set(:@field_objs, [#{children.join(', ')}])"
+        end
+
+        def leaf_lines(field, var, parent)
+          @templates << field
+          copier = field.is_a?(BinData::Array) ? "clone" : "dup"
+          ["#{var} = TEMPLATES[#{@templates.size - 1}].#{copier}", "#{var}.instance_variable_set(:@parent, #{parent})"]
+        end
+
+        def assign(field, index, value)
+          present = "unless #{value}.nil? || ABSENT.equal?(#{value})"
+          return "objs[#{index}].assign(#{value}) #{present}" unless field.respond_to?(:field_names)
+
+          @struct_classes << field.class
+          klass = "STRUCTS[#{@struct_classes.size - 1}]"
+          <<~RUBY.chomp
+            #{present}
+              if #{value}.instance_of?(#{klass})
+                t1 = objs[#{index}].instance_variable_get(:@field_objs)
+                #{struct_copy(field, 1, value).join("\n    ")}
+              else
+                Emf::Emr::Binary::WireCopy.assign(objs[#{index}], #{value})
+              end
+            end
+          RUBY
+        end
+
+        # Leaf-by-leaf assignments from `source` into the target field list `t<depth>`.
+        def struct_copy(struct, depth, source)
+          fields = struct.instance_variable_get(:@field_objs)
+          WireCopy.slots(struct).flat_map do |name, index|
+            field = fields[index]
+            if field.respond_to?(:field_names)
+              ["t#{depth + 1} = t#{depth}[#{index}].instance_variable_get(:@field_objs)",
+               *struct_copy(field, depth + 1, "#{source}.#{name}")]
+            else
+              ["t#{depth}[#{index}].assign(#{source}.#{name})"]
+            end
+          end
+        end
+      end
+
       # Self-check for a FastFill, run once when the filler is built. Proves on
       # the installed BinData that a template copy is a faithful, independent
       # twin of a fresh instance and that the generated reader and writer agree
@@ -217,6 +323,34 @@ module Emf
           expected = @wire_class.new({ name => 1 })
           same = built.snapshot == expected.snapshot && bindata_bytes(built) == bindata_bytes(expected)
           unverified!("build differs from BinData's constructor") unless same
+          verify_build_copy
+          verify_build_structs
+          unverified!("build accepted an unknown key") if build(name => 1, no_such_field_: 1)
+        end
+
+        # The generated copy is a fresh, independent twin of the template.
+        def verify_build_copy
+          copy = build({})
+          unless copy.instance_of?(@wire_class) && copy.snapshot == @wire_class.new.snapshot
+            unverified!("build copy differs from a fresh instance")
+          end
+          shared = tree_objects(@template).map(&:object_id) & tree_objects(copy).map(&:object_id)
+          unverified!("build copy shares objects with the template") unless shared.empty? && parents_consistent?(copy)
+        end
+
+        # Every nested struct field, given as a distinct-valued struct of its
+        # own class, builds the same record as BinData's constructor.
+        def verify_build_structs
+          sample = verification_record
+          @slots.each_key do |slot|
+            next unless @template.public_send(slot).respond_to?(:field_names)
+
+            given = sample.public_send(slot)
+            built = build(slot => given)
+            expected = @wire_class.new({ slot => given })
+            same = built && built.snapshot == expected.snapshot && bindata_bytes(built) == bindata_bytes(expected)
+            unverified!("build of #{slot} differs from BinData's constructor") unless same
+          end
         end
       end
 
@@ -262,13 +396,13 @@ module Emf
           @slots = WireCopy.slots(sample)
           generate_call(leaves)
           generate_pack(leaves)
+          extend(BuildSource.new(@template, @slots).to_module)
         end
 
         # Keyword construction, `wire_class.new(**attrs)`; nil when a key is
-        # not a field, so the caller falls back to BinData.
-        def build(attrs)
-          WireCopy.build(@template, @slots, attrs)
-        end
+        # not a field, so the caller falls back to BinData. Generated per
+        # class by generate_build; subclasses override `build` and call super.
+        def build(attrs) = build_attrs(attrs)
 
         private
 
