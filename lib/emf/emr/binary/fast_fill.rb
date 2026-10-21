@@ -42,8 +42,10 @@ module Emf
           wire
         end
 
+        # BinData extends each array with its initial_length behavior; dup
+        # would drop that singleton module, clone keeps it.
         def leaf(leaf, parent)
-          copy = leaf.dup
+          copy = leaf.is_a?(BinData::Array) ? leaf.clone : leaf.dup
           copy.instance_variable_set(:@parent, parent)
           copy
         end
@@ -69,7 +71,7 @@ module Emf
         end
 
         def self.for_class(wire_class)
-          BY_CLASS[wire_class]
+          BY_CLASS[wire_class] || POINT_ARRAY_BY_CLASS[wire_class]
         end
 
         attr_reader :size, :wire_class
@@ -103,10 +105,10 @@ module Emf
           field.name == FLOAT_LEAF
         end
 
-        def suffix(record_bytes)
-          return EMPTY_SUFFIX if record_bytes.bytesize == @size
+        def suffix(record_bytes, consumed = @size)
+          return EMPTY_SUFFIX if record_bytes.bytesize == consumed
 
-          record_bytes.byteslice(@size, record_bytes.bytesize - @size).b.freeze
+          record_bytes.byteslice(consumed, record_bytes.bytesize - consumed).b.freeze
         end
 
         def leaf_paths(record, prefix)
@@ -179,6 +181,140 @@ module Emf
         BY_TYPE = ENABLED_TYPES.to_h { |type_id| [type_id, new(Records.lookup(type_id))] }.freeze
         BY_CLASS = BY_TYPE.values.to_h { |filler| [filler.wire_class, filler] }.freeze
         private_constant :ENABLED_TYPES, :BY_TYPE, :BY_CLASS
+      end
+
+      class FastFill
+        # Header plus a counted array of 32-bit PointL (POLYGON, POLYLINE).
+        # The header is unpacked and assigned like a fixed layout; the points
+        # come from one `unpack` and are built by copying a PointL template,
+        # so the array holds the same BinData elements a read produces.
+        # `call` returns nil when the count overruns the bytes, and `pack`
+        # when a coordinate is not an int32, leaving those to BinData.
+        class PointArrayFill < FastFill
+          POINT_BYTES = 8
+          INT32 = (-(2**31))..((2**31) - 1)
+          private_constant :POINT_BYTES, :INT32
+
+          def initialize(klass)
+            super
+            array = @template.aptl
+            @point = array.send(:new_element)
+            @x_leaf = @point.x
+            @y_leaf = @point.y
+            # The sample's num_bytes built the array's (empty) element list and
+            # cached evaluators that read the template's cptl; copies share
+            # neither.
+            array.instance_variable_set(:@elements, nil)
+            [@template, array, @point, @x_leaf, @y_leaf].each { |object| forget_evaluator(object) }
+          end
+
+          # Keyword construction; the points are built from template copies
+          # when every element is a PointL or an {x:, y:} hash, else BinData's.
+          def build(attrs)
+            points = attrs[:aptl]
+            return super unless points.is_a?(::Array) && points.all? { |source| fast_point?(source) }
+
+            wire = super(attrs.except(:aptl))
+            return unless wire
+
+            array = wire.aptl
+            array.instance_variable_set(:@elements, points.map { |source| copy_point(array, source) })
+            wire
+          end
+
+          def pack(wire)
+            coords = []
+            wire.aptl.each { |point| coords << point.x.value << point.y.value }
+            return unless coords.all? { |v| v.is_a?(Integer) && INT32.cover?(v) }
+
+            [*header_values(wire), *coords].pack("#{@format}l<*")
+          end
+
+          private
+
+          def forget_evaluator(object)
+            return unless object.instance_variable_defined?(:@lazy_evaluator)
+
+            object.send(:remove_instance_variable, :@lazy_evaluator)
+          end
+
+          def leaf_paths(record, prefix)
+            super.reject { |path, _| path == [:aptl] }
+          end
+
+          def fast_point?(point)
+            point.instance_of?(Emf::Binary::Types::PointL) ||
+              (point.instance_of?(Hash) && point.size == 2 && point.key?(:x) && point.key?(:y))
+          end
+
+          def point_copy(array)
+            point = @point.dup
+            x = @x_leaf.dup
+            y = @y_leaf.dup
+            point.instance_variable_set(:@parent, array)
+            x.instance_variable_set(:@parent, point)
+            y.instance_variable_set(:@parent, point)
+            point.instance_variable_set(:@field_objs, [x, y])
+            [point, x, y]
+          end
+
+          def copy_point(array, source)
+            point, x, y = point_copy(array)
+            x.assign(source.is_a?(Hash) ? source[:x] : source.x)
+            y.assign(source.is_a?(Hash) ? source[:y] : source.y)
+            point
+          end
+
+          def points_from(array, flat)
+            list = Array.new(flat.size / 2)
+            index = 0
+            while index < list.size
+              point, x, y = point_copy(array)
+              x.assign(flat[index * 2])
+              y.assign(flat[(index * 2) + 1])
+              list[index] = point
+              index += 1
+            end
+            list
+          end
+
+          def generate_call(leaves)
+            count = leaves.index { |path, _| path == [:cptl] }
+            locals = leaves.each_index.map { |i| "v#{i}" }
+            lines = leaves.each_with_index.map { |(path, _), i| "#{accessor_chain(path)}.assign(v#{i})" }
+            define_generated(:call, <<~RUBY)
+              def call(record_bytes)
+                #{locals.join(', ')} = record_bytes.unpack(@format)
+                consumed = @size + v#{count} * #{POINT_BYTES}
+                return if record_bytes.bytesize < consumed
+                wire = WireCopy.call(@template, nil)
+                #{lines.join("\n  ")}
+                array = wire.aptl
+                flat = record_bytes.unpack("l<\#{v#{count} * 2}", offset: @size)
+                array.instance_variable_set(:@elements, points_from(array, flat))
+                [wire, suffix(record_bytes, consumed)]
+              end
+            RUBY
+          end
+
+          def generate_pack(leaves)
+            reads = leaves.map { |path, _| "#{accessor_chain(path)}.value" }
+            define_generated(:header_values, "def header_values(wire)\n  [#{reads.join(', ')}]\nend\n")
+          end
+        end
+
+        POINT_ARRAY_TYPES = [TypeCodes::POLYGON, TypeCodes::POLYLINE].freeze
+        POINT_ARRAY_BY_TYPE = POINT_ARRAY_TYPES.to_h do |type_id|
+          [type_id, PointArrayFill.new(Records.lookup(type_id))]
+        end.freeze
+        POINT_ARRAY_BY_CLASS = POINT_ARRAY_BY_TYPE.values.to_h { |filler| [filler.wire_class, filler] }.freeze
+        private_constant :POINT_ARRAY_TYPES, :POINT_ARRAY_BY_TYPE, :POINT_ARRAY_BY_CLASS
+
+        # The filler for a header plus point array record, which parses only
+        # when its count fits the bytes.
+        def self.for_points(type_id)
+          POINT_ARRAY_BY_TYPE[type_id]
+        end
       end
     end
   end

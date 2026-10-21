@@ -217,8 +217,11 @@ module Emf
       end
 
       def read_typed(type_id, n_size, record_bytes)
-        filler = Emf::Emr::Binary::FastFill.for(type_id)
-        return filler.call(record_bytes) if filler && n_size >= filler.size
+        filler = Emf::Emr::Binary::FastFill.for(type_id) || Emf::Emr::Binary::FastFill.for_points(type_id)
+        if filler && n_size >= filler.size
+          filled = filler.call(record_bytes)
+          return filled if filled
+        end
 
         wire = Emf::Emr::Binary::Records.lookup(type_id).read(record_bytes)
         [wire, Model::Emr::Records::WireAdapter.suffix_of(record_bytes, wire)]
