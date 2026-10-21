@@ -58,8 +58,12 @@ pub fn serialize_with_limits(
                 RecordData::ExtCreatePen(pen) => {
                     pen.work_len().ok_or(SerializeFailure::SizeOverflow)?
                 }
-                RecordData::PolyTextOutA(text) => text.work_len().ok_or(SerializeFailure::SizeOverflow)?,
-                RecordData::PolyTextOutW(text) => text.work_len().ok_or(SerializeFailure::SizeOverflow)?,
+                RecordData::PolyTextOutA(text) => {
+                    text.work_len().ok_or(SerializeFailure::SizeOverflow)?
+                }
+                RecordData::PolyTextOutW(text) => {
+                    text.work_len().ok_or(SerializeFailure::SizeOverflow)?
+                }
                 RecordData::ExtTextOutA(text) => {
                     text.work_len().ok_or(SerializeFailure::SizeOverflow)?
                 }
@@ -188,7 +192,9 @@ pub fn serialize_with_limits(
         match &record.data {
             RecordData::PolyTextOutA(text) => crate::poly_text::encode(&mut out, start, text)?,
             RecordData::PolyTextOutW(text) => crate::poly_text::encode(&mut out, start, text)?,
-            RecordData::SetColorAdjustment(color) => crate::poly_text::encode_color(&mut out, color),
+            RecordData::SetColorAdjustment(color) => {
+                crate::poly_text::encode_color(&mut out, color)
+            }
             RecordData::ExtTextOutA(text) => {
                 append_text(&mut out, start, text, |out, value| out.push(*value))?
             }

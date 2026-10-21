@@ -12,8 +12,8 @@ mod gradient;
 mod limits;
 mod model;
 mod parse;
-mod reader;
 mod poly_text;
+mod reader;
 mod serialize;
 pub mod wmf;
 

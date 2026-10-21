@@ -591,8 +591,14 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
             }
             RecordData::ExtCreatePen(pen) => pen_payload(&mut out, pen)?,
             RecordData::CreateFontIndirectW(font) => font_payload(&mut out, font)?,
-            RecordData::PolyTextOutA(text) => poly_text_snapshot::encode(&mut out, text, |out, v| out.push(*v))?,
-            RecordData::PolyTextOutW(text) => poly_text_snapshot::encode(&mut out, text, |out, v| out.extend_from_slice(&v.to_le_bytes()))?,
+            RecordData::PolyTextOutA(text) => {
+                poly_text_snapshot::encode(&mut out, text, |out, v| out.push(*v))?
+            }
+            RecordData::PolyTextOutW(text) => {
+                poly_text_snapshot::encode(&mut out, text, |out, v| {
+                    out.extend_from_slice(&v.to_le_bytes())
+                })?
+            }
             RecordData::SetColorAdjustment(color) => poly_text_snapshot::color(&mut out, color),
             RecordData::ExtTextOutA(text) => {
                 text_payload(&mut out, text, |out, value| out.push(*value))?
@@ -1062,8 +1068,11 @@ mod tests {
             let expected_len = if kind == 23 { 24 } else { 36 };
             assert_eq!(cursor.u64(), expected_len);
             let fields = cursor.take(expected_len as usize);
-            if kind == 23 { assert_eq!(&fields[16..18], &i16::MIN.to_le_bytes()); }
-            else { assert_eq!(&fields[28..], &0u64.to_le_bytes()); }
+            if kind == 23 {
+                assert_eq!(&fields[16..18], &i16::MIN.to_le_bytes());
+            } else {
+                assert_eq!(&fields[28..], &0u64.to_le_bytes());
+            }
             assert_eq!(cursor.position, encoded.len());
         }
     }
