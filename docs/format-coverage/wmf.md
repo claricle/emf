@@ -47,11 +47,11 @@ to `emf-rs/crates/emf-core/src/` or its sibling `tests/` directory.
 
 | Payload | Current semantic coverage | Remaining boundary |
 | --- | --- | --- |
-| Bitmap16 and DIB transfer sources | Rust exposes optional typed views and compatible replacement; Ruby retains bitmap bytes | Ruby nested views would be an additive API. Compressed pixel data remains opaque. |
-| Pattern brushes | Rust validates pattern sizing and exposes DIB target views; Ruby retains pattern/target bytes | Ruby nested target views would be additive. |
+| Bitmap16 and DIB transfer sources | Rust exposes optional typed views and compatible replacement. Ruby exposes read-only `typed_image` on the six transfer records (`Emf::Wmf::Dib`, `Bitmap16`, `BitmapImage::ABSENT`) over the retained bytes | Ruby has no replacement API. Compressed pixel data remains opaque. |
+| Pattern brushes | Rust validates pattern sizing and exposes DIB target views; Ruby validates pattern sizing and exposes `DibCreatePatternBrush#target_dib` and `#effective_color_usage` | Ruby has no target replacement API. |
 | Region scans and fonts | Both implementations expose typed scans and fixed font fields | No missing typed interior identified in this inventory. |
-| Recognized Escape subtypes | Rust exposes fixed, counted and SPCLPASSTHROUGH2 views; Ruby retains function/data/padding/suffix | Ruby subtype views would be additive; current bytes remain inert. |
-| Embedded EMF Escape (0x000F) | Generic Escape preserves bytes; neither side provides a typed sequence API | Metadata, segment bounds and sequence assembly remain unimplemented as semantic views. See the reference's META_ESCAPE_ENHANCED_METAFILE record. |
+| Recognized Escape subtypes | Rust exposes fixed, counted and SPCLPASSTHROUGH2 views. Ruby exposes `Escape#typed_payload`, `#typed_counted_payload` and `#typed_special_passthrough2_payload` over the retained bytes | Ruby has no replacement API. GETCOLORTABLE and EPS views remain Rust-only. Bytes remain inert. |
+| Embedded EMF Escape (0x000F) | Both sides validate the 34-byte metadata, the 8,192-byte segment limit, record count, remaining/total arithmetic and completion, and assemble consecutive segments into EMF bytes: Rust `EscapeRecord::embedded_emf_segment`, `assemble_embedded_emf`, `Document::embedded_emf_sequences`; Ruby `Emf::Wmf::EmbeddedEmf.segment`, `.assemble`, `.sequences` | Assembly never parses the EMF; the caller passes the bytes to the EMF parser. A checksum mismatch is reported (`checksum_valid`), not rejected. ByteCount is checked as 34 plus CurrentRecordSize: the reference text says 34 plus EnhancedMetafileDataSize, which cannot hold across 8,192-byte segments. Behavior on real Windows-written streams is unverified. |
 
 The native snapshot's families 0–13 carry opaque records, EOF and all typed record
 groups above. Full function words, source spans and bitmap presence are retained.
@@ -101,16 +101,16 @@ pass is claimed here.
 
 1. Reconcile the fixture manifest through its existing owner. Optional bitmap
    bridge transport is covered by the generated parity examples above.
-2. Define the embedded-EMF Escape sequence API before implementation: validate the
-   34-byte metadata, 8,192-byte segment limit, record count, total/remaining byte
-   arithmetic and completion, with multi-segment and malformed examples.
-3. Define Ruby Bitmap16/DIB and brush-target views against the existing Rust
-   semantics, followed by Ruby views for already recognized Escape subtypes.
+2. Done: embedded-EMF Escape sequence API (Rust `tests/wmf_embedded_emf.rs`, Ruby
+   `spec/emf/wmf/embedded_emf_spec.rb`).
+3. Done: Ruby Bitmap16/DIB, brush-target and recognized Escape subtype views
+   (`spec/emf/wmf/dib_views_spec.rb`, `brush_escape_views_spec.rb`). The Rust views are not
+   reachable through the native snapshot, so parity rests on mirrored byte vectors.
 4. Supply the independent corpus, semantic/rendering and resilience evidence
    above before claiming full format acceptance.
 
-Items 2–3 require public API design decisions. Raw preservation currently works;
-these are additive capabilities rather than demonstrated codec defects.
+Items 2–3 were additive read-only capabilities; raw bytes stay the source of truth
+and unchanged documents serialize byte-identically.
 
 ## Verification boundary
 
