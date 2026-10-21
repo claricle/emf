@@ -139,7 +139,8 @@ module RecordVariants
       valid(label, rectl("rcl_bounds", -1, -2, 30, 40), u32("n_ver", verts), u32("n_tri", elements), u32("ul_mode", mode),
             raw("body", body))
     end
-    malformed("vertex count exceeds record", rectl("rcl_bounds", 0, 0, 1, 1), u32("n_ver", 99), u32("n_tri", 1), u32("ul_mode", 0), pad("\0".b * 16))
+    malformed("vertex count exceeds record", rectl("rcl_bounds", 0, 0, 1, 1), u32("n_ver", 99), u32("n_tri", 1), u32("ul_mode", 0),
+              pad("\0".b * 16))
     malformed("counts max", rectl("rcl_bounds", 0, 0, 1, 1), u32("n_ver", UINT_MAX), u32("n_tri", UINT_MAX), u32("ul_mode", 2))
   end
 end
