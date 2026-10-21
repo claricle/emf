@@ -52,17 +52,26 @@ RSpec.describe "native gradient hydration" do
     end
   end
 
-  it "keeps malformed gradients raw and continues through EOF" do
+  it "keeps malformed gradients with Ruby parity and continues through EOF" do
     record = "#{[118, 40, 0, 0, 0, 0, 0, 0, 3].pack('V*')}TAIL"
-    parsed = Emf.parse(header + record + eof)
-    expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records::Raw)
+    parsed, ruby = parse_both(header + record + eof)
+    expect(parsed.records.first.wire.class).to eq(ruby.records.first.wire.class)
+    expect(parsed.errors.length).to eq(ruby.errors.length)
     expect(parsed.records.last.wire).to be_a(Emf::Emr::Binary::Records::Eof)
-    expect(parsed.errors.length).to eq(1)
     expect(Emf.serialize(parsed)).to eq(header + record + eof)
   end
 
   it "rejects impossible transport counts before constructing the Ruby body" do
     payload = [0, 0, 0, 0, 2].pack("V*") + [0xFFFFFFFFFFFFFFFF, 1].pack("Q<2")
     expect { Emf::Native::GradientFields.call(payload, "".b) }.to raise_error(Emf::FormatError)
+  end
+
+  def parse_both(input)
+    native = Emf.parse(input)
+    ENV["EMF_BACKEND"] = "ruby"
+    ruby = Emf.parse(input)
+    [native, ruby]
+  ensure
+    ENV["EMF_BACKEND"] = "native"
   end
 end

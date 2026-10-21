@@ -123,3 +123,7 @@ jobs:
           name: probe-${{ matrix.row.target }}-ruby${{ matrix.ruby }}
           path: probe-out/
           if-no-files-found: warn
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}

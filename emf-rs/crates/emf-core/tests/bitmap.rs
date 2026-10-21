@@ -207,7 +207,8 @@ fn malformed_ranges_and_truncation_recover_without_losing_next_record() {
                 &RecordData::Raw,
                 "{kind} {field} {value}"
             );
-            assert_eq!(d.diagnostics().len(), 1);
+            // The fixed prefix is intact, so the record is opaque, not rejected.
+            assert!(d.diagnostics().is_empty(), "{kind} {field} {value}");
             assert!(d.has_eof());
             assert_eq!(serialize(&d).unwrap(), b);
         }
@@ -225,6 +226,7 @@ fn malformed_ranges_and_truncation_recover_without_losing_next_record() {
         put(&mut b, 92, (fixed - 4) as u32);
         let d = parse(&b, &ParseLimits::default()).unwrap();
         assert_eq!(d.records()[0].data(), &RecordData::Raw);
+        assert_eq!(d.diagnostics().len(), 1, "{kind} below the fixed prefix");
         assert!(d.has_eof());
         assert_eq!(serialize(&d).unwrap(), b);
     }

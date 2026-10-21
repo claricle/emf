@@ -1,9 +1,16 @@
 //! Independent read-only EMF+ snapshot schema; see emf-plus-snapshot-v1.md.
 use crate::emf_plus_typed::Sink;
 use crate::*;
-use emf_core::emf_plus::{Error, ObjectData, ObjectDefinition, RecordData};
+use emf_core::emf_plus::{
+    Error, ObjectData, ObjectDefinition, ObjectReference, RecordData, ReferenceTarget,
+};
 
 pub const EMF_PLUS_SNAPSHOT_VERSION: u32 = 1;
+/// Version 1 plus recovering framing and a typed TSClip family.
+pub const EMF_PLUS_SNAPSHOT_VERSION_2: u32 = 2;
+const TS_CLIP_FAMILY: u32 = 0x106;
+/// kind u32, role u32, frame index u64, raw ID u32, actual object type u32.
+const REFERENCE_DIAGNOSTIC_BYTES: usize = 24;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -13,7 +20,7 @@ pub struct EmfPlusSnapshotOptions {
     pub max_output_bytes: u64,
 }
 
-fn family(data: &RecordData) -> (u32, usize) {
+fn family(data: &RecordData, version: u32) -> (u32, usize) {
     match data {
         RecordData::Header(_) => (1, 16),
         RecordData::Empty => (2, 0),
@@ -30,6 +37,7 @@ fn family(data: &RecordData) -> (u32, usize) {
         RecordData::Effect(_) => (0x103, 0),
         RecordData::TSGraphics(_) => (0x104, 0),
         RecordData::Object(_) => (0x105, 0),
+        RecordData::TSClip(_) if version >= EMF_PLUS_SNAPSHOT_VERSION_2 => (TS_CLIP_FAMILY, 0),
         // These core types have no typed payload in the frozen v1 schema.
         // Their complete source frames remain available through the raw family.
         RecordData::Comment(_) | RecordData::TSClip(_) | RecordData::Opaque(_) => (0, 0),
@@ -38,6 +46,7 @@ fn family(data: &RecordData) -> (u32, usize) {
 
 fn typed_len(
     data: &RecordData,
+    version: u32,
     budget: &mut emf_core::ParseBudget<'_>,
     index: usize,
     object: Option<&(ObjectDefinition, ObjectData)>,
@@ -62,9 +71,12 @@ fn typed_len(
         RecordData::Text(value) => sink.text(value)?,
         RecordData::Effect(value) => sink.effect(value)?,
         RecordData::TSGraphics(value) => sink.ts_graphics(value)?,
+        RecordData::TSClip(value) if version >= EMF_PLUS_SNAPSHOT_VERSION_2 => {
+            sink.ts_clip(value)?
+        }
         _ => {
             sink.budget.charge_work(1)?;
-            return Ok(family(data).1);
+            return Ok(family(data, version).1);
         }
     }
     Ok(sink.len)
@@ -77,6 +89,17 @@ fn nested_error(error: Error) -> Failure {
             Failure::new(EMF_FORMAT_ERROR, Some(offset as u64), error)
         }
         Error::InvalidObject { .. } => Failure::new(EMF_FORMAT_ERROR, None, error),
+    }
+}
+
+/// Diagnostic kind and the actual object type for a reference that does not
+/// resolve; valid and solid-color references produce no diagnostic.
+fn reference_diagnostic(reference: &ObjectReference) -> Option<(u32, u32)> {
+    match reference.target {
+        ReferenceTarget::EmptySlot => Some((1, 0)),
+        ReferenceTarget::WrongType { actual_type } => Some((2, actual_type as u32)),
+        ReferenceTarget::OutOfRange => Some((3, 0)),
+        ReferenceTarget::Definition { .. } | ReferenceTarget::SolidColor => None,
     }
 }
 
@@ -116,7 +139,8 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             return Err(Failure::invalid("unsupported EMF+ options size"));
         }
         let options = &*options;
-        if options.version != EMF_PLUS_SNAPSHOT_VERSION {
+        let version = options.version;
+        if version != EMF_PLUS_SNAPSHOT_VERSION && version != EMF_PLUS_SNAPSHOT_VERSION_2 {
             return Err(Failure::invalid("unsupported EMF+ snapshot version"));
         }
         let document = &document
@@ -127,9 +151,12 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
         // source copies and work/record/allocation ceilings.
         let parse_limits = limits(parse_limits)?;
         let mut budget = emf_core::ParseBudget::new(&parse_limits);
-        let embedded = document
-            .structured_emf_plus_with_budget(&mut budget)
-            .map_err(nested_error)?;
+        let embedded = if version >= EMF_PLUS_SNAPSHOT_VERSION_2 {
+            document.structured_emf_plus_recovering_with_budget(&mut budget)
+        } else {
+            document.structured_emf_plus_with_budget(&mut budget)
+        }
+        .map_err(nested_error)?;
         let stream = &embedded.stream;
         // Assemble and decode once per definition, including continuation chains.
         // Reuse these values for both checked sizing and output writing.
@@ -146,6 +173,16 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             definition.bytes = Vec::new();
             objects.push((definition, value));
         }
+        // Unresolved references are nonfatal diagnostics appended after the frames.
+        let references = stream
+            .object_references_with_budget(&mut budget)
+            .map_err(nested_error)?;
+        let mut diagnostics = budget.vector::<(ObjectReference, (u32, u32))>(references.len())?;
+        diagnostics.extend(
+            references
+                .into_iter()
+                .filter_map(|r| reference_diagnostic(&r).map(|d| (r, d))),
+        );
         let lengths = stream.segment_lengths();
         let raw_len = lengths
             .iter()
@@ -158,7 +195,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
                 .enumerate()
                 .try_fold(0usize, |n, (index, record)| {
                     let object = objects.get(object_index);
-                    let len = typed_len(&record.data, &mut budget, index, object)?;
+                    let len = typed_len(&record.data, version, &mut budget, index, object)?;
                     if object.is_some_and(|(definition, _)| definition.last_record == index) {
                         object_index += 1;
                     }
@@ -177,6 +214,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             .and_then(|n| n.checked_add(40))
             .and_then(|n| n.checked_add(raw_len))
             .and_then(|n| n.checked_add(typed_total))
+            .and_then(|n| n.checked_add(diagnostics.len().checked_mul(REFERENCE_DIAGNOSTIC_BYTES)?))
             .filter(|n| *n as u64 <= options.max_output_bytes && *n <= isize::MAX as usize)
             .ok_or_else(overflow)?;
         // Charge raw copying, table/record scans and both enclosing source scans.
@@ -198,35 +236,30 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
         budget.charge_work(scan_work)?;
         let mut bytes = budget.vector::<u8>(total)?;
         bytes.extend_from_slice(b"EPSN");
-        bytes.extend_from_slice(&EMF_PLUS_SNAPSHOT_VERSION.to_le_bytes());
+        bytes.extend_from_slice(&version.to_le_bytes());
         for value in [
             total as u64,
             lengths.len() as u64,
             stream.records.len() as u64,
-            0,
+            diagnostics.len() as u64,
         ] {
             word(&mut bytes, value);
         }
-        let segments = || {
-            document
-                .records()
-                .iter()
-                .enumerate()
-                .filter_map(|(index, record)| match record.data() {
-                    emf_core::RecordData::Comment { data } if data.starts_with(b"EMF+") => {
-                        Some((index, &data[4..]))
-                    }
-                    _ => None,
-                })
-        };
+        // Segment table: payload starts and lengths come from the selected comments;
+        // only their framed prefixes (`lengths`) carry frames.
+        let mut logical_starts = budget.vector::<usize>(lengths.len())?;
         let mut logical_offset = 0;
-        for (index, segment) in segments() {
+        for (index, segment) in embedded.segment_sources() {
             for value in [index as u64, logical_offset as u64, segment.len() as u64, 4] {
                 word(&mut bytes, value);
             }
+            logical_starts.push(logical_offset);
             logical_offset += segment.len();
         }
-        let mut source = segments().flat_map(|(_, segment)| segment.iter().copied());
+        let mut source = embedded
+            .segment_sources()
+            .zip(lengths)
+            .flat_map(|((_, segment), framed)| segment[..*framed].iter().copied());
         let mut offset = 0usize;
         let mut first_segment = 0usize;
         let mut segment_end = lengths.first().copied().unwrap_or(0);
@@ -244,6 +277,9 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
                 first_segment += 1;
                 segment_end += lengths[first_segment];
             }
+            // Position in the logical EMF+ bytes, which include unframed remainders.
+            let logical =
+                logical_starts[first_segment] + offset - (segment_end - lengths[first_segment]);
             let mut last_segment = first_segment;
             let mut last_end = segment_end;
             while offset + size > last_end {
@@ -252,7 +288,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             }
             for value in [
                 index as u64,
-                offset as u64,
+                logical as u64,
                 first_segment as u64,
                 last_segment as u64,
             ] {
@@ -260,9 +296,9 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             }
             bytes.extend_from_slice(&header[..8]);
             bytes.extend_from_slice(&(data_size as u32).to_le_bytes());
-            let (tag, _) = family(&record.data);
+            let (tag, _) = family(&record.data, version);
             let object = objects.get(object_index);
-            let typed_len = typed_len(&record.data, &mut budget, index, object)?;
+            let typed_len = typed_len(&record.data, version, &mut budget, index, object)?;
             bytes.extend_from_slice(&tag.to_le_bytes());
             word(&mut bytes, typed_len as u64);
             word(&mut bytes, size as u64);
@@ -311,12 +347,26 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
                     budget: &mut budget,
                 }
                 .ts_graphics(value)?,
+                RecordData::TSClip(value) if version >= EMF_PLUS_SNAPSHOT_VERSION_2 => Sink {
+                    len: 0,
+                    out: Some(&mut bytes),
+                    budget: &mut budget,
+                }
+                .ts_clip(value)?,
                 _ => bytes.extend_from_within(raw_start + 12..raw_start + 12 + typed_len),
             }
             if object.is_some_and(|(definition, _)| definition.last_record == index) {
                 object_index += 1;
             }
             offset += size;
+        }
+        for (reference, (kind, actual_type)) in &diagnostics {
+            let role = reference.role.object_type() as u32;
+            bytes.extend_from_slice(&kind.to_le_bytes());
+            bytes.extend_from_slice(&role.to_le_bytes());
+            word(&mut bytes, reference.record_index as u64);
+            bytes.extend_from_slice(&reference.raw_id.to_le_bytes());
+            bytes.extend_from_slice(&actual_type.to_le_bytes());
         }
         debug_assert_eq!(bytes.len(), total);
         out_buffer.write(Box::into_raw(Box::new(EmfBuffer { bytes })));

@@ -194,7 +194,8 @@ fn malformed_tables_counts_and_buffer_spans_recover_raw_with_diagnostics() {
             let input = document(&r);
             let doc = parse(&input, &ParseLimits::default()).unwrap();
             assert_eq!(doc.records()[0].data(), &RecordData::Raw, "{r:?}");
-            assert!(!doc.diagnostics().is_empty());
+            // PolyTextOut stays opaque without a diagnostic, like Ruby's tolerant native.
+            assert!(doc.diagnostics().is_empty());
             assert_eq!(serialize(&doc).unwrap(), input);
         }
     }
@@ -302,7 +303,7 @@ fn color_adjustment_owns_signed_and_unsigned_words_and_preserves_suffix() {
         let input = document(&short);
         let doc = parse(&input, &ParseLimits::default()).unwrap();
         assert_eq!(doc.records()[0].data(), &RecordData::Raw);
-        assert!(!doc.diagnostics().is_empty());
+        assert!(doc.diagnostics().is_empty());
         assert_eq!(serialize(&doc).unwrap(), input);
     }
 }

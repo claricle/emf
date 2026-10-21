@@ -93,10 +93,10 @@ variant has a mapped ABI/Ruby consumer, Model visitor or CLI rendering path.
 ## Remaining acceptance
 
 Resolve compressed TSClip, establish
-independent rendering/conditional-version oracles, and measure the advertised
-ABI/Ruby mapping for every family. Keep licensed embedded corpus, EMF+ Only/dual
-mode behavior, full ordering/reference validation, fuzz/performance evidence and
-cross-platform native execution distinct from synthetic unit acceptance. No full
+independent rendering/conditional-version oracles, and extend the Ruby mapping
+beyond native framing (below). Keep licensed embedded corpus, EMF+ Only/dual
+mode behavior, fuzz/performance evidence and cross-platform native execution
+distinct from synthetic unit acceptance. No full
 format completion, Windows/Linux execution, full corpus rerun or rendering oracle
 is claimed by this checkpoint.
 
@@ -122,3 +122,49 @@ changed container file was rerun after adding nested-decode rejection and passes
 without compiler warnings. The checks use the same one-job local debug target;
 no production repair or new platform/corpus claim accompanies these acceptance
 assertions.
+
+## Object-reference validation and Ruby consumer (feature/native-emfplus-references-ruby)
+
+Core `Stream::object_references` resolves, per record, the objects a known
+Drawing, Text, image or clip record references against the most recently
+completed definition of each of the 64 slots (a definition counts from its last
+continuation record). Targets: `Definition`, `SolidColor` (S flag), `EmptySlot`,
+`WrongType`, `OutOfRange`. Only invalid chains and resource limits are errors;
+unresolved references are data. Tests: `emf_plus_references.rs` (valid, dangling,
+type mismatch, redefinition and type change, continuation, solid color, budget).
+
+The EPSN snapshot appends unresolved references as nonfatal diagnostics
+(`emf-plus-snapshot-v1.md`, "Reference diagnostics").
+
+`Emf::Native::EmfPlusStream.from_metafile` (lib/emf/native/emf_plus_stream.rb)
+builds an `Emf::EmfPlus::Stream` from the snapshot: native framing, object-chain
+and reference validation; Ruby `Records` classes decode each frame's validated raw
+bytes. Over the 27 EMF+ fixtures, including the three corrupted ones, it equals the
+Ruby Stream (segments, records, offsets, gaps, errors, object diagnostics) and the
+fallback set is empty.
+
+Ruby requests snapshot **version 2**, which differs from version 1 only by:
+
+- Recovering framing: each comment is framed on its own by the Ruby framer's rules.
+  A truncated header, invalid Size/DataSize or a Size past the comment ends that
+  comment's framing (the remainder is unframed, kept by Ruby with its collected
+  `ParseError`, which Ruby re-derives at the native stop offset and requires to
+  match); the next comment starts afresh. A record spanning comments is therefore
+  unframed too, as in Ruby, rather than joined. An EMR_COMMENT whose cbData exceeds
+  its record is selected, clamped to the bytes it holds. Core exposes this as
+  `Document::structured_emf_plus_recovering_with_budget`; its stream cannot be applied
+  back (`EmbedError::Edit(RecordLayout)`).
+- SetTSClip with C clear is typed (family 0x106: rectangle count u64, then four
+  sign-extended i32 words per rectangle). C-set clips stay family 0 with raw bytes.
+
+Version 1 is unchanged. Deliberate tighter behaviour: a correctly framed record
+whose typed layout the native decoder rejects (for example a fixed-size record with
+the wrong DataSize, or a SetTSClip whose DataSize is not count * 8) fails the whole
+snapshot, so `from_metafile` returns nil and the Ruby stream keeps it as a diagnosed
+`Unknown`. Regression example: `emf_plus_stream_spec.rb`, "returns nil for a
+correctly framed record whose typed layout native rejects". The normalized native
+payloads are otherwise not mapped into Ruby values.
+
+MetafileImage and texture metafile images now retain any bytes after
+MetafileDataSize in `suffix` (corpus test-109/test-118 carry 24-26); they were
+previously rejected, failing the whole snapshot.

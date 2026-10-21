@@ -3,10 +3,12 @@
 `emf_document_emf_plus_snapshot_v1` is an additive ABI 1 call returning all
 nested frames in one owned `emf_buffer`. It leaves `emf_document_snapshot`
 (schema 2), raw comment family 4, document bytes and existing ABI layouts unchanged.
-This is partial structured **read** support, with no edit/apply API and no Ruby API.
+This is partial structured **read** support, with no edit/apply API. Ruby consumes it through
+`Emf::Native::EmfPlusStream` (lib/emf/native/emf_plus_stream.rb).
 
 Pass required `emf_plus_snapshot_options` with exact `struct_size` (16),
-`version = EMF_PLUS_SNAPSHOT_VERSION` (1), and an explicit `max_output_bytes`.
+`version` 1 (`EMF_PLUS_SNAPSHOT_VERSION`) or 2 (`EMF_PLUS_SNAPSHOT_VERSION_2`, see
+"Version 2"), and an explicit `max_output_bytes`. The header echoes the version.
 The optional ABI 1 `emf_limits` bounds the complete snapshot operation; NULL uses
 core defaults. One cumulative budget covers extraction, object assembly, all object
 decodes, retained metadata and final output allocation. Allocation charges count
@@ -24,25 +26,47 @@ freeing the document. Errors use the existing status/owned-error API.
 No EMF+ comments produces a valid empty snapshot. An empty EMF+ segment is retained.
 Malformed nested framing/typed layouts return `EMF_FORMAT_ERROR` (logical offset
 when available), resource limits retain their status, and output is NULL.
-No partial snapshot or recovery is returned. Core currently has no nonfatal nested
-conformance-diagnostic channel: diagnostic_count is always zero and must not be
-interpreted as proof of conformance. Outer diagnostics remain in schema 2.
+No partial snapshot or recovery is returned. The only nonfatal nested diagnostics are
+unresolved object references (below); a zero diagnostic_count does not prove
+conformance to anything else. Outer diagnostics remain in schema 2.
 
 All integers are little endian, with no implicit alignment. Offsets below are
 relative to the enclosing structure; arrays and variable bodies are concatenated.
 Counts and lengths are unsigned. A consumer must reject unrecognized versions,
 truncated entries, overflowing lengths and inconsistent total length.
 
+## Version 2
+
+Opt-in by `version = 2`; layout and every other rule is version 1. Version 1 requests
+are unchanged, so existing readers see the same bytes. Differences:
+
+- **Recovering framing.** Each EMF+ comment is framed independently using the
+  header rules of the Ruby framer (12 bytes available, Size >= 12 and a multiple of
+  4, DataSize <= Size - 12, Size within the comment). The first header that fails
+  ends that comment's framing without an error; its remaining bytes carry no frame
+  and are visible only in the segment table (length) and the source comment. The next
+  comment starts afresh, so a frame never spans comments and `first segment` equals
+  `last segment`. The logical frame offset still counts the unframed bytes of earlier
+  segments. Typed-layout failures and resource limits still fail the snapshot.
+- **EMR_COMMENT length clamp.** An EMR_COMMENT whose declared cbData exceeds the bytes
+  its record holds, with cbData >= 4, is selected when those bytes begin `EMF+`; its
+  payload is clamped to what the record holds (source index and start 4 as usual).
+  Version 1 does not select it.
+- **TSClip family 0x106** for SetTSClip (0x403A) with C clear: rectangle count u64,
+  then per rectangle left, top, right, bottom words as given on the wire, each a
+  sign-extended i32. C-set (compressed) clips stay family 0, raw only (MS-EMFPLUS
+  2.3.8.1 leaves their coding undefined). A reader of version 1 never sees tag 0x106.
+
 ## Header (40 bytes)
 
 | Offset | Type | Meaning |
 | --- | --- | --- |
 | 0 | bytes[4] | `EPSN` |
-| 4 | u32 | independent schema version, 1 |
+| 4 | u32 | independent schema version, the requested 1 or 2 |
 | 8 | u64 | entire buffer length |
 | 16 | u64 | segment count |
 | 24 | u64 | nested frame count |
-| 32 | u64 | diagnostic count, zero |
+| 32 | u64 | reference diagnostic count (see Reference diagnostics) |
 
 ## Segment table (32 bytes per segment, follows header)
 
@@ -104,6 +128,7 @@ record Type/Flags distinguish operations sharing a layout (e.g. Pair).
 | 0x103 | Effect | normalized subtype, GUID and values below |
 | 0x104 | TSGraphics | normalized state and optional palette below |
 | 0x105 | Object | fragment bounds and normalized definition below |
+| 0x106 | TSClip (version 2) | count u64, rectangles[count][4] i32 |
 
 Consumers must distinguish typed Empty from opaque families. Unknown object
 layouts have a normalized opaque definition. Unknown effect GUIDs have a
@@ -326,6 +351,26 @@ The brush fields follow: 0 Solid: ARGB; 1 Hatch: style, foreground ARGB,
 background ARGB; 2 Texture: texture; 3 PathGradient: path gradient;
 4 LinearGradient: linear gradient. Scalar absence always emits a zero value;
 array/transform/path absence emits only the zero presence word.
+
+### Reference diagnostics
+
+After the last frame's typed payload come `diagnostic count` entries of 24 bytes,
+in frame order. Each reports an object reference that does not resolve against the
+object table as of that frame (the most recently *completed* definition of the
+slot, so a definition's own continuation chain is not visible to earlier frames):
+
+| Offset | Type | Meaning |
+| --- | --- | --- |
+| 0 | u32 | kind: 1 empty slot, 2 wrong object type, 3 ID outside 0..63 |
+| 4 | u32 | required object type (1 brush, 2 pen, 3 path, 4 region, 5 image, 6 font, 7 string format, 8 image attributes) |
+| 8 | u64 | nested frame index of the referencing frame |
+| 16 | u32 | raw referenced ID |
+| 20 | u32 | actual object type in the slot for kind 2, otherwise zero |
+
+Referencing frames are the known Drawing and Text families, DrawImage/DrawImagePoints,
+SetClipPath and SetClipRegion. A brush word with the S flag set is a literal ARGB
+color and is never looked up. Resolved references are not listed. Diagnostics do
+not change the frames or fail the snapshot; invalid object chains still do.
 
 ### Output bounds
 

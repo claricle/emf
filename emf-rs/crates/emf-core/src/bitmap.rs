@@ -364,6 +364,9 @@ fn shape(kind: u32) -> (usize, usize, Option<usize>) {
         _ => unreachable!(),
     }
 }
+pub(crate) fn fixed_payload_len(kind: u32) -> Option<usize> {
+    matches!(kind, 76..=81 | 93 | 94 | 114 | 116).then(|| shape(kind).0 - 8)
+}
 fn word(out: &mut Vec<u8>, v: u32) {
     out.extend_from_slice(&v.to_le_bytes());
 }

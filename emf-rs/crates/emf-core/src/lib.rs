@@ -13,6 +13,7 @@ mod limits;
 mod model;
 mod parse;
 mod poly_text;
+mod prefix;
 mod reader;
 mod serialize;
 pub mod wmf;
@@ -27,6 +28,7 @@ pub use model::{
     RegionData, ScaleFactors, Size, XForm, EMR_EOF, EMR_HEADER, HEADER_FIXED_BYTES,
 };
 pub use parse::parse;
+pub use prefix::opaque_prefix_len;
 pub use reader::Reader;
 pub use serialize::{serialize, serialize_with_limits};
 

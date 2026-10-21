@@ -207,7 +207,7 @@ fn chain_error(offset: usize, reason: &'static str) -> Error {
     }
 }
 
-fn check_stream(
+pub(crate) fn check_stream(
     stream: &Stream,
     budget: &mut Budget<'_>,
     count_records: bool,

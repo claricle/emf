@@ -1,8 +1,15 @@
 # frozen_string_literal: true
 
 module BitmapRecords
+  # EMR type => [fixed size, source pointer offset, mask pointer offset]; native LAYOUTS no longer carries offsets.
+  POINTER_LAYOUTS = {
+    76 => [100, 84, nil], 77 => [108, 84, nil], 78 => [128, 84, 112], 79 => [140, 96, 124],
+    80 => [76, 48, nil], 81 => [80, 48, nil], 93 => [32, 16, nil], 94 => [32, 16, nil],
+    114 => [108, 84, nil], 116 => [108, 84, nil]
+  }.freeze
+
   def bitmap_record(type, layout: :reversed)
-    fixed, source, mask = Emf::Native::BitmapFields::LAYOUTS.values.find { |entry| entry.first == type }.drop(1)
+    fixed, source, mask = POINTER_LAYOUTS.fetch(type)
     bytes = Array.new(fixed / 4) { |i| 0xFFFFFF00 + i }.pack("V*")
     bytes[0, 8] = [type, fixed].pack("V2")
     pointers = [source, source + 8, mask, mask && (mask + 8)]

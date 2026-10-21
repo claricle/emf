@@ -86,6 +86,147 @@ module Emf
         end
       end
 
+      # Source generation for the lazy fields of a FastFill's wires (see Record):
+      # how to copy one field from the template and read its leaves from the
+      # record's bytes.
+      module LazySource
+        private
+
+        # The template's struct alone: no field object is copied, so each
+        # slot of its @field_objs is nil until `lazy_field` makes it.
+        def shell_lines(template)
+          @templates << template
+          ["wire = TEMPLATES[#{@templates.size - 1}].dup", "wire.instance_variable_set(:@parent, nil)",
+           "wire.instance_variable_set(:@field_objs, Array.new(#{template.instance_variable_get(:@field_objs).size}))"]
+        end
+
+        # One `when` per top-level field: a copy of its subtree with the
+        # values of the leaves beneath it, read from the record's bytes,
+        # assigned.
+        def lazy_cases(objs, slots, leaves, reads)
+          slots.map do |name, index|
+            field = objs[index]
+            first = leaves.index { |path, _| path.first == name }
+            lines = field.respond_to?(:field_names) ? copy_lines(field, "f", "wire") : leaf_lines(field, "f", "wire")
+            lines += lazy_assigns(name, leaves, reads, first)
+            "when #{index}\n    #{lines.join("\n    ")}\n    f"
+          end
+        end
+
+        def lazy_assigns(name, leaves, reads, first)
+          return ["fill_unvalued(f, data, base)"] unless first
+
+          leaves.each_with_index.filter_map do |(path, leaf), position|
+            next unless path.first == name
+
+            verb = leaf.name == "Emf::Binary::Float32Le" ? "assign_bits" : "assign"
+            directive, at = reads[position]
+            "#{path.drop(1).inject('f') { |expr, step| "#{expr}.#{step}" }}.#{verb}(data.unpack1(\"#{directive}\", offset: base + #{at}))"
+          end
+        end
+      end
+
+      # Where each leaf of a fixed layout sits in the record's bytes, and the
+      # shell that reads them on demand.
+      module LeafReads
+        WIDTHS = { "V" => 4, "l<" => 4, "C" => 1 }.freeze
+        private_constant :WIDTHS
+
+        private
+
+        # A shell whose fields are made, from the record's bytes, as they are
+        # first used.
+        def lazy_wire(data, base)
+          wire = copy_shell
+          return eager(wire, data, base) unless @lazy_ok
+
+          wire.instance_variable_set(:@lazy_data, data)
+          wire.instance_variable_set(:@lazy_base, base)
+          wire.instance_variable_set(:@lazy_filler, self)
+          wire
+        end
+
+        # The same record with every field made now: what lazy fill is
+        # checked against, and the fallback when the check fails.
+        def eager(wire, data, base)
+          objs = wire.instance_variable_get(:@field_objs)
+          objs.each_index { |index| objs[index] = lazy_field(index, wire, data, base) }
+          wire
+        end
+
+        # [directive, byte offset in the record] of each leaf, in leaf order;
+        # the layout must be gap-free up to the end of the fixed part.
+        def leaf_reads(leaves, directives)
+          at = 0
+          reads = leaves.map do |_, field|
+            directive = directives.fetch(field.name)
+            [directive, at].tap { at += WIDTHS.fetch(directive) }
+          end
+          raise SelfCheck::Unverified, "#{@wire_class}: leaves do not tile the record" unless at == @size
+
+          reads
+        end
+      end
+
+      # The self-check of FlatPoints, run once per point array filler.
+      module FlatPointsCheck
+        # The BinData::Array API the flat-points holder was written
+        # against (bindata 2.5.1): every reader of its element list goes
+        # through `elements`, `clear?` or `assign`.
+        ARRAY_METHODS = %i[<< [] []= assign at clear? concat debug_name_of do_num_bytes do_write each empty?
+                           find_index find_index_of first index initialize_instance initialize_shared_instance
+                           insert last length offset_of push size slice snapshot to_ary unshift].freeze
+        ARRAY_PRIVATE_METHODS = %i[append_new_element elements extend_array new_element slice_index slice_range
+                                   slice_start_length sum_num_bytes_below_index
+                                   sum_num_bytes_for_all_elements].freeze
+        private_constant :ARRAY_METHODS, :ARRAY_PRIVATE_METHODS
+
+        # Reads of a held array, one fresh pair (held, BinData-built) per
+        # scenario; each returns what it observed.
+        FLAT_SCENARIOS = [
+          ->(_wire, array, _write) { [array.size, array.first.snapshot, array.last.snapshot, array.to_a.map(&:snapshot)] },
+          ->(_wire, array, _write) { [array.map { |point| point.x.value + point.y.value }, array[1].x.value] },
+          ->(wire, array, _write) { [array.num_bytes, wire.num_bytes, array.empty?, array.clear?] },
+          ->(wire, _array, _write) { [wire.snapshot] },
+          lambda { |wire, array, write|
+            array << { x: 9, y: -9 }
+            [array.size, array.last.snapshot, write.call(wire)]
+          },
+          lambda { |wire, array, write|
+            array.assign([])
+            [array.size, write.call(wire)]
+          },
+          lambda { |_wire, array, _write|
+            array.assign([{ x: 1, y: 2 }])
+            [array.size, array.first.snapshot, array.clear?]
+          },
+          ->(_wire, array, _write) { [array.to_binary_s, array.clear?, array.snapshot] }
+        ].freeze
+        private_constant :FLAT_SCENARIOS
+
+        # True when this BinData still behaves as the flat-points holder
+        # assumes: the Array API is the one it was written against and a
+        # parsed record that holds its points flat reads, writes and
+        # edits like the same record built by BinData. Any difference, or
+        # an error, makes parsed and built records use eager points.
+        def verify_flat_points
+          return false unless BinData::Array.instance_methods(false).sort == ARRAY_METHODS.sort &&
+                              BinData::Array.private_instance_methods(false).sort == ARRAY_PRIVATE_METHODS.sort
+
+          bytes = bindata_bytes(verification_record)
+          write = method(:bindata_bytes)
+          FLAT_SCENARIOS.all? do |scenario|
+            held = call(bytes).first
+            reference = @wire_class.read(bytes)
+            held.public_send(array_name).respond_to?(:hold_flat_points) &&
+              scenario.call(held, held.public_send(array_name), write) ==
+                scenario.call(reference, reference.public_send(array_name), write)
+          end
+        rescue StandardError
+          false
+        end
+      end
+
       # Source of a FastFill's generated `build_attrs`, same result as
       # WireCopy.build: every known key is fetched into a local first (an
       # unknown key makes the count disagree and returns nil before any
@@ -93,13 +234,17 @@ module Emf
       # A nested struct given as the same struct class is copied leaf by
       # leaf inline; any other value goes through WireCopy.assign.
       class BuildSource
+        include LazySource
+
         ABSENT = Object.new.freeze
 
-        def initialize(template, slots)
+        def initialize(template, slots, leaves = [], reads = [])
           @struct_classes = []
           @templates = []
           @copy = copy_lines(template, "wire", "nil")
           objs = template.instance_variable_get(:@field_objs)
+          @shell = shell_lines(template)
+          @lazy = lazy_cases(objs, slots, leaves, reads)
           @fetches = []
           @counts = []
           @assigns = []
@@ -125,6 +270,24 @@ module Emf
 
         def to_s
           <<~RUBY
+            def copy_template
+              #{@copy.join("\n  ")}
+              wire
+            end
+
+            def copy_shell
+              #{@shell.join("\n  ")}
+              wire
+            end
+
+            # The field at `index` of a shell, copied from the template and
+            # given the value read from `data`, the record starting at `base`.
+            def lazy_field(index, wire, data, base)
+              case index
+              #{@lazy.join("\n  ")}
+              end
+            end
+
             def build_attrs(attrs)
               #{@fetches.join("\n  ")}
               seen = 0
@@ -197,6 +360,32 @@ module Emf
       # twin of a fresh instance and that the generated reader and writer agree
       # with BinData's own on a record with distinct leaf values.
       module SelfCheck
+        # Each compares a lazy record with the read one after the same use.
+        LAZY_SCENARIOS = [
+          ->(lazy, ref, write, _) { lazy.snapshot == ref.snapshot && write.call(lazy) == write.call(ref) },
+          lambda { |lazy, ref, write, leaves|
+            path = leaves.last.first
+            last = ->(wire) { path.inject(wire) { |obj, name| obj.public_send(name) } }
+            last.call(lazy).value == last.call(ref).value && lazy.snapshot == ref.snapshot &&
+              write.call(lazy) == write.call(ref)
+          },
+          lambda { |lazy, ref, write, leaves|
+            [lazy, ref].each { |wire| leaves.first.first.inject(wire) { |o, n| o.public_send(n) }.assign(0x2A) }
+            lazy.snapshot == ref.snapshot && write.call(lazy) == write.call(ref)
+          },
+          lambda { |lazy, _ref, write, _|
+            lazy.assign(lazy.class.new)
+            fresh = lazy.class.new
+            lazy.snapshot == fresh.snapshot && write.call(lazy) == write.call(fresh)
+          },
+          lambda { |lazy, _ref, _write, _|
+            was_clear = lazy.clear?
+            lazy.clear
+            was_clear == false && lazy.snapshot == lazy.class.new.snapshot
+          }
+        ].freeze
+        private_constant :LAZY_SCENARIOS
+
         # Raised when BinData's internals do not behave as WireCopy assumes.
         class Unverified < StandardError; end
 
@@ -231,10 +420,40 @@ module Emf
           verify_read(bytes)
           verify_write(sample)
           verify_build
+          @lazy_ok = verify_lazy(bytes)
           self
         end
 
         private
+
+        # BinData::Struct as the lazy shell assumes (bindata 2.5.1): fields
+        # are reached only through instantiate_obj_at / instantiate_all_objs,
+        # and clear / clear? are the only readers of @field_objs besides.
+        STRUCT_METHODS = %i[[] []= assign clear clear? debug_name_of do_num_bytes do_read do_write each_pair
+                            field_names has_key? initialize_instance initialize_shared_instance key?
+                            offset_of snapshot].freeze
+        STRUCT_PRIVATE_METHODS = %i[as_stringified_hash assign_fields base_field_name define_field_accessors
+                                    define_field_accessors_for find_index_of find_obj_for_name include_obj?
+                                    include_obj_for_io? instantiate_all_objs instantiate_obj_at
+                                    sum_num_bytes_below_index sum_num_bytes_for_all_fields].freeze
+        private_constant :STRUCT_METHODS, :STRUCT_PRIVATE_METHODS
+
+        # True when a lazily filled record reads, writes and edits like the
+        # BinData-read one; false (eager fill) on any difference or error.
+        def verify_lazy(bytes)
+          return false unless BinData::Struct.instance_methods(false).sort == STRUCT_METHODS.sort &&
+                              BinData::Struct.private_instance_methods(false).sort == STRUCT_PRIVATE_METHODS.sort
+
+          data = bytes.b.freeze
+          LAZY_SCENARIOS.all? do |scenario|
+            lazy = lazy_wire(data, 0)
+            reference = @wire_class.read(data)
+            lazy.instance_variable_get(:@lazy_filler) &&
+              scenario.call(lazy, reference, method(:bindata_bytes), @leaves) == true
+          end
+        rescue StandardError
+          false
+        end
 
         def unverified!(what)
           raise Unverified, "#{@wire_class}: #{what}"
@@ -245,23 +464,29 @@ module Emf
         end
 
         def verify_template(fresh)
-          copy = WireCopy.call(@template, nil)
+          [WireCopy.call(@template, nil), copy_template].each { |copy| verify_copy_of(copy, fresh) }
+          unverified!("slots do not cover the field list") unless @slots.keys == fresh.field_names
+        end
+
+        def verify_copy_of(copy, fresh)
           same = copy.instance_of?(@wire_class) && copy.snapshot == fresh.snapshot &&
                  copy.num_bytes == fresh.num_bytes && bindata_bytes(copy) == bindata_bytes(fresh)
           unverified!("template copy differs from a fresh instance") unless same
-          unverified!("slots do not cover the field list") unless @slots.keys == fresh.field_names
         end
 
         # No object of a copy is shared with the template, and every parent
         # link points into the copy.
         def verify_independent
-          copy = WireCopy.call(@template, nil)
+          [-> { WireCopy.call(@template, nil) }, -> { copy_template }].each { |copier| verify_independent_copy(copier) }
+        end
+
+        def verify_independent_copy(copier)
+          copy = copier.call
           shared = tree_objects(@template).map(&:object_id) & tree_objects(copy).map(&:object_id)
           unverified!("copy shares objects with the template") unless shared.empty?
           unverified!("copy parent links are wrong") unless parents_consistent?(copy)
           edit_leaf(copy)
-          again = WireCopy.call(@template, nil)
-          unverified!("editing a copy changed the template") unless again.snapshot == @wire_class.new.snapshot
+          unverified!("editing a copy changed the template") unless copier.call.snapshot == @wire_class.new.snapshot
         end
 
         def tree_objects(struct)
@@ -370,6 +595,7 @@ module Emf
         private_constant :DIRECTIVES, :FLOAT_LEAF, :EMPTY_SUFFIX
 
         include SelfCheck
+        include LeafReads
 
         def self.for(type_id)
           BY_TYPE[type_id]
@@ -383,12 +609,14 @@ module Emf
 
         def initialize(klass)
           @wire_class = klass
+          @lazy_ok = true
           sample = klass.new
           @size = sample.num_bytes
           @leaves = leaves = leaf_paths(sample, [])
           # leaf_paths touched every field, so the sample is fully instantiated.
           @template = sample
           @format = leaves.map { |_, field| DIRECTIVES.fetch(field.name) }.join
+          @leaf_reads = leaf_reads(leaves, DIRECTIVES)
           # Float layouts are not packed: measured on test-000, BinData writes
           # SETWORLDTRANSFORM in 15 objects against 18+ for a value pack, and
           # Float32Le must write its retained NaN bits itself.
@@ -396,7 +624,7 @@ module Emf
           @slots = WireCopy.slots(sample)
           generate_call(leaves)
           generate_pack(leaves)
-          extend(BuildSource.new(@template, @slots).to_module)
+          extend(BuildSource.new(@template, @slots, leaves, @leaf_reads).to_module)
         end
 
         # Keyword construction, `wire_class.new(**attrs)`; nil when a key is
@@ -404,16 +632,34 @@ module Emf
         # class by generate_build; subclasses override `build` and call super.
         def build(attrs) = build_attrs(attrs)
 
+        # [wire, suffix] for one record's bytes. The wire reads its fields
+        # from a private frozen view of them when they are first used.
+        def call(record_bytes)
+          data = record_bytes.b.freeze
+          call_at(data, 0, data.bytesize)
+        end
+
+        # The same for the n_size-byte record at `offset` of the frozen
+        # binary `data`, which the wire keeps and reads fields from.
+        def call_at(data, offset, n_size)
+          [lazy_wire(data, offset), suffix(data, offset, n_size)]
+        end
+
+        # Called by a lazy wire's field copy for a field `call` has no
+        # unpacked leaf value for (subclasses with such a field override it).
+        def fill_unvalued(_field, _data, _base); end
+
         private
 
         def float?(field)
           field.name == FLOAT_LEAF
         end
 
-        def suffix(record_bytes, consumed = @size)
-          return EMPTY_SUFFIX if record_bytes.bytesize == consumed
+        # Bytes of the record at `offset` of `data` past the `consumed` ones.
+        def suffix(data, offset, n_size, consumed = @size)
+          return EMPTY_SUFFIX if n_size == consumed
 
-          record_bytes.byteslice(consumed, record_bytes.bytesize - consumed).b.freeze
+          data.byteslice(offset + consumed, n_size - consumed).b.freeze
         end
 
         def leaf_paths(record, prefix)
@@ -430,24 +676,7 @@ module Emf
         # One specialized `call` per wire class: the record is unpacked into
         # locals and each leaf is assigned through the accessors BinData
         # already resolved for the class, with no per-leaf dispatch loop.
-        def generate_call(leaves)
-          locals = []
-          lines = leaves.each_with_index.map do |(path, field), index|
-            value = "v#{index}"
-            locals << value
-            target = accessor_chain(path)
-            verb = float?(field) ? "assign_bits" : "assign"
-            "#{target}.#{verb}(#{value})"
-          end
-          define_generated(:call, <<~RUBY)
-            def call(record_bytes)
-              #{locals.join(', ')} = record_bytes.unpack(@format)
-              wire = WireCopy.call(@template, nil)
-              #{lines.join("\n  ")}
-              [wire, suffix(record_bytes)]
-            end
-          RUBY
-        end
+        def generate_call(_leaves); end
 
         def generate_pack(leaves)
           if @pack_format
@@ -489,6 +718,102 @@ module Emf
       end
 
       class FastFill
+        # Extended onto the template's array (clones keep it). A built
+        # record holds its coordinates as one flat list of integers; the
+        # BinData points are made the first time anything reads the array's
+        # elements, so a record built and serialized untouched never pays
+        # for them. Every reader of @elements in BinData::Array goes through
+        # `elements`, `clear?` or `assign`, which are the methods covered here.
+        module FlatPoints
+          def hold_flat_points(flat, filler)
+            @elements = nil
+            @flat_points = flat
+            @point_filler = filler
+          end
+
+          def initialize_instance
+            @flat_points = @point_filler = nil
+            super
+          end
+
+          def clear?
+            @flat_points ? false : super
+          end
+
+          def assign(array)
+            return if equal?(array)
+
+            @flat_points = @point_filler = nil
+            super
+          end
+
+          # The coordinates of the given points as one list of Integers, the
+          # values `assign` would store; nil when any is not an Integer or
+          # there are no points, leaving those to the element-by-element copy.
+          def self.coords_of(points)
+            return if points.empty?
+
+            flat = Array.new(points.size * 2)
+            points.each_with_index do |source, index|
+              x, y = source.is_a?(Hash) ? [source[:x], source[:y]] : [source.x, source.y]
+              flat[index * 2] = x.respond_to?(:snapshot) ? x.snapshot : x
+              flat[(index * 2) + 1] = y.respond_to?(:snapshot) ? y.snapshot : y
+            end
+            return unless flat.all?(Integer)
+
+            flat
+          end
+
+          private
+
+          def elements
+            materialize_points if @flat_points
+            super
+          end
+
+          # Build the full element list before publishing it, so a concurrent
+          # reader sees either the flat list or complete elements.
+          def materialize_points
+            list = @point_filler.points_from(self, @flat_points)
+            @elements = list
+            @flat_points = @point_filler = nil
+          end
+        end
+
+        # Builds BinData points from the filler's point template (`@point`
+        # and its x and y leaves, set up by PointArrayFill).
+        module PointCopying
+          # Points as BinData elements, built from one flat coordinate list.
+          def points_from(array, flat)
+            Array.new(flat.size / 2) do |index|
+              point, x, y = point_copy(array)
+              x.assign(flat[index * 2])
+              y.assign(flat[(index * 2) + 1])
+              point
+            end
+          end
+
+          private
+
+          def point_copy(array)
+            point = @point.dup
+            x = @x_leaf.dup
+            y = @y_leaf.dup
+            point.instance_variable_set(:@parent, array)
+            x.instance_variable_set(:@parent, point)
+            y.instance_variable_set(:@parent, point)
+            point.instance_variable_set(:@field_objs, [x, y])
+            [point, x, y]
+          end
+
+          def copy_point(array, source)
+            point, x, y = point_copy(array)
+            x.assign(source.is_a?(Hash) ? source[:x] : source.x)
+            y.assign(source.is_a?(Hash) ? source[:y] : source.y)
+            point
+          end
+        end
+
         # Header plus one counted array of PointL (32-bit) or PointS (16-bit)
         # points. The array field, its count field, the point class, the
         # unpack directive and the coordinate range are all read from the
@@ -498,6 +823,9 @@ module Emf
         # `call` returns nil when the count overruns the bytes, and `pack`
         # when a coordinate is not an int32, leaving those to BinData.
         class PointArrayFill < FastFill
+          include PointCopying
+          include FlatPointsCheck
+
           LAYOUTS = {
             "BinData::Int32le" => { directive: "l<", bytes: 8, range: (-(2**31))..((2**31) - 1) },
             "BinData::Int16le" => { directive: "s<", bytes: 4, range: (-(2**15))..((2**15) - 1) }
@@ -517,6 +845,29 @@ module Emf
             # neither.
             array.instance_variable_set(:@elements, nil)
             [@template, array, @point, @x_leaf, @y_leaf].each { |object| WireCopy.forget_evaluator(object) }
+            array.extend(FlatPoints)
+            @pack_points_format = "#{@format}#{@directive}*"
+            @hold_flat = true
+            @hold_flat = verify_flat_points
+          end
+
+          # `nil` when the count overruns the n_size bytes of the record.
+          def call_at(data, offset, n_size)
+            consumed = @size + (data.unpack1("V", offset: offset + @count_offset) * @point_bytes)
+            return if n_size < consumed
+
+            [lazy_wire(data, offset), suffix(data, offset, n_size, consumed)]
+          end
+
+          # The array field of a lazy wire: its points, held flat or built.
+          def fill_unvalued(array, data, base)
+            count = data.unpack1("V", offset: base + @count_offset)
+            flat = data.unpack("#{@directive}#{count * 2}", offset: base + @size)
+            if @hold_flat
+              array.hold_flat_points(flat, self)
+            else
+              array.instance_variable_set(:@elements, points_from(array, flat))
+            end
           end
 
           # Keyword construction; the points are built from template copies
@@ -529,19 +880,28 @@ module Emf
             return unless wire
 
             array = wire.public_send(array_name)
-            array.instance_variable_set(:@elements, points.map { |source| copy_point(array, source) })
+            flat = FlatPoints.coords_of(points)
+            if flat && @hold_flat
+              array.hold_flat_points(flat, self)
+            else
+              array.instance_variable_set(:@elements, points.map { |source| copy_point(array, source) })
+            end
             wire
           end
 
           def pack(wire)
-            coords = []
-            wire.public_send(array_name).each { |point| coords << point.x.value << point.y.value }
-            return unless coords.all? { |v| v.is_a?(Integer) && @range.cover?(v) }
+            array = wire.public_send(array_name)
+            coords = array.instance_variable_get(:@flat_points) || collect_coords(array)
+            return unless coords.all?(Integer) && coords.all?(@range)
 
-            [*header_values(wire), *coords].pack("#{@format}#{@directive}*")
+            header_values(wire).concat(coords).pack(@pack_points_format)
           end
 
           private
+
+          def collect_coords(array)
+            array.each_with_object([]) { |point, coords| coords << point.x.value << point.y.value }
+          end
 
           # Two points, so the counted array is exercised by the self-check.
           def verification_record
@@ -569,55 +929,9 @@ module Emf
               (point.instance_of?(Hash) && point.size == 2 && point.key?(:x) && point.key?(:y))
           end
 
-          def point_copy(array)
-            point = @point.dup
-            x = @x_leaf.dup
-            y = @y_leaf.dup
-            point.instance_variable_set(:@parent, array)
-            x.instance_variable_set(:@parent, point)
-            y.instance_variable_set(:@parent, point)
-            point.instance_variable_set(:@field_objs, [x, y])
-            [point, x, y]
-          end
-
-          def copy_point(array, source)
-            point, x, y = point_copy(array)
-            x.assign(source.is_a?(Hash) ? source[:x] : source.x)
-            y.assign(source.is_a?(Hash) ? source[:y] : source.y)
-            point
-          end
-
-          def points_from(array, flat)
-            list = Array.new(flat.size / 2)
-            index = 0
-            while index < list.size
-              point, x, y = point_copy(array)
-              x.assign(flat[index * 2])
-              y.assign(flat[(index * 2) + 1])
-              list[index] = point
-              index += 1
-            end
-            list
-          end
-
           def generate_call(leaves)
             count = leaves.index { |path, _| path == [count_name] }
-            array = array_name
-            locals = leaves.each_index.map { |i| "v#{i}" }
-            lines = leaves.each_with_index.map { |(path, _), i| "#{accessor_chain(path)}.assign(v#{i})" }
-            define_generated(:call, <<~RUBY)
-              def call(record_bytes)
-                #{locals.join(', ')} = record_bytes.unpack(@format)
-                consumed = @size + v#{count} * @point_bytes
-                return if record_bytes.bytesize < consumed
-                wire = WireCopy.call(@template, nil)
-                #{lines.join("\n  ")}
-                array = wire.#{array}
-                flat = record_bytes.unpack("\#{@directive}\#{v#{count} * 2}", offset: @size)
-                array.instance_variable_set(:@elements, points_from(array, flat))
-                [wire, suffix(record_bytes, consumed)]
-              end
-            RUBY
+            @count_offset = @leaf_reads.fetch(count).last
           end
 
           def generate_pack(leaves)
@@ -666,6 +980,10 @@ module Emf
             @rect_size = @size
             @size = @rect_size - rect_bytes
             forget_evaluators(@template)
+          end
+
+          def call_at(data, offset, n_size)
+            call(data.byteslice(offset, n_size))
           end
 
           def call(record_bytes)
@@ -761,7 +1079,7 @@ module Emf
             define_generated(name, <<~RUBY)
               def #{name}(record_bytes)
                 #{locals.join(', ')} = record_bytes.unpack("#{format}")
-                wire = WireCopy.call(@template, nil)
+                wire = copy_template
                 #{lines.join("\n  ")}
                 wire.trailing.assign(record_bytes.byteslice(#{size}, record_bytes.bytesize - #{size}))
                 [wire, EMPTY_SUFFIX]

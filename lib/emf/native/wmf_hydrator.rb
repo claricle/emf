@@ -1,10 +1,23 @@
 # frozen_string_literal: true
 
 require_relative "wmf_fields"
+require_relative "wmf_snapshot"
+require_relative "wmf_diagnosis"
 
 module Emf
   module Native
     class WmfHydrator
+      # Native parsing is authoritative for accepted input. A rejection, from the core or the hydrator, is reported
+      # with the contract's diagnosis; when the contract would accept the input the native rejection is raised as is.
+      def self.parse(loader, input)
+        loader.wmf_document(input) do |document|
+          new(WmfSnapshot.new(loader.wmf_snapshot(document)), input).call
+        end
+      rescue Emf::Error => e
+        WmfDiagnosis.call(input)
+        raise e
+      end
+
       def initialize(snapshot, input)
         @snapshot = snapshot
         @input = input
@@ -26,21 +39,41 @@ module Emf
         validate_header(type, size, version, words, placeable, eof, reserved)
         @start = placeable == 1 ? 22 : 0
         @limit = @start + (words * 2)
-        unless @limit <= @input.bytesize && @input.byteslice(@limit..) == @snapshot.trailing
-          raise FormatError, "invalid native WMF declared size"
-        end
+        raise FormatError, "invalid native WMF declared size" unless @limit <= @input.bytesize
 
         placeable_header = hydrate_placeable(type) if placeable == 1
+        raise_framing_error unless eof_present?
+        raise FormatError, "invalid native WMF declared size" unless @input.byteslice(@limit..) == @snapshot.trailing
+
         Model::Wmf::Header.new(type: type, version: version, size_words: words, number_of_objects: objects,
                                max_record_words: maximum, number_of_members: members, placeable: placeable_header)
       end
 
       def validate_header(type, size, version, words, placeable, eof, reserved)
         valid = [1, 2].include?(type) && size == 9 && [0x100, 0x300].include?(version) &&
-                [0, 1].include?(placeable) && eof == 1 && reserved.zero? && words >= 9
+                [0, 1].include?(placeable) && [0, 1].include?(eof) && reserved.zero? && words >= 9
         raise FormatError, "invalid native WMF header" unless valid
         raise FormatError, "invalid native WMF source length" unless @snapshot.source_length == @input.bytesize
         raise FormatError, "WMF input too large" if @input.bytesize > Wmf::Binary::MAX_INPUT_BYTES
+      end
+
+      def eof_present?
+        @snapshot.header.fetch(8) == 1
+      end
+
+      # Core diagnostics 6-10 are record framing failures; Ruby raises ParseError for them.
+      FRAMING_DIAGNOSTICS = {
+        6 => "invalid record length", 7 => "truncated record", 8 => "invalid EOF record",
+        9 => "missing EOF record", 10 => "malformed record payload"
+      }.freeze
+      private_constant :FRAMING_DIAGNOSTICS
+
+      def raise_framing_error
+        kind, has_function, function, _detail, offset = @snapshot.diagnostics.find { |entry| FRAMING_DIAGNOSTICS.key?(entry.first) }
+        raise FormatError, "invalid native WMF header" unless kind
+
+        raise ParseError.new(offset: offset, record_code: has_function == 1 ? function : nil,
+                             message: "WMF #{FRAMING_DIAGNOSTICS.fetch(kind)} at offset #{offset}")
       end
 
       def hydrate_placeable(type)

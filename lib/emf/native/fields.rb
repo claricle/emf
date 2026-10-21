@@ -281,7 +281,7 @@ module Emf
         raise FormatError, "invalid native region payload" if payload.bytesize < fixed
 
         fields = region_scalars(payload, family)
-        data = optional_region_data(payload, family, fixed, fields)
+        data = optional_region_data(payload, family, fixed)
         count = data ? 32 + (data.fetch(:count_rects) * 16) + data.fetch(:trailing).bytesize : 0
         wire_fixed = family == 80 ? 16 : fixed + 12
         raise FormatError, "invalid native region span" if raw.bytesize < wire_fixed + count
@@ -292,12 +292,12 @@ module Emf
         [klass, fields]
       end
 
-      def self.optional_region_data(payload, family, fixed, fields)
+      def self.optional_region_data(payload, family, fixed)
         present = family == 80 ? payload.byteslice(4, 4).unpack1("V") : 1
         raise FormatError, "invalid native region presence" unless (0..1).cover?(present)
         return region_data(payload.byteslice(fixed..)) if present == 1
 
-        raise FormatError, "invalid native clip reset" unless fields.fetch(:dw_mode) == 5 && payload.bytesize == fixed
+        raise FormatError, "invalid native clip reset" unless payload.bytesize == fixed
 
         nil
       end

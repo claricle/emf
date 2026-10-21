@@ -45,7 +45,7 @@ module Emf
             return @wire if @wire
 
             @wire = @wire_source.materialize
-            @suffix = self.class.suffix_of(@wire_source.to_binary_s, @wire)
+            @suffix = @wire_source.suffix(@wire)
             @wire_source = nil
             @wire
           end

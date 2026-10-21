@@ -49,7 +49,7 @@ impl Texture {
                 .checked_add(data.len())
                 .ok_or(SerializeFailure::SizeOverflow)?,
             Some(TextureImage::Metafile { data, suffix, .. }) => {
-                if data.len() > u32::MAX as usize || suffix.len() > 3 {
+                if data.len() > u32::MAX as usize {
                     return Err(SerializeFailure::Inconsistent { offset: 0 });
                 }
                 16usize
@@ -128,9 +128,8 @@ pub(super) fn read(r: &mut Reader<'_, '_, '_>) -> Result<Option<Texture>, Error>
                 let metafile_type = r.word()?;
                 let count = r.word()? as usize;
                 let data = r.bytes(count)?;
-                if r.remaining() > 3 {
-                    return Err(r.error());
-                }
+                // Producers append bytes beyond MetafileDataSize (corpus files do);
+                // they are retained verbatim in the suffix.
                 TextureImage::Metafile {
                     version,
                     metafile_type,

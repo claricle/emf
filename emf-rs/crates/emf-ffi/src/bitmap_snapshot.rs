@@ -55,8 +55,11 @@ pub(super) fn len(value: &BitmapRecord) -> Result<usize, Error> {
     Ok(layout(value)?.1)
 }
 pub(super) fn family(value: &BitmapRecord) -> u32 {
-    match value.record_type() {
-        76..=81 => 94 + value.record_type() - 76,
+    family_of(value.record_type())
+}
+pub(super) fn family_of(record_type: u32) -> u32 {
+    match record_type {
+        76..=81 => 94 + record_type - 76,
         93 => 100,
         94 => 101,
         114 => 102,

@@ -134,9 +134,8 @@ RSpec.describe "EMR SetColorAdjustment semantic fields" do
       ruby = Emf.parse(input)
       ENV["EMF_BACKEND"] = "native"
       native = Emf.parse(input)
-      # Typed native decoding diagnoses a truncated known record while preserving
-      # its body-backed public class and source bytes, like other recovered families.
-      expect(native.errors.size).to eq(native.records.first.wire.body.to_s.bytesize < 24 ? 1 : 0)
+      # Native keeps a short body opaque without a diagnostic, like Ruby (strictness parity).
+      expect(native.errors.size).to eq(ruby.errors.size)
       expect(native.records.first.wire.snapshot).to eq(ruby.records.first.wire.snapshot)
       expect(Emf.serialize(native)).to eq(input)
       next if native.records.first.wire.body.to_s.bytesize < 24

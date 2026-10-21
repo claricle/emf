@@ -6,9 +6,11 @@ pub use emf_plus_snapshot::*;
 mod types;
 mod wmf;
 mod wmf_snapshot;
+mod wmf_view;
 pub use types::*;
 pub use wmf::*;
 pub use wmf_snapshot::*;
+pub use wmf_view::*;
 
 use emf_core::{Format, ParseFailure, ParseLimits, SerializeFailure};
 use std::{

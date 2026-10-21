@@ -206,9 +206,8 @@ impl ObjectDefinition {
                         let metafile_type = r.word()?;
                         let count = r.word()? as usize;
                         let data = r.bytes(count)?;
-                        if r.remaining() > 3 {
-                            return Err(r.error());
-                        }
+                        // Producers append bytes beyond MetafileDataSize (corpus files do);
+                        // they are retained verbatim in the suffix.
                         ObjectData::MetafileImage {
                             version,
                             metafile_type,
@@ -408,7 +407,7 @@ impl ObjectData {
             }
             Self::BitmapImage { data, .. } => (28, [data.len(), 0, 0], 0),
             Self::MetafileImage { data, suffix, .. } => {
-                if data.len() > u32::MAX as usize || suffix.len() > 3 {
+                if data.len() > u32::MAX as usize {
                     return Err(SerializeFailure::Inconsistent { offset: 0 });
                 }
                 (16, [data.len(), suffix.len(), 0], 0)

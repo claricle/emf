@@ -98,6 +98,8 @@ extern "C" {
 #define EMF_FAMILY_SETTEXTJUSTIFICATION 73u
 
 #define EMF_PLUS_SNAPSHOT_VERSION 1u
+/* Adds per-comment recovering framing and the typed SetTSClip family (0x106). */
+#define EMF_PLUS_SNAPSHOT_VERSION_2 2u
 /* Independent read-only EMF+ snapshot options, not an outer snapshot version. */
 typedef struct emf_plus_snapshot_options {
   uint32_t struct_size;
@@ -231,6 +233,12 @@ int32_t emf_wmf_replace_record(emf_wmf_document *document, uint64_t index, uint3
  * Uses the current serialized document after edits, reparsed with default limits.
  * Free the returned buffer with emf_buffer_free. */
 int32_t emf_wmf_document_snapshot(const emf_wmf_document *document, emf_buffer **out_buffer, emf_error **out_error);
+/* Owned WMFV v1 typed views of one record (DIB, Bitmap16, pattern-brush target, Escape
+ * subtypes, embedded-EMF segment); zero entries when none applies. limits may be NULL.
+ * Free with emf_buffer_free. Layout: wmf-views-v1.md. */
+int32_t emf_wmf_record_view(const emf_wmf_document *document, uint64_t index, const emf_limits *limits, emf_buffer **out_buffer, emf_error **out_error);
+/* Owned WMFE v1 list of embedded-EMF escape sequences. limits may be NULL. */
+int32_t emf_wmf_embedded_emf(const emf_wmf_document *document, const emf_limits *limits, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_wmf_serialize(const emf_wmf_document *document, emf_buffer **out_buffer, emf_error **out_error);
 void emf_wmf_document_free(emf_wmf_document *document);
 int32_t emf_buffer_view(const emf_buffer *buffer, const uint8_t **out_data, uint64_t *out_length);
