@@ -19,7 +19,7 @@ env:
 jobs:
   downstream:
     name: emfsvg goldens on Ruby and native backends
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 60
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/emf/emf-rs/target
@@ -45,10 +45,11 @@ jobs:
           bundler-cache: true
           working-directory: emfsvg
 
+      # The goldens were generated against macOS system fonts; emfsvg resolves glyph indices
+      # through fc-match, so this job runs on macOS rather than on Liberation/DejaVu.
       - name: Install font tooling
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fontconfig
+          brew install fontconfig
           fc-match --version
 
       - name: Install Rust
@@ -60,7 +61,7 @@ jobs:
 
       - name: Run emfsvg goldens against both backends
         run: |
-          library="$CARGO_TARGET_DIR/release/libemf_ffi.so"
+          library="$CARGO_TARGET_DIR/release/libemf_ffi.dylib"
           test -f "$library"
           mkdir -p "$RUNNER_TEMP/downstream"
           ruby emf/script/downstream_native_goldens \
