@@ -38,8 +38,7 @@ fn fixture(wide: bool, count: usize, reverse: bool) -> Vec<u8> {
         put(&mut b, d + 8, 2);
         put(&mut b, d + 16, 0x2000 | if no_rect { 0x100 } else { 0 });
     }
-    for index in 0..count {
-        let d = descriptors[index];
+    for (index, &d) in descriptors.iter().enumerate() {
         let dxfield = d + if index % 2 == 1 { 20 } else { 36 };
         for is_dx in [reverse, !reverse] {
             b.extend_from_slice(b"GAP!");
