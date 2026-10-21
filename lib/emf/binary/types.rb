@@ -6,6 +6,33 @@ require "emf/binary/float32_le"
 
 module Emf
   module Binary
+    # `Type.new(x: 1, y: 2)` for an all-integer layout copies one instantiated
+    # sample and assigns the given leaves, as BinData's constructor does
+    # field by field; any other call shape, or an unknown key, is BinData's.
+    module KeywordNew
+      def new(*args, **attrs)
+        if args.empty? && !attrs.empty?
+          template, slots = (@keyword_template ||= keyword_template)
+          wire = Emf::Emr::Binary::WireCopy.build(template, slots, attrs)
+          return wire if wire
+        end
+        super
+      end
+
+      private
+
+      def keyword_template
+        sample = allocate_sample
+        [sample, Emf::Emr::Binary::WireCopy.slots(sample)].freeze
+      end
+
+      def allocate_sample
+        sample = method(:new).super_method.call
+        sample.field_names.each { |name| sample.public_send(name) }
+        sample
+      end
+    end
+
     # Bindata primitives shared by all three formats (WMF, EMF, EMF+).
     # Each record type is declared once and used as a `type:` argument in
     # larger records. See TODO.impl/03-binary-primitives.md.
@@ -90,6 +117,8 @@ module Emf
       end
 
       constants.each { |name| const_get(name).prepend ClassFieldAccessors }
+
+      [PointL, PointS, SizeL, RectL, RectS, ColorRef].each { |type| type.singleton_class.prepend(Emf::Binary::KeywordNew) }
     end
   end
 end
