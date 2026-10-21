@@ -233,6 +233,57 @@ the native backend. The native backend has no final-head measurement yet.
 The run's commands, scripts and raw output are local evidence in
 `/private/tmp/emf-execution/p07-timing-authorized/`.
 
+## Final whole-consumer result with generated construction
+
+Commit `3108916` adds a generated build method per class for keyword
+construction. The microbenchmark below and the whole-consumer result after it
+are kept apart: the first does not imply the second.
+
+- **Construction microbenchmark.** This covers all 194,122 attribute sets the
+  consumer passes for `test-031`. `Klass.new(**attrs)` plus `to_binary_s` fell
+  from 2621 to 1712 ms, a 34.7% cut and the median of 3 alternating runs. Snapshot,
+  BinData-writer bytes and `num_bytes` matched on every set, with 0 mismatches.
+- **Whole consumer workload.** The emfsvg `test-031` round trip ran 3 times on
+  each side, alternating baseline `d93967d` with candidate `3108916`. Every run
+  was a fresh process with `EMF_BACKEND=ruby`. Output hashes were identical in
+  every run.
+  - The baseline was re-run in this session instead of reusing the earlier runs,
+    because macOS Spotlight indexing was loading the machine (load average 14 to
+    18). Pairing the runs keeps baseline and candidate under the same conditions.
+
+| Round trip `test-031` | Baseline `d93967d` | Candidate `3108916` |
+| --- | --- | --- |
+| process CPU, median of 3 | 16.59 s | 9.20 s (-45%) |
+| wall clock, median of 3 | 17.6 s | 10.4 s |
+| peak RSS, median of 3 | 586 MiB | 419 MiB |
+
+The generated build does not move the whole round trip measurably beyond
+`b12f4bd` (9.34 s above). Its construction gain is real, but it falls inside
+this machine's run-to-run noise at the whole-workload level.
+
+**Remaining split.** One run on `3108916`, with non-nested timers that inflate
+the totals slightly: emf accounts for 3.7 s of about 9.1 s, roughly 40%.
+
+| emf part | CPU |
+| --- | --- |
+| `Emf.parse` of the 194,122-record EMF the consumer emits | 1.39 s |
+| `Record.new` | 1.14 s |
+| `Record#to_binary_s` (the consumer's `n_size` pass) | 0.54 s |
+| `Emf.serialize` | 0.45 s |
+| `WireAdapter.new` | 0.16 s |
+
+The other 5.4 s is the consumer's own SVG parsing, emission and rendering.
+
+**Verdict: the under-one-second target is not met** with the Ruby backend
+(9.2 s). Even if emf's share fell to zero, the consumer side alone would still be
+over five seconds. The remaining emf-owned lever is the per-record parse path.
+The `n_size` pass serializes every record a second time, and changing that is a
+consumer change. The native backend still has no final-head measurement. The
+roughly 12-second workload from the issue remains unidentified.
+
+Evidence: `/private/tmp/emf-execution/p07-timing-authorized/`, in
+`final-3108916.txt`, `split-3108916.txt`, `rt_cpu.rb` and `split.rb`.
+
 ## Open
 
 - The native backend measurements over the same fixtures need a library built
