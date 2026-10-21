@@ -20,6 +20,8 @@ The [slow-workload guide](../docs/performance/issue-15-slow-workload.md#final-wh
 
 Generated construction over all 194,122 consumer attribute sets separately fell from 2621 to 1712 ms for construction plus writing, with zero snapshot, byte or size mismatches. That microbenchmark does not imply a further whole-consumer gain beyond the earlier text/point fast paths. A subsequent per-record parser experiment produced no material speedup and was not integrated; it is not an outstanding implementation item.
 
+Later measurements on the same pinned workload (Ruby backend, process CPU, noisy local machine; evidence under `/private/tmp/emf-execution/claude-lanes/roundtrip-profile/`, not retained in the repository): keyword-built record construction (#44) cut the SVG-to-EMF phase from about 9.5 to 5.5 seconds with 40% fewer objects, and lazily filled parsed records (#49) cut test-031 parse alone from 0.40 to 0.18 seconds. On main at 2d67080 a final-review measurement found native parse of test-031 at 0.27–0.30 seconds against Ruby's 0.20–0.21, while native serialization took 0.01 seconds against Ruby's 0.39. The Ruby-side work, not the Rust port, produced the end-to-end gains. Roughly half of the remaining round-trip time is emfsvg's own conversion code.
+
 **The under-one-second end-to-end target remains unmet.** The measured consumer round trip takes 9.20 seconds of CPU; an instrumented split attributes approximately 3.7 seconds to emf and 5.4 seconds to consumer SVG work. The split is diagnostic, not a separate calibrated benchmark. The roughly 12-second input from the issue remains unidentified, and the release-native conversion below is slower than Ruby. Preserve these limits when assessing performance acceptance.
 
 ## Implemented measurement surface

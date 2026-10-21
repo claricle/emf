@@ -21,7 +21,7 @@ The same gem/API must prefer an available compatible native library while retain
 
 ## Target acceptance matrix (still open)
 
-Every row requires an actual build, execution test, and clean gem-install smoke test; cross-compilation alone does not qualify. Linux glibc and musl artifacts are distinct. All eight rows remain open here pending a complete retained, passing target/Ruby acceptance result. Existing partial local/CI evidence is useful for diagnosing failures, not a full matrix certification. Windows ARM64 Ruby 3.1 has no compatible setup-ruby distribution in the current probe and is explicitly excluded; Ruby 3.4 remains an experimental probe.
+Every row requires an actual build, execution test, and clean gem-install smoke test; cross-compilation alone does not qualify. Linux glibc and musl artifacts are distinct. The hosted acceptance section below records passing Ruby 3.4 cells for Windows ARM64 and both musl architectures at a specific revision. Remaining cells require retained passing evidence; those three cells do not certify the full matrix or later source. Windows ARM64 Ruby 3.1 has no compatible setup-ruby distribution in the current probe and is explicitly excluded; Ruby 3.4 remains an experimental probe.
 
 | Rust target | Intended RubyGems platform | Required execution environment |
 | --- | --- | --- |
@@ -94,7 +94,7 @@ The composed source/native collector regressions passed 60 examples, including a
 
 The installed workload now includes self-contained standard/placeable WMF parse, exact dump, typed `MoveTo.x` mutation, reparse and serialization while preserving EMF+ format reporting. Its focused spec passed 14 examples with 0 failures against the retained Apple Silicon library; without a configured library, 1 native-only example is pending, and a configured missing library fails as expected. The workload spec's discovery checks use stubs, so real installed-gem/CLI qualification remains open. Both task4's workload and tasks2–3's WMF checks use retained dylib SHA-256 `a167eae1e2ed3ebeaa7066b8ea870508185a9304416e4f8740e8ea4f5fb67ef3`, not final Rust HEAD.
 
-The retained local Apple Silicon throwaway-probe artifact lacks its real-library phase and packaged revision metadata, so its revision is unknown and acceptance remains open. Keep all eight target rows OPEN; no platform job was rerun. Source-gem revision binding is implemented, while actual revision-bound source/native artifact production, clean installation and per-platform/Ruby acceptance still require retained execution evidence. See `/private/tmp/emf-execution/native-corpus-parity-handoff.md` for focused command and lint results.
+The retained local Apple Silicon throwaway-probe artifact lacks its real-library phase and packaged revision metadata, so its revision is unknown and acceptance remains open. At that local-probe checkpoint all eight target rows remained OPEN; no platform job was rerun. Subsequent hosted evidence is recorded below. Source-gem revision binding is implemented, while actual revision-bound source/native artifact production, clean installation and per-platform/Ruby acceptance still require retained execution evidence. See `/private/tmp/emf-execution/native-corpus-parity-handoff.md` for focused command and lint results.
 
 ## Acceptance
 
