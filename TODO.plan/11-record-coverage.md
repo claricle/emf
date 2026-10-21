@@ -1,6 +1,6 @@
 # EMF record coverage inventory
 
-Status: 118 of 119 record rows Complete; `Comment` remains In progress.
+Status: 119 of 119 record rows Complete.
 
 Source of truth: `lib/emf/emr/binary/records.rb` and its referenced wire files.
 This table lists each autoloaded record class, including `Raw`; it does not claim
@@ -13,14 +13,13 @@ preserving an extended header ([header extension spec](../spec/emf/native/header
 This bounded preservation acceptance does not establish all header variants;
 those remain open.
 
-Every row except `Comment` now has its synthetic variant controls passing with
+Every row now has its synthetic variant controls passing with
 Ruby/native parity, including the divergences that earlier left bitmap, gradient,
-clip-region and text rows In progress. Native keeps a record with an intact fixed
-prefix opaque (as `Raw` in the core, typed by its prefix in the snapshot) instead
-of raising a diagnostic, matching Ruby's tolerant parse. `Comment` stays In
-progress: the Ruby hydrator's `comment_fields` requires the payload to equal
-8 + `cb_data`, so a Comment whose `cb_data` overruns the record is not yet
-parity-equal. The [native family evidence](../docs/native-record-coverage.md)
+clip-region, text and `Comment` rows In progress. Native keeps a record with an
+intact fixed prefix opaque (as `Raw` in the core, typed by its prefix in the
+snapshot) instead of raising a diagnostic, matching Ruby's tolerant parse; a
+`Comment` whose `cb_data` overruns the record stays a typed `Comment` in both.
+The [native family evidence](../docs/native-record-coverage.md)
 links models, hydrators and focused controls; the initial core slice is in
 [PR #17](https://github.com/claricle/emf/pull/17). Synthetic controls and an
 inventory match do not by themselves prove every header variant.
@@ -94,7 +93,7 @@ and corpus parity. Group names are proposed Rust modules.
 | `PolyPolygon` | `POLYPOLYGON` | [`poly_polygon.rb`](../lib/emf/emr/binary/records/poly_polygon.rb) | `emf::geometry` | Complete: 10 synthetic variant and derived controls assert typed fields, diagnostics, exact bytes and Ruby/native parity ([variants](../spec/emf/native/variants/poly_spec.rb)); earlier evidence: core and snapshot-2 Ruby parity; `38722dd` |
 | `PolyPolyline16` | `POLYPOLYLINE16` | [`poly_polyline16.rb`](../lib/emf/emr/binary/records/poly_polyline16.rb) | `emf::geometry` | Complete: 10 synthetic variant and derived controls assert typed fields, diagnostics, exact bytes and Ruby/native parity ([variants](../spec/emf/native/variants/poly_spec.rb)); earlier evidence: core and snapshot-2 Ruby parity; `38722dd` |
 | `PolyPolygon16` | `POLYPOLYGON16` | [`poly_polygon16.rb`](../lib/emf/emr/binary/records/poly_polygon16.rb) | `emf::geometry` | Complete: 10 synthetic variant and derived controls assert typed fields, diagnostics, exact bytes and Ruby/native parity ([variants](../spec/emf/native/variants/poly_spec.rb)); earlier evidence: core and snapshot-2 Ruby parity; `38722dd` |
-| `Comment` | `COMMENT` | [`comment.rb`](../lib/emf/emr/binary/records/comment.rb) | `emf::opaque_extensions` | In progress: 9 of 10 variant controls pass ([variants](../spec/emf/native/variants/control_spec.rb)); missing: native falls back to Raw with a ParseError when cb_data exceeds the record; Ruby keeps the typed Comment |
+| `Comment` | `COMMENT` | [`comment.rb`](../lib/emf/emr/binary/records/comment.rb) | `emf::opaque_extensions` | Complete: all variant controls pass ([variants](../spec/emf/native/variants/control_spec.rb)), including `cb_data` exceeding the record |
 | `SetWorldTransform` | `SETWORLDTRANSFORM` | [`set_world_transform.rb`](../lib/emf/emr/binary/records/set_world_transform.rb) | `emf::transform` | Complete: 6 synthetic variant and derived controls assert typed fields, diagnostics, exact bytes and Ruby/native parity ([variants](../spec/emf/native/variants/state_spec.rb)); earlier evidence: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
 | `ModifyWorldTransform` | `MODIFYWORLDTRANSFORM` | [`modify_world_transform.rb`](../lib/emf/emr/binary/records/modify_world_transform.rb) | `emf::transform` | Complete: 8 synthetic variant and derived controls assert typed fields, diagnostics, exact bytes and Ruby/native parity ([variants](../spec/emf/native/variants/state_spec.rb)); earlier evidence: typed core, snapshot-2 Ruby parity and edits; `e548c23` |
 | `BeginPath` | `BEGINPATH` | [`begin_path.rb`](../lib/emf/emr/binary/records/begin_path.rb) | `emf::path_clip_region` | Complete: 4 synthetic variant and derived controls assert typed fields, diagnostics, exact bytes and Ruby/native parity ([variants](../spec/emf/native/variants/state_spec.rb)); earlier evidence: typed core, snapshot-2 Ruby parity and edits; `b4ec24d` |
