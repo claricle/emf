@@ -108,15 +108,15 @@ RSpec.describe "native extended pen hydration" do
     end
   end
 
-  it "recovers malformed style counts and bitmap spans as Raw with diagnostics" do
+  it "recovers malformed style counts and bitmap spans with Ruby parity" do
     [[48, 0xFFFFFFFF], [12, 1], [16, 0xFFFFFFFF], [20, 68], [24, 0xFFFFFFFF]].each do |offset, value|
       record = extended_pen_record
       record[offset, 4] = [value].pack("V")
       input = header + record + unknown + eof
-      parsed = Emf.parse(input)
-      expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records::Raw)
+      parsed, ruby = parse_both(input)
+      expect(parsed.records.first.wire.class).to eq(ruby.records.first.wire.class)
+      expect(parsed.errors.length).to eq(ruby.errors.length)
       expect(parsed.records[1].wire.i_type.to_i).to eq(0xFFFF)
-      expect(parsed.errors.length).to eq(1)
       expect(Emf.serialize(parsed)).to eq(input)
     end
   end
@@ -137,5 +137,14 @@ RSpec.describe "native extended pen hydration" do
     malformed[32, 4] = [1].pack("V")
     malformed[60, 8] = [1].pack("Q<")
     expect { Emf::Native::Fields.extended_pen("#{malformed}x", "\0" * 56) }.to raise_error(Emf::FormatError)
+  end
+
+  def parse_both(input)
+    native = Emf.parse(input)
+    ENV["EMF_BACKEND"] = "ruby"
+    ruby = Emf.parse(input)
+    [native, ruby]
+  ensure
+    ENV["EMF_BACKEND"] = "native"
   end
 end

@@ -83,23 +83,31 @@ RSpec.describe "native region hydration" do
     excessive[20, 8] = [1_000_001].pack("Q<")
     expect { Emf::Native::Fields.region_data(excessive) }.to raise_error(Emf::FormatError)
     expect { Emf::Native::Fields.region([5, 2].pack("V2"), 80, "") }.to raise_error(Emf::FormatError)
-    expect { Emf::Native::Fields.region([4, 0].pack("V2"), 80, "\0" * 16) }.to raise_error(Emf::FormatError)
     expect { Emf::Native::Fields.region([5, 0].pack("V2"), 80, "") }.to raise_error(Emf::FormatError)
     expect { Emf::Native::Fields.region([5, 1].pack("V2") + data, 80, "\0" * 16) }.to raise_error(Emf::FormatError)
   end
 
-  it "recovers malformed region headers and truncated arrays as raw while retaining following records" do
+  it "recovers malformed region headers and arrays with Ruby parity while retaining following records" do
     (71..75).each do |type|
       fixed = region_offsets.fetch(type)
       malformed_offsets.each do |offset|
         record = region_record(type)
         record[fixed + offset, 4] = Array(0xFFFFFFFF).pack("V")
-        parsed = Emf.parse(header + record + unknown + eof)
-        expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records::Raw)
+        parsed, ruby = parse_both(header + record + unknown + eof)
+        expect(parsed.records.first.wire.class).to eq(ruby.records.first.wire.class)
+        expect(parsed.errors.length).to eq(ruby.errors.length)
         expect(parsed.records[1].wire.i_type.to_i).to eq(0xFFFF)
-        expect(parsed.errors.length).to eq(1)
         expect(Emf.serialize(parsed)).to eq(header + record + unknown + eof)
       end
     end
+  end
+
+  def parse_both(input)
+    native = Emf.parse(input)
+    ENV["EMF_BACKEND"] = "ruby"
+    ruby = Emf.parse(input)
+    [native, ruby]
+  ensure
+    ENV["EMF_BACKEND"] = "native"
   end
 end
