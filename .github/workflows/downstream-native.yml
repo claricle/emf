@@ -1,0 +1,80 @@
+name: Downstream native goldens
+
+# Issue #15 requirement 4: the pinned emfsvg golden and round-trip suites, unmodified,
+# run against both backends of this checkout.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Keep in sync with script/downstream_native_goldens (PINNED_REVISION) and bench/emfsvg.md.
+  EMFSVG_REVISION: 101356dcf673841fda0693076131bca7a0f34948
+
+jobs:
+  downstream:
+    name: emfsvg goldens on Ruby and native backends
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/emf/emf-rs/target
+    steps:
+      # The consumer's specs read fixtures from ../emf/spec/fixtures, so the two
+      # checkouts must be siblings named emf and emfsvg.
+      - name: Check out emf
+        uses: actions/checkout@v4
+        with:
+          path: emf
+
+      - name: Check out emfsvg at the pinned revision
+        uses: actions/checkout@v4
+        with:
+          repository: claricle/emfsvg
+          ref: ${{ env.EMFSVG_REVISION }}
+          path: emfsvg
+
+      - name: Set up Ruby for emfsvg
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+          working-directory: emfsvg
+
+      # The goldens were generated against macOS system fonts; emfsvg resolves glyph indices
+      # through fc-match, so this job runs on macOS rather than on Liberation/DejaVu.
+      - name: Install font tooling
+        run: |
+          brew install fontconfig
+          fc-match --version
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Build emf-ffi (release)
+        working-directory: emf/emf-rs
+        run: cargo +stable build --release --locked -p emf-ffi
+
+      - name: Run emfsvg goldens against both backends
+        run: |
+          library="$CARGO_TARGET_DIR/release/libemf_ffi.dylib"
+          test -f "$library"
+          mkdir -p "$RUNNER_TEMP/downstream"
+          ruby emf/script/downstream_native_goldens \
+            --emfsvg emfsvg \
+            --revision "$EMFSVG_REVISION" \
+            --backend both \
+            --native-library "$library" \
+            --output "$RUNNER_TEMP/downstream/summary.json"
+
+      - name: Upload summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: downstream-native-goldens
+          path: ${{ runner.temp }}/downstream/
+          if-no-files-found: warn

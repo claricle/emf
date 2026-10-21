@@ -1,0 +1,331 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Runs the pinned emfsvg consumer's unmodified golden and round-trip specs
+# against THIS checkout's lib, once per requested emf backend, and fails on any
+# golden difference. The consumer's specs read fixtures from "../emf/spec/fixtures",
+# so the consumer runs in a directory whose sibling "emf" is this checkout (the
+# consumer is mirrored with symlinks when the layout differs).
+#
+# Exit 0: every backend passed and was verified. 1: a backend failed or could not
+# be verified. 2: bad arguments or a consumer that is not the pinned clean checkout.
+
+require "digest"
+require "fileutils"
+require "json"
+require "optparse"
+require "tmpdir"
+
+module DownstreamNativeGoldens
+  PINNED_REVISION = "101356dcf673841fda0693076131bca7a0f34948"
+  DEFAULT_SPECS = %w[spec/golden_spec.rb spec/round_trip_spec.rb spec/round_trip_golden_spec.rb].freeze
+  BACKENDS = %w[ruby native].freeze
+  SELECTED_CLASS = { "ruby" => "Emf::Backend::Ruby", "native" => "Emf::Native::Adapter" }.freeze
+  FAILURE_LINES = 8
+  # Families used by the consumer's goldens; emfsvg resolves glyph indices through fc-match.
+  FONT_FAMILIES = ["Arial", "Calibri", "Carlito", "Courier New", "Times New Roman", "Wingdings 2", "Symbol", "David"].freeze
+  EMF_ROOT = File.expand_path("..", __dir__)
+
+  class UsageError < StandardError; end
+
+  # Loaded into the consumer's rspec process before any spec: records which emf
+  # was loaded and which backend every Emf.parse/Emf.serialize actually selected.
+  PROBE = <<~RUBY
+    require "emf"
+    require "json"
+
+    module DownstreamProbe
+      SELECTIONS = Hash.new(0)
+
+      def selected
+        backend = super
+        SELECTIONS[backend.is_a?(Module) ? backend.name : backend.class.name] += 1
+        backend
+      end
+    end
+    Emf::Backend.singleton_class.prepend(DownstreamProbe)
+
+    at_exit do
+      emf_rb = $LOADED_FEATURES.find { |path| path.end_with?("/lib/emf.rb") }
+      File.write(ENV.fetch("DOWNSTREAM_PROBE_OUT"), JSON.generate(
+        "emf_path" => emf_rb && File.realpath(emf_rb),
+        "requested_backend" => ENV["EMF_BACKEND"],
+        "native_library" => ENV["EMF_NATIVE_LIBRARY"],
+        "selections" => DownstreamProbe::SELECTIONS
+      ))
+    end
+  RUBY
+
+  Options = Struct.new(:emfsvg, :revision, :backends, :native_library, :output, :specs, :example, :emf, keyword_init: true)
+
+  def self.parse_options(argv)
+    options = Options.new(revision: PINNED_REVISION, backends: BACKENDS, specs: [], emf: EMF_ROOT)
+    parser = OptionParser.new do |o|
+      o.banner = "Usage: script/downstream_native_goldens --emfsvg DIR [options]"
+      o.on("--emfsvg DIR", "Checkout of the pinned consumer") { |v| options.emfsvg = v }
+      o.on("--revision SHA", "Expected consumer HEAD (default #{PINNED_REVISION})") { |v| options.revision = v }
+      o.on("--backend NAME", %w[ruby native both], "ruby, native or both (default)") do |v|
+        options.backends = v == "both" ? BACKENDS : [v]
+      end
+      o.on("--native-library FILE", "libemf_ffi for the native run") { |v| options.native_library = v }
+      o.on("--output FILE", "Write the JSON summary here") { |v| options.output = v }
+      o.on("--spec FILE", "Consumer spec file (repeatable; default golden and round-trip specs)") { |v| options.specs << v }
+      o.on("--example PATTERN", "Trial only: rspec -e filter; the summary records it") { |v| options.example = v }
+      o.on("--emf DIR", "emf checkout under test (default: this checkout)") { |v| options.emf = v }
+      o.on("-h", "--help") do
+        puts o
+        exit 0
+      end
+    end
+    parser.parse!(argv)
+    raise UsageError, "unexpected arguments: #{argv.join(' ')}" unless argv.empty?
+
+    validate(options)
+  rescue OptionParser::ParseError => e
+    raise UsageError, e.message
+  end
+
+  def self.validate(options)
+    raise UsageError, "--emfsvg is required" if options.emfsvg.nil? || options.emfsvg.empty?
+    raise UsageError, "--emfsvg is not a directory: #{options.emfsvg}" unless File.directory?(options.emfsvg)
+    raise UsageError, "--emf has no lib/emf.rb: #{options.emf}" unless File.file?(File.join(options.emf, "lib", "emf.rb"))
+
+    if options.backends.include?("native")
+      raise UsageError, "--native-library is required for the native backend" if options.native_library.nil?
+      raise UsageError, "--native-library not found: #{options.native_library}" unless File.file?(options.native_library)
+    end
+    options.specs = DEFAULT_SPECS.dup if options.specs.empty?
+    options
+  end
+
+  def self.consumer_state(dir)
+    head = IO.popen(["git", "-C", dir, "rev-parse", "HEAD"], err: File::NULL, &:read).to_s.strip
+    dirty = IO.popen(["git", "-C", dir, "status", "--porcelain", "--untracked-files=no"], err: File::NULL, &:read).to_s
+    [head, dirty.strip]
+  end
+
+  def self.check_consumer!(options)
+    head, dirty = consumer_state(options.emfsvg)
+    raise UsageError, "consumer HEAD #{head.inspect} is not the pinned #{options.revision}" unless head == options.revision
+    raise UsageError, "consumer has tracked modifications; goldens must be unchanged:\n#{dirty}" unless dirty.empty?
+  end
+
+  # Verifies one backend's rspec JSON and probe record. Returns a list of problems.
+  def self.problems(backend, rspec, probe, options, exit_status)
+    found = []
+    found << "rspec exited #{exit_status}" unless exit_status.zero?
+    found.concat(rspec_problems(rspec, options))
+    found.concat(probe_problems(backend, probe, options))
+    found
+  end
+
+  def self.rspec_problems(rspec, options)
+    return ["rspec JSON report missing or unreadable"] unless rspec
+
+    summary = rspec.fetch("summary", {})
+    found = []
+    found << "no examples ran" unless summary.fetch("example_count", 0).positive?
+    found << "#{summary['failure_count']} failing examples" if summary.fetch("failure_count", 0).positive?
+    failed_examples(rspec).each { |example| found << "failed: #{example['id']} #{example['description']}" }
+    outside = summary.fetch("errors_outside_of_examples_count", 0)
+    found << "#{outside} errors outside examples" if outside.positive?
+    unless options.example
+      ran = rspec.fetch("examples", []).map { |e| File.basename(e.fetch("file_path", "")) }.uniq
+      (options.specs.map { |s| File.basename(s) } - ran).each { |s| found << "#{s} contributed no examples" }
+    end
+    found
+  end
+
+  # The failing examples of an rspec JSON report: id, description and the first lines of the message.
+  def self.failed_examples(rspec)
+    return [] unless rspec
+
+    rspec.fetch("examples", []).select { |e| e["status"] == "failed" }.map do |example|
+      message = example.dig("exception", "message").to_s.lines.first(FAILURE_LINES).map(&:chomp)
+      { "id" => example["id"], "description" => example["full_description"],
+        "exception" => example.dig("exception", "class"), "message" => message.map { |l| l[0, 300] } }
+    end
+  end
+
+  def self.probe_problems(backend, probe, options)
+    return ["probe record missing: emf was not loaded in the consumer"] unless probe
+
+    found = []
+    expected_emf = File.realpath(File.join(options.emf, "lib", "emf.rb"))
+    found << "loaded emf #{probe['emf_path'].inspect}, expected #{expected_emf}" unless probe["emf_path"] == expected_emf
+    found << "EMF_BACKEND was #{probe['requested_backend'].inspect}, expected #{backend}" unless probe["requested_backend"] == backend
+    classes = probe.fetch("selections", {}).keys
+    found << "no backend selection was observed" if classes.empty?
+    expected_class = SELECTED_CLASS.fetch(backend)
+    found << "backends selected #{classes.inspect}, expected only #{expected_class}" unless classes.empty? || classes == [expected_class]
+    found.concat(native_library_problems(backend, probe, options))
+  end
+
+  def self.native_library_problems(backend, probe, options)
+    return [] unless backend == "native"
+
+    expected = File.realpath(options.native_library)
+    actual = probe["native_library"] && File.exist?(probe["native_library"]) && File.realpath(probe["native_library"])
+    actual == expected ? [] : ["native library was #{probe['native_library'].inspect}, expected #{expected}"]
+  end
+
+  # What fc-match resolves each golden font family to on this host; font differences explain golden drift.
+  def self.font_environment
+    FONT_FAMILIES.to_h do |family|
+      pattern = "%{family} | %{file}" # rubocop:disable Style/FormatStringToken -- fontconfig syntax
+      resolved = IO.popen(["fc-match", "-f", pattern, family], err: File::NULL, &:read)
+      [family, resolved.to_s.strip]
+    rescue SystemCallError
+      [family, nil]
+    end
+  end
+
+  def self.read_json(path)
+    JSON.parse(File.read(path))
+  rescue SystemCallError, JSON::ParserError
+    nil
+  end
+
+  # Default executor: runs the argv with env in dir, output to log. Returns the exit status.
+  DEFAULT_EXECUTOR = lambda do |argv, env:, chdir:, log:|
+    pid = Process.spawn(env, *argv, chdir: chdir, in: File::NULL, out: log, err: %i[child out])
+    status = Process.wait2(pid).last
+    status.exitstatus || (128 + status.termsig)
+  end
+
+  class Run
+    def initialize(options, workdir:, executor: DEFAULT_EXECUTOR)
+      @options = options
+      @workdir = workdir
+      @executor = executor
+    end
+
+    def call
+      DownstreamNativeGoldens.check_consumer!(@options)
+      layout = consumer_layout
+      File.write(probe_path, PROBE)
+      results = @options.backends.map { |backend| run_backend(backend, layout) }
+      summary = build_summary(results)
+      write_summary(summary)
+      summary
+    end
+
+    private
+
+    def probe_path = File.join(@workdir, "probe.rb")
+
+    # The consumer resolves "../emf/spec/fixtures" from its working directory.
+    def consumer_layout
+      real = File.realpath(@options.emfsvg)
+      return real if sibling_emf?(real)
+
+      stage = File.join(@workdir, "stage")
+      FileUtils.mkdir_p(File.join(stage, "emfsvg"))
+      File.symlink(File.realpath(@options.emf), File.join(stage, "emf"))
+      Dir.children(real).reject { |name| name == ".git" }.each do |name|
+        File.symlink(File.join(real, name), File.join(stage, "emfsvg", name))
+      end
+      File.realpath(File.join(stage, "emfsvg"))
+    end
+
+    def sibling_emf?(real)
+      sibling = File.join(real, "..", "emf")
+      File.exist?(sibling) && File.realpath(sibling) == File.realpath(@options.emf)
+    end
+
+    def run_backend(backend, cwd)
+      json_path = File.join(@workdir, "rspec-#{backend}.json")
+      probe_out = File.join(@workdir, "probe-#{backend}.json")
+      log = File.join(@workdir, "rspec-#{backend}.log")
+      status = @executor.call(command(json_path), env: env_for(backend, probe_out), chdir: cwd, log: log)
+      rspec = DownstreamNativeGoldens.read_json(json_path)
+      probe = DownstreamNativeGoldens.read_json(probe_out)
+      found = DownstreamNativeGoldens.problems(backend, rspec, probe, @options, status)
+      { backend: backend, rspec: rspec, probe: probe, problems: found, log: log, json: json_path }
+    end
+
+    def command(json_path)
+      real_emfsvg = File.realpath(@options.emfsvg)
+      argv = ["bundle", "exec", "ruby", "-I", File.join(File.realpath(@options.emf), "lib"), "-I", File.join(real_emfsvg, "lib"),
+              "-r", probe_path, "-S", "rspec", *@options.specs, "--no-color", "--format", "json", "--out", json_path]
+      argv.push("-e", @options.example) if @options.example
+      argv
+    end
+
+    def env_for(backend, probe_out)
+      env = { "EMF_BACKEND" => backend, "DOWNSTREAM_PROBE_OUT" => probe_out,
+              "BUNDLE_GEMFILE" => File.join(File.realpath(@options.emfsvg), "Gemfile"),
+              "EMF_NATIVE_LIBRARY" => nil }
+      env["EMF_NATIVE_LIBRARY"] = File.realpath(@options.native_library) if backend == "native"
+      env
+    end
+
+    def build_summary(results)
+      { "consumer" => { "revision" => @options.revision },
+        "emf" => { "path" => File.realpath(@options.emf) },
+        "fc_match" => DownstreamNativeGoldens.font_environment,
+        "trial_filter" => @options.example,
+        "specs" => @options.specs,
+        "passed" => results.all? { |r| r[:problems].empty? },
+        "backends" => results.to_h { |r| [r[:backend], backend_summary(r)] } }
+    end
+
+    def backend_summary(result)
+      counts = result[:rspec]&.fetch("summary", {}) || {}
+      entry = { "passed" => result[:problems].empty?, "problems" => result[:problems],
+                "examples" => counts["example_count"], "failures" => counts["failure_count"],
+                "pending" => counts["pending_count"], "selections" => result[:probe]&.fetch("selections", nil),
+                "emf_path" => result[:probe]&.fetch("emf_path", nil), "log" => kept_log(result),
+                "failed_examples" => DownstreamNativeGoldens.failed_examples(result[:rspec]) }
+      entry["native_library_sha256"] = Digest::SHA256.file(@options.native_library).hexdigest if result[:backend] == "native"
+      entry
+    end
+
+    # Logs live in the temporary workdir; keep them beside the summary when one is written.
+    def kept_log(result)
+      return result[:log] unless @options.output
+
+      base = "#{@options.output.delete_suffix('.json')}-#{result[:backend]}"
+      dest = "#{base}.log"
+      FileUtils.mkdir_p(File.dirname(File.expand_path(dest)))
+      FileUtils.cp(result[:json], "#{base}-rspec.json") if File.file?(result[:json])
+      FileUtils.cp(result[:log], dest) if File.file?(result[:log])
+      dest
+    end
+
+    def write_summary(summary)
+      return unless @options.output
+
+      FileUtils.mkdir_p(File.dirname(File.expand_path(@options.output)))
+      File.write(@options.output, "#{JSON.pretty_generate(summary)}\n")
+    end
+  end
+
+  def self.main(argv, executor: DEFAULT_EXECUTOR, out: $stdout, err: $stderr)
+    options = parse_options(argv)
+    Dir.mktmpdir("downstream-goldens") do |workdir|
+      summary = Run.new(options, workdir: workdir, executor: executor).call
+      report(summary, out: out, err: err)
+      summary["passed"] ? 0 : 1
+    end
+  rescue UsageError => e
+    err.puts e.message
+    2
+  end
+
+  def self.report(summary, out:, err:)
+    summary.fetch("backends").each do |backend, entry|
+      out.puts "#{backend}: #{entry['passed'] ? 'PASS' : 'FAIL'} examples=#{entry['examples']} failures=#{entry['failures']} " \
+               "pending=#{entry['pending']} selections=#{entry['selections'].inspect}"
+      entry["problems"].each { |problem| err.puts "  #{backend}: #{problem}" }
+      entry["failed_examples"].each { |example| err.puts "  #{backend}: #{example['id']}\n    #{example['message'].join("\n    ")}" }
+      tail_log(entry["log"], err) unless entry["passed"]
+    end
+  end
+
+  def self.tail_log(path, err)
+    err.puts File.readlines(path).last(40).join if File.file?(path)
+  end
+end
+
+exit DownstreamNativeGoldens.main(ARGV) if $PROGRAM_NAME == __FILE__
