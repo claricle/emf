@@ -30,6 +30,6 @@ RSpec.describe "Native WMF resource limits" do
     expect(Emf.serialize(parsed)).to eq(bytes)
 
     stub_const("Emf::Wmf::Binary::MAX_RECORDS", records - 1)
-    expect { Emf.parse(bytes) }.to raise_error(Emf::FormatError, /record limit exceeded/)
+    expect { Emf.parse(bytes) }.to raise_error(Emf::ParseError, /record limit exceeded/)
   end
 end

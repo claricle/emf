@@ -34,12 +34,8 @@ module Emf
       end
 
       def parse_wmf(input)
-        require_relative "native/wmf_snapshot"
         require_relative "native/wmf_hydrator"
-        @loader.wmf_document(input) do |document|
-          snapshot = WmfSnapshot.new(@loader.wmf_snapshot(document))
-          WmfHydrator.new(snapshot, input).call
-        end
+        WmfHydrator.parse(@loader, input)
       end
 
       def serialize(metafile)
