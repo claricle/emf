@@ -10,7 +10,9 @@ The roughly 12-second fixture mentioned in [issue #15](https://github.com/claric
 
 ## Current workload evidence
 
-The [recorded Ruby slow-workload baseline](../docs/performance/issue-15-slow-workload.md) covers all 208 valid fixtures at `b81d6aa`: every parse succeeded and unchanged serialization was byte-identical. Six pinned emfsvg candidates were measured against the released gem and this revision. The reported approximately 12-second case remains unidentified. Current conversion exposes a font-construction compatibility failure in five candidates; fixing it and rerunning the consumer is required before accepting their timings. This sequential single-pass evidence identifies workloads and a correctness blocker; repeated distributions, final-head native comparisons and the subsecond target remain open.
+The [recorded Ruby slow-workload baseline](../docs/performance/issue-15-slow-workload.md) covers all 208 valid fixtures at `b81d6aa`: every parse succeeded and unchanged serialization was byte-identical. Six pinned emfsvg candidates were measured against the released gem and this revision. The reported approximately 12-second case remains unidentified. The font-construction failures in that historical comparison were subsequently resolved, as recorded in the workload guide; they are not the current blocker. The guide also records a later Ruby fast-fill comparison at `228f404` against `54230f8`, with preserved downstream golden output. Its reduced sample counts and concurrent machine load make it informational rather than a calibrated baseline. Repeated distributions at the final source revision, final-head native comparisons and the subsecond target remain open.
+
+Ruby implementation through `d08a9c0` additionally includes guarded BinData template copying, attribute construction, nested structure assignment and 16-/32-bit point-array paths. Focused equivalence checks accompany those changes; they do not qualify final-head end-to-end latency. The shared deadline implementation now supports an explicit bounded benchmark series, documented in [the parser harness guide](../bench/README.md), without reducing the policy sample counts. Measurements must still record the exact source and preserve the same correctness controls.
 
 ## Implemented measurement surface
 
@@ -22,7 +24,7 @@ The [recorded Ruby slow-workload baseline](../docs/performance/issue-15-slow-wor
 - `.github/workflows/parser-benchmark.yml` builds a locked release native library and retains schema-v2 input manifest plus forced Ruby/native reports for `simple/image1.emf`; it uses bounded children and three samples after one warmup. Its floating Ubuntu/Ruby/Rust setup is a smoke environment, not the dedicated calibrated runner proposed below.
 - Focused coverage lives under `spec/bench/`, with wire/model and downstream golden preservation checks accompanying optimizations.
 
-Still proposed: a controlled, representative `bench/baseline.json`; calibrated `bench/performance-policy.json`; and a pinned runner regression gate. These artifacts are not present and must not be inferred from the smoke workflow. The isolated native kernel target uses the standard library rather than adding Criterion dependencies.
+The tracked [performance policy](../bench/performance-policy.json) exists in informational mode: five warmups, at least 20 samples and two baseline runs, median/p95 statistics, and a 10% alert ratio. Runner identity, absolute floors and noise bounds remain unset. A controlled, representative `bench/baseline.json` and a calibrated pinned-runner regression gate remain outstanding; neither is established by the smoke workflow. The isolated native kernel target uses the standard library rather than adding Criterion dependencies.
 
 ## Execution order and dependencies
 
