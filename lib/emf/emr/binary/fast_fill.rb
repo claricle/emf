@@ -242,7 +242,7 @@ module Emf
         end
 
         def self.for_class(wire_class)
-          BY_CLASS[wire_class] || POINT_ARRAY_BY_CLASS[wire_class]
+          BY_CLASS[wire_class] || POINT_ARRAY_BY_CLASS[wire_class] || TEXT_BY_CLASS[wire_class]
         end
 
         attr_reader :size, :wire_class
@@ -507,6 +507,149 @@ module Emf
         # when its count fits the bytes.
         def self.for_points(type_id)
           POINT_ARRAY_BY_TYPE[type_id]
+        end
+      end
+
+      class FastFill
+        # EMR_EXTTEXTOUTA/W: a fixed header, an optional clip rectangle (absent
+        # when f_options has ETO_NO_RECT, 0x100) and `rest :trailing`, which
+        # takes every remaining byte, so a parse never leaves a suffix. The
+        # option bits are read from the bytes to pick the with-rect or
+        # without-rect layout; both unpack the header in one call and copy
+        # one template, the rect leaves just staying at their defaults when
+        # absent, as BinData leaves them. `call` returns nil when the bytes
+        # are too short for the layout they select, and `pack` when a scale is
+        # NaN (Float32Le keeps NaN bits) or trailing is not a String, leaving
+        # those to BinData.
+        class TextFill < FastFill
+          NO_RECT = 0x100
+          OPTIONS_OFFSET = 52
+          FLOAT_DIRECTIVE = "e"
+          private_constant :NO_RECT, :OPTIONS_OFFSET, :FLOAT_DIRECTIVE
+
+          def initialize(klass)
+            super
+            @rect_size = @size
+            @size = @rect_size - rect_bytes
+            forget_evaluators(@template)
+          end
+
+          def call(record_bytes)
+            return if record_bytes.bytesize < @size
+
+            if record_bytes.unpack1("V", offset: OPTIONS_OFFSET).anybits?(NO_RECT)
+              read_plain(record_bytes)
+            elsif record_bytes.bytesize >= @rect_size
+              read_rect(record_bytes)
+            end
+          end
+
+          def pack(wire)
+            options = wire.f_options.value
+            trailing = wire.trailing.value
+            return unless options.is_a?(Integer) && trailing.is_a?(::String)
+            return unless [wire.ex_scale.value, wire.ey_scale.value].all? { |v| v.is_a?(Numeric) && !(v.is_a?(Float) && v.nan?) }
+
+            if options.anybits?(NO_RECT)
+              [*plain_values(wire), trailing].pack("#{@plain_pack_format}a*")
+            else
+              [*rect_values(wire), trailing].pack("#{@rect_pack_format}a*")
+            end
+          end
+
+          private
+
+          def rect_bytes
+            @template.rcl.num_bytes
+          end
+
+          def forget_evaluators(object)
+            WireCopy.forget_evaluator(object)
+            object.instance_variable_get(:@field_objs).each do |field|
+              field.respond_to?(:field_names) ? forget_evaluators(field) : WireCopy.forget_evaluator(field)
+            end
+          end
+
+          def leaf_paths(record, prefix)
+            super.reject { |path, _| path == [:trailing] }
+          end
+
+          # Distinct trailing bytes, so the rest field is exercised.
+          def verification_record
+            wire = super
+            wire.trailing.assign("abc".b)
+            wire
+          end
+
+          def verification_tail
+            "".b
+          end
+
+          # The base self-check covers the with-rect layout; this repeats the
+          # read and write comparison with ETO_NO_RECT set, where BinData
+          # skips the rect.
+          def verify_write(sample)
+            super
+            sample.f_options.assign(NO_RECT)
+            bytes = bindata_bytes(sample)
+            unverified!("no-rect layout is not shorter") unless bytes.bytesize == @size + 3
+            wire, rest = call(bytes)
+            expected = @wire_class.read(bytes)
+            same = wire.snapshot == expected.snapshot && bindata_bytes(wire) == bytes && rest.empty?
+            unverified!("no-rect call differs from read") unless same
+            unverified!("no-rect pack differs from BinData's writer") unless pack(sample) == bytes
+          end
+
+          def generate_call(leaves)
+            plain = leaves.reject { |path, _| path.first == :rcl }
+            @rect_format = @format
+            @plain_format = plain.map { |_, field| DIRECTIVES.fetch(field.name) }.join
+            @rect_pack_format = pack_format(leaves)
+            @plain_pack_format = pack_format(plain)
+            define_reader(:read_rect, leaves, @rect_format, :@rect_size)
+            define_reader(:read_plain, plain, @plain_format, :@size)
+            define_values(:rect_values, leaves)
+            define_values(:plain_values, plain)
+          end
+
+          def generate_pack(_leaves); end
+
+          # Scales are packed as floats, everything else as in the read format.
+          def pack_format(leaves)
+            leaves.map { |_, field| float?(field) ? FLOAT_DIRECTIVE : DIRECTIVES.fetch(field.name) }.join
+          end
+
+          def define_reader(name, leaves, format, size)
+            locals = leaves.each_index.map { |i| "v#{i}" }
+            lines = leaves.each_with_index.map do |(path, field), i|
+              "#{accessor_chain(path)}.#{float?(field) ? 'assign_bits' : 'assign'}(v#{i})"
+            end
+            define_generated(name, <<~RUBY)
+              def #{name}(record_bytes)
+                #{locals.join(', ')} = record_bytes.unpack("#{format}")
+                wire = WireCopy.call(@template, nil)
+                #{lines.join("\n  ")}
+                wire.trailing.assign(record_bytes.byteslice(#{size}, record_bytes.bytesize - #{size}))
+                [wire, EMPTY_SUFFIX]
+              end
+            RUBY
+          end
+
+          # Pack-ready values; scale leaves are read as floats, not bits.
+          def define_values(name, leaves)
+            reads = leaves.map { |path, _| "#{accessor_chain(path)}.value" }
+            define_generated(name, "def #{name}(wire)\n  [#{reads.join(', ')}]\nend\n")
+          end
+        end
+
+        TEXT_TYPES = [TypeCodes::EXTTEXTOUTA, TypeCodes::EXTTEXTOUTW].freeze
+        TEXT_BY_TYPE = TEXT_TYPES.to_h { |type_id| [type_id, TextFill.guarded(Records.lookup(type_id))] }.compact.freeze
+        TEXT_BY_CLASS = TEXT_BY_TYPE.values.to_h { |filler| [filler.wire_class, filler] }.freeze
+        private_constant :TEXT_TYPES, :TEXT_BY_TYPE, :TEXT_BY_CLASS
+
+        # The filler for the text-out records, whose layout depends on f_options.
+        def self.for_text(type_id)
+          TEXT_BY_TYPE[type_id]
         end
       end
     end

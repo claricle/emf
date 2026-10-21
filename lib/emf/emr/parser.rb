@@ -217,7 +217,8 @@ module Emf
       end
 
       def read_typed(type_id, n_size, record_bytes)
-        filler = Emf::Emr::Binary::FastFill.for(type_id) || Emf::Emr::Binary::FastFill.for_points(type_id)
+        filler = Emf::Emr::Binary::FastFill.for(type_id) || Emf::Emr::Binary::FastFill.for_points(type_id) ||
+                 Emf::Emr::Binary::FastFill.for_text(type_id)
         if filler && n_size >= filler.size
           filled = filler.call(record_bytes)
           return filled if filled
