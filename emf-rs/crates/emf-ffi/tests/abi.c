@@ -1022,7 +1022,7 @@ static int check_emf_plus_snapshot(void) {
     put_u32(108, 16); put_u32(112, 4); put_u32(116, 0x80ff0033);
     input_length = 120;
     CHECK(emf_parse(input, input_length, NULL, &document, NULL) == EMF_OK);
-    options.version++;
+    options.version = EMF_PLUS_SNAPSHOT_VERSION_2 + 1;
     CHECK(emf_document_emf_plus_snapshot_v1(document, &options, NULL, &buffer, NULL) == EMF_INVALID_ARGUMENT);
     CHECK(buffer == NULL);
     options.version = EMF_PLUS_SNAPSHOT_VERSION;
