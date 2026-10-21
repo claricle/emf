@@ -67,6 +67,8 @@ module Emf
         end
 
         Emf::Emr::Binary::Header.read(full)
+      rescue IOError
+        raise FormatError, "EMF header nSize #{n_size} cannot hold its fields"
       end
 
       # Per-type byte-size validation for records with variable-length arrays.
