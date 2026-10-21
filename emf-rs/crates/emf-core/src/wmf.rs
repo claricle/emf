@@ -5,6 +5,7 @@
 
 pub mod bitmap;
 pub mod brush;
+pub mod contract;
 pub mod dib;
 pub mod escape;
 pub mod geometry;

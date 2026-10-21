@@ -2,19 +2,22 @@
 
 require_relative "wmf_fields"
 require_relative "wmf_snapshot"
-require_relative "wmf_diagnosis"
+require_relative "wmf_rejection"
 
 module Emf
   module Native
     class WmfHydrator
       # Native parsing is authoritative for accepted input. A rejection, from the core or the hydrator, is reported
-      # with the contract's diagnosis; when the contract would accept the input the native rejection is raised as is.
+      # with the native first-rejection detail mapped to the contract's error; when the contract would accept the
+      # input the native rejection is raised as is.
       def self.parse(loader, input)
         loader.wmf_document(input) do |document|
           new(WmfSnapshot.new(loader.wmf_snapshot(document)), input).call
         end
       rescue Emf::Error => e
-        WmfDiagnosis.call(input)
+        found = WmfRejection.read(loader.wmf_rejection(input, Wmf::Binary::MAX_INPUT_BYTES, Wmf::Binary::MAX_RECORDS))
+        raise WmfRejection.error(found) if found
+
         raise e
       end
 
