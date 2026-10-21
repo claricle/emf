@@ -62,7 +62,7 @@ RSpec.describe "native bitmap hydration" do
         body = type == 81 ? :trailing : :body
         value = wire.public_send(body).to_s.dup
         if layout == :reversed
-          source = Emf::Native::BitmapFields::LAYOUTS.values.find { |entry| entry.first == type }[2]
+          source = BitmapRecords::POINTER_LAYOUTS.fetch(type)[1]
           offset = record.byteslice(source, 4).unpack1("V")
           body_start = body_starts.fetch(type, 24)
           value.setbyte(offset - body_start, 0xAB)
@@ -75,22 +75,23 @@ RSpec.describe "native bitmap hydration" do
       end
     end
 
-    it "keeps malformed EMR#{type} buffer ranges raw and continues through EOF" do
+    it "keeps bad EMR#{type} buffer ranges opaque like Ruby and continues through EOF" do
       record = bitmap_record(type)
-      source = Emf::Native::BitmapFields::LAYOUTS.values.find { |entry| entry.first == type }[2]
+      source = BitmapRecords::POINTER_LAYOUTS.fetch(type)[1]
       record[source, 4] = bad_offset
       input = header + record + eof
       parsed = Emf.parse(input)
-      expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records::Raw)
+      expect(parsed.records.first.wire).to be_a(Emf::Emr::Binary::Records.lookup(type))
+      expect(parsed.records.first.wire.snapshot).to eq(Emf::Emr::Binary::Records.lookup(type).read(record).snapshot)
       expect(parsed.records.last.wire).to be_a(Emf::Emr::Binary::Records::Eof)
-      expect(parsed.errors.length).to eq(1)
+      expect(parsed.errors).to be_empty
       expect(Emf.serialize(parsed)).to eq(input)
     end
   end
 
-  it "rejects truncated or impossible exported buffer ranges" do
+  it "rejects truncated exported payloads but not impossible buffer ranges" do
     expect { Emf::Native::BitmapFields.call("".b, 100, "".b) }.to raise_error(Emf::FormatError)
     payload = [1, 2, 32, 0xFFFFFFFF, 0, 0].pack("V*")
-    expect { Emf::Native::BitmapFields.call(payload, 100, "x" * 32) }.to raise_error(Emf::FormatError)
+    expect { Emf::Native::BitmapFields.call(payload, 100, "x" * 32) }.not_to raise_error
   end
 end
