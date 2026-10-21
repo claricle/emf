@@ -8,6 +8,8 @@ require "optparse"
 require "rubygems/package"
 require "tmpdir"
 
+load File.expand_path("../build_source_release_gem", __dir__)
+
 module PlatformAcceptance
   TARGETS = {
     "x86_64-unknown-linux-gnu" => "x86_64-linux-gnu", "aarch64-unknown-linux-gnu" => "aarch64-linux-gnu",
@@ -96,6 +98,91 @@ module PlatformAcceptance
     end
   end
 
+  class PackagePair
+    attr_reader :checks, :conflicts, :revisions
+
+    def initialize(directory, name, target, platform)
+      @directory = directory
+      @name = name
+      @target = target
+      @platform = platform
+      @checks = {}
+      @conflicts = []
+      @revisions = []
+    end
+
+    def call
+      packages = Dir.glob(File.join(@directory, "package/*.gem")).map { |path| [path, Gem::Package.new(path)] }
+      sources, natives = packages.partition { |_path, package| package.spec.platform.to_s == "ruby" }
+      source = single(sources, "source")
+      native = single(natives, "platform")
+      check("source_package", !source.nil?)
+      source_contract(source&.last&.spec)
+      native_contract(native&.first)
+      @conflicts << "#{@name}: source/native version mismatch" if source && native && source.last.spec.version != native.last.spec.version
+      self
+    end
+
+    private
+
+    def check(name, passed) = @checks["#{@name}.#{name}"] = passed ? "PASS" : "OPEN"
+
+    def single(packages, kind)
+      @conflicts << "#{@name}: duplicate #{kind} packages" if packages.size > 1
+      packages.first if packages.size == 1
+    end
+
+    def valid_revision?(value)
+      return false if value.nil?
+
+      unless value.is_a?(String) && value.match?(/\A[0-9a-f]{40}\z/)
+        @conflicts << "#{@name}: invalid package revision #{value.inspect}"
+        return false
+      end
+      @revisions << value
+      true
+    end
+
+    def valid_contract?(actual, expected)
+      expected.map do |field, value|
+        next false if actual[field].nil?
+        next true if value && actual[field] == value
+
+        @conflicts << "#{@name}: package #{field} #{actual[field].inspect} != #{value.inspect}"
+        false
+      end.all?
+    end
+
+    def source_contract(spec)
+      metadata = spec ? spec.metadata : {}
+      valid_revision = valid_revision?(metadata["emf_revision"])
+      expected = SourceReleaseGemBuilder.metadata(metadata["emf_revision"]).except("emf_revision")
+      valid_contract = valid_contract?(metadata, expected)
+      @conflicts << "#{@name}: source package name mismatch" if spec && spec.name != "emf"
+      check("source_contract", valid_revision && valid_contract)
+    end
+
+    def native_contract(path)
+      package, provenance = path ? PackageMetadata.read(path) : [nil, nil]
+      check("revision", provenance && valid_revision?(provenance["revision"]))
+      unless provenance
+        check("native_contract", false)
+        return
+      end
+      identity = [package.spec.name, package.spec.platform.to_s, provenance["platform"], provenance["target"]]
+      @conflicts << "#{@name}: package target/platform mismatch" unless identity == ["emf", @platform, @platform, @target]
+      if provenance["gem_version"] && provenance["gem_version"] != package.spec.version.to_s
+        @conflicts << "#{@name}: package version mismatch"
+      end
+      expected = SourceReleaseGemBuilder.metadata(nil)
+      check("native_contract", valid_contract?(provenance, {
+                                                 "cargo_lock_sha256" => expected.fetch("emf_cargo_lock_sha256"),
+                                                 "crate_version" => expected.fetch("emf_crate_version"),
+                                                 "gem_version" => package.spec.version.to_s
+                                               }))
+    end
+  end
+
   module RealEvidence
     def self.checks(directory)
       workload = File.join(directory, "real/workload.log")
@@ -113,7 +200,7 @@ module PlatformAcceptance
     end
 
     def self.workload_passes?(log)
-      log.match?(/^installed gem: emf-/) && log.match?(/^parsed: format=emf records=\d+$/) &&
+      log.match?(/^installed gem: emf-/) && log.match?(/^parsed: format=emf(?:_plus)? records=\d+$/) &&
         log.lines.include?("discovery_without_env=works\n") && log.lines.include?("dump: roundtrip_identical=true\n") &&
         log.match?(/^mutate: SetTextColor color.red \d+ -> \d+, reparse\+reserialize identical$/) &&
         %w[standard placeable].all? { |kind| wmf_workload_passes?(log, kind) } && log.lines.last == "ok\n"
@@ -187,29 +274,19 @@ module PlatformAcceptance
     end
 
     def read_packages
-      @revisions = %w[probe real].filter_map do |name|
+      @revisions = []
+      %w[probe real].each do |name|
         directory = name == "probe" ? @directory : File.join(@directory, "real")
-        paths = Dir.glob(File.join(directory, "package/*.gem")).reject { |path| Gem::Package.new(path).spec.platform.to_s == "ruby" }
-        @conflicts << "#{name}: duplicate platform packages" if paths.size > 1
-        metadata = paths.size == 1 && package_metadata(paths.first, name)
-        check("#{name}.revision", metadata && metadata.match?(/\A[0-9a-f]{40}\z/))
-        metadata
+        pair = PackagePair.new(directory, name, @target, @platform).call
+        @checks.merge!(pair.checks)
+        @conflicts.concat(pair.conflicts)
+        @revisions.concat(pair.revisions)
       end
       @conflicts << "mixed revisions within row" if @revisions.uniq.size > 1
       @revision = @revisions.uniq.size == 1 ? @revisions.first : nil
       validate_expected_revisions
     rescue Gem::Package::Error, JSON::ParserError, Errno::ENOENT => e
       @blockers << "package metadata unreadable: #{e.message}"
-    end
-
-    def package_metadata(path, name)
-      package, provenance = PackageMetadata.read(path)
-      return unless provenance
-
-      identity = [package.spec.name, package.spec.platform.to_s, provenance["platform"], provenance["target"]]
-      @conflicts << "#{name}: package target/platform mismatch" unless identity == ["emf", @platform, @platform, @target]
-      @conflicts << "#{name}: package version mismatch" unless provenance["gem_version"] == package.spec.version.to_s
-      provenance["revision"] if provenance["revision"].is_a?(String)
     end
 
     def validate_expected_revisions

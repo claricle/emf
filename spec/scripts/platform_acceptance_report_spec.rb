@@ -38,6 +38,21 @@ RSpec.describe PlatformAcceptance::Report do
     end.join
     "#{emf_workload}#{wmf}ok\n"
   end
+  let(:contract) { SourceReleaseGemBuilder.metadata(revision) }
+  let(:native_metadata) do
+    { "platform" => platform, "target" => metadata_target, "revision" => revision, "gem_version" => "0.1.2",
+      "cargo_lock_sha256" => contract.fetch("emf_cargo_lock_sha256"), "crate_version" => contract.fetch("emf_crate_version") }
+  end
+  let(:source_metadata) { contract.dup }
+  let(:source_spec) do
+    double(name: "emf", platform: "ruby", version: Gem::Version.new("0.1.2"), metadata: source_metadata)
+  end
+  let(:real_source_spec) do
+    double(name: "emf", platform: "ruby", version: source_spec.version,
+           metadata: source_metadata.merge("emf_revision" => real_revision))
+  end
+  let(:source_package) { double(spec: source_spec) }
+  let(:real_source_package) { double(spec: real_source_spec) }
   let(:run_cli) do
     lambda do |*arguments|
       script = File.expand_path("../../script/platform_probe/acceptance_report.rb", __dir__)
@@ -52,12 +67,16 @@ RSpec.describe PlatformAcceptance::Report do
       begin
         allow(Gem::Package).to receive(:new) do |path|
           @cli_package_path = path
-          package
+          if File.basename(path).include?("source")
+            path.include?("/real/") ? real_source_package : source_package
+          else
+            package
+          end
         end
         allow(package).to receive(:extract_files) do |directory, _pattern|
           FileUtils.mkdir_p(File.join(directory, "lib/emf/native"))
           metadata_revision = @cli_package_path.include?("/real/") ? real_revision : revision
-          provenance = { platform: platform, target: metadata_target, revision: metadata_revision, gem_version: "0.1.2" }
+          provenance = native_metadata.merge("revision" => metadata_revision)
           File.write(File.join(directory, "lib/emf/native/provenance.json"), JSON.generate(provenance))
         end
         $0 = script
@@ -91,10 +110,15 @@ RSpec.describe PlatformAcceptance::Report do
   before do
     allow(PlatformAcceptance::PackageMetadata).to receive(:read) do |path|
       metadata_revision = path.include?("/real/") ? real_revision : revision
-      [package, { "platform" => platform, "target" => metadata_target,
-                  "revision" => metadata_revision, "gem_version" => "0.1.2" }]
+      [package, native_metadata.merge("revision" => metadata_revision)]
     end
-    allow(Gem::Package).to receive(:new).and_return(package)
+    allow(Gem::Package).to receive(:new) do |path|
+      if File.basename(path).include?("source")
+        path.include?("/real/") ? real_source_package : source_package
+      else
+        package
+      end
+    end
     @tmp = Dir.mktmpdir("emf-acceptance-report")
     @directory = File.join(@tmp, "probe-#{target}-ruby3.4", "#{target}-ruby3.4")
     @real = File.join(@directory, "real")
@@ -117,6 +141,7 @@ RSpec.describe PlatformAcceptance::Report do
       File.write(File.join(directory, "summary.txt"), "#{lines.join("\n")}\nresult=PASS\n")
       FileUtils.mkdir_p(File.join(directory, "package"))
       File.write(File.join(directory, "package", "fixture.gem"), "stub package path\n")
+      File.write(File.join(directory, "package", "source.gem"), "stub source package path\n")
     end
     File.write(File.join(@directory, "load-direct.jsonl"), "#{JSON.generate(load_record)}\n")
     resolution = { intended_platform: platform, installed_platform: platform, native_gem_selected: true, gem_install_ok: true }
@@ -138,6 +163,121 @@ RSpec.describe PlatformAcceptance::Report do
     excluded = report.fetch(:targets).last.fetch(:rubies).first
     expect(excluded).to include(status: "OPEN", excluded: true, revision: nil)
     expect(excluded.fetch(:exclusion)).to include("unavailable")
+  end
+
+  it "accepts an EMF+ installed fixture alongside both WMF workloads" do
+    File.write(File.join(@real, "workload.log"), workload.sub("format=emf records=", "format=emf_plus records="))
+    expect(row.fetch(:status)).to eq("PASS")
+  end
+
+  %w[probe real].each do |phase|
+    context "with #{phase} source/native package evidence" do
+      let(:phase_directory) { phase == "probe" ? @directory : @real }
+      let(:phase_source_spec) { phase == "probe" ? source_spec : real_source_spec }
+
+      it "keeps a missing source package open without losing the observed native revision" do
+        FileUtils.rm(File.join(phase_directory, "package/source.gem"))
+        expect(row).to include(status: "OPEN", revision: revision)
+        expect(row.fetch(:checks)).to include("#{phase}.source_package" => "OPEN")
+        expect(row.fetch(:conflicts)).to be_empty
+      end
+
+      it "rejects duplicate source packages" do
+        File.write(File.join(phase_directory, "package/duplicate-source.gem"), "stub source duplicate")
+        expect(row.fetch(:status)).to eq("FAILED")
+        expect(row.fetch(:conflicts)).to include("#{phase}: duplicate source packages")
+      end
+
+      it "rejects duplicate native packages" do
+        File.write(File.join(phase_directory, "package/duplicate.gem"), "stub native duplicate")
+        expect(row.fetch(:status)).to eq("FAILED")
+        expect(row.fetch(:conflicts)).to include("#{phase}: duplicate platform packages")
+      end
+
+      it "rejects a source revision differing from the native artifact" do
+        allow(phase_source_spec).to receive(:metadata).and_return(contract.merge("emf_revision" => "d" * 40))
+        expect(row.fetch(:status)).to eq("FAILED")
+        expect(report.fetch(:revisions)).to contain_exactly(revision, "d" * 40)
+        expect(report.fetch(:conflicts)).to include("mixed revisions within row")
+      end
+
+      it "keeps missing source revision metadata open" do
+        allow(phase_source_spec).to receive(:metadata).and_return(contract.except("emf_revision"))
+        expect(row.fetch(:status)).to eq("OPEN")
+        expect(row.fetch(:conflicts)).to be_empty
+      end
+
+      it "rejects a source version differing from the platform package" do
+        allow(phase_source_spec).to receive(:version).and_return(Gem::Version.new("9.9.9"))
+        expect(row.fetch(:status)).to eq("FAILED")
+        expect(row.fetch(:conflicts).join).to include("#{phase}: source/native version mismatch")
+      end
+    end
+  end
+
+  { "emf_cargo_lock_sha256" => "0" * 64, "emf_crate_version" => "999.0.0" }.each do |field, wrong|
+    context "with stale source #{field}" do
+      before { source_metadata[field] = wrong }
+
+      it "rejects the source contract even when its revision matches" do
+        expect(row.fetch(:status)).to eq("FAILED")
+        expect(row.fetch(:conflicts).join).to include(field)
+      end
+    end
+
+    context "without source #{field}" do
+      before { source_metadata.delete(field) }
+
+      it "keeps the missing source contract open" do
+        expect(row.fetch(:status)).to eq("OPEN")
+        expect(row.fetch(:conflicts)).to be_empty
+      end
+    end
+  end
+
+  { "cargo_lock_sha256" => "0" * 64, "crate_version" => "999.0.0" }.each do |field, wrong|
+    context "with stale native #{field}" do
+      before { native_metadata[field] = wrong }
+
+      it "rejects the native contract even when its revision matches" do
+        expect(row.fetch(:status)).to eq("FAILED")
+        expect(row.fetch(:conflicts).join).to include(field)
+      end
+    end
+  end
+
+  it "keeps absent native provenance open" do
+    allow(PlatformAcceptance::PackageMetadata).to receive(:read).and_return([package, nil])
+    expect(row).to include(status: "OPEN", revision: revision)
+    expect(row.fetch(:checks)).to include("real.revision" => "OPEN", "real.native_contract" => "OPEN")
+    expect(row.fetch(:conflicts)).to be_empty
+  end
+
+  %w[cargo_lock_sha256 crate_version gem_version revision].each do |field|
+    it "keeps missing native #{field} evidence open" do
+      allow(PlatformAcceptance::PackageMetadata).to receive(:read).and_return([package, native_metadata.except(field)])
+      expect(row.fetch(:status)).to eq("OPEN")
+      expect(row.fetch(:conflicts)).to be_empty
+    end
+  end
+
+  it "rejects malformed recorded revisions rather than treating them as absent" do
+    source_metadata["emf_revision"] = "not-a-sha"
+    expect(row.fetch(:status)).to eq("FAILED")
+    expect(row.fetch(:conflicts).join).to include("invalid package revision")
+  end
+
+  it "rejects native versions conflicting with their provenance" do
+    native_metadata["gem_version"] = "9.9.9"
+    expect(row.fetch(:status)).to eq("FAILED")
+    expect(row.fetch(:conflicts).join).to include("package version mismatch")
+  end
+
+  it "accepts a consistent declared gem version across the pair" do
+    allow(package_spec).to receive(:version).and_return(Gem::Version.new("9.9.9"))
+    allow(source_spec).to receive(:version).and_return(Gem::Version.new("9.9.9"))
+    native_metadata["gem_version"] = "9.9.9"
+    expect(row.fetch(:status)).to eq("PASS")
   end
 
   it "keeps the old EMF-only installed workload open" do

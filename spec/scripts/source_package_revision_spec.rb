@@ -46,8 +46,8 @@ RSpec.describe "script/check_native_package source revision binding" do
       end
       Gem::Package.define_singleton_method(:new) { |_path| package }
       original_glob = Dir.method(:glob)
-      Dir.define_singleton_method(:glob) do |pattern, *args|
-        pattern == "stub-packages/*.gem" ? ["release.gem"] : original_glob.call(pattern, *args)
+      Dir.define_singleton_method(:glob) do |pattern, *args, **kwargs, &block|
+        pattern == "stub-packages/*.gem" ? ["release.gem"] : original_glob.call(pattern, *args, **kwargs, &block)
       end
       ARGV.unshift("--directory", "stub-packages")
       load script
