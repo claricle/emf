@@ -69,11 +69,6 @@ module RecordVariants
     ["flags reserved explicit nocollapse", [[255, 0, 128, 1], [0, 255, 0, 2], [9, 9, 9, 4], [0, 0, 0, 0xFF]], "".b],
     ["trailing bytes", [[7, 8, 9, 0]], "\x11\x22\x33".b]
   ].freeze
-  GRADIENT_RECT_DIAGNOSTIC = "native sizes every gradient element at 12 bytes and keeps rectangle-mode records with " \
-                             "8-byte GRADIENT_RECT elements (MS-EMF 2.3.5.12) as Raw; Ruby keeps them typed"
-  GRADIENT_MODE_DIAGNOSTIC = "native falls back to Raw with ParseError 108 for a gradient mode above 2; Ruby keeps the typed record"
-  GRADIENT_BOUNDS_DIAGNOSTIC = "native falls back to Raw with ParseError 108 when the counts exceed the record; " \
-                               "Ruby keeps the typed record with no diagnostic"
   PEN_BMI = [40, 2, -2, 1, 32, 0, 16, 0, 0, 0, 0].pack("VllvvVVllVV").freeze
   PEN_BITS = (1..16).to_a.pack("C*").freeze
 
@@ -128,26 +123,24 @@ module RecordVariants
   define("RealizePalette", 52) { valid("header only (8 bytes)") }
 
   define("GradientFill", 118, hydrated: true) do
-    pending_derived(:truncated, GRADIENT_BOUNDS_DIAGNOSTIC)
     vertex = ->(x, y, red) { [x, y].pack("l<2") + [red, 0x8000, 0, 0xFFFF].pack("v4") }
     rect_verts = vertex.call(0, 0, 0xFFFF) + vertex.call(INT_MIN, INT_MAX, 0)
     tri_verts = vertex.call(1, 2, 3) + vertex.call(4, 5, 6) + vertex.call(-7, -8, 9)
     wide_rect = rect_verts + [0, 1, 0xDEADBEEF].pack("V3")
-    # [label, mode, vertices, elements, body, pending]; MS-EMF sizes a GRADIENT_RECT at 8 bytes.
-    [["horizontal rectangle, 8-byte element", 0, 2, 1, rect_verts + [0, 1].pack("V2"), GRADIENT_RECT_DIAGNOSTIC],
-     ["vertical rectangle, 8-byte element", 1, 2, 1, rect_verts + [1, 0].pack("V2"), GRADIENT_RECT_DIAGNOSTIC],
-     ["two rectangles, 8-byte elements", 0, 2, 2, rect_verts + [0, 1, 1, 0].pack("V4"), GRADIENT_RECT_DIAGNOSTIC],
-     ["horizontal rectangle, 12-byte element", 0, 2, 1, wide_rect, nil],
-     ["vertical rectangle, 12-byte element", 1, 2, 1, wide_rect, nil],
-     ["undefined mode, 12-byte element", 7, 2, 1, wide_rect, GRADIENT_MODE_DIAGNOSTIC],
-     ["no vertices or elements", 0, 0, 0, "".b, nil],
-     ["triangle", 2, 3, 1, tri_verts + [0, 1, 2].pack("V3"), nil]].each do |label, mode, verts, elements, body, pending|
+    # [label, mode, vertices, elements, body]; MS-EMF sizes a GRADIENT_RECT at 8 bytes, with one optional padding word each.
+    [["horizontal rectangle, 8-byte element", 0, 2, 1, rect_verts + [0, 1].pack("V2")],
+     ["vertical rectangle, 8-byte element", 1, 2, 1, rect_verts + [1, 0].pack("V2")],
+     ["two rectangles, 8-byte elements", 0, 2, 2, rect_verts + [0, 1, 1, 0].pack("V4")],
+     ["horizontal rectangle, 12-byte element", 0, 2, 1, wide_rect],
+     ["vertical rectangle, 12-byte element", 1, 2, 1, wide_rect],
+     ["undefined mode, 12-byte element", 7, 2, 1, wide_rect],
+     ["no vertices or elements", 0, 0, 0, "".b],
+     ["triangle", 2, 3, 1, tri_verts + [0, 1, 2].pack("V3")]].each do |label, mode, verts, elements, body|
       valid(label, rectl("rcl_bounds", -1, -2, 30, 40), u32("n_ver", verts), u32("n_tri", elements), u32("ul_mode", mode),
-            raw("body", body), pending: pending)
+            raw("body", body))
     end
     malformed("vertex count exceeds record", rectl("rcl_bounds", 0, 0, 1, 1), u32("n_ver", 99), u32("n_tri", 1), u32("ul_mode", 0),
-              pad("\0".b * 16), pending: GRADIENT_BOUNDS_DIAGNOSTIC)
-    malformed("counts max", rectl("rcl_bounds", 0, 0, 1, 1), u32("n_ver", UINT_MAX), u32("n_tri", UINT_MAX), u32("ul_mode", 2),
-              pending: GRADIENT_BOUNDS_DIAGNOSTIC)
+              pad("\0".b * 16))
+    malformed("counts max", rectl("rcl_bounds", 0, 0, 1, 1), u32("n_ver", UINT_MAX), u32("n_tri", UINT_MAX), u32("ul_mode", 2))
   end
 end

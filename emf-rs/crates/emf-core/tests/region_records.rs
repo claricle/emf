@@ -204,8 +204,19 @@ fn zero_clip_region_resets_only_in_copy_mode_and_can_be_edited() {
             .data(),
         &reset
     );
+    // A zero count carries no region for any mode, as in Ruby's tolerant native.
     for mode in [0, 1, 2, 3, 4, u32::MAX] {
-        assert_raw(75, &words(&[0, mode]));
+        let original = input(75, &words(&[0, mode]));
+        let doc = parse(&original, &ParseLimits::default()).unwrap();
+        assert_eq!(
+            doc.records()[0].data(),
+            &RecordData::ExtSelectClipRgn {
+                region_mode: mode,
+                region: None
+            }
+        );
+        assert!(doc.diagnostics().is_empty());
+        assert_eq!(serialize(&doc).unwrap(), original);
     }
     let mut empty = region();
     empty.rectangles.clear();

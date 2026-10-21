@@ -70,10 +70,11 @@ fn owned_gradient_snapshot_exports_signed_vertices_channels_mesh_and_padding() {
     }
 }
 #[test]
-fn invalid_gradient_indices_remain_raw() {
+fn invalid_gradient_indices_expose_only_the_prefix() {
     let mut input = input(2);
     input[172..176].copy_from_slice(&3u32.to_le_bytes());
     let bytes = snapshot(input);
-    assert_eq!(word(&bytes, 56 + 112 + 88 + 28), 0);
-    assert_eq!(wide(&bytes, 32), 1);
+    assert_eq!(word(&bytes, 56 + 112 + 88 + 28), 93);
+    assert_eq!(wide(&bytes, 56 + 112 + 88 + 32), 36);
+    assert_eq!(wide(&bytes, 32), 0);
 }
