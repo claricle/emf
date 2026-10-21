@@ -525,8 +525,11 @@ fn brush(raw: &[u8], low: u8, offset: usize, function: u16) -> Result<(), Reject
         let width = i64::from(le16(raw, 8) as i16);
         let height = i64::from(le16(raw, 10) as i16);
         let (planes, bits) = (i64::from(raw[14]), i64::from(raw[15]));
-        let length = (width > 0 && height > 0 && planes == 1 && bits > 0)
-            .then(|| ((width * bits + 15) / 16) * 2 * height);
+        let length = if width > 0 && height > 0 && planes == 1 && bits > 0 {
+            Some(((width * bits + 15) / 16) * 2 * height)
+        } else {
+            None
+        };
         if !length.is_some_and(|length| length <= raw.len() as i64 - 38) {
             return fail(Reason::BrushInvalidPatternExtent);
         }
