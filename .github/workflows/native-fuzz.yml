@@ -98,3 +98,7 @@ jobs:
         run: |
           test -f "$EMF_TEST_NATIVE_LIBRARY"
           bundle exec rspec spec/emf/wmf_resilience_spec.rb spec/emf/native_wmf_resilience_seeds_spec.rb
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
