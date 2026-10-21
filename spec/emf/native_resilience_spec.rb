@@ -189,6 +189,18 @@ RSpec.describe NativeResilience do
       expect(described_class.observe(parsed_fixture)).to eq("outcome" => "parsed", "round_trip" => "ok")
     end
 
+    %w[parsed recovered].each do |outcome|
+      it "rejects #{outcome} bytes rewritten once even when subsequent serialization is stable" do
+        path = outcome == "parsed" ? parsed_fixture : fixture_with(outcome)
+        document = Emf.parse(File.binread(path))
+        allow(Emf).to receive(:serialize).and_return("rewritten")
+        allow(Emf).to receive(:parse).and_call_original
+        allow(Emf).to receive(:parse).with("rewritten").and_return(document)
+
+        expect(described_class.observe(path)).to eq("outcome" => outcome, "round_trip" => "source_bytes_changed")
+      end
+    end
+
     it "skips the round trip for a format_error fixture" do
       expect(described_class.observe(fixture_with("format_error")))
         .to include("outcome" => "format_error", "round_trip" => "not_applicable")

@@ -160,3 +160,30 @@ region-allocation and region-wire checks passed **25 examples, zero failures**
 (seed 48328). Both changed Ruby files passed RuboCop. Evidence:
 `/private/tmp/emf-execution/p06-region-allocation-bound/short-tail-result.json`.
 This closes the witnessed short-header defect, not whole-corpus or fuzz acceptance.
+
+### Current-source malformed corpus with original-byte preservation
+
+At source base `7904186a2fc308233a64ecad84c0afddca81240a` plus the
+resilience-oracle changes, all **21 original malformed fixtures passed** under
+forced native selection: 9 parsed, 10 recovered and 2 explicit `FormatError`
+rejections. Every successful parse preserved the original bytes on serialization
+and remained byte-identical through reparse/reserialization. Fixture hashes
+matched the manifest before and after each child. The existing library was built
+from `d3588c5d8f590233c125e5aa97fb4ad53056a5cd`; its Rust inputs are unchanged
+at this source base. No rebuild or installation was performed.
+
+The supervisor enforced 60 seconds and 1 GiB RSS per fixture; maximum observed
+child time was 1.394 seconds and peak RSS was 257,687,552 bytes on macOS arm64.
+The oracle now rejects a first serialization that changes input bytes even when
+later serializations stabilize. Both parsed and recovered rewrite controls failed
+before this change and pass afterward. Runner checks passed **36 examples,
+0 failures, 1 optional native-corpus example pending** (seed 48328); the separate
+21-fixture execution above supplies actual native evidence. Three changed Ruby
+files passed RuboCop; diff whitespace checks passed.
+
+Evidence: `/private/tmp/emf-execution/p06-current-native-corrupt/`, including
+`source-exact-report.json`, `source-provenance.json`,
+`source-oracle-old-red.log` and `source-oracle-spec-ps.log`. This establishes
+original-byte preservation and expected outcomes for these 21 inputs on this
+platform. Exact diagnostic/model parity, broader fuzz budgets and the remaining
+platform criteria above remain open.
