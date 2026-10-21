@@ -32,6 +32,7 @@ RSpec.describe "script/check_native_package source revision binding" do
       spec = Dir.chdir(root) { Gem::Specification.load("emf.gemspec") }
       contents = spec.files + data.fetch("files").keys + data.fetch("extra_contents")
       spec.platform = data.fetch("platform")
+      spec.add_runtime_dependency("fiddle", "~> 1.1") unless data.fetch("platform") == "ruby"
       spec.metadata = data.fetch("metadata")
       spec.extensions = data.fetch("extensions")
       package = Object.new
