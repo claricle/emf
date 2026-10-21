@@ -168,3 +168,47 @@ This diagnostic supports EMF and EMF+ snapshots, with no cold runs or
 per-component allocation measurements. WMF inputs fail explicitly. It measures
 adapter boundaries rather than isolated Rust kernels, and does not measure a
 native serialization kernel or establish a speedup.
+
+## Regression policy and comparator (informational)
+
+`bench/performance-policy.json` is the explicit regression policy. Its `status` is
+`informational`: no performance check blocks anything. It stays informational
+until a runner class is chosen, floors and the noise bound are calibrated, and a
+baseline is committed. The runner identity fields, `absolute_floor_ms` and
+`noise_bound.max_relative_spread` are deliberately `null`; the comparator treats
+them as uncalibrated, and refuses to load a `blocking` policy that leaves any of
+them unset. The policy records five warmups, at least 20 samples, median and p95,
+and a 10% median alert ratio.
+
+Compare reports from `bench/parser.rb`:
+
+```sh
+bundle exec ruby bench/check_regression.rb --baseline tmp/bench/base1.json --baseline tmp/bench/base2.json --candidate tmp/bench/candidate.json
+```
+
+Pass `--baseline` once per repeated baseline run (at least `min_baseline_runs`),
+optionally `--policy FILE` and `--output FILE`. Per `fixture#stage` workload the
+verdict is one of:
+
+| Verdict | Meaning |
+| --- | --- |
+| `ok` | Candidate median is within the alert ratio of the baseline median |
+| `alert` | Median exceeds the alert ratio; `blocking_eligible` is true only when the slowdown also exceeds the absolute floor |
+| `inconclusive` | Too few samples or baseline runs, noise bound exceeded or uncalibrated, or an uncalibrated floor |
+| `incomparable` | Fixture SHA-256 differs or the workload is missing |
+
+Reports must agree on backend, timing boundaries, machine identity (OS,
+architecture, CPU model and count, Ruby platform), native library SHA-256 and
+manifest SHA-256; otherwise nothing is compared. Exit status: 0 compared (alerts
+included while informational), 1 a `blocking` policy found a blocking-eligible
+alert or an inconclusive workload, 2 malformed input, 3 incomparable reports.
+An independent rerun to confirm a blocking alert is the caller's step; the
+comparator does not rerun anything.
+
+Baseline update procedure:
+
+1. Choose and commit the runner identity (OS, architecture, libc, image, toolchains, release Rust) in the policy.
+2. On that idle runner, run `bench/parser.rb` at least twice from the same revision with 5 warmups and 20 or more samples.
+3. Compare the baseline runs with each other; record the largest relative median spread as the noise bound and set a per-workload absolute floor above it.
+4. Commit the baseline reports with the git revision and manifest SHA-256 in a reviewed pull request, separate from any change they excuse.
+5. Update the baseline only after an intentional performance change merges, or when the runner image, toolchains or fixture manifest change. Only then flip `status` to `blocking`.

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "status": "informational",
+  "status_note": "Informational until a runner class is chosen, floors and the noise bound are calibrated, and bench/baseline.json is committed. Only then may status become blocking.",
+  "runner": {
+    "os": null,
+    "arch": null,
+    "libc": null,
+    "image": null,
+    "cpu_model": null,
+    "cpu_count": null,
+    "ruby_version": null,
+    "rust_toolchain": null,
+    "release_build": null,
+    "idle_preflight": null
+  },
+  "sampling": {
+    "warmups": 5,
+    "min_samples": 20,
+    "min_baseline_runs": 2
+  },
+  "statistics": ["median", "p95"],
+  "alert_ratio": 0.10,
+  "absolute_floor_ms": {
+    "default": null,
+    "per_workload": {}
+  },
+  "noise_bound": {
+    "max_relative_spread": null,
+    "observed_baseline_spread": null
+  },
+  "confirmation": "independent rerun must also alert before a regression blocks",
+  "baseline_update": {
+    "owner": "repository maintainer",
+    "when": [
+      "an intentional performance change has merged",
+      "the runner image or toolchain pin changed",
+      "the fixture manifest digest changed"
+    ],
+    "record": ["git revision", "fixture manifest sha256", "runner identity", "baseline run count"],
+    "approval": "baseline changes go through a reviewed pull request, never alongside the change they excuse"
+  }
+}
