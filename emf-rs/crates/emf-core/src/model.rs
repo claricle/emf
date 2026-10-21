@@ -5,6 +5,7 @@
 //! bytes, including padding, unknown payloads and trailing data.
 
 use crate::error::EditFailure;
+use crate::poly_text::{ColorAdjustment, PolyTextOut};
 use std::ops::Range;
 
 /// `EMR_HEADER` record type.
@@ -432,6 +433,9 @@ pub enum RecordData {
     },
     ExtTextOutA(ExtTextOut<u8>),
     ExtTextOutW(ExtTextOut<u16>),
+    PolyTextOutA(PolyTextOut<u8>),
+    PolyTextOutW(PolyTextOut<u16>),
+    SetColorAdjustment(ColorAdjustment),
     Eof(EofRecord),
     ScaleViewportExtEx {
         scale: ScaleFactors,
@@ -719,6 +723,9 @@ impl RecordData {
             Self::ExtCreatePen(_) => Some(95),
             Self::ExtTextOutA(_) => Some(83),
             Self::ExtTextOutW(_) => Some(84),
+            Self::PolyTextOutA(_) => Some(96),
+            Self::PolyTextOutW(_) => Some(97),
+            Self::SetColorAdjustment(_) => Some(23),
             Self::Raw => None,
             Self::Eof(_) => Some(14),
             Self::ScaleViewportExtEx { .. } => Some(31),
@@ -819,6 +826,9 @@ impl RecordData {
             Self::ExtCreatePen(pen) => pen.layout()?.2.checked_sub(8),
             Self::ExtTextOutA(text) => text.layout()?.2.checked_sub(8),
             Self::ExtTextOutW(text) => text.layout()?.2.checked_sub(8),
+            Self::PolyTextOutA(text) => text.encoded_len()?.checked_sub(8),
+            Self::PolyTextOutW(text) => text.encoded_len()?.checked_sub(8),
+            Self::SetColorAdjustment(_) => Some(24),
             Self::ScaleViewportExtEx { .. } | Self::ScaleWindowExtEx { .. } => Some(16),
             Self::SetWorldTransform { .. } => Some(24),
             Self::ModifyWorldTransform { .. } => Some(28),
@@ -962,6 +972,8 @@ impl RecordSpan {
                 data,
                 RecordData::ExtTextOutA(_)
                     | RecordData::ExtTextOutW(_)
+                    | RecordData::PolyTextOutA(_)
+                    | RecordData::PolyTextOutW(_)
                     | RecordData::ExtCreatePen(_)
                     | RecordData::Bitmap(_)
             ) {
@@ -1076,6 +1088,8 @@ impl Document {
             RecordData::ExtCreatePen(pen) => !pen.valid(),
             RecordData::ExtTextOutA(text) => !text.valid(),
             RecordData::ExtTextOutW(text) => !text.valid(),
+            RecordData::PolyTextOutA(text) => !text.valid(),
+            RecordData::PolyTextOutW(text) => !text.valid(),
             _ => false,
         };
         if invalid_layout {

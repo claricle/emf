@@ -58,6 +58,8 @@ pub fn serialize_with_limits(
                 RecordData::ExtCreatePen(pen) => {
                     pen.work_len().ok_or(SerializeFailure::SizeOverflow)?
                 }
+                RecordData::PolyTextOutA(text) => text.work_len().ok_or(SerializeFailure::SizeOverflow)?,
+                RecordData::PolyTextOutW(text) => text.work_len().ok_or(SerializeFailure::SizeOverflow)?,
                 RecordData::ExtTextOutA(text) => {
                     text.work_len().ok_or(SerializeFailure::SizeOverflow)?
                 }
@@ -184,6 +186,9 @@ pub fn serialize_with_limits(
         out.extend_from_slice(&record.record_type.to_le_bytes());
         out.extend_from_slice(&[0; 4]);
         match &record.data {
+            RecordData::PolyTextOutA(text) => crate::poly_text::encode(&mut out, start, text)?,
+            RecordData::PolyTextOutW(text) => crate::poly_text::encode(&mut out, start, text)?,
+            RecordData::SetColorAdjustment(color) => crate::poly_text::encode_color(&mut out, color),
             RecordData::ExtTextOutA(text) => {
                 append_text(&mut out, start, text, |out, value| out.push(*value))?
             }
@@ -567,6 +572,8 @@ pub fn serialize_with_limits(
             record.data,
             RecordData::ExtTextOutA(_)
                 | RecordData::ExtTextOutW(_)
+                | RecordData::PolyTextOutA(_)
+                | RecordData::PolyTextOutW(_)
                 | RecordData::ExtCreatePen(_)
                 | RecordData::Bitmap(_)
         ) {

@@ -13,6 +13,7 @@ mod limits;
 mod model;
 mod parse;
 mod reader;
+mod poly_text;
 mod serialize;
 pub mod wmf;
 
@@ -35,3 +36,5 @@ pub use bitmap::{
     BitmapBuffer, BitmapBufferKind, BitmapBuffers, BitmapMask, BitmapRecord, BitmapSource,
     BitmapTransfer, BlendFunction, DibTransfer,
 };
+
+pub use poly_text::{ColorAdjustment, PolyTextEntry, PolyTextOut};
