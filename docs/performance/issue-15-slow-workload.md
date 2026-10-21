@@ -4,8 +4,16 @@ Issue #15 says one emfsvg round-trip fixture takes about 12 seconds. This baseli
 looked for that fixture with the Ruby backend. It names the slowest candidates on
 one recorded machine. It **does not reproduce an exact 12-second case**: the
 nearest round trips under the released gem take 15.9 s and 17.9 s, and one takes
-88 s. The reported fixture's identity stays unknown. Native and head-to-head
-speed criteria remain open.
+88 s. The reported fixture's identity stays unknown.
+
+**Current state.** The under-one-second round trip is **unmet**. The latest
+whole-consumer Ruby result for `test-031` is 9.20 s process CPU at `3108916`
+(integrated as `a65eac7` on `main`), down from 16.59 s at `d93967d`. Of that,
+about 3.7 s is emf and about 5.4 s is emfsvg's own SVG parsing, emission and
+rendering, so removing all emf time would still leave more than one second.
+Native parse is faster than Ruby at `666f45d` (PR #54, open, not on `main`).
+Native conversion was slower than Ruby at `5c45ab9` and has no measurement at
+`666f45d`. Details are in [the downstream evidence](downstream-comparison.md).
 
 ## Revision, machine and commands
 
@@ -15,7 +23,7 @@ speed criteria remain open.
 | Machine | Apple M2, 8 cores, 8 GiB, macOS 26.5.1 arm64 |
 | Ruby | 3.4.8 (arm64-darwin25), BinData 2.5.1 |
 | Backend | `EMF_BACKEND=ruby` |
-| Consumer | emfsvg `101356dcf673841fda0693076131bca7a0f34948`, `/private/tmp/emfsvg-issue15-baseline` |
+| Consumer | emfsvg `101356dcf673841fda0693076131bca7a0f34948` (clean checkout) |
 | Date | 2026-10-20, load average about 3.5 to 5.3 throughout |
 
 Each fixture ran in a fresh process, one after another, with file IO outside the
@@ -28,8 +36,8 @@ EMF_BACKEND=ruby bundle exec ruby -Ilib p07_baseline.rb spec/fixtures/emf/test-0
 EMF_BACKEND=ruby bundle exec ruby -I<emf>/lib -Ilib emfsvg_trial.rb <emf> <golden svg>
 ```
 
-The scripts, JSON rows and machine record are local evidence in
-`/private/tmp/emf-execution/p07-slow-workload/`; they are not checked in.
+The scripts, JSON rows and machine record are execution artifacts; they are not
+checked in.
 
 ## emf parse and serialize, all 208 valid fixtures
 
@@ -144,8 +152,7 @@ RUBYOPT=-I<emf>/lib EMF_BACKEND=ruby bundle exec rspec spec/round_trip_golden_sp
   run.
 
 The JSON report (SHA-256 `c7cd1c3cae0d0b5d...`), progress log, `time -l` output
-and run identity are local evidence in
-`/private/tmp/emf-execution/p07-consumer-acceptance/`.
+and run identity are execution artifacts, not checked in.
 
 ## Where the round-trip time goes, and the first fix
 
@@ -192,8 +199,9 @@ the candidate, inside this run's noise but recorded so it is not lost.
 the consumer's emitted file is about 2.2 s, and the consumer record build is
 still about 6 s of emf wire construction. The next measured step is cheaper wire
 construction from attributes, which the consumer uses for every record it emits.
-Reaching under one second also needs the native backend, which the build hold
-blocks.
+Reaching under one second also needs the native backend. A native conversion
+measurement was later taken at `5c45ab9`, not at this revision; see the downstream
+evidence.
 
 ## Authorized CPU comparison of today's changes
 
@@ -228,10 +236,11 @@ trip takes about 9.3 s of CPU with the Ruby backend. emf parse and serialize of
 own work on that fixture. The rest of the round trip is mostly the consumer's
 own SVG parsing, emission and rendering, plus emf wire construction for 194k
 emitted records. Closing the end-to-end target needs consumer-side changes or
-the native backend. The native backend has no final-head measurement yet.
+the native backend. No native measurement exists at this revision; later native
+results are in the downstream evidence.
 
-The run's commands, scripts and raw output are local evidence in
-`/private/tmp/emf-execution/p07-timing-authorized/`.
+The run's commands, scripts and raw output are execution artifacts, not
+checked in.
 
 ## Final whole-consumer result with generated construction
 
@@ -278,16 +287,18 @@ The other 5.4 s is the consumer's own SVG parsing, emission and rendering.
 (9.2 s). Even if emf's share fell to zero, the consumer side alone would still be
 over five seconds. The remaining emf-owned lever is the per-record parse path.
 The `n_size` pass serializes every record a second time, and changing that is a
-consumer change. The native backend still has no final-head measurement. The
-roughly 12-second workload from the issue remains unidentified.
+consumer change. The roughly 12-second workload from the issue remains
+unidentified. The native backend was not measured at `3108916`; native conversion
+was measured only at `5c45ab9`, and native parse at `666f45d`.
 
-Evidence: `/private/tmp/emf-execution/p07-timing-authorized/`, in
-`final-3108916.txt`, `split-3108916.txt`, `rt_cpu.rb` and `split.rb`.
+Evidence: the run's `final-3108916.txt`, `split-3108916.txt`, `rt_cpu.rb` and
+`split.rb` artifacts, not checked in.
 
 ## Open
 
-- The native backend measurements over the same fixtures need a library built
-  from the final head; the build hold blocks them.
+- Native conversion on the final Ruby-measured head (`3108916`, on `main` as
+  `a65eac7`) is not measured. The last native conversion measurement is at
+  `5c45ab9`. Native parse is measured at `666f45d` (PR #54, open, not on `main`).
 - The calibrated runner, noise policy and the under-one-second target are still
   open, as described in [the downstream evidence](downstream-comparison.md) and
   `TODO.plan/07-performance.md`.
