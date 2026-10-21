@@ -1,10 +1,10 @@
 # Ruby implementation and integration sequence
 
-Status: **In progress**. This expands package 05 into executable Ruby tasks; its
-effort is included in the existing **3–4 engineering days**, not added to the
-[overall estimate](00-overview.md). Baseline harness work belongs to
-[package 02](02-baseline-and-parity.md); packaging and new-format
-implementation retain their separate estimates.
+Status: **Integration implemented; qualification remains in progress**. Binding,
+backend dispatch, mutable model adaptation and serialization are implemented.
+See [binding evidence](05-ruby-binding.md) for revision-bound native checks and
+remaining downstream, malformed-model and platform acceptance. The original
+3–4 engineering days was a planning estimate, not a remaining-work ETA.
 
 The existing Ruby parser is the initial behavioral oracle and remains the
 fallback. Ruby implementation work is required even when decoding runs in Rust.

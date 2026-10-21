@@ -20,8 +20,9 @@ wrapper around the GPLv2 `libemf2svg` C library.
   (`Metafile#emf_plus_stream`) are implemented.
 * **WMF**: standard and placeable headers, records and binary serialization
   are implemented.
-* **Native backend**: Rust decoding and a Ruby adapter are implemented; final-source
-  native qualification and installed platform qualification remain open.
+* **Native backend**: Rust decoding and a Ruby adapter are implemented and match the
+  Ruby backend on the valid and corrupt fixture corpora, every EMF record type and
+  mutated WMF input; installed platform qualification remains open.
 * **Qualification**: implementation does not imply complete format coverage or
   release readiness. See link:TODO.plan/10-progress.md[delivery progress] and
   link:TODO.plan/09-format-extension.md[format extension acceptance].

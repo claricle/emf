@@ -5,27 +5,27 @@ do not close native, performance or installed-platform acceptance.
 
 ## Current acceptance checkpoint
 
-- **Ruby corpus:** exact source `0f63318655f49dcdc65756d780b94fda0e1602c0`
-  completed all 231 fixture captures: 219 parsed, 10 recovered and two explicit
-  format errors. Canonical controls verified 229 byte-exact round trips,
-  reparse/file equality and unchanged input identities, with zero safety failures.
-  See [the revision-bound evidence](02-baseline-and-parity.md). Later parser
-  changes require affected qualification; this result does not certify them.
-- **Ruby API:** source `7be55ce3f6d75d52c269071508330ef8fabaf0c7` passed
-  64 forced-Ruby public API, backend-selection, model, detector and visitor
-  examples. Native execution is a separate remaining criterion in
-  [05](05-ruby-execution.md).
-- **Performance harness:** bounded benchmark-series deadlines are implemented
-  in `9b4f0e6b225ef25f3c56dc9ac52e94d2c304a39f`; its affected benchmark
-  checks passed 38 examples. Ordinary deadlines retain their 60-second ceiling;
-  explicit series deadlines permit up to 1,200 seconds with resource and cleanup
-  controls retained. This enables the measurement policy in
-  [07](07-performance.md); it is not evidence that the speed target is met.
-- **Native and distribution:** the earlier workspace run at `7165bf2` stopped
-  on obsolete unknown-record test controls. The source correction is integrated,
-  but a passing final-source workspace run, linked ABI/public Ruby checks and
-  real installed/platform rows remain open. See [03](03-rust-core.md),
-  [04](04-c-abi.md) and [08](08-platform-delivery.md).
+- **Ruby corpus:** canonical capture at `67a6fc54a9f590808d79c6eaf59ab72a6e463f64`
+  verified 229 byte-exact round trips with reparse/file controls and two explicit
+  format rejections across all 231 unchanged inputs, with zero safety failures.
+  See [02](02-baseline-and-parity.md) for the capture boundaries.
+- **Native binding and recovery:** [05](05-ruby-binding.md) records 214 passing
+  valid-corpus examples at Ruby production inputs `7204a67`, using an identified
+  library with matching Rust inputs. [06](06-resilience.md) records all 21 original
+  malformed fixtures under forced-native execution, including exact original-byte
+  preservation for successful parses. Full malformed model/diagnostic parity
+  remains separate from byte preservation.
+- **Performance:** the release comparison at `5c45ab9` measured native public
+  parsing slower than Ruby on the named workload. The sub-second target remains
+  **unmet**; harness completion is not speed acceptance. See [07](07-performance.md).
+- **Distribution:** Windows ARM64 and both musl architectures passed actual Ruby
+  3.4 source/native installation and workload checks at `ba7a0ed`. These three
+  revision-bound cells do not certify the full platform matrix or later inputs.
+  See [08](08-platform-delivery.md).
+- **Integrated CI:** [PR33](https://github.com/claricle/emf/pull/33) merged as
+  `5408248` after all 33 checks passed on `c5a56fa`. That closes its CI failures;
+  it does not close the remaining performance, coverage, downstream and delivery
+  requirements or replace the final whole-issue review.
 
 The detailed records below retain earlier observations. Their revisions and
 limits apply; they do not override this checkpoint or certify later source.
@@ -34,16 +34,16 @@ limits apply; they do not override this checkpoint or certify later source.
 
 | Package | State | Evidence / remaining work |
 | --- | --- | --- |
-| 01 Requirements | Baseline documented | Validate contracts through executable oracle in 02 |
-| 02 Baseline/parity | In progress | Fixture inventory, API/mutation controls, canonical observation/comparison harness and parser/consumer timing drivers added; reported slow workload and native comparisons pending |
-| 03 Rust core | In progress | Checked reader, bounded framing and exact unchanged serialization added; typed header/EOF, scalar state, signed coordinates, color, rectangle, simple/multi point arrays, PolyDraw, scale/world transforms, fixed state/path completion and comment cohorts added; remaining record families and corpus parity pending |
-| 04 C ABI | In progress | Versioned interface, owned typed snapshots, boundary tests and linked C client verified locally; full model/edit and platform checks pending |
-| 05 Ruby binding | In progress | [R1–R5](05-ruby-execution.md): contracts, dispatch, model adaptation, edited serialization, consumers |
-| 06 Resilience | In progress | Ruby subprocess supervisor and Rust budget regressions underway; forced-native corpus and fuzz budgets pending |
-| 07 Performance | In progress | Ruby/native parser and consumer measurement drivers verified; comparable end-to-end results, issue target and regression budget remain open |
-| 08 Platform delivery | In progress | Feasibility probe underway; artifacts, clean installs and complete CI/release integration pending |
-| 09 Format extensions | In progress | Bounded Ruby standard/placeable WMF headers, mapping, fixed geometry, point arrays, arcs, origin offsets and raw unknown preservation verified; full WMF and structured EMF+ pending |
-| 11 Record coverage | In progress | Header and bounded scalar/coordinate/variable cohorts cross core, ABI and Ruby; color/rectangle, fixed state/path, simple/multi point arrays, PolyDraw and transform parity verified; remaining registry entries and variants pending |
+| 01 Requirements | In progress | Compatibility contract documented; acceptance tracked by the packages below |
+| 02 Baseline/parity | In progress | Ruby corpus qualification and valid-corpus native evidence retained; full model/diagnostic and downstream parity remain open |
+| 03 Rust core | In progress | Core parsing, typed records and editable serialization implemented; detailed family/variant acceptance is tracked in [11](11-record-coverage.md) |
+| 04 C ABI | In progress | Versioned ownership, typed snapshots and linked C client verified locally; remaining sanitizer/platform acceptance in [04](04-c-abi.md) |
+| 05 Ruby binding | In progress | Binding, dispatch and mutable serialization implemented; 214 valid-corpus examples passed; remaining qualification in [05](05-ruby-binding.md) |
+| 06 Resilience | In progress | All 21 original malformed inputs checked with forced native and original-byte preservation; broader fuzz, model/diagnostic and platform qualification remain open |
+| 07 Performance | In progress | Release comparison retained; native public path is slower on the measured workload and sub-second target remains unmet |
+| 08 Platform delivery | In progress | Packaging implemented; three hosted Ruby 3.4 cells qualified at ba7a0ed; full matrix and release acceptance remain open |
+| 09 Format extensions | In progress | WMF and typed EMF+ paths implemented; supported scope and remaining acceptance are tracked in [09](09-format-extension.md) and [11](11-record-coverage.md) |
+| 11 Record coverage | In progress | [Coverage ledger](11-record-coverage.md) owns per-family and variant states; implementation does not imply complete qualification |
 
 Documentation of a requirement is not implementation completion. Keep package
 states as `Not started`, `In progress`, `Blocked` or `Complete`; a blocked entry
@@ -93,8 +93,8 @@ on the new implementation before the evidence describes that version.
 Complete the remaining end-to-end qualification rather than repeat the historical
 baseline discovery:
 
-1. Validate the corrected Rust workspace and linked ABI/Ruby public path at one
-   recorded source revision; retain failures and qualify the actual library used.
+1. Carry forward passing PR33 checks with their exact source identities; qualify
+   affected ABI/Ruby paths after subsequent changes using the actual library.
 2. Refresh affected corpus/parity controls for that source after parser changes,
    including forced-native execution, edits, recovery and downstream golden output.
 3. Use the bounded series harness to collect the required comparable distributions

@@ -1,6 +1,7 @@
 # Requirements and compatibility contract
 
-Status: baseline documented; implementation not started.
+Status: compatibility contract documented; implementation and qualification in progress.
+See [delivery progress](10-progress.md) for acceptance evidence and remaining gaps.
 Depends on: [overview](00-overview.md). Execution starts with [02](02-baseline-and-parity.md).
 
 ## Source baseline and issue interpretation

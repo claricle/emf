@@ -9,9 +9,9 @@ Gem::Specification.new do |spec|
   spec.authors = ["Ribose Inc."]
   spec.email = ["open.source@ribose.com"]
 
-  spec.summary = "Pure-Ruby parser for WMF, EMF, and EMF+ metafiles."
-  spec.description = "Pure-Ruby parser for Windows Metafile (WMF), Enhanced Metafile (EMF), " \
-                     "and EMF+ binary formats. Produces an OOP domain model that downstream " \
+  spec.summary = "Parser for WMF, EMF, and EMF+ metafiles, with an optional native backend."
+  spec.description = "Parser for Windows Metafile (WMF), Enhanced Metafile (EMF), " \
+                     "and EMF+ binary formats, in Ruby with an optional native backend. Produces an OOP domain model that downstream " \
                      "gems (such as emfsvg) consume."
   spec.homepage = "https://github.com/claricle/emf"
   spec.license = "BSD-2-Clause"
