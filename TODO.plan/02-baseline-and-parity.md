@@ -1,7 +1,7 @@
 # 02 — Baseline and parity
 
-Status: **Partial — current-source Ruby qualification captured; native parity,
-stage-cost and downstream acceptance remain open.** Ruby evidence is bound to the
+Status: **Partial — revision-bound Ruby corpus and valid-corpus native checks
+recorded; complete parity, stage-cost and downstream acceptance remain open.** Ruby evidence is bound to the
 exact source revision below; later relevant parser changes require a new capture.
 
 Depends on [requirements](01-requirements.md). Supplies acceptance data to
