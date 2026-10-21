@@ -11,6 +11,10 @@ mkdir -p "$out"
 failures=$out/bootstrap-failures.txt
 : >"$failures"
 apk add --no-cache bash curl file build-base ruby git >"$out/apk.log" 2>&1 || echo "apk base install failed (apk.log)" >>"$failures"
+# The runner checkout is mounted with host ownership into this root container.
+checkout=$(cd "$here/../.." && pwd -P)
+git config --global --add safe.directory "$checkout" >>"$out/apk.log" 2>&1 ||
+  echo "git checkout trust setup failed (apk.log)" >>"$failures"
 # json and Fiddle ship inside the ruby package (3.17 lists ruby-json and
 # ruby-fiddle only as its virtual names; 3.22 has no such names, so naming them
 # fails the install). Judge by whether Ruby loads them: a missing Fiddle is a
