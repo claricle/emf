@@ -25,7 +25,10 @@ RSpec.describe Emf::Emr::Binary::FastFill::PointArrayFill do
     GC.enable
   end
 
-  { "Polygon" => codes::POLYGON, "Polyline" => codes::POLYLINE }.each do |name, type|
+  {
+    "Polygon" => codes::POLYGON, "Polyline" => codes::POLYLINE, "PolyBezier" => codes::POLYBEZIER,
+    "PolyBezierTo" => codes::POLYBEZIERTO, "PolylineTo" => codes::POLYLINETO
+  }.each do |name, type|
     describe name do
       let(:klass) { records.lookup(type) }
       let(:filler) { Emf::Emr::Binary::FastFill.for_points(type) }

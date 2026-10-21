@@ -493,7 +493,8 @@ module Emf
         end
 
         POINT_ARRAY_TYPES = [
-          TypeCodes::POLYGON, TypeCodes::POLYLINE, TypeCodes::POLYGON16, TypeCodes::POLYLINE16,
+          TypeCodes::POLYGON, TypeCodes::POLYLINE, TypeCodes::POLYBEZIER, TypeCodes::POLYBEZIERTO,
+          TypeCodes::POLYLINETO, TypeCodes::POLYGON16, TypeCodes::POLYLINE16,
           TypeCodes::POLYBEZIER16, TypeCodes::POLYBEZIERTO16, TypeCodes::POLYLINETO16
         ].freeze
         POINT_ARRAY_BY_TYPE = POINT_ARRAY_TYPES.to_h do |type_id|
