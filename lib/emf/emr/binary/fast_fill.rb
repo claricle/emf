@@ -51,6 +51,140 @@ module Emf
         end
       end
 
+      # Self-check for a FastFill, run once when the filler is built. Proves on
+      # the installed BinData that a template copy is a faithful, independent
+      # twin of a fresh instance and that the generated reader and writer agree
+      # with BinData's own on a record with distinct leaf values.
+      module SelfCheck
+        # Raised when BinData's internals do not behave as WireCopy assumes.
+        class Unverified < StandardError; end
+
+        BINDATA_WRITER = BinData::Base.instance_method(:to_binary_s)
+        private_constant :BINDATA_WRITER
+
+        def self.included(base)
+          base.extend(ClassMethods)
+        end
+
+        # Class-level entry point.
+        module ClassMethods
+          # A verified filler for the class, or nil when the class cannot be
+          # filled safely: construction or the self-check raised or disagreed
+          # with plain BinData. Callers treat nil as "use BinData".
+          def guarded(klass)
+            filler = new(klass)
+            filler.verify!
+            filler
+          rescue StandardError
+            nil
+          end
+        end
+
+        # Raises Unverified (or whatever the internals raise) on any difference.
+        def verify!
+          fresh = @wire_class.new
+          verify_template(fresh)
+          verify_independent
+          sample = verification_record
+          bytes = bindata_bytes(sample) + verification_tail
+          verify_read(bytes)
+          verify_write(sample)
+          verify_build
+          self
+        end
+
+        private
+
+        def unverified!(what)
+          raise Unverified, "#{@wire_class}: #{what}"
+        end
+
+        def bindata_bytes(wire)
+          BINDATA_WRITER.bind_call(wire)
+        end
+
+        def verify_template(fresh)
+          copy = WireCopy.call(@template, nil)
+          same = copy.instance_of?(@wire_class) && copy.snapshot == fresh.snapshot &&
+                 copy.num_bytes == fresh.num_bytes && bindata_bytes(copy) == bindata_bytes(fresh)
+          unverified!("template copy differs from a fresh instance") unless same
+          unverified!("slots do not cover the field list") unless @slots.keys == fresh.field_names
+        end
+
+        # No object of a copy is shared with the template, and every parent
+        # link points into the copy.
+        def verify_independent
+          copy = WireCopy.call(@template, nil)
+          shared = tree_objects(@template).map(&:object_id) & tree_objects(copy).map(&:object_id)
+          unverified!("copy shares objects with the template") unless shared.empty?
+          unverified!("copy parent links are wrong") unless parents_consistent?(copy)
+          edit_leaf(copy)
+          again = WireCopy.call(@template, nil)
+          unverified!("editing a copy changed the template") unless again.snapshot == @wire_class.new.snapshot
+        end
+
+        def tree_objects(struct)
+          objs = struct.instance_variable_get(:@field_objs)
+          raise Unverified, "no field objects" unless objs.is_a?(::Array)
+
+          [struct] + objs.flat_map { |obj| obj.respond_to?(:field_names) ? tree_objects(obj) : [obj] }
+        end
+
+        def parents_consistent?(struct)
+          struct.instance_variable_get(:@field_objs).all? do |obj|
+            obj.instance_variable_get(:@parent).equal?(struct) &&
+              (!obj.respond_to?(:field_names) || parents_consistent?(obj))
+          end
+        end
+
+        def edit_leaf(wire)
+          path, field = @leaves.first
+          target = path.inject(wire) { |obj, name| obj.public_send(name) }
+          float?(field) ? target.assign_bits(1) : target.assign(1)
+        end
+
+        # A record with a distinct small value in every leaf.
+        def verification_record
+          wire = @wire_class.new
+          @leaves.each_with_index do |(path, field), index|
+            target = path.inject(wire) { |obj, name| obj.public_send(name) }
+            float?(field) ? target.assign_bits(index + 1) : target.assign(index + 1)
+          end
+          wire
+        end
+
+        def verification_tail
+          "\x07\x08".b
+        end
+
+        def verify_read(bytes)
+          wire, rest = call(bytes)
+          expected = @wire_class.read(bytes)
+          unverified!("call differs from read") unless wire.snapshot == expected.snapshot &&
+                                                       bindata_bytes(wire) == bindata_bytes(expected)
+          unverified!("call kept the wrong suffix") unless rest == verification_tail
+        end
+
+        def verify_write(sample)
+          packed = pack(sample)
+          return if packed.nil? || packed == bindata_bytes(sample)
+
+          unverified!("pack differs from BinData's writer")
+        end
+
+        # Keyword construction with the first scalar field set.
+        def verify_build
+          name = @slots.each_key.find { |slot| @leaves.any? { |path, _| path == [slot] } }
+          return unless name
+
+          built = build(name => 1)
+          unverified!("build refused a known field") unless built
+          expected = @wire_class.new({ name => 1 })
+          same = built.snapshot == expected.snapshot && bindata_bytes(built) == bindata_bytes(expected)
+          unverified!("build differs from BinData's constructor") unless same
+        end
+      end
+
       # Eager fill of fixed-layout records: one String#unpack for the whole
       # record, then leaf assignment into a fresh instance of the same wire
       # class. The unpack format and leaf paths are derived once per class
@@ -66,6 +200,8 @@ module Emf
         EMPTY_SUFFIX = "".b.freeze
         private_constant :DIRECTIVES, :FLOAT_LEAF, :EMPTY_SUFFIX
 
+        include SelfCheck
+
         def self.for(type_id)
           BY_TYPE[type_id]
         end
@@ -80,7 +216,7 @@ module Emf
           @wire_class = klass
           sample = klass.new
           @size = sample.num_bytes
-          leaves = leaf_paths(sample, [])
+          @leaves = leaves = leaf_paths(sample, [])
           # leaf_paths touched every field, so the sample is fully instantiated.
           @template = sample
           @format = leaves.map { |_, field| DIRECTIVES.fetch(field.name) }.join
@@ -178,7 +314,7 @@ module Emf
           TypeCodes::RECTANGLE, TypeCodes::INTERSECTCLIPRECT, TypeCodes::EXCLUDECLIPRECT,
           TypeCodes::SETMITERLIMIT, TypeCodes::SETICMMODE, TypeCodes::SETLAYOUT
         ].freeze
-        BY_TYPE = ENABLED_TYPES.to_h { |type_id| [type_id, new(Records.lookup(type_id))] }.freeze
+        BY_TYPE = ENABLED_TYPES.to_h { |type_id| [type_id, guarded(Records.lookup(type_id))] }.compact.freeze
         BY_CLASS = BY_TYPE.values.to_h { |filler| [filler.wire_class, filler] }.freeze
         private_constant :ENABLED_TYPES, :BY_TYPE, :BY_CLASS
       end
@@ -231,6 +367,14 @@ module Emf
           end
 
           private
+
+          # Two points, so the counted array is exercised by the self-check.
+          def verification_record
+            wire = super
+            wire.cptl.assign(2)
+            wire.aptl.assign([{ x: 3, y: 4 }, { x: -5, y: 6 }])
+            wire
+          end
 
           def forget_evaluator(object)
             return unless object.instance_variable_defined?(:@lazy_evaluator)
@@ -305,8 +449,8 @@ module Emf
 
         POINT_ARRAY_TYPES = [TypeCodes::POLYGON, TypeCodes::POLYLINE].freeze
         POINT_ARRAY_BY_TYPE = POINT_ARRAY_TYPES.to_h do |type_id|
-          [type_id, PointArrayFill.new(Records.lookup(type_id))]
-        end.freeze
+          [type_id, PointArrayFill.guarded(Records.lookup(type_id))]
+        end.compact.freeze
         POINT_ARRAY_BY_CLASS = POINT_ARRAY_BY_TYPE.values.to_h { |filler| [filler.wire_class, filler] }.freeze
         private_constant :POINT_ARRAY_TYPES, :POINT_ARRAY_BY_TYPE, :POINT_ARRAY_BY_CLASS
 
