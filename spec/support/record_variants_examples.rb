@@ -39,7 +39,10 @@ RSpec.shared_examples "record variants" do |names|
     end
   end
 
-  def expect_parse_path(observed, backend, hydrated)
+  def expect_parse_path(observed, backend, hydrated, variant)
+    # Native recovers malformed records through the Ruby reader to word diagnostics identically (native malformed parity).
+    return unless variant.kind == :valid
+
     if hydrated && backend == "native"
       expect(@native_reads).to be_empty, "native called the Ruby reader"
     else
@@ -48,7 +51,7 @@ RSpec.shared_examples "record variants" do |names|
   end
 
   def expect_variant(observed, variant, backend, expected_class, hydrated)
-    expect_parse_path(observed, backend, hydrated)
+    expect_parse_path(observed, backend, hydrated, variant)
     return unless variant.kind == :valid
 
     expect(observed.wire).to be_a(expected_class), "#{backend}: #{observed.wire.class}"
