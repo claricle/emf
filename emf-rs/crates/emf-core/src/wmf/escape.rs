@@ -1,8 +1,14 @@
 //! Escape transport framing and borrowed or fixed payload views. Escape data is never executed.
 
 mod color_table;
+mod embedded_emf;
 mod postscript;
 pub use color_table::GetColorTablePayload;
+pub use embedded_emf::{
+    assemble_embedded_emf, embedded_emf_checksum, EmbeddedEmf, EmbeddedEmfError,
+    EmbeddedEmfSegment, EmbeddedEmfSequence, EMBEDDED_EMF_ESCAPE, EMBEDDED_EMF_MAX_SEGMENT_BYTES,
+    EMBEDDED_EMF_METADATA_BYTES,
+};
 pub use postscript::EncapsulatedPostScriptPayload;
 
 use super::DecodeError;
