@@ -106,6 +106,10 @@ class WindowsProcessSupervisor
     end
 
     def call(name, *args)
+      # Fiddle saves the native thread's error before returning to Ruby. A second
+      # DLL call can observe an error overwritten by Ruby's GVL/thread machinery.
+      return Fiddle.win32_last_error if name == "GetLastError"
+
       @functions.fetch(name).call(*args)
     end
   end
@@ -163,6 +167,34 @@ class WindowsProcessSupervisor
       end
       entries = values.sort_by { |key, _| key.upcase }.map { |key, value| "#{key}=#{value}" }
       wide("#{entries.join("\0")}\0")
+    end
+
+    def job_pids
+      # A fixed cap bounds enumeration. ERROR_MORE_DATA fails closed.
+      list = buffer(8 + (POINTER_BYTES * Native::MAX_PROCESSES))
+      check("QueryInformationJobObject", @job, 3, list, list.bytesize, 0)
+      assigned, count = list.unpack("L<2")
+      raise NativeError, "incomplete job process list" if assigned != count || count > Native::MAX_PROCESSES
+
+      list.byteslice(8, count * POINTER_BYTES).unpack("#{POINTER_PACK}*")
+    end
+
+    def terminate_job
+      # ActiveProcesses == 0 is job accounting, not a process-signaling barrier.
+      # Retain current members before termination so cleanup also waits for them.
+      members = []
+      begin
+        job_pids.each { |pid| members << handle("OpenProcess", 0x100000, 0, pid) }
+      ensure
+        # Even a failed snapshot must not leave the live job running.
+        check("TerminateJobObject", @job, 1)
+        wait_empty
+      end
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + CLEANUP_SECONDS
+      members.each do |process|
+        remaining = [(deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)) * 1000, 0].max.to_i
+        raise NativeError, "terminated descendant did not finish" unless @api.call("WaitForSingleObject", process, remaining).zero?
+      end
     end
 
     def check_wait
@@ -252,15 +284,10 @@ class WindowsProcessSupervisor
     end
 
     def rss_bytes
-      # A fixed cap bounds enumeration. ERROR_MORE_DATA fails closed, never samples a partial tree.
-      list = buffer(8 + (POINTER_BYTES * MAX_PROCESSES))
-      check("QueryInformationJobObject", @job, 3, list, list.bytesize, 0)
-      assigned, count = list.unpack("L<2")
-      raise NativeError, "incomplete job process list" if assigned != count || count > MAX_PROCESSES
+      pids = job_pids
+      raise NativeError, "empty initial job RSS sample" if pids.empty? && @initial_rss.nil?
 
-      raise NativeError, "empty initial job RSS sample" if count.zero? && @initial_rss.nil?
-
-      sample = list.byteslice(8, count * POINTER_BYTES).unpack("#{POINTER_PACK}*").sum { |pid| process_rss(pid) }
+      sample = pids.sum { |pid| process_rss(pid) }
       [sample, @initial_rss.to_i].max
     end
 
@@ -279,8 +306,7 @@ class WindowsProcessSupervisor
       failure = nil
       begin
         if @assigned
-          check("TerminateJobObject", @job, 1)
-          wait_empty
+          terminate_job
         elsif @process
           check("TerminateProcess", @process, 1)
         end

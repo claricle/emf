@@ -120,7 +120,10 @@ RSpec.describe WindowsProcessSupervisor do
     end
 
     it "kills an excessive-memory helper and records working-set RSS" do
-      result = supervisor.call(ruby_command + ['a = []; loop { a << ("x" * 1_000_000); sleep 0.002 }'])
+      # The RSS case must reach its memory bound before the separate wall-clock
+      # control, including slower ARM runners. Production limits are unchanged.
+      memory_supervisor = ProcessSupervisor.new(wall_seconds: 10, rss_limit_bytes: limit, output_limit: 1024)
+      result = memory_supervisor.call(ruby_command + ['a = []; loop { a << ("x" * 4_000_000) }'])
 
       expect(result.status).to eq(:rss_exceeded)
       expect(result.peak_rss_bytes).to be > limit
@@ -218,7 +221,24 @@ RSpec.describe WindowsProcessSupervisor::Native do
     expect(limits[2].byteslice(16, 4).unpack1("L<")).to eq(0x2000)
     expect(names.index("AssignProcessToJobObject")).to be < names.index("ResumeThread")
     expect(names.index("TerminateJobObject")).to be < names.rindex("WaitForSingleObject")
-    expect(calls.filter_map { |name, args| args.first if name == "CloseHandle" }).to contain_exactly(10, 11, 12, 13, 14, 15, 16)
+    expect(calls.filter_map { |name, args| args.first if name == "CloseHandle" }).to contain_exactly(10, 11, 12, 13, 14, 15, 16, 16)
+  end
+
+  it "waits for captured descendants even after the job accounting is empty" do
+    native.start(["ruby"], {})
+    allow(api).to receive(:call).with("WaitForSingleObject", 16, anything).and_return(258)
+
+    expect { native.cleanup }.to raise_error(WindowsProcessSupervisor::NativeError, /descendant/)
+    expect(calls.last).to eq(["CloseHandle", [10]])
+  end
+
+  it "still terminates the job if opening a descendant handle fails" do
+    native.start(["ruby"], {})
+    allow(api).to receive(:call).with("OpenProcess", 0x100000, 0, 101).and_return(0)
+
+    expect { native.cleanup }.to raise_error(WindowsProcessSupervisor::NativeError, /OpenProcess/)
+    expect(calls.map(&:first)).to include("TerminateJobObject")
+    expect(calls.last).to eq(["CloseHandle", [10]])
   end
 
   it "terminates and waits for the suspended process if job assignment fails" do
@@ -247,7 +267,7 @@ RSpec.describe WindowsProcessSupervisor::Native do
 
     expect { native.rss_bytes }.to raise_error(WindowsProcessSupervisor::NativeError, /incomplete/)
   ensure
-    native.cleanup
+    expect { native.cleanup }.to raise_error(WindowsProcessSupervisor::NativeError, /incomplete/)
   end
 
   it "sums working-set bytes for every enumerated job process and closes probe handles" do
@@ -348,6 +368,19 @@ RSpec.describe WindowsProcessSupervisor::API do
 
   it "keeps BOOL results signed" do
     expect(round_trip(described_class::BOOL, -1)).to eq(-1)
+  end
+
+  it "reads Fiddle's saved Win32 error without another native call" do
+    api = described_class.allocate
+    function = double("native function")
+    api.instance_variable_set(:@functions, { "PeekNamedPipe" => function })
+    allow(function).to receive(:call).and_return(0)
+    without_partial_double_verification do
+      allow(Fiddle).to receive(:win32_last_error).and_return(109)
+    end
+
+    expect(api.call("PeekNamedPipe")).to eq(0)
+    expect(api.call("GetLastError")).to eq(109)
   end
 
   it "declares CreateFileW's access mask as a DWORD" do
