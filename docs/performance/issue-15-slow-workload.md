@@ -147,6 +147,54 @@ The JSON report (SHA-256 `c7cd1c3cae0d0b5d...`), progress log, `time -l` output
 and run identity are local evidence in
 `/private/tmp/emf-execution/p07-consumer-acceptance/`.
 
+## Where the round-trip time goes, and the first fix
+
+A single profiled run of the `test-031` consumer round trip at `d93967d`, with
+the Ruby backend, took 19.4 s of CPU:
+- `Emfsvg.from_svg` took 12.2 s: the SVG parse 0.7 s, the record build 10.3 s
+  (about 61% of it inside emf), and `Emf.serialize` 1.2 s.
+- `Emfsvg.from_bytes` took 6.6 s: `Emf.parse` 4.35 s and the SVG render 2.25 s.
+
+About 62% of the round trip is inside emf. The EMF the consumer emits has 194,122
+records, and 174,646 of them are fixed-layout types on the fast-fill path. The
+largest single cost was BinData instantiating each leaf on first access inside
+the fast fill.
+
+Commit `de722ac` (integrated as `3498507`) generates the fill and pack code for
+each class and clones an already-instantiated template record. On the emitted
+file, `Emf.parse` fell from 4.5 s to 2.2 s and `Emf.serialize` from 1.24 s to
+0.67 s (medians of 3 alternating runs). Every one of the 174,646 records matched
+a plain BinData read in snapshot and bytes.
+
+The template copy reads BinData internals. It was verified on BinData 2.5.1 only,
+while the gemspec allows `~> 2.4`.
+
+Representative series: baseline `54230f8`, candidate `228f404`, Ruby backend,
+same machine, load average 5 to 9 (an editor process was using one core).
+`bench/emfsvg.rb` ran 1 warmup and 5 samples; `bench/parser.rb` ran 1 warmup
+and 3 to 5 samples. That is fewer than the policy's 5 and 20, because each
+fixture child is capped at 60 s. These are informational medians, not a
+calibrated baseline.
+
+| Fixture | Workload | Baseline | Candidate |
+| --- | --- | --- | --- |
+| `test-031` | emfsvg `from_bytes` (golden identical) | 3476 ms | 2156 ms |
+| `test-105` | emfsvg `from_bytes` (golden identical) | 1833 ms | 1225 ms |
+| `test-172` | emfsvg `from_bytes` (golden identical) | 1085 ms | 807 ms |
+| `test-031` | emf `parse_to_serialize` | 2881 ms (1 sample; 3 samples exceeded the 60 s cap) | 1567 ms |
+| `test-105` | emf `parse_to_serialize` | 1453 ms (1 sample) | 820 ms |
+| `test-172` | emf `parse_to_serialize` | 681 ms | 227 ms |
+
+First wire traversal on `test-172` measured 161 ms at the baseline and 187 ms on
+the candidate, inside this run's noise but recorded so it is not lost.
+
+**Under-one-second target: not met.** Even after this change, emf-side parse of
+the consumer's emitted file is about 2.2 s, and the consumer record build is
+still about 6 s of emf wire construction. The next measured step is cheaper wire
+construction from attributes, which the consumer uses for every record it emits.
+Reaching under one second also needs the native backend, which the build hold
+blocks.
+
 ## Open
 
 - The native backend measurements over the same fixtures need a library built
