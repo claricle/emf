@@ -164,3 +164,50 @@ thresholds, and an update policy remain open before a blocking performance gate.
 Neither these reports nor a median below one second for this different fixture
 satisfies issue #15's unidentified-workload target. Track the full requirements
 in [P07](../../TODO.plan/07-performance.md).
+
+## Release comparison on the large representative fixture
+
+At source `5c45ab9faf6abd53b18df359e3379e038fe92f7e`, a sequential Ruby/native
+comparison used `spec/fixtures/emf/test-031.emf`, pinned consumer `101356dc`,
+Ruby 3.4.8 on Apple M2, five warmups, 20 measured samples and one separate cold
+child per backend. Both runs passed the pinned SVG golden. The current-source
+manifest digest was
+`116efa7477dba266e7ab396afb92c682771c5764bd5e41abb8077907cf3718d5`.
+The offline release library SHA-256 was
+`4ccad2f46996a0a2f42c344942a48ea9607b9e2fe339aa0591bc40dc8231d766`.
+
+| Backend | `from_bytes` median / p95 (seconds) | `from_file` median / p95 (seconds) |
+| --- | --- | --- |
+| Ruby | 1.804824 / 2.009575 | 1.812184 / 1.987776 |
+| Release native | 2.337168 / 3.139217 | 2.381786 / 2.850778 |
+
+Native-over-Ruby median ratios were 1.294956 and 1.314318. Median Ruby-object
+counts were 4,813,479 versus 6,890,527 from bytes and 4,813,482 versus
+6,890,531 from file. Sampled RSS peaks were 228,208 versus 322,768 KiB;
+these are between-region samples rather than guaranteed peak measurements.
+
+Reproduce using the commands above with the named fixture, `--cold-runs 1`,
+`--iterations 20 --warmups 5 --series-timeout 300 --rss-limit-mb 1024` and a
+matching manifest. The explicit series deadline is needed for the complete
+series; an initial run using the ordinary 60-second child deadline timed out
+and is retained as a failed measurement. Successful paired reports and their
+comparison are retained privately under `p07-release-qualification` as
+`paired-ruby.json`, `paired-native.json` and `comparison.json`, together with
+build, command, fixture, manifest and library provenance. The comparator accepts
+an unloaded environment Bundler (`null`) only when both reports agree; required
+gem versions and worker provenance remain validated.
+
+The separate `native_components.rb` measurement used five samples and one
+warmup with the same fixture/library. Hydration dominated the measured adapter
+components at median 345.734 ms, versus snapshot decode 61.086 ms, snapshot
+creation/copy 8.343 ms and parse-handle setup 6.511 ms. Instrumented component
+total was 422.043 ms and separate public parse 525.243 ms. Exact byte/parity,
+post-cleanup consumer and mutation guards passed. Component instrumentation,
+cached loader boundaries and Ruby allocation measurements do not isolate a pure
+Rust kernel or total process allocations.
+
+This evidence replaces neither full consumer round-trip measurements nor repeated
+calibrated baselines. Native conversion is slower on this named workload and the
+subsecond requirement remains open. Profile hydration and subsequent wire access
+before choosing another optimization, then preserve complete conversion timing
+and golden/parity checks when measuring its effect.

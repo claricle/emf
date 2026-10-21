@@ -10,7 +10,7 @@ The roughly 12-second fixture mentioned in [issue #15](https://github.com/claric
 
 ## Current workload evidence
 
-The [recorded Ruby slow-workload baseline](../docs/performance/issue-15-slow-workload.md) covers all 208 valid fixtures at `b81d6aa`: every parse succeeded and unchanged serialization was byte-identical. Six pinned emfsvg candidates were measured against the released gem and this revision. The reported approximately 12-second case remains unidentified. The font-construction failures in that historical comparison were subsequently resolved, as recorded in the workload guide; they are not the current blocker. The guide also records a later Ruby fast-fill comparison at `228f404` against `54230f8`, with preserved downstream golden output. Its reduced sample counts and concurrent machine load make it informational rather than a calibrated baseline. The later paired comparison below supersedes these reduced-sample figures for the named Ruby consumer workload. Policy-sized distributions on a calibrated runner, final-head native comparisons and the subsecond target remain open.
+The [recorded Ruby slow-workload baseline](../docs/performance/issue-15-slow-workload.md) covers all 208 valid fixtures at `b81d6aa`: every parse succeeded and unchanged serialization was byte-identical. Six pinned emfsvg candidates were measured against the released gem and this revision. The reported approximately 12-second case remains unidentified. The font-construction failures in that historical comparison were subsequently resolved, as recorded in the workload guide; they are not the current blocker. The guide also records a later Ruby fast-fill comparison at `228f404` against `54230f8`, with preserved downstream golden output. Its reduced sample counts and concurrent machine load make it informational rather than a calibrated baseline. The later paired comparison below supersedes these reduced-sample figures for the named Ruby consumer workload. A release-mode paired comparison with 20 samples and five warmups is recorded below. Repeated baselines on a calibrated runner and the subsecond target remain open.
 
 Ruby implementation through `d08a9c0` additionally includes guarded BinData template copying, attribute construction, nested structure assignment and 16-/32-bit point-array paths. Focused equivalence checks accompany those changes; they do not qualify final-head end-to-end latency. The shared deadline implementation now supports an explicit bounded benchmark series, documented in [the parser harness guide](../bench/README.md), without reducing the policy sample counts. Measurements must still record the exact source and preserve the same correctness controls.
 
@@ -20,7 +20,7 @@ The [slow-workload guide](../docs/performance/issue-15-slow-workload.md#final-wh
 
 Generated construction over all 194,122 consumer attribute sets separately fell from 2621 to 1712 ms for construction plus writing, with zero snapshot, byte or size mismatches. That microbenchmark does not imply a further whole-consumer gain beyond the earlier text/point fast paths. A subsequent per-record parser experiment produced no material speedup and was not integrated; it is not an outstanding implementation item.
 
-**The under-one-second end-to-end target remains unmet.** The measured consumer round trip takes 9.20 seconds of CPU; an instrumented split attributes approximately 3.7 seconds to emf and 5.4 seconds to consumer SVG work. The split is diagnostic, not a separate calibrated benchmark. The roughly 12-second input from the issue remains unidentified, and final-head native measurements remain outstanding. Preserve these limits when assessing performance acceptance.
+**The under-one-second end-to-end target remains unmet.** The measured consumer round trip takes 9.20 seconds of CPU; an instrumented split attributes approximately 3.7 seconds to emf and 5.4 seconds to consumer SVG work. The split is diagnostic, not a separate calibrated benchmark. The roughly 12-second input from the issue remains unidentified, and the release-native conversion below is slower than Ruby. Preserve these limits when assessing performance acceptance.
 
 ## Implemented measurement surface
 
@@ -67,14 +67,46 @@ Run measurements sequentially on an otherwise idle recorded runner for performan
 - No optimization is accepted solely because native parsing is faster. Reports include total latency, memory, variance and any workload regression.
 - The selected stable CI job, calibrated noise/absolute thresholds and baseline update procedure are explicit before enabling a blocking regression gate. Until then performance CI is informational and completion of the issue's target remains unclaimed.
 
-## Current representative conversion measurement
+## Current representative release conversion measurement
 
-Five measured conversions after one warmup on `test031`, using current production
-source at `6669366` and pinned emfsvg `101356dc`, retained identical SVG goldens.
-Forced Ruby medians were 1.729715 seconds from bytes and 1.696344 seconds from file;
-forced native medians were 2.279385 and 2.274567 seconds respectively. The retained
-`d3588c5` native library is a **debug build**. These raw observations demonstrate
-neither release-mode speedup nor the requested subsecond outcome. They are not
-an accepted performance-policy baseline: the reports used the stale manifest
-fingerprint, and the native report includes documentation-only working-tree
-changes. The original reported twelve-second workload remains unidentified.
+Source `5c45ab9faf6abd53b18df359e3379e038fe92f7e`, pinned emfsvg
+`101356dcf673841fda0693076131bca7a0f34948`, Ruby 3.4.8 and an Apple M2
+were measured sequentially, with five warmups and 20 measured samples per
+backend. The manifest parser digest matched the measured source. The native
+library was built with `cargo build --release --locked --offline -p emf-ffi`
+using the workspace manifest, one build job and the existing toolchain. Its
+SHA-256 was `4ccad2f46996a0a2f42c344942a48ea9607b9e2fe339aa0591bc40dc8231d766`.
+
+The named input was `spec/fixtures/emf/test-031.emf` (1,512,544 bytes,
+79,055 records). Both backend runs exited successfully and produced the same
+pinned SVG golden. These conversion APIs do not measure the consumer's full
+`from_svg`/`from_bytes` round trip.
+
+| Backend | `from_bytes` median / p95 (s) | `from_file` median / p95 (s) | Median Ruby objects, bytes / file |
+| --- | --- | --- | --- |
+| Ruby | 1.804824 / 2.009575 | 1.812184 / 1.987776 | 4,813,479 / 4,813,482 |
+| Release native | 2.337168 / 3.139217 | 2.381786 / 2.850778 | 6,890,527 / 6,890,531 |
+
+Native conversion was 29.50% slower from bytes and 31.43% slower from file,
+with approximately 43.15% more Ruby objects. Sampled peak RSS was 228,208 KiB
+for Ruby and 322,768 KiB for native; sampling between regions can miss transient
+peaks, and Ruby object counts exclude Rust allocations. This is one local paired
+comparison, not repeated baselines on the proposed calibrated CI runner.
+**The subsecond target remains unmet.** Earlier five-sample debug observations
+are historical and do not establish release performance.
+
+A separate bounded native component run used the same input/library, five
+samples and one warmup. Median times were 6.511 ms for parse-handle setup,
+8.343 ms for snapshot creation/copy, 61.086 ms for snapshot decoding,
+345.734 ms for Ruby model hydration and 2.755 ms for cleanup. The instrumented
+component total was 422.043 ms; separately measured public native parse was
+525.243 ms. These are distinct boundaries: do not sum their medians or call
+parse-handle time a pure Rust kernel measurement. Byte identity, Ruby/native
+parity, post-cleanup consumption and a map-mode mutation round trip passed.
+
+Hydration is the largest measured adapter component. The next optimization task
+is to profile hydration and subsequent consumer wire materialization, reduce the
+proven dominant cost, then rerun affected compatibility checks and the same
+conversion workload. Deferred work must remain included in total conversion.
+See [the downstream evidence guide](../docs/performance/downstream-comparison.md#release-comparison-on-the-large-representative-fixture)
+for reproduction and remaining measurement limits.

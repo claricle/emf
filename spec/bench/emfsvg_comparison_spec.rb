@@ -78,6 +78,14 @@ RSpec.describe EmfsvgComparison::CLI do
     expect([ruby_path, native_path].map { |path| File.binread(path) }).to eq(before)
   end
 
+  it "compares reports when Bundler was not loaded in either harness process" do
+    native_report
+    [ruby_report, native_report].each { |report| report["environment"]["gems"]["bundler"] = nil }
+    write_reports
+    expect(described_class.new(arguments).run).to eq(0)
+    expect(JSON.parse(File.read(output_path)).fetch("status")).to eq("informational")
+  end
+
   it "reports an undefined allocation ratio when the Ruby baseline is zero" do
     native_report
     ruby_report["fixtures"][0]["stages"]["from_bytes"]["allocated_objects_median"] = 0
@@ -114,6 +122,11 @@ RSpec.describe EmfsvgComparison::CLI do
     "manifest mismatch" => ->(_ruby, native) { native["inputs"]["manifest_sha256"] = "e" * 64 },
     "method mismatch" => ->(_ruby, native) { native["method"]["warmups"] = 1 },
     "environment mismatch" => ->(_ruby, native) { native["environment"]["ruby"]["version"] = "different" },
+    "missing bindata version" => ->(_ruby, native) { native["environment"]["gems"]["bindata"] = nil },
+    "loaded Bundler mismatch" => lambda do |ruby, native|
+      ruby["environment"]["gems"]["bundler"] = nil
+      native["environment"]["gems"]["bundler"] = "2.6.9"
+    end,
     "gem mismatch" => ->(_ruby, native) { native["fixtures"][0]["gems"]["bindata"] = "different" },
     "fixture mismatch" => ->(_ruby, native) { native["fixtures"][0]["sha256"] = "e" * 64 },
     "dirty consumer" => ->(_ruby, native) { native["consumer"]["git_tracked_changes"] = " M lib/emfsvg.rb" },
