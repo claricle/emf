@@ -66,3 +66,15 @@ Run measurements sequentially on an otherwise idle recorded runner for performan
 - The identified slow fixture achieves the issue's under-one-second target for the agreed end-to-end boundary on the recorded machine, or the unmet target is reported as an open issue requirement with evidence and a revised optimization task.
 - No optimization is accepted solely because native parsing is faster. Reports include total latency, memory, variance and any workload regression.
 - The selected stable CI job, calibrated noise/absolute thresholds and baseline update procedure are explicit before enabling a blocking regression gate. Until then performance CI is informational and completion of the issue's target remains unclaimed.
+
+## Current representative conversion measurement
+
+Five measured conversions after one warmup on `test031`, using current production
+source at `6669366` and pinned emfsvg `101356dc`, retained identical SVG goldens.
+Forced Ruby medians were 1.729715 seconds from bytes and 1.696344 seconds from file;
+forced native medians were 2.279385 and 2.274567 seconds respectively. The retained
+`d3588c5` native library is a **debug build**. These raw observations demonstrate
+neither release-mode speedup nor the requested subsecond outcome. They are not
+an accepted performance-policy baseline: the reports used the stale manifest
+fingerprint, and the native report includes documentation-only working-tree
+changes. The original reported twelve-second workload remains unidentified.

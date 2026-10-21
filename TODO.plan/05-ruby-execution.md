@@ -178,3 +178,24 @@ attempt was blocked by sandbox access to the process monitor; the bounded rerun
 with monitoring enabled passed. No build or install was needed. This checkpoint
 does not establish complete valid/corrupt corpus equivalence or pinned downstream
 native golden acceptance; those R1–R5 conditions remain open.
+
+### Pinned downstream native golden acceptance
+
+At clean source `6669366b4946c825b40e0b514a3b7cb5ad59571e`, pinned emfsvg
+`101356dcf673841fda0693076131bca7a0f34948` converted all **208 selected valid
+fixtures with exact golden SVG equality and zero failures**, using the retained
+native library built from `d3588c5d8f590233c125e5aa97fb4ad53056a5cd`.
+Both byte-input and file-input conversions verify golden bytes; input and golden
+SHA-256 identities were independently checked after the run. The pinned consumer's
+focused round-trip/builder checks also passed 13 examples with zero failures.
+
+The sequential fixture children had 60-second deadlines, 1 GiB RSS limits and
+4 MiB output limits. Evidence and exact commands are retained in
+`/private/tmp/emf-execution/downstream-current-native/` (`goldens.json`,
+`goldens-run.json`, `goldens-audit.json` and `focused.log`). The historical fixture
+manifest's parser digest differs from this source: this result qualifies the
+selected downstream goldens, not the complete current parse/recovery inventory.
+One measured sample per stage establishes correctness, not a calibrated timing
+baseline. The slowest recorded file conversion was test-031 at 2.316 seconds;
+the issue's under-one-second target remains open. Current-source complete corpus,
+required CI and the remaining R1–R5 acceptance conditions remain open.

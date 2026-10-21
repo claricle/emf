@@ -148,3 +148,15 @@ original reproducer, oversized byte lengths for all five types, oversized counts
 valid region layouts and truncated-tail preservation. This is one resilience
 criterion; it does not complete fuzz, whole-corpus or whole-issue qualification.
 Evidence: `/private/tmp/emf-execution/p06-region-allocation-bound/checks.log`.
+
+### Incomplete terminal record headers
+
+Source `6669366b4946c825b40e0b514a3b7cb5ad59571e` also preserves terminal
+record headers of one through seven bytes. Each incomplete header produces an
+explicit ParseError and remains in trailing bytes, preserving exact serialization
+and the preceding complete record. Previously these inputs raised from parsing.
+Seven regression cases failed before the correction; the composed truncated-tail,
+region-allocation and region-wire checks passed **25 examples, zero failures**
+(seed 48328). Both changed Ruby files passed RuboCop. Evidence:
+`/private/tmp/emf-execution/p06-region-allocation-bound/short-tail-result.json`.
+This closes the witnessed short-header defect, not whole-corpus or fuzz acceptance.

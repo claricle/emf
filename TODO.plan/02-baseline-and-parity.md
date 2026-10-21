@@ -169,3 +169,14 @@ is released. Safety-limit failures remain failures, not passes.
 Native comparison remains open under the assigned build/install hold. Current-source
 Ruby capture alone does not close the public mutation, final-head native, stage-cost,
 slow-fixture, downstream golden or required CI acceptance criteria above.
+
+## Current-source inventory refresh
+
+At `6669366`, all 231 fixture identities were independently verified against the
+committed inventory and on-disk SHA-256 values. The bounded Ruby capture completed
+in 46.09 seconds: **219 parsed, 10 recovered, two explicit format errors**, with
+zero safety failures or backend exceptions. No fixture outcome changed.
+`spec/fixtures/manifest.json` now records the current parser-source digest
+`116efa7477dba266e7ab396afb92c682771c5764bd5e41abb8077907cf3718d5`;
+`ruby script/fixture_manifest --check` passes. This refresh establishes inventory
+acceptance, not current-source canonical roundtrip or native parity acceptance.
