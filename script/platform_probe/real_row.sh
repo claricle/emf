@@ -85,12 +85,16 @@ compiler_free_path() {
   fi
 }
 
+# Bundled gems (fiddle on Ruby 4.0) live in the Ruby install, outside the isolated GEM_HOME.
+# shellcheck disable=SC2329  # invoked through command substitution
+gem_path() { ruby -e 'print [ARGV[0], Gem.default_dir].join(File::PATH_SEPARATOR)' "$1"; }
+
 # shellcheck disable=SC2329  # invoked through step
 fetch_in() { (cd "$1" && gem fetch "$2" --version "$3"); }
 
 # shellcheck disable=SC2329  # invoked through step
 install_gem() { # install_gem HOME STAGE VERSION : same command as native_install_smoke, RubyGems in-process
-  (cd "$2" && env -u RUBYOPT -u RUBYLIB -u BUNDLE_GEMFILE PATH="$isolated" GEM_HOME="$1" GEM_PATH="$1" \
+  (cd "$2" && env -u RUBYOPT -u RUBYLIB -u BUNDLE_GEMFILE PATH="$isolated" GEM_HOME="$1" GEM_PATH="$(gem_path "$1")" \
     "$ruby" -rrubygems/gem_runner -e 'Gem::GemRunner.new.run(ARGV)' -- \
     install emf --version "$3" --local --no-document)
 }
@@ -107,13 +111,13 @@ check_dll_closure() { # check_dll_closure HOME
 
 # shellcheck disable=SC2329  # invoked through step
 run_workload() { # run_workload HOME FIXTURE : cwd outside the checkout so nothing loads from lib/
-  (cd "$out" && env -u RUBYOPT -u RUBYLIB -u BUNDLE_GEMFILE PATH="$isolated" GEM_HOME="$1" GEM_PATH="$1" \
+  (cd "$out" && env -u RUBYOPT -u RUBYLIB -u BUNDLE_GEMFILE PATH="$isolated" GEM_HOME="$1" GEM_PATH="$(gem_path "$1")" \
     "$ruby" "$2" "$3")
 }
 
 # shellcheck disable=SC2329  # invoked through step
 run_availability() { # run_availability HOME SCRIPT LIBRARY FIXTURE : the script gives its children a ruby-only PATH
-  (cd "$out" && env -u RUBYOPT -u RUBYLIB -u BUNDLE_GEMFILE GEM_HOME="$1" GEM_PATH="$1" \
+  (cd "$out" && env -u RUBYOPT -u RUBYLIB -u BUNDLE_GEMFILE GEM_HOME="$1" GEM_PATH="$(gem_path "$1")" \
     "$ruby" "$2" --library "$3" --fixture "$4")
 }
 

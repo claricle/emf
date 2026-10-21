@@ -30,6 +30,7 @@ require "tmpdir"
 
 class NativeInstallSmoke
   COMPILERS = %w[cc gcc clang rustc].freeze
+  # GEM_PATH also lists the Ruby install: fiddle is a bundled gem on Ruby 4.0, outside the isolated GEM_HOME.
   CLEAN_ENV = %w[RUBYOPT RUBYLIB BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLER_SETUP GEM_HOME GEM_PATH].to_h { |k| [k, nil] }.freeze
 
   def initialize(directory:, platform:, abi_symbol:, require_native:, forbid_compiler:, resolve_dependencies:)
@@ -92,7 +93,7 @@ class NativeInstallSmoke
   end
 
   def install(home)
-    env = CLEAN_ENV.merge("GEM_HOME" => home, "GEM_PATH" => home)
+    env = CLEAN_ENV.merge("GEM_HOME" => home, "GEM_PATH" => [home, Gem.default_dir].join(File::PATH_SEPARATOR))
     cmd = [RbConfig.ruby, "-rrubygems/gem_runner", "-e", "Gem::GemRunner.new.run(ARGV)",
            "install", "emf", "--version", version, "--local", "--no-document"]
     cmd << "--ignore-dependencies" unless @resolve_dependencies
@@ -133,7 +134,7 @@ class NativeInstallSmoke
 
   def check_source_runtime(home)
     %w[auto ruby].each do |backend|
-      env = CLEAN_ENV.merge("GEM_HOME" => home, "GEM_PATH" => home,
+      env = CLEAN_ENV.merge("GEM_HOME" => home, "GEM_PATH" => [home, Gem.default_dir].join(File::PATH_SEPARATOR),
                             "EMF_BACKEND" => backend, "EMF_NATIVE_LIBRARY" => nil)
       out, status = Open3.capture2e(env, RbConfig.ruby, File.join(__dir__, "native_source_runtime"), chdir: home)
       fail!("source runtime #{backend} failed: #{out}") unless status.success?
