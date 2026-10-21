@@ -153,3 +153,28 @@ Exact command, source revision, log digest and remaining scope are recorded in
 `rspec.log` in the same directory. This does not establish final-head native
 execution, complete corpus/CLI equivalence, downstream native golden behavior
 or installed-platform acceptance. Those R1–R5 gates remain open.
+
+### Native and Ruby public-consumer checkpoint
+
+At `ba7a0ed4cd077ae9c55e1b6595974302700a1d5e`, the public API, model,
+detector, visitor and CLI suite passed **60 examples, 0 failures** under forced
+native execution. The same paths plus backend selection passed **75 examples,
+0 failures** under forced Ruby execution with the native library override cleared.
+Backend availability checks run separately from the forced-native suite because
+their subprocesses inherit the library environment.
+
+The instrumented forced-backend consumer suite passed **42 examples, 0 failures**.
+For EMF, standard WMF and placeable WMF it verifies CLI info, dump, stats,
+validate and round-trip behavior, Stats/Dump visitor results, byte-identical
+round-trip files and actual parser dispatch without native-to-Ruby fallback.
+It also checks deterministic corrupt-input errors and nonzero CLI status.
+All three runs use seed 48328. The library was built from
+`d3588c5d8f590233c125e5aa97fb4ad53056a5cd`; intervening changes affect only
+Alpine bootstrap and test expectations, not production parser/binding inputs.
+
+Evidence: `/private/tmp/emf-execution/p05-public-native-ba7a0ed/result.json`
+records source identity, library identity and log digests. The first consumer
+attempt was blocked by sandbox access to the process monitor; the bounded rerun
+with monitoring enabled passed. No build or install was needed. This checkpoint
+does not establish complete valid/corrupt corpus equivalence or pinned downstream
+native golden acceptance; those R1–R5 conditions remain open.
