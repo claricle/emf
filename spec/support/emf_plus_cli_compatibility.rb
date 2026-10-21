@@ -27,8 +27,11 @@ module EmfPlusCliCompatibility
   module_function
 
   def reference_cli(root, directory)
-    source, error, status = Open3.capture3("git", "-C", root, "show", "97c5885:exe/emf")
-    raise "reference CLI unavailable: #{error}" unless status.success?
+    # Exact exe/emf from 97c5885d58b4c366df317f9af4accbe3cdde0ec5.
+    # Keep the oracle available in shallow checkouts and source archives.
+    source = File.binread(File.join(root, "spec/fixtures/cli/emf-97c5885.txt"))
+    expected = "fd311333701e16fe848419495982153e6bc60921d014775ffbcddfd9e04150fa"
+    raise "historical CLI fixture digest mismatch" unless Digest::SHA256.hexdigest(source) == expected
 
     path = File.join(directory, "previous-emf.rb")
     File.write(path, source)

@@ -79,6 +79,15 @@ RSpec.describe "script/verify_release_artifacts" do
   it "rejects missing source provenance before writing output" do
     dir = stage("source-unbound", rows: rows, revision: revision, source: false)
     build("--platform", "ruby", output: File.join(dir, "source"))
+    path = Dir.glob(File.join(dir, "source", "*.gem")).first
+    Dir.mktmpdir("emf-source-unbound", @tmp) do |tmp|
+      package = Gem::Package.new(path)
+      package.extract_files(tmp)
+      spec = package.spec
+      spec.metadata.delete("emf_revision")
+      Dir.chdir(tmp) { Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) { Gem::Package.build(spec, true) } }
+      FileUtils.cp(Dir.glob(File.join(tmp, "*.gem")).first, path)
+    end
     code, err, out = verify(dir)
     expect([code, err, File.exist?(out)]).to match([1, /source provenance.*revision/, false])
   end
