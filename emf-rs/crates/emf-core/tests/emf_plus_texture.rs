@@ -181,10 +181,11 @@ fn malformed_image_headers_lengths_and_inconsistent_edits_fail() {
         }
         assert!(definition(b).decode(&ParseLimits::default()).is_err());
     }
-    let mut b = brush(0, 2);
-    b.extend([1, 2]);
-    assert!(definition(b).decode(&ParseLimits::default()).is_err());
-    for edit in 0..3 {
+    // A suffix longer than alignment padding is retained and re-serialized verbatim.
+    let mut long = brush(2, 2);
+    long.extend([7; 20]);
+    exact(long);
+    for edit in 0..2 {
         let mut v = exact(brush(2, 2));
         let ObjectData::TextureBrush { data, .. } = &mut v else {
             panic!()
@@ -192,12 +193,6 @@ fn malformed_image_headers_lengths_and_inconsistent_edits_fail() {
         match edit {
             0 => data.flags |= 4,
             1 => data.transform = None,
-            2 => {
-                let Some(emf_plus::TextureImage::Metafile { suffix, .. }) = &mut data.image else {
-                    panic!()
-                };
-                suffix.extend([1, 2]);
-            }
             _ => unreachable!(),
         };
         assert!(matches!(

@@ -151,6 +151,13 @@ fn image_metadata_and_unexpanded_payloads_preserve_unknown_values() {
     assert!(
         matches!(exact(5,bytes),ObjectData::MetafileImage {metafile_type:5,data,suffix,..} if data==[9,8,7]&&suffix==[0xfe])
     );
+    // Real producers append more than alignment padding after MetafileDataSize bytes.
+    let mut bytes = words(&[3, 2, 2, 2]);
+    bytes.extend_from_slice(&[1, 2]);
+    bytes.extend_from_slice(&[0x12; 24]);
+    assert!(
+        matches!(exact(5, bytes), ObjectData::MetafileImage { data, suffix, .. } if data == [1, 2] && suffix == [0x12; 24])
+    );
     for (kind, bytes) in [
         (1, words(&[3, 99, 0xdeadbeef])),
         (5, words(&[3, 99, 0x12345678])),

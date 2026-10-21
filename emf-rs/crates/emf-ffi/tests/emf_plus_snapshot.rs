@@ -405,7 +405,8 @@ fn fixed_typed_families_preserve_word_bits_and_complex_families_keep_raw_frames(
             assert_eq!(&bytes[at..at + typed.len()], typed);
             at += typed.len();
         }
-        assert_eq!(at, bytes.len());
+        // Unresolved object references follow the frames as 24-byte diagnostics.
+        assert_eq!(at + 24 * u64_at(&bytes, 32) as usize, bytes.len());
         emf_document_free(doc);
     }
 }
@@ -599,7 +600,7 @@ fn normalized_drawing_and_text_cover_operations_encodings_arrays_and_presence() 
             assert_eq!(&bytes[at..at + typed.len()], typed);
             at += typed.len();
         }
-        assert_eq!(at, bytes.len());
+        assert_eq!(at + 24 * u64_at(&bytes, 32) as usize, bytes.len());
         let mut output = ptr::null_mut();
         assert_eq!(
             emf_document_emf_plus_snapshot_v1(
@@ -1662,6 +1663,41 @@ fn empty_snapshot_output_is_in_the_cumulative_allocation_budget() {
                 assert!(output.is_null());
             }
         }
+        emf_document_free(doc);
+    }
+}
+
+#[test]
+fn unresolved_object_references_are_appended_as_nonfatal_diagnostics() {
+    let solid = frame(0x4008, (1 << 8) | 3, &[0; 12], &[]);
+    let attributes = frame(0x4008, (8 << 8) | 1, &[0; 24], &[]);
+    let fill = |brush: u32| {
+        let mut body = brush.to_le_bytes().to_vec();
+        body.extend(1u32.to_le_bytes());
+        body.extend([0i16, 0, 1, 1].iter().flat_map(|n| n.to_le_bytes()));
+        frame(0x400a, 0x4000, &body, &[])
+    };
+    // Resolved brush, empty slot, attributes where a brush is required, ID beyond the table.
+    let logical: Vec<u8> = [solid, attributes, fill(3), fill(2), fill(1), fill(70)].concat();
+    unsafe {
+        let doc = parse(&input(&[&logical]));
+        let bytes = snapshot(doc);
+        assert_eq!(u64_at(&bytes, 24), 6);
+        assert_eq!(u64_at(&bytes, 32), 3);
+        let start = bytes.len() - 3 * 24;
+        let diagnostic = |i: usize| {
+            let at = start + i * 24;
+            (
+                u32_at(&bytes, at),
+                u32_at(&bytes, at + 4),
+                u64_at(&bytes, at + 8),
+                u32_at(&bytes, at + 16),
+                u32_at(&bytes, at + 20),
+            )
+        };
+        assert_eq!(diagnostic(0), (1, 1, 3, 2, 0));
+        assert_eq!(diagnostic(1), (2, 1, 4, 1, 8));
+        assert_eq!(diagnostic(2), (3, 1, 5, 70, 0));
         emf_document_free(doc);
     }
 }
