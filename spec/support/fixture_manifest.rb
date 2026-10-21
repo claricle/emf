@@ -73,9 +73,9 @@ module FixtureManifest
     FAILURE_KINDS = { timed_out: "timeout", output_limit: "output_limit",
                       rss_exceeded: "rss_exceeded", monitor_failed: "monitor_failed" }.freeze
 
-    def initialize(rss_limit_bytes:, timeout: 5, output_limit: 16_384, command: nil)
+    def initialize(rss_limit_bytes:, timeout: 5, output_limit: 16_384, command: nil, benchmark_series: false)
       @supervisor = ProcessSupervisor.new(wall_seconds: timeout, rss_limit_bytes: rss_limit_bytes,
-                                          output_limit: output_limit)
+                                          output_limit: output_limit, benchmark_series: benchmark_series)
       @command = command || [RbConfig.ruby, "-I", File.expand_path("../../lib", __dir__), __FILE__, "--observe"]
     end
 

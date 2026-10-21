@@ -54,7 +54,8 @@ RSpec.describe ParserBenchmark::CLI do
       expect(report.fetch("revision")).to include("git_sha", "parser_source_sha256", "manifest_matches_sources")
       expect(report.fetch("environment")).to include("ruby", "gems", "os", "cpu_count")
       expect(report.fetch("method")).to include("iterations" => 2, "warmups" => 0, "child_timeout_seconds" => 60,
-                                                "child_rss_limit_bytes" => 512 * 1024 * 1024)
+                                                "child_rss_limit_bytes" => 512 * 1024 * 1024,
+                                                "child_timeout_mode" => "ordinary", "child_timeout_limit_seconds" => 60)
     end
 
     it "reports exactly the declared stages with one sample per iteration" do
@@ -181,6 +182,48 @@ RSpec.describe ParserBenchmark::CLI do
     end
   end
 
+  %w[0 1201 -1 1.5 NaN Infinity invalid].each do |seconds|
+    it "rejects an invalid --series-timeout of #{seconds}" do
+      expect { expect(described_class.new([*fast_args, "--series-timeout", seconds]).run).to eq(2) }
+        .to output(/--series-timeout/).to_stderr
+      expect(File).not_to exist(result_path)
+    end
+  end
+
+  [["--timeout", "60", "--series-timeout", "1200"], ["--series-timeout", "1200", "--timeout", "60"]].each do |flags|
+    it "rejects mixed deadline options in #{flags.first} order" do
+      expect { expect(described_class.new([*fast_args, *flags]).run).to eq(2) }
+        .to output(/--timeout and --series-timeout cannot be combined/).to_stderr
+      expect(File).not_to exist(result_path)
+    end
+  end
+
+  it "uses the opted-in deadline for warm and cold children and completes a tiny requested series" do
+    bytes = Emf::Emr::Binary::Header.new(i_type: 1, n_size: 108, d_signature: 0x464D4520, n_version: 0x10000).to_binary_s +
+            [17, 12, 8, 14, 20, 0, 0, 20].pack("V*")
+    path = File.join(tmpdir, "tiny.emf")
+    File.binwrite(path, bytes)
+    digest = Digest::SHA256.hexdigest(bytes)
+    File.write(manifest, JSON.generate("schema_version" => FixtureManifest::SCHEMA_VERSION, "fixtures" => [
+                                         { "path" => path, "sha256" => digest, "size_bytes" => bytes.bytesize, "outcome" => "parsed" }
+                                       ]))
+    args = ["--manifest", manifest, "--output", result_path, "--rss-limit-mb", "512", "--series-timeout", "1200",
+            "--iterations", "20", "--warmups", "5", "--cold-runs", "1", "--backend", "ruby"]
+    expect(FixtureManifest::Runner).to receive(:new).with(hash_including(timeout: 1200, benchmark_series: true)).twice.and_call_original
+
+    expect(described_class.new(args).run).to eq(0)
+    expect(report.fetch("backend")).to eq("ruby")
+    expect(report.fetch("method")).to include("iterations" => 20, "warmups" => 5, "child_timeout_seconds" => 1200,
+                                              "child_timeout_mode" => "benchmark_series", "child_timeout_limit_seconds" => 1200)
+    fixture = report.fetch("fixtures").fetch(0)
+    expect(fixture).to include("status" => "ok", "sha256" => digest)
+    expect(fixture.dig("validity", "round_trip_identical")).to be(true)
+    expect(fixture.fetch("stages").values.map { |stage| stage.fetch("samples_ns").size }).to eq([20] * ParserBenchmark::STAGES.size)
+    expect(report.dig("cold_load", "runs", 0, "status")).to eq("ok")
+    expect(report.fetch("failures")).to be_empty
+    expect(File.binread(path)).to eq(bytes)
+  end
+
   it "reports a fixture child over the RSS ceiling as an rss_exceeded failure" do
     expect(described_class.new(option_value(fast_args, "--rss-limit-mb", "1")).run).to eq(1)
     expect(report.fetch("fixtures").fetch(0)).to include("status" => "failed", "failure" => include("kind" => "rss_exceeded"))
@@ -189,13 +232,19 @@ RSpec.describe ParserBenchmark::CLI do
     )
   end
 
-  it "reports warm iterations that outrun the deadline as a timeout without partial timings" do
-    args = option_value(fast_args, "--iterations", "100000000") + ["--timeout", "1"]
+  it "reports a series deadline failure without accepting partial timings" do
+    args = option_value(fast_args, "--iterations", "20") + ["--series-timeout", "1", "--warmups", "5", "--cold-runs", "0"]
+    partial = { "status" => "ok", "stages" => { "parse" => { "samples_ns" => [1] } },
+                "safety_failure" => { "kind" => "timeout" } }
+    allow_any_instance_of(ParserBenchmark::Run).to receive(:child).and_return(partial)
+
     expect(described_class.new(args).run).to eq(1)
     fixture = report.fetch("fixtures").fetch(0)
     expect(fixture).to include("status" => "failed", "failure" => include("kind" => "timeout"))
     expect(fixture).not_to have_key("stages")
-    expect(report.dig("method", "child_timeout_seconds")).to eq(1)
+    expect(report.fetch("slowest_measured_case")).to be_nil
+    expect(report.fetch("failures")).to contain_exactly(include("status" => "failed", "failure" => include("kind" => "timeout")))
+    expect(report.fetch("method")).to include("child_timeout_seconds" => 1, "child_timeout_mode" => "benchmark_series")
   end
 
   it "requires the manifest and output options" do
@@ -288,6 +337,19 @@ RSpec.describe ParserBenchmark::WarmWorker do
     expect(serialized.size).to be >= 3
     expect(dumped.map(&:object_id) & traversed.map(&:object_id)).to be_empty
     expect(serialized.map(&:object_id) & traversed.map(&:object_id)).to be_empty
+  end
+
+  it "runs every requested warmup and sample in a tiny twenty-sample series" do
+    series = described_class.new(path: path, sha256: Digest::SHA256.hexdigest(bytes), iterations: 20, warmups: 5)
+    allow(ParserBenchmark::Memory).to receive(:sample).and_return({})
+    expect(series).to receive(:trial).exactly(25).times.and_call_original
+
+    result = series.call
+
+    expect(result.fetch("status")).to eq("ok")
+    expect(result.fetch("stages").values.map { |stage| stage.fetch("samples_ns").size }).to eq([20] * ParserBenchmark::STAGES.size)
+    expect(result.dig("validity", "round_trip_identical")).to be(true)
+    expect(File.binread(path)).to eq(bytes)
   end
 
   context "without a representative record" do

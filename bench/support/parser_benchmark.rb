@@ -266,11 +266,13 @@ module ParserBenchmark
   end
 
   Options = Struct.new(:manifest, :backend, :output, :iterations, :warmups, :timeout, :fixtures, :limit, :outcomes,
-                       :cold_runs, :worker, :sha256, :path, :rss_limit_bytes, keyword_init: true)
+                       :cold_runs, :worker, :sha256, :path, :rss_limit_bytes, :benchmark_series, keyword_init: true)
 
   class CLI
     TIMEOUT_RANGE = (1..60)
-    DEFAULTS = { backend: "ruby", iterations: 20, warmups: 5, timeout: 60, fixtures: [], outcomes: %w[parsed], cold_runs: 3 }.freeze
+    SERIES_TIMEOUT_RANGE = (1..1200)
+    DEFAULTS = { backend: "ruby", iterations: 20, warmups: 5, timeout: 60, benchmark_series: false,
+                 fixtures: [], outcomes: %w[parsed], cold_runs: 3 }.freeze
 
     def initialize(argv)
       @argv = argv.dup
@@ -287,6 +289,7 @@ module ParserBenchmark
     private
 
     def parse(argv)
+      @timeout_option = nil
       options = Options.new(**DEFAULTS, fixtures: [])
       rest = parser(options).parse(argv)
       options.worker ? options.tap { options.path = rest.fetch(0) { raise UsageError, "worker needs a path" } } : validate(options, rest)
@@ -307,10 +310,17 @@ module ParserBenchmark
 
     def check_positive(options)
       raise UsageError, "--iterations must be a positive integer" unless options.iterations.is_a?(Integer) && options.iterations.positive?
-      raise UsageError, "--timeout must be within #{TIMEOUT_RANGE} seconds" unless TIMEOUT_RANGE.cover?(options.timeout)
+
+      check_timeout(options)
       raise UsageError, "--warmups must be >= 0" unless options.warmups.is_a?(Integer) && options.warmups >= 0
       raise UsageError, "--cold-runs must be >= 0" unless options.cold_runs.is_a?(Integer) && options.cold_runs >= 0
       raise UsageError, "--limit must be a positive integer" unless options.limit.nil? || options.limit.positive?
+    end
+
+    def check_timeout(options)
+      range = options.benchmark_series ? SERIES_TIMEOUT_RANGE : TIMEOUT_RANGE
+      option = options.benchmark_series ? "--series-timeout" : "--timeout"
+      raise UsageError, "#{option} must be within #{range} seconds" unless range.cover?(options.timeout)
     end
 
     def parser(options)
@@ -327,7 +337,10 @@ module ParserBenchmark
         opts.on("--iterations N", Integer, "Timed trials per fixture (default #{DEFAULTS[:iterations]})") { |v| options.iterations = v }
         opts.on("--warmups N", Integer, "Untimed warmup trials per fixture (default #{DEFAULTS[:warmups]})") { |v| options.warmups = v }
         opts.on("--timeout SECONDS", Integer, "Fixture child deadline, #{TIMEOUT_RANGE} (default #{DEFAULTS[:timeout]})") do |v|
-          options.timeout = v
+          set_timeout(options, v, "--timeout")
+        end
+        opts.on("--series-timeout SECONDS", Integer, "Opt in to a benchmark series child deadline, #{SERIES_TIMEOUT_RANGE}") do |v|
+          set_timeout(options, v, "--series-timeout")
         end
         opts.on("--fixture GLOB", "Manifest path glob (File.fnmatch); repeatable") { |v| options.fixtures << v }
         opts.on("--limit N", Integer, "Keep only the first N selected fixtures") { |v| options.limit = v }
@@ -336,6 +349,14 @@ module ParserBenchmark
         opts.on("--worker KIND", %w[warm cold], "Internal: run one child measurement") { |v| options.worker = v }
         opts.on("--sha256 HEX", "Internal: expected input digest") { |v| options.sha256 = v }
       end
+    end
+
+    def set_timeout(options, seconds, option)
+      raise UsageError, "--timeout and --series-timeout cannot be combined" if @timeout_option && @timeout_option != option
+
+      @timeout_option = option
+      options.timeout = seconds
+      options.benchmark_series = option == "--series-timeout"
     end
 
     def run_worker(options)
@@ -405,9 +426,15 @@ module ParserBenchmark
     end
   end
 
+  def self.timeout_description(options)
+    { "child_timeout_seconds" => options.timeout,
+      "child_timeout_mode" => options.benchmark_series ? "benchmark_series" : "ordinary",
+      "child_timeout_limit_seconds" => options.benchmark_series ? CLI::SERIES_TIMEOUT_RANGE.max : CLI::TIMEOUT_RANGE.max }
+  end
+
   def self.runner(options, output_limit, command)
     FixtureManifest::Runner.new(timeout: options.timeout, rss_limit_bytes: options.rss_limit_bytes,
-                                output_limit: output_limit, command: command)
+                                output_limit: output_limit, command: command, benchmark_series: options.benchmark_series)
   end
 
   def self.cold_failures(cold)
@@ -562,7 +589,7 @@ module ParserBenchmark
     end
 
     def method_description
-      { "iterations" => @options.iterations, "warmups" => @options.warmups, "child_timeout_seconds" => @options.timeout,
+      { "iterations" => @options.iterations, "warmups" => @options.warmups, **ParserBenchmark.timeout_description(@options),
         "child_rss_limit_bytes" => @options.rss_limit_bytes,
         "timing" => { "clock" => "Process.clock_gettime(CLOCK_MONOTONIC, :nanosecond)", "unit" => "nanoseconds" },
         "gc_policy" => "GC.start before each stage, outside timed regions, so no stage pays for earlier garbage; " \

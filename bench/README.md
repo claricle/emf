@@ -15,7 +15,25 @@ bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backen
 | `--outcomes LIST` | `parsed` | Manifest outcomes to run (`parsed,recovered,format_error`) |
 | `--cold-runs N` | 3 | Fresh-process cold-load runs |
 | `--rss-limit-mb MB` | required | RSS ceiling for each child process group, in MiB; measure the target runner, there is no default |
-| `--timeout SECONDS` | 60 | Deadline for each fixture child, 1 to 60 |
+| `--timeout SECONDS` | 60 | Ordinary deadline for each fixture child, 1 to 60 |
+| `--series-timeout SECONDS` | none | Explicit benchmark-series deadline for each fixture child, 1 to 1200; cannot be combined with `--timeout` |
+
+Ordinary runs retain the 60-second default and ceiling. For a full measurement
+series that needs a longer child deadline, explicitly select `--series-timeout`:
+
+```sh
+bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backend ruby --fixture spec/fixtures/simple/image1.emf --warmups 5 --iterations 20 --series-timeout 1200 --rss-limit-mb 512 --output tmp/bench/ruby-series.json
+```
+
+The deadline covers the entire warm child, including all warmups and timed trials
+across its stages. Each fresh cold child receives the same configured deadline.
+The opt-in changes only the wall-clock ceiling: RSS limits, bounded output and
+process-tree cleanup still apply. It does not reduce sample counts or accept
+partial timings after a failure. Reports record the effective deadline in
+`method.child_timeout_seconds`, its `ordinary` or `benchmark_series` mode in
+`method.child_timeout_mode`, and its 60- or 1200-second ceiling in
+`method.child_timeout_limit_seconds`. The native component diagnostic below
+accepts the same explicit opt-in through its shared CLI and supervisor.
 
 For native runs, point to the exact compiled library being measured:
 
