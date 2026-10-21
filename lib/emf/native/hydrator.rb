@@ -7,6 +7,7 @@ require_relative "bitmap_fields"
 require_relative "small_text_fields"
 require_relative "poly_text_fields"
 require_relative "lazy_wire"
+require_relative "diagnostics"
 
 module Emf
   module Native
@@ -20,17 +21,12 @@ module Emf
       end
 
       def call
-        records = @snapshot.records.map { |record| hydrate_record(record) }
-        emf_plus = @snapshot.records.filter_map do |record|
-          next unless record.fetch(:family) == 4
-
-          _klass, fields = comment_fields(record.fetch(:payload), @input.byteslice(record.fetch(:offset), record.fetch(:length)))
-          data = fields.fetch(:data)
-          data.byteslice(4..) if fields.fetch(:cb_data) >= 4 && data.start_with?("EMF+")
-        end.join.b
+        diagnostics = Diagnostics.new(@snapshot, @input)
+        records = @snapshot.records.map { |record| diagnostics.adapter_at(record.fetch(:offset)) || hydrate_record(record) }
+        emf_plus = emf_plus_stream(diagnostics)
         Model::Metafile.new(
           format: emf_plus.empty? ? :emf : :emf_plus, header: Header.new.call(@snapshot.header, @snapshot.raw_header), records: records,
-          errors: diagnostics, emf_plus: emf_plus.empty? ? nil : emf_plus,
+          errors: diagnostics.errors, emf_plus: emf_plus.empty? ? nil : emf_plus,
           trailing: @snapshot.trailing + @snapshot.unframed
         )
       end
@@ -136,13 +132,16 @@ module Emf
         [Emr::Binary::Records::Comment, { cb_data: count, data: data }]
       end
 
-      def diagnostics
-        @snapshot.diagnostics.map do |kind, has_type, type, reserved, offset, detail1, detail2|
-          raise FormatError, "invalid native snapshot diagnostic" unless (1..4).cover?(kind) && (0..1).cover?(has_type) && reserved.zero?
+      def emf_plus_stream(diagnostics)
+        @snapshot.records.filter_map do |record|
+          offset = record.fetch(:offset)
+          next diagnostics.emf_plus_at(offset) if diagnostics.recovered?(offset)
+          next unless record.fetch(:family) == 4
 
-          message = "native parse diagnostic #{kind} at offset #{offset} (#{detail1}, #{detail2})"
-          ParseError.new(offset: offset, record_code: has_type == 1 ? type : nil, message: message)
-        end
+          _klass, fields = comment_fields(record.fetch(:payload), @input.byteslice(offset, record.fetch(:length)))
+          data = fields.fetch(:data)
+          data.byteslice(4..) if fields.fetch(:cb_data) >= 4 && data.start_with?("EMF+")
+        end.join.b
       end
     end
   end
