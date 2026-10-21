@@ -33,6 +33,21 @@ RSpec.describe Emf::Emr::Parser, "terminal record preservation" do
     expect(Emf.serialize(source)).to eq(bytes)
   end
 
+  save_dc = [33, 8].pack("V2").freeze
+  (1..7).each do |length|
+    it "preserves a #{length}-byte incomplete record header with a diagnostic" do
+      fixtures = Emf::SpecSupport::EmfPlusGeneratedFixtures
+      tail = "\xAA".b * length
+      bytes = fixtures.header_bytes(96 + length, 3) + save_dc + tail
+      source = Emf.parse(bytes)
+
+      expect(source.records.length).to eq(1)
+      expect(source.trailing).to eq(tail)
+      expect(source.errors.map(&:message)).to eq(["truncated record header at offset 96 (#{length} bytes)"])
+      expect(Emf.serialize(source)).to eq(bytes)
+    end
+  end
+
   it "keeps complete records and the normal EOF suffix byte-identical" do
     fixtures = Emf::SpecSupport::EmfPlusGeneratedFixtures
     bytes = fixtures.single_comment(fixtures.typed_record(:Clear)) + "after EOF".b

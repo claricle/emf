@@ -196,9 +196,18 @@ module Emf
           (bytes.getbyte(offset + 3) << 24)
       end
 
+      def short_header?(head, offset, errors)
+        return false if head.bytesize >= 8
+        return true if head.empty?
+
+        errors << ParseError.new(offset: offset, record_code: nil,
+                                 message: "truncated record header at offset #{offset} (#{head.bytesize} bytes)")
+        true
+      end
+
       def read_record(io, offset, errors)
         head = io.read(8)
-        return nil if head.nil? || head.empty?
+        return nil if head.nil? || short_header?(head, offset, errors)
 
         type_id, n_size = head.unpack("VV")
         if n_size < 8
