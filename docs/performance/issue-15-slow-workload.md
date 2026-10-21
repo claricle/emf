@@ -195,6 +195,44 @@ construction from attributes, which the consumer uses for every record it emits.
 Reaching under one second also needs the native backend, which the build hold
 blocks.
 
+## Authorized CPU comparison of today's changes
+
+This was a sequential Ruby-only run, authorized as a bounded timing slot and
+announced in the shared handoff. It compared the baseline `d93967d`, before
+today's fast paths, with the candidate `b12f4bd`. The candidate includes the
+fast-fill template, keyword construction, nested assign, the BinData guard,
+32-bit and 16-bit point records, and ExtTextOutA/W. Baseline and candidate ran
+alternately, 3 times each, one fresh process per run, on the same machine
+(Apple M2, 8 GiB, Ruby 3.4.8, `EMF_BACKEND=ruby`). Load average was 13 to 23
+throughout, so read the figures as order of magnitude. Every output was
+identical: emitted EMF `bc1437fa9a34`, SVG `787b5f25eb01`, and every
+`Emf.serialize` byte-identical.
+
+| Workload (process CPU, median of 3) | Baseline `d93967d` | Candidate `b12f4bd` | Change |
+| --- | --- | --- | --- |
+| emfsvg round trip `test-031`, `from_svg` | 11.46 s | 6.49 s | -43% |
+| emfsvg round trip `test-031`, `from_bytes` | 5.60 s | 2.93 s | -48% |
+| emfsvg round trip `test-031`, total | 16.84 s | 9.34 s | -45% |
+| peak RSS of the round-trip process | 585 MiB | 416 MiB | -29% |
+| `Emf.parse` `test-031.emf` | 1618 ms | 618 ms | -62% |
+| `Emf.serialize` `test-031.emf` | 491 ms | 173 ms | -65% |
+| `Emf.parse` `test-178.emf` | 1566 ms | 671 ms | -57% |
+| `Emf.serialize` `test-178.emf` | 532 ms | 257 ms | -52% |
+
+The round trip's allocations fell from 52.9 M to 27.1 M objects, measured
+separately and deterministically.
+
+**Verdict on the under-one-second target: not met.** The slowest consumer round
+trip takes about 9.3 s of CPU with the Ruby backend. emf parse and serialize of
+`test-031.emf` alone now take about 0.8 s, which is under one second for emf's
+own work on that fixture. The rest of the round trip is mostly the consumer's
+own SVG parsing, emission and rendering, plus emf wire construction for 194k
+emitted records. Closing the end-to-end target needs consumer-side changes or
+the native backend. The native backend has no final-head measurement yet.
+
+The run's commands, scripts and raw output are local evidence in
+`/private/tmp/emf-execution/p07-timing-authorized/`.
+
 ## Open
 
 - The native backend measurements over the same fixtures need a library built
