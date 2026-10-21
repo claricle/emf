@@ -95,34 +95,66 @@ fn malformed_counts_modes_indexes_and_missing_rectangle_padding_recover() {
         let mut b = fixture(0);
         put(&mut b, 88 + at, value);
         let d = parse(&b, &ParseLimits::default()).unwrap();
+        // The fixed prefix is intact, so the record stays opaque without a diagnostic.
         assert_eq!(d.records()[0].data(), &RecordData::Raw);
-        assert_eq!(d.diagnostics().len(), 1);
+        assert!(d.diagnostics().is_empty());
         assert!(d.has_eof());
         assert_eq!(serialize(&d).unwrap(), b);
     }
+    // A record shorter than the fixed prefix still earns a diagnostic.
+    let mut b = fixture(0);
+    b.drain(88 + 32..88 + 36 + 3 * 16 + 12);
+    put(&mut b, 88 + 4, 32);
+    let d = parse(&b, &ParseLimits::default()).unwrap();
+    assert_eq!(d.records()[0].data(), &RecordData::Raw);
+    assert_eq!(d.diagnostics().len(), 1);
+    assert_eq!(serialize(&d).unwrap(), b);
     let mut b = fixture(0);
     b.drain(88 + 92..88 + 96);
     put(&mut b, 88 + 4, 92);
     let d = parse(&b, &ParseLimits::default()).unwrap();
-    assert_eq!(d.records()[0].data(), &RecordData::Raw);
+    // Missing rectangle padding is optional, so the record still decodes.
+    let RecordData::GradientFill(g) = d.records()[0].data() else {
+        panic!("expected a decoded gradient")
+    };
+    assert!(
+        matches!(&g.mesh, emf_core::GradientMesh::Rectangles { padding, .. } if padding.is_empty())
+    );
     assert!(d.has_eof());
+    assert_eq!(serialize(&d).unwrap(), b);
 }
 #[test]
 fn invalid_edit_is_atomic() {
     use emf_core::{EditFailure, GradientMesh};
     let mut d = parse(&fixture(0), &ParseLimits::default()).unwrap();
     let original = d.clone();
-    let RecordData::GradientFill(mut g) = d.records()[0].data().clone() else {
+    let RecordData::GradientFill(g) = d.records()[0].data().clone() else {
         panic!()
     };
-    if let GradientMesh::Rectangles { padding, .. } = &mut g.mesh {
+    // Padding is optional (all or nothing), so dropping it is a valid edit.
+    let mut unpadded = g.clone();
+    if let GradientMesh::Rectangles { padding, .. } = &mut unpadded.mesh {
         padding.clear();
     }
-    assert_eq!(
-        d.edit_record(0, RecordData::GradientFill(g)),
-        Err(EditFailure::RecordLayout { index: 0 })
-    );
-    assert_eq!(d, original);
+    let mut ok = d.clone();
+    ok.edit_record(0, RecordData::GradientFill(unpadded))
+        .unwrap();
+    // A vertex index past the vertex table and a partial padding run stay invalid.
+    let mut bad_index = g.clone();
+    if let GradientMesh::Rectangles { rectangles, .. } = &mut bad_index.mesh {
+        rectangles[0][0] = u32::MAX;
+    }
+    let mut bad_padding = g;
+    if let GradientMesh::Rectangles { padding, .. } = &mut bad_padding.mesh {
+        padding.push(0);
+    }
+    for bad in [bad_index, bad_padding] {
+        assert_eq!(
+            d.edit_record(0, RecordData::GradientFill(bad)),
+            Err(EditFailure::RecordLayout { index: 0 })
+        );
+        assert_eq!(d, original);
+    }
 }
 #[test]
 fn allocation_and_work_limits_are_inclusive() {

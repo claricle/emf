@@ -9,7 +9,6 @@ require_relative "record_variants"
 # and the accessor values those bytes must produce on both backends.
 module RecordVariants
   self.catalog = :opaque
-  ADJUSTMENT_DIAGNOSTIC = "native reports ParseError 108 for a SetColorAdjustment body below 24 bytes; Ruby reports no diagnostic"
   TAIL = "\xDE\xAD\xBE\xEF".b.freeze
   NAME_A = "icc.pro\0".b.freeze
   NAME_W = "i\0c\0c\0\0\0".b.freeze
@@ -141,7 +140,7 @@ module RecordVariants
     valid("all 12 fields", body(adjustment, *checks))
     valid("zero adjustment", body("\0".b * 24, check("adjustment_size", 0), check("contrast", 0), check("red_green_tint", 0)))
     valid("fields then trailing bytes", body(adjustment + TAIL, *checks))
-    malformed("body shorter than adjustment", raw("body", adjustment.byteslice(0, 23)), pending: ADJUSTMENT_DIAGNOSTIC)
+    malformed("body shorter than adjustment", raw("body", adjustment.byteslice(0, 23)))
   end
 
   { "SetColorspace" => 100, "DeleteColorspace" => 101 }.each do |name, type|

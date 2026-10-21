@@ -13,8 +13,6 @@ module RecordVariants
   BLT_BOUNDS = [-1, -2, 30, 40].freeze
   PTR_NAMES = %w[off_bmi_src cb_bmi_src off_bits_src cb_bits_src].freeze
   MASK_PTR_NAMES = %w[off_bmi_mask cb_bmi_mask off_bits_mask cb_bits_mask].freeze
-  BITMAP_DIAGNOSTIC = "native falls back to Raw with ParseError 108 when a bitmap descriptor leaves the record; " \
-                      "Ruby keeps the typed record with no diagnostic"
 
   # Fixed-part layouts (everything after the 8-byte record header) per record.
   module BitmapLayouts
@@ -96,7 +94,7 @@ module RecordVariants
         "offset inside fixed part" => ->(pairs) { pairs.map { |_, size| [4, size] } }
       }.each do |label, change|
         fields = with_buffers(sample, **options) { |pairs| instance_exec(change.call(pairs), &fixed) }
-        malformed(label, fields, pending: BITMAP_DIAGNOSTIC)
+        malformed(label, fields)
       end
     end
   end
@@ -115,7 +113,6 @@ module RecordVariants
       layouts.each do |label, buffers, order, gap|
         valid(gap.zero? ? label : "#{label} (#{gap}-byte gap)", with_buffers(buffers, order: order, gap: gap, **options, &fixed))
       end
-      pending_derived(:truncated, BITMAP_DIAGNOSTIC)
       sample = layouts.fetch(1)[1]
       malformed_pointers(sample, options, fixed)
     end

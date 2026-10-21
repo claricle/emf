@@ -39,9 +39,16 @@ impl GradientFill {
     pub(crate) fn payload_len(&self) -> Option<usize> {
         u32::try_from(self.vertices.len()).ok()?;
         u32::try_from(self.count()).ok()?;
+        let indexes = match &self.mesh {
+            GradientMesh::Rectangles { padding, .. } => self
+                .count()
+                .checked_mul(8)?
+                .checked_add(padding.len().checked_mul(4)?)?,
+            GradientMesh::Triangles(_) => self.count().checked_mul(12)?,
+        };
         28usize
             .checked_add(self.vertices.len().checked_mul(16)?)?
-            .checked_add(self.count().checked_mul(12)?)
+            .checked_add(indexes)
     }
     pub(crate) fn valid(&self) -> bool {
         let valid = |i: &u32| (*i as usize) < self.vertices.len();
@@ -50,7 +57,12 @@ impl GradientFill {
                 rectangles,
                 padding,
                 ..
-            } => rectangles.len() == padding.len() && rectangles.iter().flatten().all(valid),
+            } => {
+                // MS-EMF requires one padding word per rectangle; records that omit
+                // them all still parse and keep that shape.
+                (padding.is_empty() || rectangles.len() == padding.len())
+                    && rectangles.iter().flatten().all(valid)
+            }
             GradientMesh::Triangles(triangles) => triangles.iter().flatten().all(valid),
         }
     }
@@ -123,19 +135,26 @@ pub(crate) fn decode(
     let nv = r.u32()? as usize;
     let nm = r.u32()? as usize;
     let mode = r.u32()?;
-    let Some(len) = nv
+    let element = if mode == 2 { 12 } else { 8 };
+    let Some(indexed) = nv
         .checked_mul(16)
-        .and_then(|n| nm.checked_mul(12)?.checked_add(n)?.checked_add(28))
+        .and_then(|n| nm.checked_mul(element)?.checked_add(n)?.checked_add(28))
     else {
         return raw();
     };
-    if mode > 2 || len > payload.len() {
+    if mode > 2 || indexed > payload.len() {
         return raw();
     }
+    // One ignored word per rectangle follows the indexes; some writers omit it.
+    let padded = mode < 2
+        && nm
+            .checked_mul(4)
+            .is_some_and(|n| n <= payload.len() - indexed);
+    let len = if padded { indexed + nm * 4 } else { indexed };
     // Reserve work before scanning indexes or allocating the model.
     budget.charge_work((nv as u64) + (nm as u64))?;
     let index_start = 28 + nv * 16;
-    let index_count = nm * if mode == 2 { 3 } else { 2 };
+    let index_count = nm * element / 4;
     let mut indices = Reader::new(&payload[index_start..index_start + index_count * 4]);
     for _ in 0..index_count {
         if indices.u32()? as usize >= nv {
@@ -168,12 +187,14 @@ pub(crate) fn decode(
         GradientMesh::Triangles(triangles)
     } else {
         let mut rectangles = try_vec_with_capacity(nm)?;
-        let mut padding = try_vec_with_capacity(nm)?;
+        let mut padding = try_vec_with_capacity(if padded { nm } else { 0 })?;
         for _ in 0..nm {
             rectangles.push([r.u32()?, r.u32()?]);
         }
-        for _ in 0..nm {
-            padding.push(r.u32()?);
+        if padded {
+            for _ in 0..nm {
+                padding.push(r.u32()?);
+            }
         }
         GradientMesh::Rectangles {
             vertical: mode == 1,

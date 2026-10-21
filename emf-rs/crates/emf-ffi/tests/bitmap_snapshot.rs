@@ -120,12 +120,18 @@ fn owned_bitmap_snapshots_preserve_semantic_fields_float_bits_buffer_order_and_g
     }
 }
 #[test]
-fn invalid_bitmap_buffer_offsets_stay_raw_for_every_family() {
-    for (kind, fixed, source, mask, _) in LAYOUTS {
+fn invalid_bitmap_buffer_offsets_expose_only_the_prefix_and_short_records_stay_raw() {
+    for (kind, fixed, source, mask, family) in LAYOUTS {
         let mut record = fixture(kind, fixed, source, mask, 0);
         record[source..source + 4].copy_from_slice(&4u32.to_le_bytes());
         let bytes = snapshot(input(&record));
-        assert_eq!(word(&bytes, 56 + 112 + 88 + 28), 0);
-        assert_eq!(wide(&bytes, 32), 1);
+        assert_eq!(word(&bytes, 56 + 112 + 88 + 28), family, "kind {kind}");
+        assert_eq!(wide(&bytes, 32), 0);
+        // Below the fixed prefix nothing is exposed.
+        let mut short = record[..12].to_vec();
+        short[4..8].copy_from_slice(&12u32.to_le_bytes());
+        let bytes = snapshot(input(&short));
+        assert_eq!(word(&bytes, 56 + 112 + 88 + 28), 0, "kind {kind}");
+        assert_eq!(wide(&bytes, 32), 1, "kind {kind}");
     }
 }

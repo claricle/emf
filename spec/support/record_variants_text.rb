@@ -7,8 +7,6 @@ require_relative "record_variants"
 # doubled (ETO_PDY) spacing arrays, empty strings and out-of-range spans.
 module RecordVariants
   self.catalog = :text
-  SMALL_TEXT_DIAGNOSTIC = "a SmallTextOut body below the fixed prefix stays Raw on both backends, but Ruby reports " \
-                          "ParseError 108 and native reports no diagnostic"
   ETO_NO_RECT = 0x100
   ETO_SMALL_CHARS = 0x200
   ETO_PDY = 0x2000
@@ -68,9 +66,6 @@ module RecordVariants
   end
   Entry.include(TextBuilders)
 
-  POLY_TEXT_DIAGNOSTIC = "Divergence: native validates PolyTextOut descriptor and span bounds at parse and emits a " \
-                         "ParseError (record_code 96/97); Ruby parses the same bytes with no diagnostic and only raises " \
-                         "ArgumentError from the span accessors. Wire class and exact serialization agree."
   UTF16_ABC = "A\0B\0C\0".b
   SURROGATES = "\x3D\xD8\x00\xDE\x00\xD8".b # U+1F600 pair followed by a lone high surrogate
 
@@ -105,10 +100,8 @@ module RecordVariants
             poly_text(width, [{ options: 0, text: text, dx: [1, 2, 3] }, { options: ETO_NO_RECT, text: "" }]))
       valid("ETO_PDY doubles the spacing words",
             poly_text(width, [{ options: ETO_PDY, text: text.byteslice(0, 2 * width), dx: [1, 2, 3, 4] }]))
-      pending_derived(:truncated, POLY_TEXT_DIAGNOSTIC)
-      malformed("count exceeds descriptors", poly_header(5), pad("\0" * 40), pending: POLY_TEXT_DIAGNOSTIC)
-      malformed("string offset beyond record", poly_header(1),
-                pad(FAR_STRING_DESCRIPTOR), pending: POLY_TEXT_DIAGNOSTIC)
+      malformed("count exceeds descriptors", poly_header(5), pad("\0" * 40))
+      malformed("string offset beyond record", poly_header(1), pad(FAR_STRING_DESCRIPTOR))
     end
   end
 
@@ -132,6 +125,6 @@ module RecordVariants
     end
     malformed("character count exceeds payload", i32("x_dest", 0), i32("y_dest", 0), u32("c_chars", 9), u32("fu_options", 0),
               u32("i_graphics_mode", 1), f32("ex_scale", 1.0), f32("ey_scale", 1.0), pad("\0" * 16))
-    malformed("body shorter than fixed prefix", pad("\0" * 4), raw: true, pending: SMALL_TEXT_DIAGNOSTIC)
+    malformed("body shorter than fixed prefix", pad("\0" * 4), raw: true)
   end
 end

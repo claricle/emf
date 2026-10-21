@@ -3,12 +3,12 @@
 module Emf
   module Native
     module BitmapFields
-      # family => [EMR type, fixed size including EMR header, source pointer offset, mask pointer offset]
+      # family => [EMR type, fixed size including EMR header]
       LAYOUTS = {
-        94 => [76, 100, 84, nil], 95 => [77, 108, 84, nil], 96 => [78, 128, 84, 112],
-        97 => [79, 140, 96, 124], 98 => [80, 76, 48, nil], 99 => [81, 80, 48, nil],
-        100 => [93, 32, 16, nil], 101 => [94, 32, 16, nil],
-        102 => [114, 108, 84, nil], 103 => [116, 108, 84, nil]
+        94 => [76, 100], 95 => [77, 108], 96 => [78, 128],
+        97 => [79, 140], 98 => [80, 76], 99 => [81, 80],
+        100 => [93, 32], 101 => [94, 32],
+        102 => [114, 108], 103 => [116, 108]
       }.freeze
       POINTERS = %i[off_bmi_src cb_bmi_src off_bits_src cb_bits_src].freeze
       BLT = %i[x_dest y_dest cx_dest cy_dest dw_rop x_src y_src].freeze
@@ -19,8 +19,8 @@ module Emf
       def self.call(payload, family, raw)
         return GradientFields.call(payload, raw) if family == 93
 
-        type, fixed, source, mask = LAYOUTS.fetch(family)
-        validate(payload, raw, fixed, source, mask)
+        type, fixed = LAYOUTS.fetch(family)
+        validate(payload, raw, fixed)
         suffix = raw.byteslice((payload.bytesize + 8)..)
         fields = if [93, 94].include?(type)
                    BRUSH.zip(payload.unpack("V6")).to_h.merge(body: payload.byteslice(24..) + suffix)
@@ -46,19 +46,12 @@ module Emf
         end
       end
 
-      def self.validate(payload, raw, fixed, source, mask)
-        raise FormatError, "invalid native bitmap payload length" if payload.bytesize < fixed - 8 || raw.bytesize < payload.bytesize + 8
+      # The snapshot payload always starts with the fixed prefix; descriptors are
+      # not checked against the record, because Ruby keeps the rest as opaque body.
+      def self.validate(payload, raw, fixed)
+        return unless payload.bytesize < fixed - 8 || raw.bytesize < payload.bytesize + 8
 
-        spans = [source, mask].compact.flat_map do |offset|
-          payload.byteslice(offset - 8, 16).unpack("V4").each_slice(2).reject { |start, length| start.zero? && length.zero? }
-        end
-        cursor = fixed
-        spans.sort.each do |start, length|
-          raise FormatError, "invalid native bitmap buffer span" if start < cursor || length > payload.bytesize + 8 - start
-
-          cursor = start + length
-        end
-        raise FormatError, "invalid native bitmap trailing length" unless cursor == payload.bytesize + 8
+        raise FormatError, "invalid native bitmap payload length"
       end
     end
   end

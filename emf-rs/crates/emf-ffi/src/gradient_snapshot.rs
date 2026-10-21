@@ -2,15 +2,22 @@ use super::{point, rect, u32_field, u64_field, wire_len, Error};
 use emf_core::{GradientFill, GradientMesh};
 
 pub(super) fn len(value: &GradientFill) -> Result<usize, Error> {
-    let count = match &value.mesh {
-        GradientMesh::Rectangles { rectangles, .. } => rectangles.len(),
-        GradientMesh::Triangles(triangles) => triangles.len(),
+    let indexes = match &value.mesh {
+        GradientMesh::Rectangles {
+            rectangles,
+            padding,
+            ..
+        } => rectangles
+            .len()
+            .checked_mul(8)
+            .and_then(|n| n.checked_add(padding.len().checked_mul(4)?)),
+        GradientMesh::Triangles(triangles) => triangles.len().checked_mul(12),
     };
     value
         .vertices
         .len()
         .checked_mul(16)
-        .and_then(|n| count.checked_mul(12).and_then(|m| n.checked_add(m)))
+        .and_then(|n| n.checked_add(indexes?))
         .and_then(|n| n.checked_add(36))
         .ok_or(Error::SizeOverflow)
 }

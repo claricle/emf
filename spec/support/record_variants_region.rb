@@ -11,8 +11,6 @@ module RecordVariants
   self.catalog = :region
   REGION_BOUNDS = [-8, -9, 100, 120].freeze
   REGION_RECTS = [[-8, -9, 10, 11], [20, 21, 100, 120], [0, 0, 0, 0]].freeze
-  CLIP_MODE_DIAGNOSTIC = "native falls back to Raw with ParseError 108 for a clip mode outside 1..5; " \
-                         "Ruby keeps the typed record with no diagnostic"
   CLIP_MODES = (1..5).to_a.freeze
 
   module RegionBuilders
@@ -62,7 +60,7 @@ module RecordVariants
         valid("#{label}, mode #{mode}", u32("cb_rgn_data", body.bytesize), u32("dw_mode", mode), pad(body), checks)
       end
     end
-    malformed("no region data, undefined mode", u32("cb_rgn_data", 0), u32("dw_mode", UINT_MAX), pending: CLIP_MODE_DIAGNOSTIC)
+    malformed("no region data, undefined mode", u32("cb_rgn_data", 0), u32("dw_mode", UINT_MAX))
     valid("no region data, RGN_COPY", u32("cb_rgn_data", 0), u32("dw_mode", 5))
     bad, = region("rgn_data", REGION_RECTS.first(1), count_override: 9)
     malformed("count exceeds declared bytes", u32("cb_rgn_data", bad.bytesize), u32("dw_mode", 5), pad(bad))

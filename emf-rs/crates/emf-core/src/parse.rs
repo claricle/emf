@@ -12,6 +12,8 @@ use crate::model::{
 use crate::reader::{u32_at, Reader};
 
 const RECORD_HEAD_BYTES: usize = 8;
+/// Fixed bytes of EMR_SMALLTEXTOUT after the record head (MS-EMF 2.3.5.37).
+const SMALL_TEXT_PREFIX: usize = 28;
 
 /// Parse an EMF file into an owned [`Document`].
 ///
@@ -83,10 +85,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
             &mut budget,
         )?;
         if data == RecordData::Raw
-            && matches!(
-                record_type,
-                2..=68 | 70..=98 | 114..=116 | 118 | 120
-            )
+            && invalid_when_raw(record_type, size as usize - RECORD_HEAD_BYTES)
         {
             budget.reserve_one(&mut diagnostics)?;
             diagnostics.push(Diagnostic {
@@ -119,6 +118,20 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         diagnostics,
         tail_offset,
     })
+}
+
+/// Whether a record that stayed `Raw` is a recovery worth a diagnostic. Ruby keeps
+/// body-only classes (SetColorAdjustment, PolyTextOut) and prefix-typed records
+/// without one; only a record missing its fixed prefix is rejected.
+fn invalid_when_raw(record_type: u32, payload_len: usize) -> bool {
+    if let Some(prefix) = crate::prefix::opaque_prefix_len(record_type) {
+        return payload_len < prefix;
+    }
+    match record_type {
+        23 | 96 | 97 => false,
+        108 => payload_len < SMALL_TEXT_PREFIX,
+        _ => matches!(record_type, 2..=68 | 70..=98 | 114..=116 | 120),
+    }
 }
 
 fn read_header(
@@ -756,7 +769,7 @@ fn decode_record(
             if count > r.remaining() {
                 return malformed();
             }
-            if count == 0 && kind == 75 && region_mode == 5 {
+            if count == 0 && kind == 75 {
                 return Ok((
                     RecordData::ExtSelectClipRgn {
                         region_mode,

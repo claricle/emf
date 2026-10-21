@@ -14,6 +14,9 @@ mod poly_text_snapshot;
 #[path = "gradient_snapshot.rs"]
 mod gradient_snapshot;
 
+#[path = "prefix_snapshot.rs"]
+mod prefix_snapshot;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Error {
     SizeOverflow,
@@ -382,6 +385,13 @@ fn font_payload(out: &mut Vec<u8>, record: &FontRecord) -> Result<(), Error> {
     Ok(())
 }
 
+fn record_payload_len(document: &Document, record: &emf_core::RecordSpan) -> Result<usize, Error> {
+    match prefix_snapshot::of(document, record) {
+        Some(prefixed) => Ok(prefixed.payload.len()),
+        None => payload_len(record.data()),
+    }
+}
+
 fn payload_len(data: &RecordData) -> Result<usize, Error> {
     match data {
         RecordData::RealizePalette => Ok(0),
@@ -520,7 +530,7 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
     add_len(&mut len, document.header_bytes().len())?;
     for record in document.records() {
         add_len(&mut len, 40)?;
-        add_len(&mut len, payload_len(record.data())?)?;
+        add_len(&mut len, record_payload_len(document, record)?)?;
     }
     add_len(
         &mut len,
@@ -559,9 +569,18 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
         u64_field(&mut out, wire_len(record.offset())?);
         u64_field(&mut out, u64::from(record.size()));
         u32_field(&mut out, record.record_type());
-        u32_field(&mut out, family(record.data()));
-        u64_field(&mut out, wire_len(payload_len(record.data())?)?);
+        let prefixed = prefix_snapshot::of(document, record);
+        u32_field(
+            &mut out,
+            prefixed
+                .as_ref()
+                .map_or_else(|| family(record.data()), |prefixed| prefixed.family),
+        );
+        u64_field(&mut out, wire_len(record_payload_len(document, record)?)?);
         match record.data() {
+            RecordData::Raw if prefixed.is_some() => {
+                out.extend_from_slice(&prefixed.expect("checked above").payload)
+            }
             RecordData::RealizePalette => {}
             RecordData::SelectPalette { ih_pal } => u32_field(&mut out, *ih_pal),
             RecordData::ResizePalette {
