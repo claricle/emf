@@ -8,6 +8,7 @@ require_relative "small_text_fields"
 require_relative "poly_text_fields"
 require_relative "lazy_wire"
 require_relative "diagnostics"
+require_relative "emf_plus_source"
 
 module Emf
   module Native
@@ -27,7 +28,7 @@ module Emf
         Model::Metafile.new(
           format: emf_plus.empty? ? :emf : :emf_plus, header: Header.new.call(@snapshot.header, @snapshot.raw_header), records: records,
           errors: diagnostics.errors, emf_plus: emf_plus.empty? ? nil : emf_plus,
-          trailing: @snapshot.trailing + @snapshot.unframed
+          trailing: @snapshot.trailing + @snapshot.unframed, emf_plus_source: (EmfPlusSource.call(@input) unless emf_plus.empty?)
         )
       end
 

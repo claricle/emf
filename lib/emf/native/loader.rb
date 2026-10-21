@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 require "fiddle"
+require_relative "wmf_loading"
 
 module Emf
   module Native
     class Loader
+      include WmfLoading
+
       POINTER = Fiddle::TYPE_VOIDP
       UINT64 = Fiddle::TYPE_LONG_LONG
       # Version 1 status values from emf-ffi/include/emf.h.
@@ -46,40 +49,11 @@ module Emf
         buffer(:emf_document_snapshot, document)
       end
 
-      def wmf_document(bytes)
-        load_wmf_functions
-        output = slot
-        checked(:emf_wmf_parse, bytes, bytes.bytesize, 0, output)
-        yield pointer(output)
-      ensure
-        invoke(:emf_wmf_document_free, pointer(output)) if output && pointer(output) != 0
-      end
-
-      def wmf_snapshot(document)
-        buffer(:emf_wmf_document_snapshot, document)
-      end
-
       def record_bytes(document, index)
         buffer(:emf_record_bytes, document, index)
       end
 
       private
-
-      def load_wmf_functions
-        return if @functions.key?(:emf_wmf_parse)
-
-        signatures = {
-          emf_wmf_parse: [[POINTER, UINT64, POINTER, POINTER, POINTER], Fiddle::TYPE_INT],
-          emf_wmf_document_snapshot: [[POINTER, POINTER, POINTER], Fiddle::TYPE_INT],
-          emf_wmf_document_free: [[POINTER], Fiddle::TYPE_VOID]
-        }
-        functions = signatures.to_h do |name, (arguments, result)|
-          [name, Fiddle::Function.new(@library[name.to_s], arguments, result)]
-        end
-        @functions.merge!(functions)
-      rescue Fiddle::DLError => e
-        raise Unavailable, "native WMF backend could not load: #{e.message}"
-      end
 
       def invoke(name, *arguments)
         @functions.fetch(name).call(*arguments)
