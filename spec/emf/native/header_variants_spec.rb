@@ -147,21 +147,19 @@ RSpec.describe "EMF header layout variants across backends" do
           [backend, capture_error { Emf.parse(input) }]
         end
 
-        expect(outcomes.fetch("ruby")).to be_a(StandardError)
+        expect(outcomes.fetch("ruby")).to be_a(Emf::Error)
         expect(outcomes.fetch("native")).to be_a(Emf::Error)
       end
     end
 
-    # Ruby leaks BinData EOFError/IOError for these; native reports Emf::FormatError.
-    # The tighter native class is deliberate; the Ruby leak is tracked separately.
     [8, 44, 87, 89, 92, 96, 99, 101, 104, 107].each do |declared|
-      it "rejects nSize #{declared}, which cannot hold the fields it implies, with Emf::FormatError natively" do
+      it "rejects nSize #{declared}, which cannot hold the fields it implies, with Emf::FormatError on both backends" do
         input = wire.header(124, declared_size: declared) + wire::FOLLOWING + wire::EOF_RECORD
         ENV["EMF_BACKEND"] = "native"
 
         expect { Emf.parse(input) }.to raise_error(Emf::FormatError)
         ENV["EMF_BACKEND"] = "ruby"
-        expect { Emf.parse(input) }.to raise_error(StandardError)
+        expect { Emf.parse(input) }.to raise_error(Emf::FormatError)
       end
     end
   end
