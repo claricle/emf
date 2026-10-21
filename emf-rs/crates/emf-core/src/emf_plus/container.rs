@@ -1,4 +1,7 @@
-use super::{parser::parse_segments_budget, Error, Stream};
+use super::{
+    parser::{parse_segments_budget, parse_segments_recovering},
+    Error, Stream,
+};
 use crate::{
     limits::{try_vec_with_capacity, Budget},
     Document, EditFailure, LimitKind, ParseLimits, RecordData, SerializeFailure, SerializeLimits,
@@ -10,6 +13,9 @@ use crate::{
 pub struct EmbeddedStream {
     pub stream: Stream,
     source: Vec<(usize, Vec<u8>)>,
+    /// Built by the recovering extraction: bytes that could not be framed are not
+    /// part of `stream`, so it cannot be written back.
+    recovered: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,13 +50,53 @@ impl EmbeddedStream {
     }
 
     pub(crate) fn extract_budget(doc: &Document, budget: &mut Budget<'_>) -> Result<Self, Error> {
+        Self::extract_mode(doc, budget, false)
+    }
+
+    /// Frames each comment on its own (see `parse_segments_recovering`) and also
+    /// selects an EMR_COMMENT whose declared length exceeds its record, clamped
+    /// to the bytes it holds. The result is for reading only.
+    pub(crate) fn extract_recovering(
+        doc: &Document,
+        budget: &mut Budget<'_>,
+    ) -> Result<Self, Error> {
+        Self::extract_mode(doc, budget, true)
+    }
+
+    /// The enclosing record index and EMF+ payload (after the signature) of each
+    /// selected comment, in file order.
+    pub fn segment_sources(&self) -> impl Iterator<Item = (usize, &[u8])> {
+        self.source.iter().map(|(index, data)| (*index, &data[4..]))
+    }
+
+    /// The bytes an EMR_COMMENT whose declared length overruns its record still
+    /// holds: up to the declared length, within the record.
+    fn clamped_comment<'a>(doc: &'a Document, record: &crate::RecordSpan) -> Option<&'a [u8]> {
+        if record.record_type != 70 || record.data != RecordData::Raw {
+            return None;
+        }
+        let payload = doc
+            .source
+            .get(record.offset + 8..record.offset + record.size as usize)?;
+        let declared = u32::from_le_bytes(payload.get(..4)?.try_into().ok()?) as usize;
+        let held = &payload[4..];
+        let data = &held[..declared.min(held.len())];
+        (declared >= 4 && data.starts_with(b"EMF+")).then_some(data)
+    }
+
+    fn extract_mode(doc: &Document, budget: &mut Budget<'_>, recover: bool) -> Result<Self, Error> {
         let mut source = Vec::new();
         let mut input_bytes = 0usize;
         // Account for scanning the enclosing record set, even when no comments match.
         budget.charge_work(doc.records.len() as u64)?;
         for (index, record) in doc.records.iter().enumerate() {
-            if let RecordData::Comment { data } = &record.data {
-                if data.starts_with(b"EMF+") {
+            let comment = match &record.data {
+                RecordData::Comment { data } if data.starts_with(b"EMF+") => Some(data.as_slice()),
+                _ if recover => Self::clamped_comment(doc, record),
+                _ => None,
+            };
+            if let Some(data) = comment {
+                {
                     input_bytes = input_bytes
                         .checked_add(data.len() - 4)
                         .ok_or(crate::ParseFailure::ArithmeticOverflow { offset: 0 })?;
@@ -74,8 +120,16 @@ impl EmbeddedStream {
         for (_, data) in &source {
             segments.push(&data[4..]);
         }
-        let stream = parse_segments_budget(&segments, budget)?;
-        Ok(Self { stream, source })
+        let stream = if recover {
+            parse_segments_recovering(&segments, budget)?
+        } else {
+            parse_segments_budget(&segments, budget)?
+        };
+        Ok(Self {
+            stream,
+            source,
+            recovered: recover,
+        })
     }
 
     pub(crate) fn apply(
@@ -86,6 +140,9 @@ impl EmbeddedStream {
         // Preflight the logical encoding and all enclosing comparison/staging work
         // before allocating output. The final comment absorbs growth; earlier
         // capacities are retained (or clamped when the logical stream shrinks).
+        if self.recovered {
+            return Err(EmbedError::Edit(EditFailure::RecordLayout { index: 0 }));
+        }
         let (logical_len, logical_work) = super::serializer::plan(&self.stream, limits, false)?;
         if self.source.is_empty() && logical_len != 0 {
             return Err(SerializeFailure::Inconsistent { offset: 0 }.into());

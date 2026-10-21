@@ -7,7 +7,9 @@ module Emf
     # Adds the independent EMF+ snapshot call (emf_document_emf_plus_snapshot_v1)
     # to the production Loader without touching its outer-snapshot signatures.
     class EmfPlusLoader < Loader
-      SNAPSHOT_VERSION = 1
+      # Version 2 frames each comment on its own, recovering from malformed framing
+      # like the Ruby framer, and types SetTSClip (family 0x106).
+      SNAPSHOT_VERSION = 2
       # struct_size, version, max_output_bytes
       DEFAULT_OPTIONS = [16, SNAPSHOT_VERSION, 1 << 30].pack("VVQ<").freeze
 

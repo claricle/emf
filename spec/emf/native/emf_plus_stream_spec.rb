@@ -5,6 +5,7 @@ require "emf/native/emf_plus_stream"
 require_relative "../../support/native_library_context"
 require_relative "../../support/emf_plus_generated_fixtures"
 require_relative "../../support/emf_plus_native_stream_support"
+require_relative "../../support/emf_plus_native_snapshot"
 
 RSpec.describe Emf::Native::EmfPlusStream do
   include_context "with native library"
@@ -26,8 +27,6 @@ RSpec.describe Emf::Native::EmfPlusStream do
 
     it "builds the same segments, records, gaps, errors and object diagnostics as Ruby" do
       emf_plus.each do |path, metafile|
-        next if support::NATIVE_FALLBACK.include?(path)
-
         native = native_for(File.binread(path), metafile)
         expect(native).to be_a(described_class), path
         expect(support.view(native)).to eq(support.view(metafile.emf_plus_stream)), path
@@ -37,13 +36,12 @@ RSpec.describe Emf::Native::EmfPlusStream do
 
     it "round-trips the source bytes exactly, unedited and through an identity edit" do
       emf_plus.each do |path, metafile|
-        next if support::NATIVE_FALLBACK.include?(path)
-
         bytes = File.binread(path)
         native = native_for(bytes, metafile)
         expect(native.to_metafile).to equal(metafile), path
         expect(Emf::Emr::Serializer.call(native.to_metafile)).to eq(bytes), path
-        expect(native.segments.sum { |segment| segment.payload.bytesize }).to eq(native.snapshot.frames.sum(&:frame_size)), path
+        framed = native.segments.sum { |segment| segment.payload.bytesize - segment.unframed.bytesize }
+        expect(framed).to eq(native.snapshot.frames.sum(&:frame_size)), path
         expect(native.snapshot.frames.map(&:raw).join.b).to eq(native.records.map { |handle| handle.record.to_binary }.join.b), path
         first = native.records.first
         expect(Emf::Emr::Serializer.call(native.edit { |editor| editor.replace(first, first.record) })).to eq(bytes), path
@@ -52,17 +50,28 @@ RSpec.describe Emf::Native::EmfPlusStream do
 
     it "reports the same unresolved references natively as the Ruby object table" do
       emf_plus.each do |path, metafile|
-        next if support::NATIVE_FALLBACK.include?(path)
-
         native = native_for(File.binread(path), metafile)
         expect(support.native_diagnostics(native)).to eq(support.ruby_diagnostics(native)), path
       end
     end
 
-    it "falls back (nil) exactly for the documented fixtures, leaving the Ruby stream in charge" do
+    it "adopts every EMF+ fixture natively, including the corrupted ones, with no fallback" do
       fallback = emf_plus.keys.select { |path| native_for(File.binread(path), emf_plus.fetch(path)).nil? }
-      expect(fallback).to match_array(support::NATIVE_FALLBACK)
-      fallback.each { |path| expect(emf_plus.fetch(path).emf_plus_stream).to be_a(Emf::EmfPlus::Stream) }
+      expect(fallback).to eq([])
+    end
+
+    it "keeps Ruby's framing error and unframed bytes for a malformed header in a corrupted fixture" do
+      path = "spec/fixtures/emf-corrupted/bad_corrupted_2014-12-07-163010.emf"
+      native = native_for(File.binread(path), emf_plus.fetch(path))
+      expect(native.segments.sum { |segment| segment.unframed.bytesize }).to eq(52)
+      expect(native.errors.map(&:message)).to eq(["EMF+ record DataSize 4009754664 exceeds Size 52 - 12 at offset 0"])
+    end
+
+    it "clamps an EMR_COMMENT whose cbData exceeds its record, as Ruby does" do
+      path = "spec/fixtures/emf-corrupted/bad_corrupted_2017-02-11-230400.emf"
+      native = native_for(File.binread(path), emf_plus.fetch(path))
+      expect(native.segments.map(&:record_index)).to include(8)
+      expect(native.segments.find { |segment| segment.record_index == 8 }.payload.bytesize).to eq(64)
     end
   end
 
@@ -100,6 +109,40 @@ RSpec.describe Emf::Native::EmfPlusStream do
     end
   end
 
+  describe "SetTSClip across the snapshot" do
+    let(:ts_clip) { fixtures.klass(:SetTSClip)::TYPE }
+    let(:rects) { [[1, -2, 300, 400], [-32_768, 0, 32_767, -1]] }
+    let(:compressed_body) { [5, 6, 7, 8].pack("C*") }
+    let(:bytes) do
+      fixtures.single_comment(fixtures.record(ts_clip, rects.flatten.pack("s<*"), flags: rects.size),
+                              fixtures.record(ts_clip, compressed_body, flags: 0x8001),
+                              fixtures.record(ts_clip, "", flags: 0))
+    end
+    let(:native) { native_for(bytes) }
+    let(:clips) { native.records.select { |handle| handle.record.is_a?(Emf::EmfPlus::Records::SetTSClip) } }
+
+    it "types uncompressed rectangles, equal to the Ruby record's rects" do
+      uncompressed = clips.reject { |handle| handle.record.compressed? }
+      expect(uncompressed.map { |handle| native.native_family(handle) }).to eq(%i[ts_clip ts_clip])
+      first, empty = uncompressed.map { |handle| native.snapshot.frames.fetch(handle.stream_index).typed }
+      expect(first.unpack("Q<l<*")).to eq([2, *rects.flatten])
+      expect(first.unpack("Q<l<*").drop(1).each_slice(4).to_a).to eq(uncompressed.first.record.rects)
+      expect(empty.unpack("Q<")).to eq([0])
+    end
+
+    it "leaves compressed rectangles as raw bytes in the opaque family" do
+      handle = clips.find { |candidate| candidate.record.compressed? }
+      frame = native.snapshot.frames.fetch(handle.stream_index)
+      expect([native.native_family(handle), frame.typed, frame.raw.byteslice(12, 4)]).to eq([:opaque, "".b, compressed_body])
+      expect(handle.record.rects).to eq([])
+    end
+
+    it "is requested only by snapshot version 2, so a version 1 reader still sees the opaque family" do
+      v1 = Emf::Native::EmfPlusSnapshot.new(Emf::SpecSupport::EmfPlusNativeSnapshot.new(library).call(bytes))
+      expect(v1.frames.select { |frame| frame.type == ts_clip }.map(&:family).uniq).to eq([:opaque])
+    end
+  end
+
   describe "object-reference diagnostics on a synthetic stream" do
     let(:solid) { fixtures.object_record(1, 3, fixtures::VERSION + fixtures.u32(0, 0xFF112233)) }
     let(:attributes) { fixtures.object_record(8, 1, fixtures::VERSION + fixtures.u32(0, 0, 0xFF000000, 0, 0)) }
@@ -131,17 +174,33 @@ RSpec.describe Emf::Native::EmfPlusStream do
   end
 
   describe "when the native snapshot cannot stand in for the Ruby parse" do
-    it "returns nil for a malformed frame, which Ruby keeps as a diagnosed Unknown record" do
-      bytes = fixtures.malformed_comment_file(fixtures.malformed_frames.fetch(:size_below_header))
+    it "frames a malformed header as Ruby does: error, unframed rest, and the next comment unaffected" do
+      fixtures.malformed_frames.each do |name, malformed|
+        bytes = fixtures.malformed_comment_file(malformed)
+        metafile = support.ruby_parse(bytes)
+        native = native_for(bytes, metafile)
+        expect(native).to be_a(described_class), name.to_s
+        expect(metafile.emf_plus_stream.errors).not_to be_empty
+        expect(support.view(native)).to eq(support.view(metafile.emf_plus_stream)), name.to_s
+        expect(Emf::Emr::Serializer.call(native.to_metafile)).to eq(bytes), name.to_s
+      end
+    end
+
+    it "returns nil for a correctly framed record whose typed layout native rejects, which Ruby keeps as Unknown" do
+      bytes = fixtures.single_comment(fixtures.record(fixtures.klass(:Clear)::TYPE, "", data_size: 0))
       metafile = support.ruby_parse(bytes)
       expect(native_for(bytes, metafile)).to be_nil
       expect(metafile.emf_plus_stream.errors).not_to be_empty
     end
 
-    it "returns nil for a frame that crosses comments" do
+    it "frames a record that crosses comments as Ruby does: an error in each comment, nothing spanning" do
       logical = fixtures.plus_header + fixtures.typed_record(:Clear) + fixtures.plus_eof
       bytes = fixtures.emf_file([logical.byteslice(0, 30), logical.byteslice(30..)])
-      expect(native_for(bytes)).to be_nil
+      metafile = support.ruby_parse(bytes)
+      native = native_for(bytes, metafile)
+      expect(native).to be_a(described_class)
+      expect(metafile.emf_plus_stream.errors.map(&:message)).to include(/truncated EMF\+ record header/)
+      expect(support.view(native)).to eq(support.view(metafile.emf_plus_stream))
     end
 
     it "returns nil without a library and for a non-EMF+ metafile" do
@@ -158,7 +217,7 @@ RSpec.describe Emf::Native::EmfPlusStream do
     it "rejects a snapshot whose length, magic, version or counts are inconsistent" do
       expect { described_class.new(buffer.byteslice(0, buffer.bytesize - 1)) }.to raise_error(Emf::FormatError, /length/)
       expect { described_class.new("XXXX#{buffer.byteslice(4..)}") }.to raise_error(Emf::FormatError, /not an EMF\+/)
-      expect { described_class.new(buffer.dup.tap { |copy| copy[4, 4] = [2].pack("V") }) }.to raise_error(Emf::FormatError, /version/)
+      expect { described_class.new(buffer.dup.tap { |copy| copy[4, 4] = [3].pack("V") }) }.to raise_error(Emf::FormatError, /version/)
       huge = buffer.dup.tap { |copy| copy[24, 8] = [1 << 40].pack("Q<") }
       expect { described_class.new(huge) }.to raise_error(Emf::FormatError, /exceeds/)
     end

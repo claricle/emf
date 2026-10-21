@@ -15,9 +15,15 @@ module Emf
     # beside it through #snapshot (frame family, normalized payload, and the
     # object-reference diagnostics computed in Rust).
     #
+    # Native framing follows the Ruby framer: each comment is framed on its own,
+    # a malformed header ends that comment's framing (the rest stays #unframed and
+    # the ParseError is collected), and an EMR_COMMENT whose cbData exceeds its
+    # record is clamped to the bytes it holds.
+    #
     # .from_metafile returns nil whenever the native snapshot cannot stand in for
-    # the Ruby parse (library unavailable, malformed or oversized nested EMF+,
-    # a frame spanning comments, or a segment layout that differs from Ruby's);
+    # the Ruby parse (library unavailable, a record whose typed layout the native
+    # decoder rejects where Ruby keeps an Unknown record, resource limits, or a
+    # segment layout that differs from Ruby's);
     # the caller then uses Emf::EmfPlus::Stream.from_metafile, which keeps
     # Ruby's error-collecting recovery. An edited stream (#with_record) keeps
     # the Ruby model but carries no snapshot.
@@ -79,11 +85,26 @@ module Emf
           frames = snapshot.frames.select { |frame| within?(frame, row) }
           return unless frames.all? { |frame| spans_only?(frame, snapshot.segments, row) }
 
-          records = frames.map { |frame| decode(frame, row, record_index, errors) }
           framed = frames.sum(&:frame_size)
+          return unless unframed_error(payload, framed, record_index, errors)
+
+          records = frames.map { |frame| decode(frame, row, record_index, errors) }
           payload_end = SEGMENT::IDENTIFIER.bytesize + payload_length
           SEGMENT.new(record_index: record_index, payload_range: SEGMENT::IDENTIFIER.bytesize...payload_end,
                       records: records, unframed: payload.byteslice(framed..), tail: data.byteslice(payload_end..))
+        end
+
+        # Native framing stops where the Ruby framer does; the unframed remainder
+        # must raise the same ParseError there (recorded in framing order, before
+        # record decode errors). A remainder Ruby would frame disagrees: no adoption.
+        def unframed_error(payload, framed, record_index, errors)
+          return true if framed == payload.bytesize
+
+          Emf::EmfPlus::Parser.read_frame(payload, framed, record_index)
+          false
+        rescue ParseError => e
+          errors << e
+          true
         end
 
         def within?(frame, row)

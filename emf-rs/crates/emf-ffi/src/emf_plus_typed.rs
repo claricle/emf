@@ -3,7 +3,8 @@ mod object;
 use super::emf_plus_snapshot::overflow;
 use crate::Failure;
 use emf_core::emf_plus::{
-    Drawing, Effect, ImageSource, PointData, Rectangle, RelativeCoordinate, TSGraphics, Text,
+    Drawing, Effect, ImageSource, PointData, Rectangle, RelativeCoordinate, TSClip, TSGraphics,
+    Text,
 };
 
 pub(super) struct Sink<'a, 'b, 'c> {
@@ -238,6 +239,16 @@ impl Sink<'_, '_, '_> {
             Effect::Tint { hue, amount } => self.words(&[*hue as u32, *amount as u32]),
             Effect::Unknown { buffer, .. } => self.padding(buffer),
         }
+    }
+    /// Uncompressed terminal-server clip rectangles, sign-extended wire order.
+    pub fn ts_clip(&mut self, clip: &TSClip) -> Result<(), Failure> {
+        self.count(clip.rectangles.len())?;
+        for rectangle in &clip.rectangles {
+            for &value in rectangle {
+                self.word(value as i32 as u32)?;
+            }
+        }
+        Ok(())
     }
     pub fn ts_graphics(&mut self, graphics: &TSGraphics) -> Result<(), Failure> {
         self.words(&[
