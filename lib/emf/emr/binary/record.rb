@@ -25,11 +25,41 @@ module Emf
           super
         end
 
+        # A record `FastFill#call` returns is a shell: its fields are copied
+        # from the filler's template, with the unpacked value assigned, the
+        # first time anything asks for them (every BinData path to a field
+        # goes through instantiate_obj_at). Nothing read straight from
+        # @field_objs may see an unmade field as a default, so clear and
+        # clear? settle the shell first.
+        def initialize_instance
+          @lazy_filler = @lazy_data = @lazy_base = nil
+          super
+        end
+
+        def clear
+          @lazy_filler = nil
+          super
+        end
+
+        def clear?
+          instantiate_all_objs if @lazy_filler
+          super
+        end
+
         # Fixed-layout records serialize with one Array#pack, as WireAdapter
         # already does; a block or a layout with floats is BinData's writer.
         def to_binary_s(&block)
           packed = FastFill.for_class(self.class)&.pack(self) unless block
           packed || super
+        end
+
+        private
+
+        def instantiate_obj_at(index)
+          return super unless @lazy_filler
+          return unless @field_objs[index].nil?
+
+          @field_objs[index] = @lazy_filler.lazy_field(index, self, @lazy_data, @lazy_base)
         end
       end
     end
