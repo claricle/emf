@@ -10,7 +10,7 @@ mkdir -p "$out"
 # Each failed step is recorded; run_row.sh turns every line into a BLOCKER.
 failures=$out/bootstrap-failures.txt
 : >"$failures"
-apk add --no-cache bash curl file build-base ruby >"$out/apk.log" 2>&1 || echo "apk base install failed (apk.log)" >>"$failures"
+apk add --no-cache bash curl file build-base ruby git >"$out/apk.log" 2>&1 || echo "apk base install failed (apk.log)" >>"$failures"
 # json and Fiddle ship inside the ruby package (3.17 lists ruby-json and
 # ruby-fiddle only as its virtual names; 3.22 has no such names, so naming them
 # fails the install). Judge by whether Ruby loads them: a missing Fiddle is a
