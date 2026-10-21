@@ -331,3 +331,27 @@ RSpec.describe WindowsProcessSupervisor::Native do
     expect(calls.last).to eq(["CloseHandle", [10]])
   end
 end
+
+# Marshals values through a Fiddle closure declared with the supervisor's own
+# Win32 types, so the width/signedness contract is checked on every platform
+# (CI job 119157190834 failed CreateFileW on GENERIC_READ with a signed DWORD).
+RSpec.describe WindowsProcessSupervisor::API do
+  def round_trip(type, value)
+    closure = Fiddle::Closure::BlockCaller.new(type, [type]) { |given| given }
+    Fiddle::Function.new(closure, [type], type).call(value)
+  end
+
+  it "passes DWORD flags with the top bit set, such as GENERIC_READ" do
+    expect(round_trip(described_class::DWORD, 0x80000000)).to eq(0x80000000)
+    expect(round_trip(described_class::DWORD, 0xFFFFFFFF)).to eq(described_class::RESUME_FAILED)
+  end
+
+  it "keeps BOOL results signed" do
+    expect(round_trip(described_class::BOOL, -1)).to eq(-1)
+  end
+
+  it "declares CreateFileW's access mask as a DWORD" do
+    args, = described_class::SIGNATURES.fetch("CreateFileW")
+    expect(args[1]).to eq(described_class::DWORD)
+  end
+end

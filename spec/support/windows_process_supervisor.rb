@@ -66,29 +66,34 @@ class WindowsProcessSupervisor
     Process.clock_gettime(Process::CLOCK_MONOTONIC)
   end
 
-  # Explicit Win32 widths: DWORD is 32 bits even on Win64 (unlike Unix unsigned long).
+  # Explicit Win32 widths: DWORD is an unsigned 32-bit value even on Win64 (unlike
+  # Unix unsigned long), so flags such as GENERIC_READ (0x80000000) fit; BOOL is a
+  # signed 32-bit int.
   class API
     PTR = Fiddle::TYPE_VOIDP
-    DWORD = Fiddle::TYPE_INT32_T
+    DWORD = Fiddle.const_defined?(:TYPE_UINT32_T) ? Fiddle::TYPE_UINT32_T : -Fiddle::TYPE_INT32_T
+    BOOL = Fiddle::TYPE_INT32_T
+    # ResumeThread returns (DWORD)-1 on failure.
+    RESUME_FAILED = 0xFFFFFFFF
     SIGNATURES = {
       "CreateJobObjectW" => [[PTR, PTR], PTR],
-      "SetInformationJobObject" => [[PTR, DWORD, PTR, DWORD], DWORD],
-      "CreatePipe" => [[PTR, PTR, PTR, DWORD], DWORD],
-      "SetHandleInformation" => [[PTR, DWORD, DWORD], DWORD],
+      "SetInformationJobObject" => [[PTR, DWORD, PTR, DWORD], BOOL],
+      "CreatePipe" => [[PTR, PTR, PTR, DWORD], BOOL],
+      "SetHandleInformation" => [[PTR, DWORD, DWORD], BOOL],
       "CreateFileW" => [[PTR, DWORD, DWORD, PTR, DWORD, DWORD, PTR], PTR],
-      "CreateProcessW" => [[PTR, PTR, PTR, PTR, DWORD, DWORD, PTR, PTR, PTR, PTR], DWORD],
-      "AssignProcessToJobObject" => [[PTR, PTR], DWORD],
+      "CreateProcessW" => [[PTR, PTR, PTR, PTR, BOOL, DWORD, PTR, PTR, PTR, PTR], BOOL],
+      "AssignProcessToJobObject" => [[PTR, PTR], BOOL],
       "ResumeThread" => [[PTR], DWORD],
-      "PeekNamedPipe" => [[PTR, PTR, DWORD, PTR, PTR, PTR], DWORD],
-      "ReadFile" => [[PTR, PTR, DWORD, PTR, PTR], DWORD],
-      "QueryInformationJobObject" => [[PTR, DWORD, PTR, DWORD, PTR], DWORD],
-      "OpenProcess" => [[DWORD, DWORD, DWORD], PTR],
-      "K32GetProcessMemoryInfo" => [[PTR, PTR, DWORD], DWORD],
+      "PeekNamedPipe" => [[PTR, PTR, DWORD, PTR, PTR, PTR], BOOL],
+      "ReadFile" => [[PTR, PTR, DWORD, PTR, PTR], BOOL],
+      "QueryInformationJobObject" => [[PTR, DWORD, PTR, DWORD, PTR], BOOL],
+      "OpenProcess" => [[DWORD, BOOL, DWORD], PTR],
+      "K32GetProcessMemoryInfo" => [[PTR, PTR, DWORD], BOOL],
       "WaitForSingleObject" => [[PTR, DWORD], DWORD],
-      "GetExitCodeProcess" => [[PTR, PTR], DWORD],
-      "TerminateJobObject" => [[PTR, DWORD], DWORD],
-      "TerminateProcess" => [[PTR, DWORD], DWORD],
-      "CloseHandle" => [[PTR], DWORD],
+      "GetExitCodeProcess" => [[PTR, PTR], BOOL],
+      "TerminateJobObject" => [[PTR, DWORD], BOOL],
+      "TerminateProcess" => [[PTR, DWORD], BOOL],
+      "CloseHandle" => [[PTR], BOOL],
       "GetLastError" => [[], DWORD]
     }.freeze
 
@@ -218,7 +223,7 @@ class WindowsProcessSupervisor
       check("AssignProcessToJobObject", @job, @process)
       @assigned = true
       @initial_rss = rss_bytes
-      raise NativeError, "ResumeThread failed" if @api.call("ResumeThread", @thread) == -1
+      raise NativeError, "ResumeThread failed" if @api.call("ResumeThread", @thread) == API::RESUME_FAILED
     end
 
     def read_output(maximum)
