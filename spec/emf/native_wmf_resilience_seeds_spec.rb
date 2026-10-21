@@ -46,4 +46,33 @@ RSpec.describe "Native WMF resilience seeds" do
       expect(Emf.serialize(recovered)).to eq(valid_bytes), "after #{seed.fetch('name')}"
     end
   end
+
+  it "raises the Ruby parser's error class, offset and record code for every malformed seed" do
+    rejected_seeds.each do |seed|
+      name = seed.fetch("name")
+      ruby_error = capture_error { Emf::Wmf::Parser.call(seed.fetch("bytes")) }
+      native_error = capture_error { Emf.parse(seed.fetch("bytes")) }
+
+      expect(ruby_error).to be_a(Emf::Error), name
+      expect(native_error.class).to eq(ruby_error.class), "#{name}: native #{native_error.class} vs Ruby #{ruby_error.class}"
+      next unless ruby_error.is_a?(Emf::ParseError)
+
+      expect([native_error.offset, native_error.record_code]).to eq([ruby_error.offset, ruby_error.record_code]), name
+    end
+  end
+
+  it "distinguishes record failures (ParseError) from header failures (FormatError)" do
+    classes = rejected_seeds.to_h { |seed| [seed.fetch("name"), capture_error { Emf.parse(seed.fetch("bytes")) }.class] }
+
+    expect(classes.select { |_, klass| klass == Emf::ParseError }.keys)
+      .to match_array(%w[zero-record missing-eof negative-text-count bitmap-short-record])
+    expect(classes.reject { |_, klass| klass == Emf::ParseError }.values.uniq).to eq([Emf::FormatError])
+  end
+
+  def capture_error
+    yield
+    nil
+  rescue Emf::Error => e
+    e
+  end
 end
