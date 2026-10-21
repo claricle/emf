@@ -1,8 +1,8 @@
 # 02 — Baseline and parity
 
-Status: **Not started**. Estimate: **2–3 engineering days**, revised after the
-fixture inventory and downstream checkout are available. This phase is the first
-executable milestone; it does not require Rust.
+Status: **Partial — current-source Ruby qualification captured; native parity,
+stage-cost and downstream acceptance remain open.** Ruby evidence is bound to the
+exact source revision below; later relevant parser changes require a new capture.
 
 Depends on [requirements](01-requirements.md). Supplies acceptance data to
 [the core](03-rust-core.md), [binding](05-ruby-binding.md),
@@ -24,7 +24,9 @@ Track completion in [progress](10-progress.md); overall sequencing is in
 The current valid corpus is 186 files in `spec/fixtures/emf/`, 21 in
 `spec/fixtures/emf-ea/`, and one in `spec/fixtures/simple/`: **208 valid fixtures**.
 `spec/fixtures/emf-corrupted/` contains **21 corrupt `.emf` fixtures**; its README
-is not a fixture. The manifest must verify these counts against the checkout,
+is not a fixture. Two synthetic WMF fixtures extend the current inventory to
+**231 fixtures** (208 valid EMF, 21 corrupt EMF, two WMF). The manifest must verify
+these counts against the checkout,
 record repository-relative path, SHA-256, byte size, expected detected format,
 and observed outcome (`parsed`, `recovered`, or `format_error`). Record backend
 exceptions and reviewed safety deviations separately rather than declaring every
@@ -109,7 +111,61 @@ EMFSVG_PATH=/path/to/emfsvg bundle exec ruby bench/emfsvg.rb --backend ruby --ou
 
 The native invocation is deferred until [the ABI](04-c-abi.md) and binding exist;
 it must fail if the native library is unavailable. Baseline completion requires
-manifest coverage, a saved Ruby observation for all 229 fixtures, measured stage
+manifest coverage, a saved Ruby observation for all 231 fixtures, measured stage
 costs, and a reproducible downstream baseline. Resolve the wire-heavy cost and
-slow-fixture uncertainties before committing to the full port estimate. No
-benchmark or parity result is claimed by this planning document.
+slow-fixture uncertainties before committing to the full port estimate. The current
+Ruby qualification below does not establish native parity, stage performance,
+downstream equivalence or whole-phase completion.
+
+## Current-source Ruby qualification
+
+Source base: `0f63318655f49dcdc65756d780b94fda0e1602c0`, clean before capture.
+Parser-source SHA-256:
+`a9196b792eff75af9006f31f4059cd5a98012c362b266e00dd219188425aad00`.
+Environment: Ruby 3.4.8, arm64-darwin25, BinData 2.5.1; forced Ruby backend.
+Evidence directory: `/private/tmp/emf-execution/p02-current-head-qualification/`.
+The original manifest and historical `source-stable-v3-manifest.json` are preserved;
+the generated manifest is isolated evidence, not a replacement committed inventory.
+
+The regenerated 15-second/16-KiB manifest records **219 parsed, 10 recovered,
+2 format errors and no safety failures** across all 231 fixtures. Historical v3
+recorded 221 parsed, six recovered, two format errors and two timeouts. Both prior
+timeout fixtures now complete (one parsed, one recovered); three corrupt inputs
+previously marked parsed now report recovery diagnostics. These are observed
+outcome changes; successful completion does not establish why the earlier capture
+timed out. All three newly recovered inputs preserve their original bytes: two
+report variable-array bounds diagnostics (offsets 46984 and 103240), and one reports
+a short LOGFONT body (offset 99368). `comparison.json` retains exact paths and errors.
+
+Canonical observations cover all 231 unchanged fixture identities: **229 byte-exact
+roundtrips**, each also passing reparse equality, serialized-file equality and
+parse-file equality. Two corrupt fixtures explicitly raise `Emf::FormatError`:
+`bad_corrupted_2014-12-02-215338.emf` has a truncated header, and
+`bad_corrupted_2014-12-02-215428.emf` has an unrecognised format. These rejections
+have no successful serialization/equality claim. There are no identity mismatches,
+nonidentical successful serializations or safety failures. Both capture commands
+and the regenerated-manifest check exited zero; stage exceptions remain recorded
+as exceptions, independently of child-process success.
+
+Exact commands are retained in `capture.sh`; `capture.rb` wraps the unchanged
+harnesses solely for bounded supervision and telemetry. `preflight.json` binds the
+clean source and fixture identities, `current-manifest.json` and
+`current-observations.json` hold results, and `SHA256SUMS` binds retained artifacts.
+The canonical artifact records the exact source revision with `lib_dirty: false`.
+
+The exclusive capture window followed Claude's explicit timing release. Existing
+harnesses ran sequential isolated children with a 1-GiB RSS ceiling; manifest
+limits stayed 15 seconds/16 KiB, and canonical observations used 60 seconds/64 MiB.
+A 4-GiB per-artifact file-size ceiling bounds retained output. The supervised
+simple-fixture preflight measured 23,003,136 bytes peak RSS; per-child capture
+telemetry records actual elapsed time, peak RSS and output bytes. The historical
+manifest has no RSS measurements. Manifest peak child RSS was 133,922,816 bytes;
+canonical peak child RSS was 822,804,480 bytes, maximum child output 57,794,180 bytes
+and maximum elapsed time 35.10 seconds, all within declared bounds. Both captures
+completed 231 children with exit zero. These supervised elapsed times are capture
+telemetry, not the independently measured stage-cost benchmark. The capture window
+is released. Safety-limit failures remain failures, not passes.
+
+Native comparison remains open under the assigned build/install hold. Current-source
+Ruby capture alone does not close the public mutation, final-head native, stage-cost,
+slow-fixture, downstream golden or required CI acceptance criteria above.
