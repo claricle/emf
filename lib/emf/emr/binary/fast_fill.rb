@@ -22,6 +22,26 @@ module Emf
           copy
         end
 
+        # Field name to position in @field_objs.
+        def slots(sample)
+          fields = sample.send(:get_parameter, :fields)
+          fields.each_with_index.with_object({}) do |(field, index), slots|
+            slots[field.name_as_sym] = index if field.name_as_sym
+          end.freeze
+        end
+
+        # A copy of the template with each given field assigned, as BinData's
+        # constructor does after instantiating the fields one by one. BinData
+        # skips nil values in a constructor hash, so does this.
+        def build(template, slots, attrs)
+          return unless attrs.each_key.all? { |name| slots.key?(name) }
+
+          wire = call(template, nil)
+          objs = wire.instance_variable_get(:@field_objs)
+          attrs.each { |name, value| objs[slots[name]].assign(value) unless value.nil? }
+          wire
+        end
+
         def leaf(leaf, parent)
           copy = leaf.dup
           copy.instance_variable_set(:@parent, parent)
@@ -66,8 +86,15 @@ module Emf
           # SETWORLDTRANSFORM in 15 objects against 18+ for a value pack, and
           # Float32Le must write its retained NaN bits itself.
           @pack_format = @format unless leaves.any? { |_, field| float?(field) }
+          @slots = WireCopy.slots(sample)
           generate_call(leaves)
           generate_pack(leaves)
+        end
+
+        # Keyword construction, `wire_class.new(**attrs)`; nil when a key is
+        # not a field, so the caller falls back to BinData.
+        def build(attrs)
+          WireCopy.build(@template, @slots, attrs)
         end
 
         private
