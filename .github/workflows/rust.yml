@@ -66,3 +66,7 @@ jobs:
           test -f "$library"
           EMF_TEST_NATIVE_LIBRARY="$library" bundle exec rspec \
             spec/emf/native spec/emf/native_wmf*_spec.rb spec/emf/wmf
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
