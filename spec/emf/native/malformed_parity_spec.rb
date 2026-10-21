@@ -58,12 +58,12 @@ RSpec.describe "Native malformed-EMF parity" do
       expect(messages(parse_with("native", cut))).to eq("truncated EMF header (claimed 108, got 100)")
     end
 
-    # Ruby leaks BinData EOFError/IOError for header nSize 8..107; native reports a FormatError.
-    it "keeps native's FormatError where Ruby leaks a raw BinData error" do
+    it "words an nSize too small for the header fields the way Ruby does" do
       bytes = image.dup.tap { |data| data[4, 4] = [80].pack("V") }
 
-      expect(parse_with("ruby", bytes)).to be_a(EOFError)
-      expect(parse_with("native", bytes)).to be_a(Emf::FormatError)
+      expect(parse_with("ruby", bytes)).to be_a(Emf::FormatError)
+      expect(messages(parse_with("native", bytes))).to eq(messages(parse_with("ruby", bytes)))
+      expect(messages(parse_with("native", bytes))).to eq("EMF header nSize 80 cannot hold its fields")
     end
   end
 
