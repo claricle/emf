@@ -17,7 +17,7 @@ The shared `spec/fixtures/manifest.json` must reference the original 208 valid a
 - `emf-rs/fuzz/seeds.json`: manifest of original fixture paths, hashes, target eligibility and minimized regression seeds; do not duplicate the entire fixture tree.
 - `script/native_resilience`, `spec/emf/native_resilience_spec.rb`: subprocess supervision and Ruby-visible outcome checks.
 - `.github/workflows/native-fuzz.yml`: bounded change/scheduled/manual fuzz jobs and failure-artifact retention.
-- `.github/workflows/native-resilience.yml`: forced-native original corrupt-corpus supervision on Ubuntu. New minimized regressions must retain provenance and licensing.
+- `.github/workflows/native-resilience.yml`: forced-native original corrupt-corpus supervision on Ubuntu and Windows supervisor runtime checks on x64/ARM runners. New minimized regressions must retain provenance and licensing.
 
 ## Execution order and dependencies
 
@@ -85,6 +85,26 @@ platform, supported-runner RSS calibration using the valid corpus, longer
 scheduled budgets, and complete allocation/work boundary coverage across the
 implemented record/accessor paths. Native C lifetime controls are tracked in
 [04](04-c-abi.md). Do not infer whole-phase completion from Linux smoke checks.
+
+### Windows supervision implementation and remaining runtime acceptance
+
+`spec/support/process_supervisor.rb` selects the Windows implementation in
+`spec/support/windows_process_supervisor.rb` through the existing public API.
+It creates a suspended child, assigns a kill-on-close Windows Job Object before
+resuming, samples aggregate working-set RSS across job members, bounds captured
+output and terminates/reaps the job on completion or failure. Failed monitoring
+or cleanup cannot produce success. RSS remains sampled rather than an
+allocator-level hard limit.
+
+The affected POSIX and Windows contract specs passed together on macOS Ruby
+3.4.8: **33 examples, 0 failures** (seed 35583). The Windows adapter's three
+changed Ruby files passed RuboCop. These checks establish contract behavior and
+preservation of POSIX supervision, not Windows ABI or runtime acceptance.
+The workflow now runs `spec/scripts/windows_process_supervisor_spec.rb` on
+`windows-2025` and `windows-11-arm`; each real Windows run must execute all
+26 examples, including deadline/RSS/output enforcement and descendant cleanup.
+Until those jobs pass, Windows supervision qualification remains **OPEN**.
+The workflow passed actionlint; no native build or installation was performed.
 
 ### Additional bounded WMF malformed-input evidence
 

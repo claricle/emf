@@ -10,6 +10,41 @@ permissions:
   contents: read
 
 jobs:
+  windows-supervision:
+    name: Windows process supervision (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, windows-11-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby 3.4
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Exercise Windows process containment and limits
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          mkdir -p tmp/native-resilience
+          bundle exec rspec spec/scripts/windows_process_supervisor_spec.rb \
+            --format documentation \
+            --format json --out tmp/native-resilience/windows-supervision.json
+
+      - name: Retain Windows supervision results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-supervision-${{ matrix.runner }}-${{ github.run_id }}
+          path: tmp/native-resilience/
+          if-no-files-found: warn
+          retention-days: 14
+
   corrupt-corpus:
     name: Forced native corrupt corpus
     runs-on: ubuntu-24.04
