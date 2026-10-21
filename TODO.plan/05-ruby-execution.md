@@ -1,6 +1,6 @@
 # Ruby implementation and integration sequence
 
-Status: **Not started**. This expands package 05 into executable Ruby tasks; its
+Status: **In progress**. This expands package 05 into executable Ruby tasks; its
 effort is included in the existing **3–4 engineering days**, not added to the
 [overall estimate](00-overview.md). Baseline harness work belongs to
 [package 02](02-baseline-and-parity.md); packaging and new-format
@@ -121,3 +121,81 @@ of the suite's parent override. Native-dependent integration cases require a
 usable library and must fail clearly if it is absent. Ruby availability tests
 must pass with the native assets removed. These are future acceptance commands;
 this planning PR has not implemented or run them.
+
+## Implemented checkpoints and remaining acceptance
+
+Backend selection, setup-only fallback, direct native model hydration and lazy
+mutable wires are implemented. Preservation controls in
+`spec/emf/backend_parity_spec.rb`, `spec/emf/native/backend_spec.rb`,
+`spec/emf/native/adapter_spec.rb` and `spec/emf/native/lazy_wire_spec.rb` exercise
+these contracts. They do not establish every R1–R5 exit condition.
+
+PR #33 adds compatible classes for the remaining registered opaque record
+families without parsing their bodies again through the Ruby parser. Its composed
+adapter/EMF+ stream/object-table/link check passed 132 examples with zero failures
+(seed 47027), using an actual release native library. Standalone Rust corpus
+identity is recorded in [03](03-rust-core.md). Complete Ruby/native valid-corpus
+observations, visitor/CLI parity, corrupted-input equivalence and the pinned
+downstream native golden suite remain acceptance work; do not infer them from
+the adapter examples or unchanged Rust serialization alone.
+
+### Current Ruby public API acceptance
+
+At source `7be55ce3f6d75d52c269071508330ef8fabaf0c7`, the forced-Ruby
+public API, backend-selection, model, detector and visitor checks passed
+**64 examples, 0 failures** (seed 40715; 3.61 seconds). Both native library
+environment paths were cleared. The checks include binary file API behavior,
+scalar/nested/array mutation after prior serialization, sibling preservation,
+fresh-process availability and controlled no-retry error propagation.
+
+Exact command, source revision, log digest and remaining scope are recorded in
+`/private/tmp/emf-execution/p05-current-ruby-public/result.json`; output is
+`rspec.log` in the same directory. This does not establish final-head native
+execution, complete corpus/CLI equivalence, downstream native golden behavior
+or installed-platform acceptance. Those R1–R5 gates remain open.
+
+### Native and Ruby public-consumer checkpoint
+
+At `ba7a0ed4cd077ae9c55e1b6595974302700a1d5e`, the public API, model,
+detector, visitor and CLI suite passed **60 examples, 0 failures** under forced
+native execution. The same paths plus backend selection passed **75 examples,
+0 failures** under forced Ruby execution with the native library override cleared.
+Backend availability checks run separately from the forced-native suite because
+their subprocesses inherit the library environment.
+
+The instrumented forced-backend consumer suite passed **42 examples, 0 failures**.
+For EMF, standard WMF and placeable WMF it verifies CLI info, dump, stats,
+validate and round-trip behavior, Stats/Dump visitor results, byte-identical
+round-trip files and actual parser dispatch without native-to-Ruby fallback.
+It also checks deterministic corrupt-input errors and nonzero CLI status.
+All three runs use seed 48328. The library was built from
+`d3588c5d8f590233c125e5aa97fb4ad53056a5cd`; intervening changes affect only
+Alpine bootstrap and test expectations, not production parser/binding inputs.
+
+Evidence: `/private/tmp/emf-execution/p05-public-native-ba7a0ed/result.json`
+records source identity, library identity and log digests. The first consumer
+attempt was blocked by sandbox access to the process monitor; the bounded rerun
+with monitoring enabled passed. No build or install was needed. This checkpoint
+does not establish complete valid/corrupt corpus equivalence or pinned downstream
+native golden acceptance; those R1–R5 conditions remain open.
+
+### Pinned downstream native golden acceptance
+
+At clean source `6669366b4946c825b40e0b514a3b7cb5ad59571e`, pinned emfsvg
+`101356dcf673841fda0693076131bca7a0f34948` converted all **208 selected valid
+fixtures with exact golden SVG equality and zero failures**, using the retained
+native library built from `d3588c5d8f590233c125e5aa97fb4ad53056a5cd`.
+Both byte-input and file-input conversions verify golden bytes; input and golden
+SHA-256 identities were independently checked after the run. The pinned consumer's
+focused round-trip/builder checks also passed 13 examples with zero failures.
+
+The sequential fixture children had 60-second deadlines, 1 GiB RSS limits and
+4 MiB output limits. Evidence and exact commands are retained in
+`/private/tmp/emf-execution/downstream-current-native/` (`goldens.json`,
+`goldens-run.json`, `goldens-audit.json` and `focused.log`). The historical fixture
+manifest's parser digest differs from this source: this result qualifies the
+selected downstream goldens, not the complete current parse/recovery inventory.
+One measured sample per stage establishes correctness, not a calibrated timing
+baseline. The slowest recorded file conversion was test-031 at 2.316 seconds;
+the issue's under-one-second target remains open. Current-source complete corpus,
+required CI and the remaining R1–R5 acceptance conditions remain open.

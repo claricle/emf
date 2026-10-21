@@ -215,3 +215,81 @@ RSpec.describe "native gem packaging scripts" do
     expect([status.exitstatus, err]).to match([1, %r{missing exe/emf}])
   end
 end
+
+RSpec.describe "native install smoke integrity without a toolchain" do
+  let(:root) { File.expand_path("../..", __dir__) }
+  let(:platform) { Gem::Platform.local.to_s }
+  let(:payload) { "not a native library" }
+  let(:manifest) do
+    { "library" => "broken.so", "abi_version" => 1, "sha256" => Digest::SHA256.hexdigest(payload) }
+  end
+  let(:package) do
+    lambda do |directory, native: true, include_library: true|
+      stage = File.join(directory, "stage")
+      FileUtils.mkdir_p(stage)
+      spec = Dir.chdir(root) { Gem::Specification.load("emf.gemspec").dup }
+      spec.files.each do |file|
+        FileUtils.mkdir_p(File.dirname(File.join(stage, file)))
+        FileUtils.cp(File.join(root, file), File.join(stage, file))
+      end
+      if native
+        spec.platform = platform
+        relative = "lib/emf/native/platforms.json"
+        FileUtils.mkdir_p(File.join(stage, "lib/emf/native", platform))
+        File.write(File.join(stage, relative), JSON.generate(manifest))
+        spec.files += [relative]
+        if include_library
+          relative = "lib/emf/native/#{platform}/broken.so"
+          File.binwrite(File.join(stage, relative), payload)
+          spec.files += [relative]
+        end
+      end
+      Dir.chdir(stage) do
+        name = Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) { Gem::Package.build(spec, true) }
+        FileUtils.mv(name, directory)
+      end
+    end
+  end
+  let(:smoke) do
+    lambda do |directory, selected = platform|
+      Open3.capture3({ "PATH" => "" }, RbConfig.ruby, File.join(root, "script/native_install_smoke"),
+                     "--directory", directory, "--platform", selected, "--require-native", "--forbid-compiler")
+    end
+  end
+
+  it "rejects an installed library whose checksum differs from its manifest before loading it" do
+    manifest["sha256"] = "0" * 64
+    Dir.mktmpdir("emf-install-integrity") do |directory|
+      package.call(directory)
+      out, err, status = smoke.call(directory)
+      expect([status.exitstatus, err]).to match([1, /native install smoke failed: installed library sha256 mismatch/])
+      expect(out).to include("compilers on PATH: none")
+    end
+  end
+
+  it "still reports a library load failure when the checksum matches corrupt bytes" do
+    Dir.mktmpdir("emf-install-integrity") do |directory|
+      package.call(directory)
+      _out, err, status = smoke.call(directory)
+      expect([status.exitstatus, err]).to match([1, /native install smoke failed: .*does not export "emf_abi_version"/])
+    end
+  end
+
+  it "reports a missing installed library before attempting its checksum" do
+    Dir.mktmpdir("emf-install-integrity") do |directory|
+      package.call(directory, include_library: false)
+      _out, err, status = smoke.call(directory)
+      expect([status.exitstatus, err]).to match([1, /native install smoke failed: installed library missing:/])
+    end
+  end
+
+  it "rejects a source installation without its runtime dependency" do
+    Dir.mktmpdir("emf-install-source") do |directory|
+      package.call(directory, native: false)
+      out, err, status = smoke.call(directory, "ruby")
+      expect(status.exitstatus).to eq(1)
+      expect(err).to include("source runtime auto failed", "bindata")
+      expect(out).to include("compilers on PATH: none")
+    end
+  end
+end

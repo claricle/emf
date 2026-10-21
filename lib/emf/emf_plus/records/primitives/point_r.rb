@@ -8,7 +8,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusPointR (2.2.2.37): relative location, each axis 7 or 15 bits.
-        class PointR < BinData::Record
+        class PointR < Body
           endian :little
           relative_coordinate :x
           relative_coordinate :y

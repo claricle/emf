@@ -11,7 +11,7 @@ module Emf
 
         TYPE = 0x400F
 
-        class DrawEllipseBody < BinData::Record
+        class DrawEllipseBody < Body
           endian :little
           mandatory_parameter :flags
           rect_array :rect_data,

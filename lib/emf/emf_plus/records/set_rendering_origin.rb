@@ -7,7 +7,7 @@ module Emf
       class SetRenderingOrigin < Base
         TYPE = 0x401D
 
-        class SetRenderingOriginBody < BinData::Record
+        class SetRenderingOriginBody < Body
           endian :little
           int32 :x
           int32 :y

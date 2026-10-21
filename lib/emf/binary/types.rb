@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/binary/class_field_accessors"
+require "emf/binary/float32_le"
 
 module Emf
   module Binary
@@ -58,12 +60,12 @@ module Emf
 
       class XForm < BinData::Record
         endian :little
-        float :m11
-        float :m12
-        float :m21
-        float :m22
-        float :dx
-        float :dy
+        float32_le :m11
+        float32_le :m12
+        float32_le :m21
+        float32_le :m22
+        float32_le :dx
+        float32_le :dy
       end
 
       class PaletteEntry < BinData::Record
@@ -86,12 +88,15 @@ module Emf
         uint32 :dw_low_date_time
         uint32 :dw_high_date_time
       end
+
+      constants.each { |name| const_get(name).prepend ClassFieldAccessors }
     end
   end
 end
 
 # Register the primitives so they can be referenced by name (e.g. `rectl :bounds`)
 # inside other BinData records. Bindata resolves types lazily through this registry.
+BinData::RegisteredClasses.register("float32_le", Emf::Binary::Float32Le)
 BinData::RegisteredClasses.register("point_l", Emf::Binary::Types::PointL)
 BinData::RegisteredClasses.register("point_s", Emf::Binary::Types::PointS)
 BinData::RegisteredClasses.register("point_d", Emf::Binary::Types::PointD)

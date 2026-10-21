@@ -818,6 +818,58 @@ RSpec.describe Emf::Native do
     end
   end
 
+  [
+    [96, "PolyTextOutA"], [97, "PolyTextOutW"],
+    [99, "CreateColorspace"], [100, "SetColorspace"], [101, "DeleteColorspace"],
+    [102, "GlsRecord"], [103, "GlsBoundedRecord"], [104, "PixelFormat"],
+    [105, "DrawEscape"], [106, "ExtEscape"], [109, "ForceUfiMapping"],
+    [110, "NamedEscape"], [111, "ColorCorrectPalette"],
+    [112, "SetIcmProfileA"], [113, "SetIcmProfileW"],
+    [119, "SetLinkedUfis"], [121, "ColorMatchToTargetW"], [122, "CreateColorspaceW"]
+  ].each do |type, name|
+    it "hydrates opaque #{name} bodies with editable Ruby wire parity" do
+      klass = Emf::Emr::Binary::Records.const_get(name)
+      ENV["EMF_BACKEND"] = "ruby"
+      inputs = ["".b, "body\x00\xFF\x80".b].map do |body|
+        input = "#{header}#{[type, 8 + body.bytesize].pack('V2')}#{body}#{unknown}#{eof}tail"
+        [body, input, Emf.parse(input)]
+      end
+      ENV["EMF_BACKEND"] = "native"
+      expect(Emf::Emr::Parser).not_to receive(:call)
+      expect(klass).not_to receive(:read)
+      inputs.each do |body, input, ruby|
+        native = Emf.parse(input)
+        expect(Emf.serialize(native)).to eq(input)
+        expect(native.records).to eq(ruby.records)
+        expect(ruby.errors).to be_empty
+        if type.between?(96, 97)
+          expect(native.errors.size).to eq(1)
+          expect(native.errors.first).to have_attributes(offset: header.bytesize, record_code: type)
+          expect(native.errors.first.message).to include("native parse diagnostic 4")
+        else
+          expect(native.errors).to be_empty
+        end
+        [ruby, native].each do |parsed|
+          expect(parsed.records.first.wire.class).to eq(klass)
+          expect(parsed.records.first.wire.body.to_s).to eq(body)
+          expect(parsed.records[1].wire.class).to eq(Emf::Emr::Binary::Records::Raw)
+          expect(parsed.records[1].wire.payload.to_s).to eq("raw!")
+          expect(Emf.serialize(parsed)).to eq(input)
+        end
+
+        edited = "edited\xFF\x00longer".b
+        native.records.first.wire.body = edited
+        native.records.first.wire.n_size = 8 + edited.bytesize
+        output = Emf.serialize(native)
+        expect(output).to eq("#{header}#{[type, 8 + edited.bytesize].pack('V2')}#{edited}#{unknown}#{eof}tail")
+        reparsed = Emf.parse(output)
+        expect(reparsed.records.first.wire.class).to eq(klass)
+        expect(reparsed.records.first.wire.body.to_s).to eq(edited)
+        expect(Emf.serialize(reparsed)).to eq(output)
+      end
+    end
+  end
+
   it "matches Ruby completion suffix handling and preserves short scalar records" do
     scalar_types = [16, 98, 115]
     completion_records.each do |type, klass, fields|
@@ -1175,8 +1227,13 @@ RSpec.describe Emf::Native do
     allow(loader).to receive(:invoke).and_call_original
     expect(loader).to receive(:invoke).with(:emf_document_free, anything).and_call_original
     expect(Emf::Emr::Parser).not_to receive(:call)
-    expect { backend.parse(header + [105, 12, 1].pack("V3") + eof) }
-      .to raise_error(Emf::FormatError, /does not support typed EMR record 105/)
+    allow(Emf::Native::Snapshot).to receive(:new).and_wrap_original do |original, transport|
+      snapshot = original.call(transport)
+      snapshot.records.first[:family] = 999
+      snapshot
+    end
+    expect { backend.parse(header + map_mode + eof) }
+      .to raise_error(Emf::FormatError, /unsupported native snapshot record family 999/)
   end
 
   it "preserves malformed supported records as Raw with native diagnostics and unframed bytes" do
@@ -1201,9 +1258,12 @@ RSpec.describe Emf::Native do
     expect { backend.parse(malformed_wmf) }.to raise_error(Emf::FormatError)
   end
 
-  it "rejects extended EOF honestly rather than changing its palette layout" do
-    expect { Emf.parse(header + [14, 24, 1, 16, 0, 24].pack("V6")) }
-      .to raise_error(Emf::FormatError, /extended or paletted EOF/)
+  it "preserves the Ruby fixed fields and opaque body of extended EOF" do
+    input = header + [14, 24, 1, 16, 0, 24].pack("V6")
+    parsed = Emf.parse(input)
+    expect(parsed.errors).to be_empty
+    expect(parsed.records.last.wire.snapshot).to include(n_pal_entries: 1, off_pal_entries: 16, n_size_last: 0, body: [24].pack("V"))
+    expect(Emf.serialize(parsed)).to eq(input)
   end
 
   it "falls back only when loading fails during selection" do

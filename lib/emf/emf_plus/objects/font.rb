@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/graphics_version"
 
 module Emf
@@ -10,10 +11,12 @@ module Emf
         FIXED_SIZE = 24
         LENGTH_OFFSET = 20
 
-        class FontBody < BinData::Record
+        # Anonymous until assigned so BinData does not register it as :font_body,
+        # a name the EMR record field resolves by symbol.
+        FontBody = Class.new(Records::Body) do
           endian :little
           graphics_version :version
-          float :em_size
+          float32_le :em_size
           uint32 :size_unit
           int32 :font_style_flags
           uint32 :reserved

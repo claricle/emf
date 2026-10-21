@@ -1,129 +1,184 @@
 # 05 — Ruby binding and backend compatibility
 
-Status: **Not started**. Estimate: **3–4 engineering days**, contingent on the
-[baseline](02-baseline-and-parity.md) and the [core](03-rust-core.md)/
-[ABI](04-c-abi.md) vertical slice. Resolve wire hydration cost before scaling the
-port. See [performance](07-performance.md), [platform delivery](08-platform-delivery.md),
-and [progress](10-progress.md) for the remaining gates.
+Status: **Implemented binding; bounded ownership acceptance verified on Apple
+arm64 / Ruby 3.4.8. Broader delivery gates remain open.** Native EMF/EMF+ and
+standard/placeable WMF construct existing Ruby models. The original 3–4 day
+estimate and proposed file map no longer describe the implementation. See
+[baseline](02-baseline-and-parity.md), [performance](07-performance.md),
+[platform delivery](08-platform-delivery.md), and [progress](10-progress.md) for
+whole-project gates; this lane does not certify them.
 
-See [Ruby execution sequence](05-ruby-execution.md) for the existing-file change map,
-require-path checks, CLI verification and ordered integration steps.
+[Ruby execution sequence](05-ruby-execution.md) retains the original integration
+sequence. The implemented paths and ownership below supersede this document's
+former proposed owner/model/backend split.
 
-## Planned files and dispatch
+## Implemented files and dispatch
 
-| Path | Planned responsibility |
+| Path | Actual responsibility |
 | --- | --- |
-| `lib/emf/backend.rb` | Internal backend selection and availability policy |
-| `lib/emf/native.rb` | Lazy native entry point |
-| `lib/emf/native/loader.rb` | Lazy Fiddle load, platform library lookup, ABI validation |
-| `lib/emf/native/platforms.json` | Packaged platform/library map coordinated with gem builds |
-| `lib/emf/native/backend.rb` | Buffer/handle calls, status mapping, cleanup and batching |
-| `lib/emf/native/model.rb` | Existing Ruby model construction and lazy BinData hydration |
-| `spec/emf/native/backend_spec.rb` | Loader, forced backend and cleanup regressions |
+| `lib/emf/backend.rb` | Internal selection for the existing public API |
+| `lib/emf/native.rb` | Lazy native entry point, adapter, Ruby serializer dispatch |
+| `lib/emf/native/library_path.rb` | Explicit library override or validated packaged manifest lookup |
+| `lib/emf/native/loader.rb` | Fiddle signatures, ABI validation, scoped document/buffer/error ownership |
+| `lib/emf/native/snapshot.rb`, `wmf_snapshot.rb` | Batched snapshot decoding |
+| `lib/emf/native/hydrator.rb`, `wmf_hydrator.rb` | Existing EMF/WMF model construction |
+| `lib/emf/native/lazy_wire.rb` | Ruby-owned lazy EMF wire values and preserved bytes |
+| `spec/emf/native/backend_spec.rb` | Selection, availability, subprocess checks |
+| `spec/emf/native/adapter_spec.rb`, `lazy_wire_spec.rb` | Hydration, mutation, serialization and cleanup regressions |
+| `spec/emf/native/lifetime_acceptance_spec.rb` | Real-library ownership, exception cleanup and bounded repetition |
 | `spec/emf/backend_parity_spec.rb` | Public behavioral and mutation parity |
 
-Route the existing `Emf.parse`, `parse_file`, `serialize`, `serialize_file` and
-`detect_format` entry points through the internal selection layer. Preserve
-signatures, file modes, return values and existing public model classes. Keep
-BinData available: it remains the Ruby backend and the native wire compatibility
-representation. No `from_*` aliases, public backend-query method or separate
-native public model are proposed. Tests can inspect the internal backend through
-test support and process environment.
+There is no `native/owner.rb`, `native/backend.rb` or `native/model.rb`.
+`Emf.parse`, `parse_file`, `serialize`, `serialize_file` and `detect_format` retain
+the existing API and public model classes. BinData remains available for the Ruby
+backend and mutable native EMF wire compatibility. Serialization currently uses
+the existing Ruby EMF/WMF writers for both backends, not the ABI serializer.
 
-Propose **Fiddle**, loaded lazily only when native use is attempted. Do not add a
-binding dependency that triggers compilation during installation. Check Fiddle
-availability and type mapping on the existing Ruby 3.1–3.4 Linux/macOS matrix;
-retain the gem's `>= 3.1.0` requirement. Research Fiddle distribution on later
-Ruby releases before declaring support there. If it becomes an explicit dependency,
-prove that installation and its transitive dependencies still need no compiler
-on every advertised platform. Availability must not be inferred from a Ruby
-version string alone.
+Fiddle loads only when native use is attempted. No binding compilation step is
+introduced. Ruby 3.1–3.4 / Linux and macOS availability, pointer mappings and gem
+installation still require their advertised matrix evidence; this ownership run
+only measures Ruby 3.4.8 on Apple arm64. Ruby 4.0 Fiddle packaging remains a
+separate dependency decision; do not infer availability from a version string.
 
-## Planned selection policy
+## Implemented selection and remaining error policy
 
-`EMF_BACKEND` is the sole proposed override, read consistently at backend setup:
+`EMF_BACKEND` is read at selection; `EMF_NATIVE_LIBRARY` is an explicit library
+path override, including for development/testing.
 
-| Value | Planned behavior |
+| Backend value | Implemented behavior |
 | --- | --- |
-| unset or `auto` | Prefer a usable packaged native library; use Ruby if Fiddle/library/compatible ABI is unavailable |
-| `ruby` | Select the existing Ruby parser/serializer without loading Fiddle or a shared library |
-| `native` | Require Fiddle and a compatible native library; fail clearly if unavailable |
-| anything else | Raise a clear configuration error (`ArgumentError`) |
+| unset or `auto` | Attempt native; select Ruby on `Native::Unavailable` during setup |
+| `ruby` | Select Ruby without requiring Fiddle/library loading |
+| `native` | Require the native backend; raise `Native::Unavailable` (an `Emf::Error`) on unavailable setup |
+| anything else | Raise `ArgumentError` |
 
-Resolve libraries only from the installed gem's declared platform-specific asset
-location, proposed as `lib/emf/native/<platform>/libemf_ffi.so` on Linux or
-`lib/emf/native/<platform>/libemf_ffi.dylib` on macOS, selected through
-`lib/emf/native/platforms.json`. A later supported Windows build uses
-`emf_ffi.dll` in that platform directory; packaging must use the same paths. A missing binary, load failure, unsupported platform or ABI
-mismatch permits `auto` availability fallback before parsing. Forced native raises
-an `Emf::Error` with the availability reason. Default fallback should not add noisy
-per-file warnings; test reports explicitly record the selected backend and reason.
+Without a library override, `LibraryPath` reads packaged
+`lib/emf/native/platforms.json`, validates platform, ABI version and SHA-256, and
+resolves the library beneath the native directory. This manifest is a generated
+packaging asset, not a checked-in source-platform list. Missing assets, load
+failures and ABI mismatch allow `auto` setup fallback. Parsing errors after native
+selection propagate without Ruby retry. Malformed input is not an availability
+failure. Native default-delivery acceptance remains subject to the platform and
+performance gates.
 
-Once native work starts for an input, a format error, limit error, serialization
-failure or internal native failure is returned as an error. Do not retry the
-input in Ruby, hide a crash, or silently change the selected backend. Malformed
-input and unsupported structured formats are not library availability failures.
-EMF/WMF/EMF+ capabilities and their staged behavior must follow
-[format extension](09-format-extension.md), with explicit errors for unimplemented
-parsing rather than a successful empty model. Native becomes the default preferred
-path only after the delivery acceptance gates pass.
+**Implemented error-class contract:** `Loader#checked` and buffer-view failures
+map `FORMAT_ERROR` / `LIMIT_EXCEEDED` to `Emf::FormatError`,
+`SERIALIZE_ERROR` to `Emf::SerializeError`, and invalid argument,
+internal/allocation or unknown status to `Emf::Error`, with copied native detail.
+`spec/emf/native/loader_status_spec.rb` exercises all seven nonzero status cases,
+success cleanup and failures while copying error or buffer data (10 examples).
+These use controlled Fiddle-boundary responses; they do not inject an actual
+allocator failure or native panic. The real-library lifetime suite separately
+proves parse-error cleanup. Native ABI serialization is not called by the Ruby
+adapter, so its error mapping is boundary-tested rather than an end-to-end
+serialization failure. Successful parse diagnostics become ordered
+`Emf::ParseError` values.
 
-Map ABI `FORMAT_ERROR` and `LIMIT_EXCEEDED` to `Emf::FormatError`, and
-`SERIALIZE_ERROR` to `Emf::SerializeError`; map internal or allocation failures to
-`Emf::Error` with bounded detail. Convert successful parse diagnostics into ordered
-`Emf::ParseError` instances with offset and record code. Treat invalid arguments
-from binding-owned calls as an adapter defect. Diagnostic compatibility and
-reviewed safety changes follow [02](02-baseline-and-parity.md).
+## Implemented wire and lifetime contract
 
-## Planned native model and mutable wire behavior
+EMF hydration builds existing headers, metafiles and `WireAdapter` records from
+batched native snapshots. Lazy wires retain validated Ruby field values and
+per-record bytes. First `.wire` access constructs the actual BinData class with
+those fields (`klass.new`, not an input reparse), caches it, and preserves relevant
+text/scale payloads. WMF hydration builds existing typed WMF records directly.
+Opaque/recovery records retain their applicable preserved bytes.
 
-Build the existing `Emf::Model::Metafile` and `Emf::Model::Emr::Header` shapes from
-batched native data. Retain record order, model classes, offsets, errors, opaque
-EMF+ bytes, trailing bytes, enumeration and frozen-container behavior. Each native
-record adapter must remain compatible with `WireAdapter` checks and visitor
-registration. The current adapter uses `@wire` directly in `type_id`, `inspect`,
-equality and hash; change these internal methods coherently so lazy records do
-not read an uninitialized instance variable.
+Exposed wire edits, including nested edits, are observed by serialization, value
+operations and visitor dispatch. Unexposed EMF records can use preserved bytes;
+existing manually constructed records and mixed models still use the Ruby writer.
+Hash values can change with wire mutation, as in the Ruby backend. Existing
+`adapter_spec.rb` and `lazy_wire_spec.rb` cover these preservation behaviors.
 
-Propose lazy **actual BinData records**: retain bounded per-record bytes and the
-existing lookup class, then call that class's `read` on first `.wire` access.
-Cache and return the same object thereafter. Construct raw records for the same
-recovery cases as the baseline. Materialization must preserve exact class names,
-field access, nested arrays, visitor dispatch and dump text. Never run the entire
-file through `Emr::Parser` merely to construct a native result.
+Native document ownership is **scoped**, not GC/finalizer based. `Loader#document`
+and `#wmf_document` free the document in `ensure`, including exceptions during
+hydration. Snapshot buffers are copied into Ruby strings and freed in `ensure`;
+error messages are copied and native error handles freed in `ensure`. Returned
+models and lazy wires have no live native document dependency. A retained record
+must therefore work after its metafile is collected, without a finalizer or a
+same-handle owner lock.
 
-Wire mutation has no reliable universal dirty callback. Once a wire is exposed,
-serialization must use that cached object's `to_binary_s`, even if no explicit
-setter was intercepted. Unexposed records can copy native-preserved bytes. This
-hybrid must serialize manually built Ruby models, existing headers and mixed
-native/Ruby adapters with the same supported-record behavior. Equality/hash and
-inspect must observe current wire values as before; they may trigger hydration.
-Document that mutation can change hashes exactly as it can today. Do not introduce
-an immutable proxy to avoid this requirement.
+## Measured ownership acceptance and exit gates
 
-Choose and test native lifetime ownership explicitly. A proposed owner object
-keeps the native document alive for all lazy records, serializes same-handle calls,
-and frees it exactly once after all references are unreachable. Every temporary
-buffer/error handle uses `ensure` cleanup. Finalizers are a last-resort owner
-cleanup, must not capture the object they finalize, and cannot be the only cleanup
-for temporary allocations. Test retained records after their metafile is dropped,
-GC stress, exceptions during model build and repeated parse/serialize loops.
+`lifetime_acceptance_spec.rb` observes real Fiddle calls and returned handles. It
+checks allocated/freed handle multiplicities rather than replacing native parse
+results. The bounded cases establish:
 
-## Planned verification and exit gate
+- Weak references prove metafile collection before lazy/exposed EMF record use;
+  a standalone exposed wire also survives both adapter and metafile collection.
+- Standard/placeable WMF records survive metafile collection and input-string
+  replacement, then support mutation and serialize/reparse.
+- Exceptions after one real lazy EMF record, during WMF typed construction, after
+  native buffer view, and while converting an actual native error release their
+  acquired handles. The same adapter subsequently parses successfully.
+- `Loader#record_bytes` rejects an out-of-range index, then returns independent
+  Ruby strings from the same valid document. Both strings remain usable after
+  native buffer/document release and GC; mutating one leaves the other intact.
+- Twelve rounds of EMF and WMF successful parse/serialize plus real failing parse
+  calls release 24 documents, 24 snapshot buffers and 24 errors; copied error
+  messages remain usable after native error release.
+
+### Additional bounded public parity evidence
+
+`spec/emf/native/wmf_collection_parity_spec.rb` adds structural WMF collection
+controls for removal, insertion and replacement on standard and placeable WMF.
+The retained Apple Silicon library at
+`/private/tmp/emf-execution/apple-repro/clean-a/aarch64-apple-darwin/release/libemf_ffi.dylib`
+(SHA-256 `a167eae1e2ed3ebeaa7066b8ea870508185a9304416e4f8740e8ea4f5fb67ef3`)
+passed 12 examples with 0 failures (seed 14873). The cases verify exact bytes,
+two serialize/reparse generations, regenerated size/count fields, opaque
+siblings, trailing bytes and placeable-header checksums. This is bounded
+Apple-arm64 evidence against a retained library; it does not qualify final Rust
+HEAD or other platforms. See `/private/tmp/emf-execution/wmf-collection-parity.log`.
+
+The same retained library ran `spec/emf/native_wmf_resilience_seeds_spec.rb`:
+2 examples, 0 failures (seed 11231). Eight named malformed WMF seeds were
+rejected with Ruby fallback forbidden, then valid generated input was parsed,
+serialized and compared byte-for-byte. This adds malformed-input controls, not
+whole-corpus or cross-platform acceptance; see the resilience plan's bounded
+evidence and the shared handoff.
+
+`spec/scripts/installed_wmf_workload_spec.rb` also exercises the installed
+workload's native WMF path against that retained library: 14 examples, 0
+failures (seed 30005). Standard and placeable WMF are parsed, dumped exactly,
+mutated through typed `MoveTo.x`, reparsed and serialized again; the workload
+retains EMF+ format reporting. Discovery is stubbed in these specs, so this
+does not establish real installed-gem or final-Rust-HEAD behavior. See the
+platform-delivery plan and shared handoff for the environment controls.
+
+Run the focused checks against an actual built library:
 
 ```sh
-EMF_BACKEND=ruby bundle exec rspec
-EMF_BACKEND=native bundle exec rspec
-EMF_BACKEND=auto bundle exec rspec spec/emf/native/backend_spec.rb spec/emf/backend_parity_spec.rb
-bundle exec rubocop lib/emf/backend.rb lib/emf/native.rb lib/emf/native spec/emf/native spec/emf/backend_parity_spec.rb spec/support/backend_parity.rb
-bundle exec ruby bench/parser.rb --manifest spec/fixtures/manifest.json --backend native --output tmp/bench/native.json
-EMFSVG_PATH=/path/to/emfsvg bundle exec ruby bench/emfsvg.rb --backend native --output tmp/bench/emfsvg-native.json
+EMF_TEST_NATIVE_LIBRARY=/path/to/libemf_ffi.dylib bundle exec rspec spec/emf/native/lifetime_acceptance_spec.rb spec/emf/native/lazy_wire_spec.rb spec/emf/native/adapter_spec.rb spec/emf/native/backend_spec.rb
+bundle exec rubocop --cache false spec/emf/native/lifetime_acceptance_spec.rb spec/support/native_lifetime_acceptance.rb
 ```
 
-All commands are planned for files not yet implemented. Run missing-Fiddle,
-missing-library, bad-version, unsupported-platform and invalid-override cases in
-fresh subprocesses; native suites must prove native was selected. Require exact
-valid-fixture bytes, public API and mutation parity, downstream golden parity,
-cleanup checks and wire-heavy timings on supported Ruby versions. `auto` tests
-must also prove Ruby availability fallback. Parser-only speed does not establish
-the downstream target, and a successful fallback run is not native test evidence.
+These are bounded ownership checks, not a memory-plateau or concurrency claim.
+Long-running GC stress, platform/Ruby matrix coverage, complete forced-backend
+suites, downstream golden parity, native installation without a compiler and
+wire-heavy performance remain separate acceptance gates. No Rust rebuild or
+corpus replay is required for this focused check. A fallback run is never native
+evidence: these cases instantiate `Emf::Native.backend` directly with an explicit
+real-library path and skip if that file is absent.
+
+## Current valid-corpus native parity
+
+The current Ruby production inputs at `7204a677b125ebbefdb022ca54b51e2dd579d2b5`
+passed the complete valid-corpus native comparison on Apple arm64 / Ruby 3.4.8:
+**214 examples, zero failures**, seed 48328 (208 valid fixtures, five mutation
+controls and the inventory check). The existing debug library built at
+`d3588c5d8f590233c125e5aa97fb4ad53056a5cd` has identical Rust inputs at this
+source; its SHA-256 is
+`b010fe7e9686673a3e575bd4254b14ace7a333ed9dc14ba1bbef3d21aac99089`.
+
+The observation helper now records absent conditional BinData fields explicitly
+rather than traversing them. Present invalid region fields still raise the
+allocation-bound error. This corrects the harness without relaxing production
+bounds. Related observation checks passed 30/0, including short-header recovery
+with exact trailing bytes, serialization and reparse preservation.
+
+Evidence: `/private/tmp/emf-execution/p05-current-corpus-parity/optional-corrected/`
+contains the exact source patch/provenance, library identity, command, full RSpec
+JSON and terminal result (284.81 seconds). The earlier 200/14 run and its absent
+optional-field failure are retained in the parent evidence directory. This valid
+corpus result does not close malformed-input parity, release performance,
+platform matrix, installed-package or final whole-issue acceptance.

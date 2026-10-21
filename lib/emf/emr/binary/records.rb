@@ -12,6 +12,7 @@ module Emf
         autoload :Raw, "emf/emr/binary/records/raw"
         autoload :Eof, "emf/emr/binary/records/eof"
         autoload :SetTextColor, "emf/emr/binary/records/set_text_color"
+        autoload :SetColorAdjustment, "emf/emr/binary/records/set_color_adjustment"
         autoload :SetBkColor, "emf/emr/binary/records/set_bk_color"
         autoload :SetBkMode, "emf/emr/binary/records/set_bk_mode"
         autoload :SetMapMode, "emf/emr/binary/records/set_map_mode"
@@ -239,6 +240,7 @@ module Emf
           Binary::TypeCodes::CREATECOLORSPACEW => :CreateColorspaceW,
           Binary::TypeCodes::CREATECOLORSPACE => :CreateColorspace,
           Binary::TypeCodes::SETCOLORSPACE => :SetColorspace,
+          Binary::TypeCodes::SETCOLORADJUSTMENT => :SetColorAdjustment,
           Binary::TypeCodes::DELETECOLORSPACE => :DeleteColorspace,
           Binary::TypeCodes::GLSRECORD => :GlsRecord,
           Binary::TypeCodes::GLSBOUNDEDRECORD => :GlsBoundedRecord,

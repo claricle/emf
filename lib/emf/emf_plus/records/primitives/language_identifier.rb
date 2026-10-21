@@ -9,7 +9,7 @@ module Emf
         # EmfPlusLanguageIdentifier (2.2.2.23): 6-bit SubLanguageId above a
         # 10-bit PrimaryLanguageId. The containing objects reserve a full
         # dword for it, so the whole dword is kept.
-        class LanguageIdentifier < BinData::Record
+        class LanguageIdentifier < Body
           endian :little
           uint32 :raw
 

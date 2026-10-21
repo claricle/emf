@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
+
 module Emf
   module EmfPlus
     module Effects
@@ -7,9 +9,9 @@ module Emf
       class ColorMatrix < Effect
         GUID = "718f2615-7933-40e3-a511-5f68fe14dd74"
 
-        class ColorMatrixBody < BinData::Record
+        class ColorMatrixBody < Records::Body
           endian :little
-          array :matrix_values, type: :float_le, initial_length: 25
+          array :matrix_values, type: :float32_le, initial_length: 25
         end
         BODY = ColorMatrixBody
 

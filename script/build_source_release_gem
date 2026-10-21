@@ -1,0 +1,63 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Builds the source release gem with revision/lock metadata for release-set
+# verification. Metadata records the checkout; it is not a build attestation.
+require "digest"
+require "fileutils"
+require "open3"
+require "optparse"
+require "rubygems/package"
+require "tmpdir"
+
+class SourceReleaseGemBuilder
+  ROOT = File.expand_path("..", __dir__)
+
+  def self.metadata(revision)
+    {
+      "emf_revision" => revision,
+      "emf_cargo_lock_sha256" => Digest::SHA256.file(File.join(ROOT, "emf-rs/Cargo.lock")).hexdigest,
+      "emf_crate_version" => File.read(File.join(ROOT, "emf-rs/crates/emf-ffi/Cargo.toml"))[/^version\s*=\s*"([^"]+)"/, 1]
+    }
+  end
+
+  def self.problems(spec, revision)
+    metadata(revision).filter_map do |field, expected|
+      actual = spec.metadata[field]
+      "source provenance #{field} #{actual.inspect} != #{expected.inspect}" unless expected && actual == expected
+    end
+  end
+
+  def initialize(output:, revision: nil)
+    @output = File.expand_path(output)
+    actual, status = Open3.capture2("git", "rev-parse", "HEAD", chdir: ROOT)
+    abort "cannot determine source checkout revision" unless status.success? && actual.strip.match?(/\A[0-9a-f]{40}\z/)
+    @revision = actual.strip
+    abort "source checkout revision #{@revision} != #{revision}" if revision && revision != @revision
+  end
+
+  def build
+    spec = Dir.chdir(ROOT) { Gem::Specification.load("emf.gemspec") }
+    spec.metadata.merge!(self.class.metadata(@revision))
+    FileUtils.mkdir_p(@output)
+    Dir.mktmpdir("emf-source-release") do |stage|
+      spec.files.each do |file|
+        FileUtils.mkdir_p(File.dirname(File.join(stage, file)))
+        FileUtils.cp(File.join(ROOT, file), File.join(stage, file))
+      end
+      gem = Dir.chdir(stage) { Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) { Gem::Package.build(spec, true) } }
+      FileUtils.mv(File.join(stage, gem), @output)
+      puts File.join(@output, gem)
+    end
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  options = {}
+  OptionParser.new do |o|
+    o.on("--output DIR", "directory receiving the source release gem") { |v| options[:output] = v }
+    o.on("--revision SHA", "require this checkout revision (default: HEAD)") { |v| options[:revision] = v }
+  end.parse!
+  abort "--output is required" unless options[:output]
+  SourceReleaseGemBuilder.new(**options).build
+end

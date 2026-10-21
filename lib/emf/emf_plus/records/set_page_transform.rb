@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
+
 module Emf
   module EmfPlus
     module Records
@@ -7,9 +9,9 @@ module Emf
       class SetPageTransform < Base
         TYPE = 0x4030
 
-        class SetPageTransformBody < BinData::Record
+        class SetPageTransformBody < Body
           endian :little
-          float :page_scale
+          float32_le :page_scale
         end
         BODY = SetPageTransformBody
 

@@ -7,7 +7,7 @@ module Emf
       class Levels < Effect
         GUID = "99c354ec-2a31-4f3a-8c34-17a803b33a25"
 
-        class LevelsBody < BinData::Record
+        class LevelsBody < Records::Body
           endian :little
           int32 :highlight
           int32 :mid_tone

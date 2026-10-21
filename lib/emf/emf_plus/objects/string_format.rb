@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/graphics_version"
 require "emf/emf_plus/records/primitives/language_identifier"
 require "emf/emf_plus/records/primitives/string_format_data"
@@ -12,7 +13,7 @@ module Emf
         FIXED_SIZE = 60
         COUNTS_OFFSET = 52
 
-        class StringFormatBody < BinData::Record
+        class StringFormatBody < Records::Body
           endian :little
           graphics_version :version
           uint32 :string_format_flags
@@ -21,11 +22,11 @@ module Emf
           uint32 :line_align
           uint32 :digit_substitution
           language_identifier :digit_language
-          float :first_tab_offset
+          float32_le :first_tab_offset
           int32 :hotkey_prefix
-          float :leading_margin
-          float :trailing_margin
-          float :tracking
+          float32_le :leading_margin
+          float32_le :trailing_margin
+          float32_le :tracking
           uint32 :trimming
           int32 :tab_stop_count
           int32 :range_count

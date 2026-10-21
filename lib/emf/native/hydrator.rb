@@ -5,12 +5,14 @@ require_relative "font_fields"
 require_relative "gradient_fields"
 require_relative "bitmap_fields"
 require_relative "small_text_fields"
+require_relative "poly_text_fields"
 require_relative "lazy_wire"
 
 module Emf
   module Native
     class Hydrator
-      SUPPORTED_TYPES = [*(2..22), *(24..68), *(70..95), 98, 114, 115, 116, 118, 120].freeze
+      SUPPORTED_TYPES = [*(2..68), *(70..98), 114, 115, 116, 118, 120].freeze
+      OPAQUE_BODY_TYPES = [23, 96, 97, *(99..106), *(109..113), 119, 121, 122].freeze
 
       def initialize(snapshot, input)
         @snapshot = snapshot
@@ -56,8 +58,9 @@ module Emf
 
       def wire_fields(record, raw)
         payload = record.fetch(:payload)
-        case record.fetch(:family)
-        when 93..103 then BitmapFields.call(payload, record.fetch(:family), raw)
+        family = record.fetch(:family)
+        case family
+        when 93..103 then BitmapFields.call(payload, family, raw)
         when 0 then raw_fields(record, raw)
         when 1 then eof_fields(payload, raw)
         when 3, 45..53 then Fields.point_array(payload, record.fetch(:family))
@@ -67,13 +70,15 @@ module Emf
         when 33
           klass, fields = Fields.call(payload, 33)
           [klass, fields.merge(trailing: raw.byteslice(12..))]
-        when 2, 5..44, 60..86, 91, 92 then scalar_fields(record, raw)
+        when 2, 5..44, 60..86, 91, 92, 104..106 then scalar_fields(record, raw)
         else raise FormatError, "unsupported native snapshot record family #{record.fetch(:family)}"
         end
       end
 
       def scalar_fields(record, raw)
         family = record.fetch(:family)
+        return PolyTextFields.call(record.fetch(:payload), family, raw, record.fetch(:type)) if (104..106).cover?(family)
+
         return PaletteFields.call(record.fetch(:payload), family, raw) if (82..86).cover?(family)
 
         return Fields.extended_pen(record.fetch(:payload), raw) if family == 81
@@ -99,9 +104,9 @@ module Emf
         type = record.fetch(:type)
         return SmallTextFields.call(raw) if type == 108
 
-        # These Ruby wire classes expose only an opaque body. Family 0 already
-        # preserves it; materialize the registered class for body editing parity.
-        return [Emr::Binary::Records.lookup(type), { body: raw.byteslice(8..) }] if [99, 100, 101, 122].include?(type)
+        # Body-backed public classes also preserve malformed recognized records.
+        # Their family-0 snapshot carries no semantic fields; diagnostics report recovery.
+        return [Emr::Binary::Records.lookup(type), { body: raw.byteslice(8..) }] if OPAQUE_BODY_TYPES.include?(type)
 
         if !SUPPORTED_TYPES.include?(type) && Emr::Binary::Records.lookup(type) != Emr::Binary::Records::Raw
           raise FormatError, "native backend does not support typed EMR record #{type}"
@@ -111,12 +116,12 @@ module Emf
       end
 
       def eof_fields(payload, raw)
-        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 12
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 12 && raw.bytesize >= 20
 
-        entries, offset, last = payload.unpack("V3")
-        raise FormatError, "native backend does not support extended or paletted EOF records" unless entries.zero? && raw.bytesize == 20
-
-        [Emr::Binary::Records::Eof, { n_pal_entries: entries, off_pal_entries: offset, n_size_last: last, body: "".b }]
+        # The public Ruby wire keeps the fixed word and opaque remainder even
+        # when the native EOF model reads nSizeLast from the record's final word.
+        entries, offset, last = raw.byteslice(8, 12).unpack("V3")
+        [Emr::Binary::Records::Eof, { n_pal_entries: entries, off_pal_entries: offset, n_size_last: last, body: raw.byteslice(20..) }]
       end
 
       def comment_fields(payload, raw)

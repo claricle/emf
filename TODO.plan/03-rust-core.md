@@ -15,6 +15,25 @@ input to [the C ABI](04-c-abi.md) and [Ruby binding](05-ruby-binding.md), with
 cross-cutting [resilience](06-resilience.md), [performance](07-performance.md),
 and [record coverage](11-record-coverage.md) gates. See [progress](10-progress.md).
 
+## Current text and color implementation checkpoint
+
+Commit `9729a14` adds owned `PolyTextOutA`, `PolyTextOutW` and
+`SetColorAdjustment` models, checked parsing and editable serialization, dedicated
+C snapshot families, and source-validated Ruby hydration that retains the existing
+body-backed public wire API. Core regression cases cover descriptor counts,
+aligned and overlapping spans, padding and suffix preservation, raw recovery,
+float bits, signed fields and edit validation.
+
+The affected Ruby checks passed **14 examples, 0 failures, 2 pending**; changed
+Ruby lint and diff checks passed. The two native examples were pending because a
+new native library was unavailable. Rust compilation, authored core/FFI tests,
+formatting and actual native hydration remain **unverified**. This implementation
+checkpoint does not close registry, native variant or full-corpus acceptance.
+The next checks are the `poly_text_color_records` core test target, the
+`poly_text_and_color_snapshots_have_dedicated_semantic_families` FFI test,
+workspace formatting and the affected Ruby specs with a library built from the
+same revision, followed by the phase-wide checks below.
+
 ## Planned workspace and contracts
 
 | Path | Planned responsibility |
@@ -104,8 +123,13 @@ cargo test --manifest-path emf-rs/Cargo.toml -p emf-core --test fixture_parity
 ```
 
 Formatting, Clippy and standalone core tests run against the implemented workspace.
-The `fixture_parity` integration target remains to be added; its command is a
-planned acceptance check, not a passing result. Current bounded test results
+The `fixture_parity` integration target is implemented in PR #33. Its planned
+command above passed three tests: all 208 valid EMF fixtures serialize exactly,
+all 231 fixture files match the checked-in hash/length inventory, and independent
+SHA-256 known-answer controls pass. This establishes standalone unchanged-byte
+preservation, not complete typed-field or malformed-input parity. Index
+regeneration and corpus-selection rules are documented in
+`emf-rs/crates/emf-core/tests/support/README.md`. Current bounded test results
 are recorded in [progress](10-progress.md).
 Acceptance requires all 208 valid fixtures to retain exact bytes, complete typed
 coverage against the inventory, reviewed malformed-input differences, passing

@@ -30,7 +30,9 @@ fn family(data: &RecordData) -> (u32, usize) {
         RecordData::Effect(_) => (0x103, 0),
         RecordData::TSGraphics(_) => (0x104, 0),
         RecordData::Object(_) => (0x105, 0),
-        RecordData::Opaque(_) => (0, 0),
+        // These core types have no typed payload in the frozen v1 schema.
+        // Their complete source frames remain available through the raw family.
+        RecordData::Comment(_) | RecordData::TSClip(_) | RecordData::Opaque(_) => (0, 0),
     }
 }
 

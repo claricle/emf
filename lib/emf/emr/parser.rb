@@ -23,7 +23,10 @@ module Emf
         until io.eof?
           offset = io.pos
           wire, suffix = read_record(io, offset, errors)
-          break if wire.nil?
+          if wire.nil?
+            trailing << bytes.byteslice(offset..)
+            break
+          end
 
           records << Model::Emr::Records::WireAdapter.new(wire: wire, offset: offset, suffix: suffix)
           emf_plus_bytes << extract_emf_plus(wire) if wire.is_a?(Emf::Emr::Binary::Records::Comment)
@@ -96,9 +99,24 @@ module Emf
       # Bounds the whole-file parse: a 100 MB EMF is unusual; refuse bigger.
       MAX_INPUT_BYTES = 200 * 1024 * 1024
 
+      REGION_DATA_OFFSETS = { 71 => 32, 72 => 40, 73 => 28, 74 => 28, 75 => 16 }.freeze
+
       def variable_array_sane?(type_id, n_size, head, payload)
-        sized_arrays_sane?(type_id, n_size, head, payload) &&
+        region_data_sane?(type_id, n_size, head, payload) &&
+          sized_arrays_sane?(type_id, n_size, head, payload) &&
           ext_text_out_sane?(type_id, n_size, head, payload)
+      end
+
+      def region_data_sane?(type_id, n_size, head, payload)
+        data_offset = REGION_DATA_OFFSETS[type_id]
+        return true unless data_offset
+
+        bytes = head + payload
+        length_offset = type_id == 75 ? 8 : 24
+        return false if bytes.bytesize < length_offset + 4
+
+        length = read_uint32(bytes, length_offset)
+        length <= n_size - data_offset
       end
 
       def sized_arrays_sane?(type_id, n_size, head, payload)
@@ -178,9 +196,18 @@ module Emf
           (bytes.getbyte(offset + 3) << 24)
       end
 
+      def short_header?(head, offset, errors)
+        return false if head.bytesize >= 8
+        return true if head.empty?
+
+        errors << ParseError.new(offset: offset, record_code: nil,
+                                 message: "truncated record header at offset #{offset} (#{head.bytesize} bytes)")
+        true
+      end
+
       def read_record(io, offset, errors)
         head = io.read(8)
-        return nil if head.nil? || head.empty?
+        return nil if head.nil? || short_header?(head, offset, errors)
 
         type_id, n_size = head.unpack("VV")
         if n_size < 8
@@ -206,12 +233,23 @@ module Emf
         end
 
         record_bytes = head + payload
-        wire = Emf::Emr::Binary::Records.lookup(type_id).read(record_bytes)
-        [wire, Model::Emr::Records::WireAdapter.suffix_of(record_bytes, wire)]
+        read_typed(type_id, n_size, record_bytes)
       rescue StandardError => e
         errors << ParseError.new(offset: offset, record_code: type_id,
                                  message: "#{e.class}: #{e.message}")
         [build_raw(head, payload), "".b]
+      end
+
+      def read_typed(type_id, n_size, record_bytes)
+        filler = Emf::Emr::Binary::FastFill.for(type_id) || Emf::Emr::Binary::FastFill.for_points(type_id) ||
+                 Emf::Emr::Binary::FastFill.for_text(type_id)
+        if filler && n_size >= filler.size
+          filled = filler.call(record_bytes)
+          return filled if filled
+        end
+
+        wire = Emf::Emr::Binary::Records.lookup(type_id).read(record_bytes)
+        [wire, Model::Emr::Records::WireAdapter.suffix_of(record_bytes, wire)]
       end
 
       def build_raw(head, payload)

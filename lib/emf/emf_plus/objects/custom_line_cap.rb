@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/graphics_version"
 require "emf/emf_plus/records/primitives/point_f"
 require "emf/emf_plus/records/primitives/path"
@@ -16,39 +17,39 @@ module Emf
         DATA_FILL_PATH = 0x01
         DATA_LINE_PATH = 0x02
 
-        class CustomLineCapHeader < BinData::Record
+        class CustomLineCapHeader < Records::Body
           endian :little
           graphics_version :version
           uint32 :cap_type
         end
 
         # EmfPlusCustomLineCapData (2.2.2.13) without OptionalData.
-        class CustomLineCapDefaultData < BinData::Record
+        class CustomLineCapDefaultData < Records::Body
           endian :little
           uint32 :custom_line_cap_data_flags
           uint32 :base_cap
-          float :base_inset
+          float32_le :base_inset
           uint32 :stroke_start_cap
           uint32 :stroke_end_cap
           uint32 :stroke_join
-          float :stroke_miter_limit
-          float :width_scale
+          float32_le :stroke_miter_limit
+          float32_le :width_scale
           point_f :fill_hot_spot
           point_f :stroke_hot_spot
         end
 
         # EmfPlusCustomLineCapArrowData (2.2.2.12).
-        class CustomLineCapArrowData < BinData::Record
+        class CustomLineCapArrowData < Records::Body
           endian :little
-          float :width
-          float :height
-          float :middle_inset
+          float32_le :width
+          float32_le :height
+          float32_le :middle_inset
           uint32 :fill_state
           uint32 :line_start_cap
           uint32 :line_end_cap
           uint32 :line_join
-          float :line_miter_limit
-          float :width_scale
+          float32_le :line_miter_limit
+          float32_le :width_scale
           point_f :fill_hot_spot
           point_f :line_hot_spot
         end

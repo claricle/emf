@@ -3,7 +3,7 @@
 
 # Usage: script/publish_release_gems --directory DIR
 #
-# Pushes every *.gem in DIR (the verified, sha256-checked release set) with
+# Rechecks SHA256SUMS against the exact flat gem inventory, then pushes with
 # `gem push`, one at a time, stopping at the first failure.
 #
 # A re-run after a mid-publish failure must fail closed. When a push is refused
@@ -36,6 +36,7 @@ class ReleaseGemPublisher
     paths = Dir.glob(File.join(@directory, "*.gem"))
     raise Failure, "no gems found in #{@directory}" if paths.empty?
 
+    verify_checksums(paths)
     paths.each { |path| publish(path) }
     @out.puts "published #{@published.size} gems: #{@published.join(', ')}"
   rescue Failure => e
@@ -44,6 +45,29 @@ class ReleaseGemPublisher
   end
 
   private
+
+  # Check the entire inventory before the first network operation, including on
+  # retries. Matching some listed checksums is insufficient if extra gems exist.
+  def verify_checksums(paths)
+    manifest = File.join(@directory, "SHA256SUMS")
+    raise Failure, "missing SHA256SUMS in #{@directory}" unless File.file?(manifest)
+
+    checksums = File.readlines(manifest, chomp: true).each_with_object({}) do |line, entries|
+      match = %r{\A([0-9a-f]{64})  (emf-[^\s/\\]+\.gem)\z}.match(line)
+      raise Failure, "invalid SHA256SUMS entry: #{line.inspect}" unless match && FILE_NAME.match?(match[2])
+      raise Failure, "duplicate checksum for #{match[2]}" if entries.key?(match[2])
+
+      entries[match[2]] = match[1]
+    end
+    names = paths.map { |path| File.basename(path) }
+    difference = (names - checksums.keys) + (checksums.keys - names)
+    raise Failure, "checksum inventory differs: #{difference.join(', ')}" unless difference.empty?
+
+    paths.each do |path|
+      name = File.basename(path)
+      raise Failure, "sha256 mismatch for #{name}" unless Digest::SHA256.file(path).hexdigest == checksums.fetch(name)
+    end
+  end
 
   def publish(path)
     name = File.basename(path)

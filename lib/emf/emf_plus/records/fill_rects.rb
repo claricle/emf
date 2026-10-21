@@ -12,7 +12,7 @@ module Emf
 
         TYPE = 0x400A
 
-        class FillRectsBody < BinData::Record
+        class FillRectsBody < Body
           endian :little
           mandatory_parameter :flags
           uint32 :brush_id

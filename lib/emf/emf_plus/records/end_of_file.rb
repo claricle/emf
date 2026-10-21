@@ -7,7 +7,7 @@ module Emf
       class EndOfFile < Base
         TYPE = 0x4002
 
-        class EndOfFileBody < BinData::Record
+        class EndOfFileBody < Body
           endian :little
         end
         BODY = EndOfFileBody

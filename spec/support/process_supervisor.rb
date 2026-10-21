@@ -68,6 +68,7 @@ end
 # Runs a command in its own process group under wall-clock, RSS and output limits.
 class ProcessSupervisor
   MAX_WALL_SECONDS = 60
+  MAX_BENCHMARK_SERIES_SECONDS = 1200
   SAMPLE_INTERVAL = 0.05
   TERM_GRACE = 0.2
 
@@ -77,10 +78,12 @@ class ProcessSupervisor
     end
   end
 
-  def initialize(wall_seconds:, rss_limit_bytes: nil, output_limit: 16_384)
-    raise NotImplementedError, "ProcessSupervisor needs POSIX process groups" if Gem.win_platform?
+  def initialize(wall_seconds:, rss_limit_bytes: nil, output_limit: 16_384, benchmark_series: false)
     raise ArgumentError, "rss_limit_bytes is required" unless rss_limit_bytes
-    raise ArgumentError, "wall_seconds must be in 1..#{MAX_WALL_SECONDS}" unless (1..MAX_WALL_SECONDS).cover?(wall_seconds)
+
+    maximum = benchmark_series.equal?(true) ? MAX_BENCHMARK_SERIES_SECONDS : MAX_WALL_SECONDS
+    valid_wall = wall_seconds.is_a?(Numeric) && wall_seconds.real? && wall_seconds.finite? && (1..maximum).cover?(wall_seconds)
+    raise ArgumentError, "wall_seconds must be finite and in 1..#{maximum}" unless valid_wall
 
     @wall_seconds = wall_seconds
     @rss_limit_bytes = rss_limit_bytes
@@ -88,6 +91,8 @@ class ProcessSupervisor
   end
 
   def call(command, env: {})
+    return windows_supervisor.call(command, env: env) if Gem.win_platform?
+
     reader, writer = IO.pipe
     started = now
     pid = Process.spawn(env, *command, in: File::NULL, out: writer, err: writer, pgroup: true)
@@ -100,6 +105,11 @@ class ProcessSupervisor
   end
 
   private
+
+  def windows_supervisor
+    require_relative "windows_process_supervisor"
+    WindowsProcessSupervisor.new(wall_seconds: @wall_seconds, rss_limit_bytes: @rss_limit_bytes, output_limit: @output_limit)
+  end
 
   def supervise(pid, reader, started)
     output = +""

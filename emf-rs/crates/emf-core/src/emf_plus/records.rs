@@ -26,10 +26,13 @@ pub struct Header {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordData {
     Header(Header),
+    /// Arbitrary private bytes; ignored flags are retained. Data is four-byte aligned.
+    Comment(Vec<u8>),
     Drawing(super::Drawing),
     Text(super::Text),
     Effect(super::Effect),
     TSGraphics(super::TSGraphics),
+    TSClip(super::TSClip),
     Empty,
     Clear {
         argb: u32,
@@ -59,6 +62,7 @@ impl RecordData {
             Self::Text(t) => t.element_work(),
             Self::Effect(e) => e.element_work(),
             Self::TSGraphics(g) => g.element_work(),
+            Self::TSClip(c) => c.rectangles.len() as u64,
             _ => 0,
         }
     }
@@ -68,6 +72,7 @@ impl RecordData {
             Self::Text(t) => t.len(),
             Self::Effect(e) => e.len(),
             Self::TSGraphics(g) => g.len(),
+            Self::TSClip(c) => c.len(),
             Self::Header(_) | Self::ClipRect(_) => 16,
             Self::Empty => 0,
             Self::Clear { .. } | Self::StackIndex(_) | Self::Scalar(_) => 4,
@@ -75,7 +80,7 @@ impl RecordData {
             Self::BeginContainer { .. } => 36,
             Self::Matrix(_) => 24,
             Self::Object(v) => v.bytes.len() + if v.total_size.is_some() { 4 } else { 0 },
-            Self::Opaque(v) => v.len(),
+            Self::Comment(v) | Self::Opaque(v) => v.len(),
         }
     }
     pub(crate) fn write(&self, out: &mut Vec<u8>) {
@@ -89,6 +94,7 @@ impl RecordData {
             Self::Text(t) => t.write(out),
             Self::Effect(e) => e.write(out),
             Self::TSGraphics(g) => g.write(out),
+            Self::TSClip(c) => c.write(out),
             Self::Header(h) => words(
                 out,
                 &[
@@ -120,7 +126,7 @@ impl RecordData {
                 }
                 out.extend_from_slice(&v.bytes);
             }
-            Self::Opaque(v) => out.extend_from_slice(v),
+            Self::Comment(v) | Self::Opaque(v) => out.extend_from_slice(v),
         }
     }
 }
@@ -141,6 +147,27 @@ impl Record {
         self.flags & 0x2000 != 0
     }
     pub(crate) fn validate(&self, offset: usize) -> Result<(), Error> {
+        if let RecordData::Comment(bytes) = &self.data {
+            return if self.record_type == 0x4003 && bytes.len() % 4 == 0 && self.padding.is_empty()
+            {
+                Ok(())
+            } else {
+                Err(Error::InvalidRecord {
+                    offset,
+                    reason: "invalid Comment type/layout",
+                })
+            };
+        }
+        if let RecordData::TSClip(c) = &self.data {
+            return if c.valid(self.record_type, self.flags) {
+                Ok(())
+            } else {
+                Err(Error::InvalidRecord {
+                    offset,
+                    reason: "terminal-server clip type/count mismatch",
+                })
+            };
+        }
         if let RecordData::TSGraphics(g) = &self.data {
             return if g.valid(self.record_type, self.flags) {
                 Ok(())
@@ -204,7 +231,10 @@ impl Record {
         ) && !(self.record_type == 0x4008
             && matches!(self.data, RecordData::Opaque(_)));
         let valid = valid
-            && !(matches!(self.record_type, 0x401c | 0x4036 | 0x4038 | 0x4039)
+            && !(self.record_type == 0x403a
+                && self.flags & 0x8000 == 0
+                && matches!(self.data, RecordData::Opaque(_)))
+            && !(matches!(self.record_type, 0x4003 | 0x401c | 0x4036 | 0x4038 | 0x4039)
                 && matches!(self.data, RecordData::Opaque(_)))
             && !(super::drawing::supported(self.record_type)
                 && matches!(self.data, RecordData::Opaque(_)));

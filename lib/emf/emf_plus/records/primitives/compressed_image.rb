@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusCompressedImage (2.2.2.10).
-        class CompressedImage < BinData::Record
+        class CompressedImage < Body
           endian :little
           rest :compressed_image_data
         end

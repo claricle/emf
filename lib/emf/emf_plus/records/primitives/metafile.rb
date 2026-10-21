@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusMetafile (2.2.2.27).
-        class Metafile < BinData::Record
+        class Metafile < Body
           endian :little
           uint32 :metafile_type
           uint32 :metafile_data_size

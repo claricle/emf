@@ -9,7 +9,7 @@ module Emf
     module Records
       module Primitives
         # `rect_count` rectangles, Rect when compressed and RectF otherwise.
-        class RectArray < BinData::Record
+        class RectArray < Body
           endian :little
           mandatory_parameter :rect_count, :compressed
           array :compressed_rects, type: Rect, initial_length: :rect_count, onlyif: -> { compressed }

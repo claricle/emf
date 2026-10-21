@@ -196,37 +196,6 @@ module Emf
          [true, dx_present, payload.byteslice(text_end...dx_end), payload.byteslice(dx_end + string_length, dx_length), 4]]
       end
 
-      # Ruby canonicalizes NaN payloads when converting to Float. Keep the transport
-      # bytes until the caller assigns a new value to that existing BinData field.
-      module TextScaleBits
-        attr_writer :native_bits
-
-        def assign(value)
-          @native_bits = nil
-          super
-        end
-
-        private
-
-        def value_to_binary_string(value)
-          @native_bits || super
-        end
-      end
-
-      def self.preserve_text_scales(wire, payload)
-        [wire.ex_scale, wire.ey_scale].each_with_index do |scale, index|
-          scale.extend(TextScaleBits)
-          scale.native_bits = payload.byteslice(20 + (index * 4), 4)
-        end
-      end
-
-      def self.preserve_small_text_scales(wire, raw)
-        [wire.ex_scale, wire.ey_scale].each_with_index do |scale, index|
-          scale.extend(TextScaleBits)
-          scale.native_bits = raw.byteslice(28 + (index * 4), 4)
-        end
-      end
-
       def self.text_buffers(buffers, fixed, raw)
         offsets = {}
         trailing = "".b
@@ -290,7 +259,9 @@ module Emf
           if presence[kind] == 1
             raise FormatError, "invalid native extended pen alignment" unless (cursor % 4).zero?
 
-            offsets[kind] = cursor
+            # Empty buffers can retain offsets into fixed fields without consuming bytes.
+            original = raw.byteslice(12 + (kind * 8), 4).unpack1("V")
+            offsets[kind] = bytes.empty? && (8...fixed).cover?(original) ? original : cursor
           end
           buffers[:"#{prefix}_padding"] = padding
           buffers[:"#{prefix}_bitmap"] = bytes

@@ -87,10 +87,15 @@ RSpec.describe BackendParity do
       expect(cut.dig("parse", "value", "records").size).to eq(3)
     end
 
-    it "records a parser exception as data and carries it into dependent stages" do
-      cut = described_class::Observation.call(bytes.byteslice(0, 292))
-      stages = cut.values_at("parse", "visitor", "serialize", "reparse", "file_api")
-      expect(stages).to all(include("status" => "raised", "error" => include("class" => "EOFError")))
+    it "records short-header recovery and preserves the trailing bytes through dependent stages" do
+      truncated = bytes.byteslice(0, 292)
+      cut = described_class::Observation.call(truncated)
+      expect(cut.values_at("parse", "visitor", "serialize", "reparse", "file_api")).to all(include("status" => "ok"))
+      expect(cut.dig("parse", "value", "errors")).to eq([{ "class" => "Emf::ParseError", "offset" => 288, "record_code" => nil,
+                                                           "message" => "truncated record header at offset 288 (4 bytes)" }])
+      expect(decode(cut.dig("parse", "value", "trailing"))).to eq(truncated.byteslice(288, 4))
+      expect(cut.dig("serialize", "value", "equals_input")).to be(true)
+      expect(cut.dig("reparse", "value", "equals_parse")).to be(true)
     end
 
     it "turns a failing stage into an explicit raised observation" do
@@ -119,13 +124,13 @@ RSpec.describe BackendParity do
       expect(hexes.uniq.size).to eq(2)
     end
 
-    it "flags a float32 NaN payload that BinData re-emits canonicalised" do
+    it "preserves a float32 NaN payload through BinData" do
       changed = bytes.dup
       target = Emf.parse(bytes).records.find { |r| r.wire.respond_to?(:xform) }
       changed[target.offset + 8, 4] = [0x7FC00001].pack("V")
       record = described_class::Observation.call(changed).dig("parse", "value", "records").find { |r| r["offset"] == target.offset }
       m11 = record.dig("wire", "value", "fields", "xform", "fields", "m11", "float", "wire_hex")
-      expect([record.fetch("matches_source"), m11]).to eq([false, "0000c07f"])
+      expect([record.fetch("matches_source"), m11]).to eq([true, "0100c07f"])
     end
 
     it "keeps non-UTF-8 binary strings exactly" do

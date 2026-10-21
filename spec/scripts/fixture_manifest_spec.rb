@@ -27,6 +27,51 @@ RSpec.describe FixtureManifest do
     }
   end
 
+  describe "benchmark series safety contract" do
+    it "runs a short observation with the explicit series deadline" do
+      runner = described_class::Runner.new(timeout: 1200, rss_limit_bytes: rss_limit, benchmark_series: true,
+                                           command: ruby('puts %q({"outcome":"parsed"})'))
+
+      expect(runner.call("unused")).to eq("outcome" => "parsed")
+    end
+
+    it "rejects a series-sized deadline without opt-in" do
+      expect { described_class::Runner.new(timeout: 61, rss_limit_bytes: rss_limit) }
+        .to raise_error(ArgumentError, /wall_seconds/)
+    end
+
+    it "rejects invalid series deadlines through the runner" do
+      [nil, "1200", Float::NAN, Float::INFINITY, 0, 1201].each do |timeout|
+        expect { described_class::Runner.new(timeout: timeout, rss_limit_bytes: rss_limit, benchmark_series: true) }
+          .to raise_error(ArgumentError, /wall_seconds/)
+      end
+    end
+
+    it "forwards the series opt-in and exact safety limits" do
+      supervisor = instance_double(ProcessSupervisor)
+      expect(ProcessSupervisor).to receive(:new)
+        .with(wall_seconds: 1200, rss_limit_bytes: rss_limit, output_limit: 123, benchmark_series: true)
+        .and_return(supervisor)
+
+      described_class::Runner.new(timeout: 1200, rss_limit_bytes: rss_limit, output_limit: 123, benchmark_series: true)
+    end
+
+    it "keeps each series safety failure separate from valid observations" do
+      supervisor = instance_double(ProcessSupervisor)
+      allow(ProcessSupervisor).to receive(:new).and_return(supervisor)
+      runner = described_class::Runner.new(timeout: 1200, rss_limit_bytes: rss_limit, benchmark_series: true)
+      { timed_out: "timeout", rss_exceeded: "rss_exceeded", output_limit: "output_limit",
+        monitor_failed: "monitor_failed", cleanup_failed: "process_failure" }.each do |status, kind|
+        result = ProcessSupervisor::Result.new(status: status, exit_code: 0, output: '{"outcome":"parsed"}')
+        allow(supervisor).to receive(:call).and_return(result)
+
+        expect(runner.call("unused")).to eq(
+          "detected_format" => nil, "outcome" => nil, "safety_failure" => { "kind" => kind }
+        )
+      end
+    end
+  end
+
   it "inventories every existing fixture in deterministic path order without parsing" do
     entries = described_class.fixtures(root)
     expect(entries.size).to eq(231)

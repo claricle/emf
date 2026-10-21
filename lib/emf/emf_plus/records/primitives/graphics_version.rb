@@ -8,7 +8,7 @@ module Emf
       module Primitives
         # EmfPlusGraphicsVersion (2.2.2.19): 20-bit MetafileSignature (0xDBC01)
         # above a 12-bit GraphicsVersion in one little-endian dword.
-        class GraphicsVersion < BinData::Record
+        class GraphicsVersion < Body
           endian :little
           uint32 :raw
 

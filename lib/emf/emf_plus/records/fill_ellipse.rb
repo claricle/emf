@@ -12,7 +12,7 @@ module Emf
 
         TYPE = 0x400E
 
-        class FillEllipseBody < BinData::Record
+        class FillEllipseBody < Body
           endian :little
           mandatory_parameter :flags
           uint32 :brush_id

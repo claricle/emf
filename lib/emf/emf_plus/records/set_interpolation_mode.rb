@@ -7,7 +7,7 @@ module Emf
       class SetInterpolationMode < Base
         TYPE = 0x4021
 
-        class SetInterpolationModeBody < BinData::Record
+        class SetInterpolationModeBody < Body
           endian :little
         end
         BODY = SetInterpolationModeBody

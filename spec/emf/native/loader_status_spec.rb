@@ -1,0 +1,82 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+require "emf/native/loader"
+
+RSpec.describe Emf::Native::Loader do
+  subject(:loader) { described_class.allocate }
+
+  let(:parse) { instance_double(Fiddle::Function) }
+  let(:document_free) { instance_double(Fiddle::Function) }
+  let(:error_free) { instance_double(Fiddle::Function) }
+  let(:functions) do
+    { emf_parse: parse, emf_document_free: document_free,
+      emf_error_free: error_free }
+  end
+
+  before do
+    loader.instance_variable_set(:@functions, functions)
+    allow(document_free).to receive(:call)
+    allow(error_free).to receive(:call)
+  end
+
+  # Numeric statuses are the public contract in emf-ffi/include/emf.h.
+  { 1 => Emf::Error, 2 => Emf::FormatError, 3 => Emf::FormatError,
+    4 => Emf::SerializeError, 5 => Emf::Error, 6 => Emf::Error,
+    99 => Emf::Error }.each do |status, error_class|
+    it "maps ABI status #{status} to #{error_class}" do
+      allow(parse).to receive(:call).and_return(status)
+
+      expect { loader.document("bad") { raise "must not yield" } }
+        .to(raise_error do |error|
+          expect(error.class).to eq(error_class)
+          expect(error.message).to eq("native operation failed (status #{status})")
+        end)
+      expect(document_free).not_to have_received(:call)
+      expect(error_free).not_to have_received(:call)
+    end
+  end
+
+  it "yields successful handles and frees them after the caller returns" do
+    allow(parse).to receive(:call) do |_bytes, _length, _limits, output, _error|
+      output[0, 8] = [123].pack("J")
+      0
+    end
+    allow(document_free).to receive(:call)
+
+    expect { |block| loader.document("valid", &block) }.to yield_with_args(123)
+    expect(document_free).to have_received(:call).with(123).once
+  end
+
+  it "releases an error handle when reading its description fails" do
+    error_view = instance_double(Fiddle::Function, call: 5)
+    functions[:emf_error_view] = error_view
+    allow(parse).to receive(:call) do |_bytes, _length, _limits, _output, error|
+      error[0, 8] = [456].pack("J")
+      6
+    end
+    allow(error_free).to receive(:call)
+
+    expect { loader.document("bad") { raise "must not yield" } }
+      .to raise_error(Emf::Error, "native operation failed (status 6)")
+    expect(error_free).to have_received(:call).with(456).once
+  end
+
+  it "maps buffer-view failures and releases the returned buffer" do
+    snapshot = instance_double(Fiddle::Function)
+    buffer_view = instance_double(Fiddle::Function, call: 5)
+    buffer_free = instance_double(Fiddle::Function, call: nil)
+    functions.merge!(emf_document_snapshot: snapshot,
+                     emf_buffer_view: buffer_view, emf_buffer_free: buffer_free)
+    allow(snapshot).to receive(:call) do |_document, output, _error|
+      output[0, 8] = [789].pack("J")
+      0
+    end
+
+    expect { loader.snapshot(123) }.to(raise_error do |error|
+      expect(error.class).to eq(Emf::Error)
+      expect(error.message).to eq("native buffer view failed (status 5)")
+    end)
+    expect(buffer_free).to have_received(:call).with(789).once
+  end
+end

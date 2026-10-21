@@ -8,7 +8,7 @@ module Emf
       class GetDC < Base
         TYPE = 0x4004
 
-        class GetDCBody < BinData::Record
+        class GetDCBody < Body
           endian :little
         end
         BODY = GetDCBody

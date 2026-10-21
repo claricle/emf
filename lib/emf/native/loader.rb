@@ -7,6 +7,9 @@ module Emf
     class Loader
       POINTER = Fiddle::TYPE_VOIDP
       UINT64 = Fiddle::TYPE_LONG_LONG
+      # Version 1 status values from emf-ffi/include/emf.h.
+      STATUS_ERRORS = { 2 => FormatError, 3 => FormatError,
+                        4 => SerializeError }.freeze
       SIGNATURES = {
         emf_abi_version: [[], Fiddle::TYPE_INT],
         emf_parse: [[POINTER, UINT64, POINTER, POINTER, POINTER], Fiddle::TYPE_INT],
@@ -96,7 +99,7 @@ module Emf
         return if status.zero?
 
         message = error_message(pointer(error), status)
-        raise FormatError, message
+        raise STATUS_ERRORS.fetch(status, Error), message
       ensure
         invoke(:emf_error_free, pointer(error)) if error && pointer(error) != 0
       end
@@ -117,7 +120,7 @@ module Emf
         data = slot
         length = slot
         status = invoke(:emf_buffer_view, pointer(output), data, length)
-        raise FormatError, "native buffer view failed (status #{status})" unless status.zero?
+        raise STATUS_ERRORS.fetch(status, Error), "native buffer view failed (status #{status})" unless status.zero?
 
         Fiddle::Pointer.new(pointer(data))[0, pointer(length)]
       ensure

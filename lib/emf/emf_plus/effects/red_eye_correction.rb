@@ -10,7 +10,7 @@ module Emf
         GUID = "74d29d05-69a4-4266-9549-3cc52836b632"
         RECT_SIZE = 16
 
-        class RedEyeCorrectionBody < BinData::Record
+        class RedEyeCorrectionBody < Records::Body
           endian :little
           int32 :number_of_areas
           array :areas, type: :rect_l, initial_length: :number_of_areas

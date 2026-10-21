@@ -7,7 +7,7 @@ module Emf
       class Comment < Base
         TYPE = 0x4003
 
-        class CommentBody < BinData::Record
+        class CommentBody < Body
           endian :little
           mandatory_parameter :data_size
           string :private_data, read_length: :data_size

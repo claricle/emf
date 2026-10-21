@@ -8,8 +8,12 @@ RSpec.describe "Native WMF resilience seeds" do
 
   let(:seeds) { WmfResilienceSeeds.build }
   let(:valid_seeds) { seeds.select { |seed| seed.fetch("expected_outcome") == "parsed" } }
-  let(:bad_placeable_checksum) do
-    seeds.find { |seed| seed.fetch("name") == "placeable-checksum" }
+  let(:rejected_seeds) { seeds.select { |seed| seed.fetch("expected_outcome") == "rejected" } }
+  let(:expected_rejected_seed_names) do
+    %w[
+      header-size file-size max-record zero-record missing-eof negative-text-count
+      placeable-checksum bitmap-short-record
+    ]
   end
 
   it "parses and byte-preserves every generated valid seed through the native bridge" do
@@ -27,11 +31,19 @@ RSpec.describe "Native WMF resilience seeds" do
     end
   end
 
-  it "rejects the malformed placeable checksum without Ruby parser fallback" do
-    expect(bad_placeable_checksum.fetch("expected_outcome")).to eq("rejected")
-    expect(bad_placeable_checksum.fetch("placeable")).to be(true)
+  it "rejects every generated malformed seed without fallback and recovers" do
+    expect(rejected_seeds.map { |seed| seed.fetch("name") }).to match_array(expected_rejected_seed_names)
     expect(Emf::Wmf::Parser).not_to receive(:call)
 
-    expect { Emf.parse(bad_placeable_checksum.fetch("bytes")) }.to raise_error(Emf::Error)
+    valid_bytes = valid_seeds.first.fetch("bytes")
+    rejected_seeds.each do |seed|
+      expect(seed.fetch("expected_outcome")).to eq("rejected"), seed.fetch("name")
+      expect do
+        Emf.parse(seed.fetch("bytes"))
+      end.to raise_error(Emf::Error), seed.fetch("name")
+
+      recovered = Emf.parse(valid_bytes)
+      expect(Emf.serialize(recovered)).to eq(valid_bytes), "after #{seed.fetch('name')}"
+    end
   end
 end

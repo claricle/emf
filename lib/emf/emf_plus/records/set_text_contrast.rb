@@ -9,7 +9,7 @@ module Emf
         TYPE = 0x4020
         CONTRAST_MASK = 0x0FFF
 
-        class SetTextContrastBody < BinData::Record
+        class SetTextContrastBody < Body
           endian :little
         end
         BODY = SetTextContrastBody

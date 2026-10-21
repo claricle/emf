@@ -8,6 +8,9 @@ use emf_core::{
 #[path = "bitmap_snapshot.rs"]
 mod bitmap_snapshot;
 
+#[path = "poly_text_snapshot.rs"]
+mod poly_text_snapshot;
+
 #[path = "gradient_snapshot.rs"]
 mod gradient_snapshot;
 
@@ -26,6 +29,9 @@ pub(crate) fn family(data: &RecordData) -> u32 {
         RecordData::RealizePalette => 86,
         RecordData::ExtCreatePen(_) => 81,
         RecordData::CreateFontIndirectW(_) => 90,
+        RecordData::PolyTextOutA(_) => 104,
+        RecordData::PolyTextOutW(_) => 105,
+        RecordData::SetColorAdjustment(_) => 106,
         RecordData::ExtTextOutA(_) => 74,
         RecordData::ExtTextOutW(_) => 75,
         RecordData::SetMapperFlags { .. } => 66,
@@ -389,6 +395,9 @@ fn payload_len(data: &RecordData) -> Result<usize, Error> {
             .ok_or(Error::SizeOverflow),
         RecordData::ExtCreatePen(pen) => pen_len(pen),
         RecordData::CreateFontIndirectW(font) => font_payload_len(&font.font),
+        RecordData::PolyTextOutA(text) => poly_text_snapshot::len(text),
+        RecordData::PolyTextOutW(text) => poly_text_snapshot::len(text),
+        RecordData::SetColorAdjustment(_) => Ok(24),
         RecordData::ExtTextOutA(text) => text_len(text),
         RecordData::ExtTextOutW(text) => text_len(text),
         RecordData::SetMapperFlags { .. }
@@ -582,6 +591,15 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
             }
             RecordData::ExtCreatePen(pen) => pen_payload(&mut out, pen)?,
             RecordData::CreateFontIndirectW(font) => font_payload(&mut out, font)?,
+            RecordData::PolyTextOutA(text) => {
+                poly_text_snapshot::encode(&mut out, text, |out, v| out.push(*v))?
+            }
+            RecordData::PolyTextOutW(text) => {
+                poly_text_snapshot::encode(&mut out, text, |out, v| {
+                    out.extend_from_slice(&v.to_le_bytes())
+                })?
+            }
+            RecordData::SetColorAdjustment(color) => poly_text_snapshot::color(&mut out, color),
             RecordData::ExtTextOutA(text) => {
                 text_payload(&mut out, text, |out, value| out.push(*value))?
             }
@@ -1027,6 +1045,36 @@ mod tests {
             assert_eq!(cursor.u64(), count);
         }
         cursor
+    }
+
+    #[test]
+    fn poly_text_and_color_snapshots_have_dedicated_semantic_families() {
+        for (kind, expected_family) in [(96u32, 104u32), (97, 105), (23, 106)] {
+            let mut input = fixture_header(88);
+            let mut payload = vec![0u8; if kind == 23 { 24 } else { 32 }];
+            if kind == 23 {
+                payload[16..18].copy_from_slice(&i16::MIN.to_le_bytes());
+            }
+            payload.extend_from_slice(b"suffix!!");
+            record(&mut input, kind, &payload);
+            let document = parse(&input, &ParseLimits::default()).unwrap();
+            assert_eq!(family(document.records()[0].data()), expected_family);
+            let encoded = encode(&document).unwrap();
+            let mut cursor = prefix(&encoded, [88, 1, 0, 0, 0]);
+            cursor.take(112 + 88);
+            cursor.take(24);
+            assert_eq!(cursor.u32(), kind);
+            assert_eq!(cursor.u32(), expected_family);
+            let expected_len = if kind == 23 { 24 } else { 36 };
+            assert_eq!(cursor.u64(), expected_len);
+            let fields = cursor.take(expected_len as usize);
+            if kind == 23 {
+                assert_eq!(&fields[16..18], &i16::MIN.to_le_bytes());
+            } else {
+                assert_eq!(&fields[28..], &0u64.to_le_bytes());
+            }
+            assert_eq!(cursor.position, encoded.len());
+        }
     }
 
     #[test]

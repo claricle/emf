@@ -13,7 +13,7 @@ module Emf
         COMPRESSED_FLAG = 0x4000
         OBJECT_ID_MASK = 0x00FF
 
-        class DrawImageBody < BinData::Record
+        class DrawImageBody < Body
           endian :little
           mandatory_parameter :flags
           uint32 :image_attributes_id

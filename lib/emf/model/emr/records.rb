@@ -23,8 +23,14 @@ module Emf
 
           # Bytes of a record that follow its typed layout (declared nSize larger
           # than the layout consumes). Kept verbatim beside the wire.
+          EMPTY_SUFFIX = "".b.freeze
+          private_constant :EMPTY_SUFFIX
+
           def self.suffix_of(record_bytes, wire)
-            (record_bytes.byteslice(wire.num_bytes..) || "").b.freeze
+            extra = record_bytes.bytesize - wire.num_bytes
+            return EMPTY_SUFFIX unless extra.positive?
+
+            record_bytes.byteslice(-extra, extra).b.freeze
           end
 
           def initialize(wire:, offset: nil, suffix: "".b)
@@ -52,7 +58,7 @@ module Emf
           def to_binary_s
             return @wire_source.to_binary_s unless @wire
 
-            bytes = @wire.to_binary_s
+            bytes = Emf::Emr::Binary::FastFill.for_class(@wire.class)&.pack(@wire) || @wire.to_binary_s
             return bytes if @suffix.empty?
 
             bytes[4, 4] = [bytes.bytesize + @suffix.bytesize].pack("V")

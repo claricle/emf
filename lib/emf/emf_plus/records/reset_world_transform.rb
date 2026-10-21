@@ -7,7 +7,7 @@ module Emf
       class ResetWorldTransform < Base
         TYPE = 0x402B
 
-        class ResetWorldTransformBody < BinData::Record
+        class ResetWorldTransformBody < Body
           endian :little
         end
         BODY = ResetWorldTransformBody

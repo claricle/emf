@@ -12,7 +12,7 @@ module Emf
 
         TYPE = 0x400C
 
-        class FillPolygonBody < BinData::Record
+        class FillPolygonBody < Body
           endian :little
           mandatory_parameter :flags
           uint32 :brush_id

@@ -1,6 +1,6 @@
-= emf: pure-Ruby parser for WMF, EMF, and EMF+ metafiles
+= emf: parser for WMF, EMF, and EMF+ metafiles
 
-`emf` is a clean-room, pure-Ruby parser for the three Microsoft Windows
+`emf` is a clean-room Ruby parser with an optional Rust native backend for the three Microsoft Windows
 metafile formats:
 
 * **WMF** — Windows Metafile (see MS-WMF, kaitai `wmf.ksy`)
@@ -15,13 +15,16 @@ wrapper around the GPLv2 `libemf2svg` C library.
 
 == Status
 
-* **EMF**: full parse + byte-identical round-trip on every fixture
-  (186/186 in `spec/fixtures/emf/`, 21/21 in `spec/fixtures/emf-ea/`,
-  1/1 in `spec/fixtures/simple/`).
-* **EMF+**: EMF+ payloads are extracted from EMF carrier records as raw
-  bytes (`Metafile#emf_plus`). Structured EMF+ parsing is TODO
-  (see link:TODO.plan/09-format-extension.md[format extension plan]).
-* **WMF**: detected but not yet parsed (see link:TODO.plan/09-format-extension.md[format extension plan]).
+* **EMF**: parsing, mutable wire records and binary serialization are implemented.
+* **EMF+**: raw carrier payloads (`Metafile#emf_plus`) and a typed stream view
+  (`Metafile#emf_plus_stream`) are implemented.
+* **WMF**: standard and placeable headers, records and binary serialization
+  are implemented.
+* **Native backend**: Rust decoding and a Ruby adapter are implemented; final-source
+  native qualification and installed platform qualification remain open.
+* **Qualification**: implementation does not imply complete format coverage or
+  release readiness. See link:TODO.plan/10-progress.md[delivery progress] and
+  link:TODO.plan/09-format-extension.md[format extension acceptance].
 * **License**: BSD-2-Clause. No GPL obligation.
 
 == Installation
@@ -35,6 +38,38 @@ Or install directly:
   gem install emf
 
 Requires Ruby >= 3.1.
+
+== Backend selection
+
+The public `Emf.parse`, `Emf.parse_file` and `Emf.serialize` APIs use
+`EMF_BACKEND` at call time:
+
+[cols="1,3",options="header"]
+|===
+|Value |Behavior
+|`auto` (default) |Use the native backend when available; fall back to Ruby if native setup raises `Emf::Native::Unavailable`.
+|`ruby` |Use Ruby directly, without loading the native library.
+|`native` |Require the native backend; unavailable setup raises `Emf::Native::Unavailable`.
+|===
+
+Other values raise `ArgumentError`. A parsing or serialization error after
+backend selection propagates to the caller; it is not retried using Ruby.
+Both backends return the existing Ruby model and use the Ruby binary writers
+for serialization, including mutable wire records.
+
+For example, to explicitly use Ruby:
+
+  EMF_BACKEND=ruby ruby -remf -e 'p Emf.parse_file(ARGV.fetch(0)).format' image.emf
+
+Native loading uses a packaged platform manifest when present. For development
+with an existing compatible library, `EMF_NATIVE_LIBRARY` overrides discovery:
+
+  EMF_BACKEND=native EMF_NATIVE_LIBRARY=/absolute/path/to/libemf_ffi.dylib ruby -remf -e 'p Emf.parse_file(ARGV.fetch(0)).format' image.emf
+
+Use the appropriate shared-library filename for the platform. An empty override
+makes native loading unavailable. Native installation and platform support must
+be qualified using link:TODO.plan/08-platform-delivery.md[the delivery checks];
+the source implementation alone does not establish an available platform gem.
 
 == Synopsis
 
@@ -50,7 +85,7 @@ Requires Ruby >= 3.1.
   stats = Emf::Visitors::Stats.new.visit_all(metafile)
   puts stats.to_s
 
-  # Serialise back to binary — byte-identical on every fixture
+  # Serialise the model back to binary
   bytes = Emf.serialize(metafile)
 
 == Command-line tool
@@ -110,7 +145,7 @@ revision bumps.
   git clone https://github.com/claricle/emf
   cd emf
   bundle install
-  bundle exec rspec       # ~280 examples across fixtures + units
+  bundle exec rspec       # fixture and unit checks
   bundle exec rubocop     # clean
 
 The round-trip harness in `spec/emf/round_trip_spec.rb` is the strongest
@@ -120,7 +155,8 @@ byte-identical parse -> serialise -> parse.
 == Roadmap
 
 The execution plan for issue #15 starts at
-link:TODO.plan/00-overview.md[the shared roadmap]. Implementation has not started.
+link:TODO.plan/00-overview.md[the shared roadmap]. Implementation is in progress; remaining acceptance and
+qualification work is tracked in the linked sections.
 
 * link:TODO.plan/05-ruby-execution.md[Ruby implementation]: existing API dispatch,
   model compatibility, mutable wire serialization, fallback and CLI behavior.

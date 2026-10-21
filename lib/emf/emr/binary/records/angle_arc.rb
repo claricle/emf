@@ -10,8 +10,8 @@ module Emf
         class AngleArc < Emf::Emr::Binary::Record
           point_l :ptl_center
           uint32 :n_radius
-          float :start_angle
-          float :sweep_angle
+          float32_le :start_angle
+          float32_le :sweep_angle
         end
       end
     end

@@ -7,7 +7,7 @@ module Emf
       class SetTextRenderingHint < Base
         TYPE = 0x401F
 
-        class SetTextRenderingHintBody < BinData::Record
+        class SetTextRenderingHintBody < Body
           endian :little
         end
         BODY = SetTextRenderingHintBody

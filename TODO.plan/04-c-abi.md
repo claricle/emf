@@ -1,153 +1,128 @@
 # 04 — C ABI and ownership
 
-Status: **Not started**. Estimate: **2–3 engineering days**, after the
-[core vertical slice](03-rust-core.md). Complete the slice with
-[the Ruby binding](05-ruby-binding.md) before extending all record families.
-Depends on [baseline parity](02-baseline-and-parity.md). Safety gates are in
-[resilience](06-resilience.md), packaging in [delivery](08-platform-delivery.md),
-and completion in [progress](10-progress.md).
+Status: **Implemented; local C ownership acceptance measured**. The standalone
+client passes on aarch64 macOS against the existing clean-a release library
+(2026-10-20). This is host-specific evidence; the remaining delivery, sanitizer,
+and resource gates below still apply. Depends on [baseline parity](02-baseline-and-parity.md)
+and [the core](03-rust-core.md); see [Ruby binding](05-ruby-binding.md),
+[resilience](06-resilience.md), [delivery](08-platform-delivery.md), and
+[progress](10-progress.md) for their separate acceptance gates.
 
-## Planned files and versioned surface
+## Implemented interface
 
-Create `emf-rs/crates/emf-ffi/Cargo.toml`, `src/lib.rs`,
-`include/emf.h`, and `tests/abi.c`. Build a `cdylib`; expose only fixed C-compatible
-types and opaque handles. The public header is the authority for both the Ruby
-loader and a standalone C smoke client. Rust layouts, enum discriminants, `Vec`,
-strings, references and Rust errors never cross this boundary.
+`emf-rs/crates/emf-ffi` contains the `cdylib`, its public
+[`include/emf.h`](../emf-rs/crates/emf-ffi/include/emf.h), and the Ruby-free
+[`tests/abi.c`](../emf-rs/crates/emf-ffi/tests/abi.c) client. The header is the
+authority for declarations, field offsets, constants and caller obligations;
+Rust layouts, enums, strings and references do not cross the boundary.
 
-The proposed ABI version is **1**. `uint32_t emf_abi_version(void)` returns `1`;
-the loader checks it before calling any other function. Incompatible signatures
-or layouts require a new version and loader support. Structs include `struct_size`
-and a version field; reserved members are zero. Fixed-width integer fields and
-explicit byte order apply to exported batch payloads. Use `uint64_t` lengths and
-indices, checked against host `size_t`/Rust `usize` before conversion. Confirm
-Fiddle's fixed-width mappings on each supported target before freezing the header.
+ABI version **1** is returned by `emf_abi_version`. Versioned structs require the
+exact supported `struct_size` and version. Lengths and indices are `uint64_t`,
+checked for host addressability before conversion. Incompatible signatures or
+layouts require a new ABI version and loader support. Snapshot schema versions
+are independent of the ABI version.
 
-Planned operations (freeze these declarations and the referenced struct layouts
-in the header before binding implementation):
-
-| Operation | Proposed contract |
+| Operations | Implemented contract |
 | --- | --- |
-| `emf_detect(data, len, out_format, out_error)` | Detect format without constructing a document |
-| `emf_parse(data, len, limits, out_document, out_error)` | Copy/own required bytes, parse and return an opaque document |
-| `emf_document_info(document, out_info)` | Format, header summary, record count and diagnostic count |
-| `emf_record_batch(document, start, capacity, out_descriptors, out_count)` | Fill caller-owned descriptor array for many records in one call |
-| `emf_document_snapshot(document, out_buffer, out_error)` | Versioned bulk header/typed-field/diagnostic payload for model construction |
-| `emf_record_bytes(document, index, out_buffer, out_error)` | Copy exact record bytes for on-demand wire hydration |
-| `emf_serialize(document, out_buffer, out_error)` | Serialize the core document to an owned output buffer |
-| `emf_buffer_view(buffer, out_data, out_len)` | Read-only pointer and length valid until buffer free |
-| `emf_error_view(error, out_info)` | Status, category, optional offset/code, and message pointer/length |
-| `emf_document_free`, `emf_buffer_free`, `emf_error_free` | Release each owned handle exactly once |
+| `emf_detect` | Detect EMF, standard WMF or placeable WMF without constructing a document |
+| `emf_parse`, `emf_wmf_parse` | Own input bytes and return the corresponding opaque document |
+| `emf_document_info`, `emf_wmf_document_info` | Header size, format, EOF, record/diagnostic counts and tail sizes |
+| `emf_record_batch`, `emf_wmf_record_batch` | Caller-owned descriptor array, with original index, offset, byte length, type and family |
+| `emf_document_snapshot` | Owned outer snapshot using [snapshot v2](../emf-rs/crates/emf-ffi/snapshot-v2.md) |
+| `emf_wmf_document_snapshot` | Owned [WMFS v1](../emf-rs/crates/emf-ffi/wmf-snapshot-v1.md) snapshot |
+| `emf_document_emf_plus_snapshot_v1` | Owned [EPSN v1](../emf-rs/crates/emf-ffi/emf-plus-snapshot-v1.md) nested-frame snapshot; required independent options struct, optional limits |
+| `emf_record_bytes`, `emf_wmf_record_bytes` | Owned copy of exact original record bytes |
+| `emf_serialize`, `emf_wmf_serialize` | Owned serialized output |
+| `emf_wmf_replace_record` | Replace a WMF function/payload; rejected edits preserve the document |
+| `emf_buffer_view`, `emf_error_view` | Borrow bytes/message from the corresponding owned handle |
+| `emf_document_free`, `emf_wmf_document_free`, `emf_buffer_free`, `emf_error_free` | Release the matching handle; NULL is a no-op |
 
-The proposed declarations make handle and output ownership explicit:
+On the measured 64-bit host, the C client asserts `emf_limits` size 48,
+`emf_info` 64, `emf_record_descriptor` 40 and `emf_error_info` 48, with their
+field offsets. `emf_plus_snapshot_options` is 16 bytes. These are measured target
+layouts, not proof of 32-bit or Windows compatibility. The header's `sizeof` and
+`offsetof` requirements govern target-specific pointer/alignment differences.
 
-```c
-typedef struct emf_document emf_document;
-typedef struct emf_buffer emf_buffer;
-typedef struct emf_error emf_error;
-uint32_t emf_abi_version(void);
-int32_t emf_detect(const uint8_t *, uint64_t, uint32_t *, emf_error **);
-int32_t emf_parse(const uint8_t *, uint64_t, const emf_limits *, emf_document **, emf_error **);
-int32_t emf_document_info(const emf_document *, emf_info *);
-int32_t emf_record_batch(const emf_document *, uint64_t, uint64_t, emf_record_descriptor *, uint64_t *);
-int32_t emf_document_snapshot(const emf_document *, emf_buffer **, emf_error **);
-int32_t emf_record_bytes(const emf_document *, uint64_t, emf_buffer **, emf_error **);
-int32_t emf_serialize(const emf_document *, emf_buffer **, emf_error **);
-int32_t emf_buffer_view(const emf_buffer *, const uint8_t **, uint64_t *);
-int32_t emf_error_view(const emf_error *, emf_error_info *);
-void emf_document_free(emf_document *);
-void emf_buffer_free(emf_buffer *);
-void emf_error_free(emf_error *);
-```
+## Status and ownership contract
 
-`emf_limits`, `emf_info`, `emf_record_descriptor` and `emf_error_info` are
-versioned fixed-layout structs, not opaque types. Before freezing v1, define their
-field offsets and sizes in the header and assert them in Rust and C. The null
-limits pointer selects documented defaults; non-null limits require a supported
-version and size. This declaration block is a planned interface, not an existing
-compilable header.
+Return statuses are `0 OK`, `1 INVALID_ARGUMENT`, `2 FORMAT_ERROR`,
+`3 LIMIT_EXCEEDED`, `4 SERIALIZE_ERROR`, `5 INTERNAL_ERROR`, and
+`6 ALLOCATION_FAILED`. Recoverable record errors are document diagnostics on a
+successful parse. The Ruby mapping is tracked in [05](05-ruby-binding.md).
 
-A batch descriptor contains record index, type ID, offset, original byte length
-and typed-family tag, with checked fixed widths. The snapshot payload includes a
-schema version, bounded counts and explicit lengths; document its exact encoding
-in `include/emf.h` or an adjacent `snapshot-v1.md`, and validate it on both sides.
-Avoid a separate FFI call per point, glyph or scalar field. Descriptor batches and
-the bulk snapshot must be benchmarked against a representative large fixture.
-Serialization of changed Ruby BinData objects is handled by the compatibility
-adapter; this ABI does not require a call per Ruby field mutation.
+Required output pointers must be supplied; `out_error` is optional. Handle and
+count outputs are cleared on entry, including failure. Callers retain separately
+owned handles when reusing an output slot: overwriting a slot does not free its
+previous value. A successful call clears its error slot. Error objects have
+independent lifetimes; there is no shared last-error message. Messages and binary
+data use pointer/length pairs, not NUL termination.
 
-## Planned status and lifetime rules
+NULL input is accepted only with zero length (which can still produce a format
+error). Non-null pointers must designate valid, aligned memory for the declared
+range. Arbitrary pointers, wrong-kind handles, dangling pointers and double-free
+are outside the contract and must not be used as negative tests.
 
-Functions return an `int32_t` status: `0 OK`, `1 INVALID_ARGUMENT`,
-`2 FORMAT_ERROR`, `3 LIMIT_EXCEEDED`, `4 SERIALIZE_ERROR`, `5 INTERNAL_ERROR`,
-`6 ALLOCATION_FAILED`. These numbers are proposed ABI constants, not Rust enum
-casts. Recoverable record errors are document diagnostics on a successful parse,
-not a failing function status. Map fatal statuses to existing public Ruby error
-classes in [05](05-ruby-binding.md); do not add new top-level API aliases.
+Input storage need survive only the call. Each returned buffer owns its bytes
+independently of the input, document, other buffers and errors. Buffer views remain
+valid until that buffer is freed; error message views remain valid until that
+error is freed. The Ruby adapter must copy borrowed bytes before freeing their
+owner.
 
-Initialize output handles to null and counts to zero on entry. On success the
-caller owns returned handles; on failure no document/buffer escapes, and an
-optional owned error provides detail. A nonzero status remains meaningful if
-error allocation fails. Messages use UTF-8 pointer/length pairs and binary data
-uses byte pointer/length pairs, never NUL-terminated strings. A null data pointer
-is valid only for zero length. Invalid non-null pointers and use-after-free cannot
-be made safe by a C API; the caller must supply valid memory for each declared
-range and valid handles of the required kind.
+EMF documents are immutable. WMF replacement is supported, with original source
+spans retained for descriptors and record-byte access. Independent handles may be
+used on independent threads; callers serialize operations on the same handle and
+never free it concurrently with a call using it. No Ruby callbacks or VM objects
+enter this C interface.
 
-Input bytes need remain valid only until the call returns. Output buffer views
-remain valid until that buffer is freed, independent of the document lifetime.
-Ruby copies bytes into its own String before freeing a buffer. No pointer into a
-movable Ruby object is stored by Rust. Free functions accept null as a no-op;
-double-free is invalid. No global last-error pointer or error-message lifetime
-shared across calls is permitted. Tests must cover early failures, empty buffers,
-repeated parse/free and each allocation ownership path.
+## Measured local acceptance
 
-## Planned panic, resource and thread policy
+The C client checks layouts, ABI version, exact parsing/serialization, descriptor
+boundaries, typed snapshot decoding, diagnostics, input ownership, and NULL frees.
+The lifecycle extension additionally measures:
 
-Wrap every fallible exported operation in `catch_unwind` with unwinding enabled
-for the FFI build; translate a caught panic to `INTERNAL_ERROR` and release partial
-results. No panic or Rust unwind may cross a C frame. This does not catch
-allocator aborts, aborting panics, invalid pointers or process termination. Validate
-lengths and budgets before allocation, apply `try_reserve` to large allocations,
-and return `ALLOCATION_FAILED` when a fallible reservation fails. Bound aggregate
-allocations and work under [06](06-resilience.md); never claim guaranteed OOM
-recovery from `catch_unwind`.
+- NULL input with positive and unaddressable lengths is rejected for detect,
+  EMF parse and WMF parse without returning handles.
+- Rejected record access clears an output slot while its saved buffer remains
+  usable; failed batch access clears the count.
+- Rejected metadata and record operations leave the same live document usable.
+- A successful snapshot clears a saved error slot without consuming that error.
+- Two independently allocated errors coexist; one error remains readable after
+  its peer, the document and all output buffers have been freed.
+- Serialized and record-byte buffers remain exact after document release;
+  freeing one buffer leaves another usable. A rejected view leaves its buffer
+  usable on the next call.
+- Rejected WMF payload, index, function and NULL/length edits preserve exact
+  serialization, followed by a successful edit on that same document.
+- An unsupported EMF+ options version is rejected on a live document, followed
+  by successful snapshot generation and buffer access after document release.
 
-ABI v1 documents are immutable for FFI access. Independent documents may be used
-on independent threads. Callers serialize operations on the same document and
-must never free a handle concurrently with a call using it. Output buffers and
-errors have the same no-concurrent-free rule. No Ruby callbacks, Ruby VM access,
-mutable process-wide parser state or cross-thread Ruby objects enter the core.
-The Ruby adapter protects same-handle access and copies results before releasing
-its lock. Measure Fiddle scheduling behavior rather than promising GVL release.
-
-## Planned verification and exit gate
+Reproduce from the repository root with an existing matching library (set
+`EMF_ABI_LIBRARY_DIR` to its directory):
 
 ```sh
-cargo test --manifest-path emf-rs/Cargo.toml -p emf-ffi
-mkdir -p tmp
-cargo build --manifest-path emf-rs/Cargo.toml -p emf-ffi --release
-cc -std=c11 -Wall -Wextra -Werror -I emf-rs/crates/emf-ffi/include emf-rs/crates/emf-ffi/tests/abi.c -L emf-rs/target/release -lemf_ffi -o tmp/emf-abi-smoke
+cc -std=c11 -Wall -Wextra -Werror -I emf-rs/crates/emf-ffi/include \
+  emf-rs/crates/emf-ffi/tests/abi.c -L "$EMF_ABI_LIBRARY_DIR" -lemf_ffi \
+  -Wl,-rpath,"$EMF_ABI_LIBRARY_DIR" -o /tmp/emf-abi-smoke
+/tmp/emf-abi-smoke
 ```
 
-Run the compiled client against the same built library, from the repository
-root (Linux and macOS respectively):
+Measured library directory:
+`/private/tmp/emf-execution/apple-repro/clean-a/aarch64-apple-darwin/release`.
+Compilation passed with warnings treated as errors; execution returned
+`C ABI smoke: ok` and exit 0. No Cargo build or full suite was needed for this
+acceptance extension.
 
-```sh
-LD_LIBRARY_PATH="$PWD/emf-rs/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ./tmp/emf-abi-smoke
-DYLD_LIBRARY_PATH="$PWD/emf-rs/target/release${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" ./tmp/emf-abi-smoke
-```
+## Remaining acceptance gates
 
-The client must exercise its vertical-slice fixture and exit nonzero on assertion
-failure; a successful compile alone is insufficient. These host commands assume
-the workspace's default target directory. [08](08-platform-delivery.md) must adapt
-the library path and executable invocation to each target's staging directory and
-loader, including Windows, and run on that target. These commands are planned,
-not run.
-Tests must independently verify ABI version rejection, structure sizes, status
-mapping, null/zero-length arguments, truncated input, batches, exact bytes,
-diagnostic positions and all free paths. Use sanitizer/leak checks on supported
-build targets and an externally supervised malformed-input subprocess. Acceptance
-requires a Ruby-free C client to parse and serialize the vertical-slice fixture,
-no unwind across the boundary, and measured batch costs. Passing Rust unit tests
-alone does not establish ABI compatibility.
+This local run does not establish Linux, Windows, x86_64 or 32-bit ABI support;
+run the client with each packaged target's library and loader under
+[08](08-platform-delivery.md). Sanitizer/leak checks, externally supervised
+malformed-input testing, representative descriptor/snapshot batch-cost
+measurements, and Fiddle fixed-width/layout checks retain their separate gates.
+
+Fallible exports use `catch_unwind`; no Rust unwind may cross a C frame. This
+client does not inject panics or allocation failures and does not prove panic
+containment or guaranteed OOM recovery. Aborting panics, allocator aborts,
+invalid pointers and process termination cannot be caught this way. Continue
+checking length/work/allocation ceilings and fallible reservations under
+[06](06-resilience.md); retain its resource and process-supervision evidence.

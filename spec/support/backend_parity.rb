@@ -54,6 +54,8 @@ module BackendParity
   # Walks a BinData object, keeping field order, class names and wire bytes.
   class WireWalker
     def call(node)
+      return { "absent" => true } if node.is_a?(BinData::Base) && node.has_parameter?(:onlyif) && !node.eval_parameter(:onlyif)
+
       case node
       when BinData::Struct then struct(node)
       when BinData::Array then { "array" => node.map { |element| call(element) } }

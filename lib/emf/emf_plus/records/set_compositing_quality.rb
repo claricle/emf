@@ -7,7 +7,7 @@ module Emf
       class SetCompositingQuality < Base
         TYPE = 0x4024
 
-        class SetCompositingQualityBody < BinData::Record
+        class SetCompositingQualityBody < Body
           endian :little
         end
         BODY = SetCompositingQualityBody

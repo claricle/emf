@@ -10,7 +10,7 @@ module Emf
 
         TYPE = 0x4013
 
-        class FillRegionBody < BinData::Record
+        class FillRegionBody < Body
           endian :little
           uint32 :brush_id
         end

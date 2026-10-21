@@ -11,7 +11,7 @@ module Emf
 
         TYPE = 0x4019
 
-        class DrawBeziersBody < BinData::Record
+        class DrawBeziersBody < Body
           endian :little
           mandatory_parameter :flags
           uint32 :item_count

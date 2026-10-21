@@ -15,6 +15,98 @@ RSpec.describe ProcessSupervisor do
   let(:supervisor) { described_class.new(wall_seconds: 10, rss_limit_bytes: limit) }
   let(:short_supervisor) { described_class.new(wall_seconds: 2, rss_limit_bytes: limit) }
 
+  describe "benchmark series safety contract" do
+    it "accepts the explicit series ceiling for a short child" do
+      sup = described_class.new(wall_seconds: 1200, rss_limit_bytes: limit, benchmark_series: true)
+      result = sup.call(ruby('print "series"'))
+
+      expect(result).to be_success
+      expect(result.output).to eq("series")
+      expect(result.elapsed).to be < 60
+    end
+
+    it "retains the ordinary ceiling and requires a literal opt-in" do
+      [false, nil, "true", 1].each do |opt_in|
+        expect { described_class.new(wall_seconds: 61, rss_limit_bytes: limit, benchmark_series: opt_in) }
+          .to raise_error(ArgumentError, /wall_seconds/)
+      end
+      expect { described_class.new(wall_seconds: 60, rss_limit_bytes: limit) }.not_to raise_error
+    end
+
+    it "rejects invalid and nonfinite wall limits in either mode" do
+      [false, true].each do |opt_in|
+        invalid = [nil, true, "60", Object.new, Complex(2, 0), Float::NAN, Float::INFINITY, -Float::INFINITY, 0, -1]
+        invalid << (opt_in ? 1201 : 61)
+        invalid.each do |wall|
+          expect { described_class.new(wall_seconds: wall, rss_limit_bytes: limit, benchmark_series: opt_in) }
+            .to raise_error(ArgumentError, /wall_seconds/)
+        end
+      end
+    end
+
+    it "keeps the RSS ceiling mandatory for series" do
+      expect { described_class.new(wall_seconds: 1200, benchmark_series: true) }
+        .to raise_error(ArgumentError, /rss_limit_bytes/)
+    end
+
+    it "enforces RSS and monitoring failures without allocating stress data" do
+      { limit + 1 => :rss_exceeded, nil => :monitor_failed }.each do |sample, status|
+        sup = described_class.new(wall_seconds: 1200, rss_limit_bytes: limit, benchmark_series: true)
+        allow(sup).to receive(:group_rss_bytes).and_return(sample)
+        result = sup.call(ruby("sleep 1"))
+
+        expect(result.status).to eq(status)
+        expect(result).not_to be_success
+      end
+    end
+
+    it "still enforces a selected short deadline for series" do
+      sup = described_class.new(wall_seconds: 1, rss_limit_bytes: limit, benchmark_series: true)
+      result = sup.call(ruby("sleep 10"))
+
+      expect(result.status).to eq(:timed_out)
+      expect(result).not_to be_success
+      expect(result.elapsed).to be_between(1, 5)
+    end
+
+    it "preserves finite fractional deadlines" do
+      expect { described_class.new(wall_seconds: 1.5, rss_limit_bytes: limit) }.not_to raise_error
+      expect { described_class.new(wall_seconds: Rational(3, 2), rss_limit_bytes: limit) }.not_to raise_error
+    end
+
+    it "preserves the output ceiling for series" do
+      sup = described_class.new(wall_seconds: 1200, rss_limit_bytes: limit, output_limit: 16, benchmark_series: true)
+      result = sup.call(ruby('print "x" * 17'))
+
+      expect(result.status).to eq(:output_limit)
+      expect(result.output.bytesize).to eq(16)
+      expect(result).not_to be_success
+    end
+
+    it "cleans up descendants after a series child exits" do
+      sup = described_class.new(wall_seconds: 1200, rss_limit_bytes: limit, benchmark_series: true)
+      result = sup.call(ruby('pid = Process.spawn("sleep", "10"); puts pid'))
+
+      expect(result).to be_success
+      expect(alive?(Integer(result.output.lines.first))).to be(false)
+    end
+
+    it "forwards exact validated limits, command and environment to Windows" do
+      require_relative "../support/windows_process_supervisor"
+      windows = instance_double(WindowsProcessSupervisor)
+      result = described_class::Result.new(status: :rss_exceeded, exit_code: nil)
+      command = ["ruby", "probe.rb"]
+      env = { "SERIES_PROBE" => "yes" }
+      allow(Gem).to receive(:win_platform?).and_return(true)
+      expect(WindowsProcessSupervisor).to receive(:new)
+        .with(wall_seconds: 1200, rss_limit_bytes: limit, output_limit: 123).and_return(windows)
+      expect(windows).to receive(:call).with(command, env: env).and_return(result)
+      sup = described_class.new(wall_seconds: 1200, rss_limit_bytes: limit, output_limit: 123, benchmark_series: true)
+
+      expect(sup.call(command, env: env)).to equal(result)
+    end
+  end
+
   it "kills a stalled child at the wall deadline" do
     result = short_supervisor.call(ruby("sleep"))
 

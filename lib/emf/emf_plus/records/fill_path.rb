@@ -10,7 +10,7 @@ module Emf
 
         TYPE = 0x4014
 
-        class FillPathBody < BinData::Record
+        class FillPathBody < Body
           endian :little
           uint32 :brush_id
         end

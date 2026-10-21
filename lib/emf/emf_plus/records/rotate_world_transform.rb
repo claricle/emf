@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
+
 module Emf
   module EmfPlus
     module Records
@@ -9,9 +11,9 @@ module Emf
 
         TYPE = 0x402F
 
-        class RotateWorldTransformBody < BinData::Record
+        class RotateWorldTransformBody < Body
           endian :little
-          float :angle
+          float32_le :angle
         end
         BODY = RotateWorldTransformBody
 

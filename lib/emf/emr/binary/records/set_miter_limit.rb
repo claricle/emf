@@ -8,7 +8,7 @@ module Emf
     module Binary
       module Records
         class SetMiterLimit < Emf::Emr::Binary::Record
-          float :miter_limit
+          float32_le :miter_limit
         end
       end
     end

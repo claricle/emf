@@ -85,12 +85,22 @@ pub(crate) fn parse_segments_budget(
                 });
             }
             decode_fixed(kind, data_bytes)
+        } else if kind == 0x4003 {
+            if data_len % 4 != 0 || size != 12 + data_len {
+                return Err(Error::InvalidRecord {
+                    offset,
+                    reason: "invalid Comment DataSize/padding",
+                });
+            }
+            RecordData::Comment(copy(data_bytes, budget)?)
         } else if super::drawing::supported(kind) {
             RecordData::Drawing(super::drawing::decode(
                 kind, flags, data_bytes, offset, budget,
             )?)
         } else if matches!(kind, 0x401c | 0x4036) {
             RecordData::Text(super::text::decode(kind, data_bytes, offset, budget)?)
+        } else if kind == 0x403a && flags & 0x8000 == 0 {
+            RecordData::TSClip(super::tsclip::decode(data_bytes, flags, offset, budget)?)
         } else if kind == 0x4039 {
             RecordData::TSGraphics(super::tsgraphics::decode(
                 data_bytes, flags, offset, budget,

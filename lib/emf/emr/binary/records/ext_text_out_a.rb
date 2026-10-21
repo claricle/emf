@@ -11,8 +11,8 @@ module Emf
         # ExtTextOutW except the string is 8-bit ANSI.
         class ExtTextOutA < Emf::Emr::Binary::WithBounds
           uint32 :i_graphics_mode
-          float :ex_scale
-          float :ey_scale
+          float32_le :ex_scale
+          float32_le :ey_scale
           point_l :ptl_reference
           uint32 :n_chars
           uint32 :off_string

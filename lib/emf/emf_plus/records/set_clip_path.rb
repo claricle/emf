@@ -10,7 +10,7 @@ module Emf
 
         TYPE = 0x4033
 
-        class SetClipPathBody < BinData::Record
+        class SetClipPathBody < Body
           endian :little
         end
         BODY = SetClipPathBody

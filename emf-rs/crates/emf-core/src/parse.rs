@@ -85,7 +85,7 @@ pub fn parse(input: &[u8], limits: &ParseLimits) -> Result<Document, ParseFailur
         if data == RecordData::Raw
             && matches!(
                 record_type,
-                2..=22 | 24..=68 | 70..=95 | 98 | 114..=116 | 118 | 120
+                2..=68 | 70..=98 | 114..=116 | 118 | 120
             )
         {
             budget.reserve_one(&mut diagnostics)?;
@@ -231,6 +231,9 @@ fn decode_record(
     let malformed = || Ok((RecordData::Raw, 0));
     let mut r = Reader::new(payload);
     match kind {
+        23 => crate::poly_text::decode_color(payload),
+        96 => crate::poly_text::decode::<u8>(payload, budget),
+        97 => crate::poly_text::decode::<u16>(payload, budget),
         118 => crate::gradient::decode(payload, budget),
         76..=81 | 93 | 94 | 114 | 116 => crate::bitmap::decode(kind, payload, budget),
         52 => Ok((RecordData::RealizePalette, 0)),
@@ -1207,6 +1210,9 @@ fn decode_extended_pen(
     // Wire offsets include the eight-byte record header.
     let span = |offset: usize, len: usize| {
         let start = offset.checked_sub(8)?;
+        // Empty bitmap buffers can retain offsets into the fixed pen fields.
+        // They consume no bytes; preserve their presence at the data boundary.
+        let start = if len == 0 { start.max(fixed) } else { start };
         let end = start.checked_add(len)?;
         (offset % 4 == 0 && start >= fixed && end <= payload.len()).then_some(start..end)
     };

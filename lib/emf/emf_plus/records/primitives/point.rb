@@ -7,7 +7,7 @@ module Emf
     module Records
       module Primitives
         # EmfPlusPoint (2.2.2.35): 16-bit signed, the "compressed" form.
-        class Point < BinData::Record
+        class Point < Body
           endian :little
           int16 :x
           int16 :y

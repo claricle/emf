@@ -42,10 +42,14 @@ module EmfsvgComparison
       result
     end
 
-    def gems(object)
+    def gems(object, unloaded_bundler: false)
       versions = value(object, "gems")
       require_value(versions.is_a?(Hash) && !versions.empty?, "invalid gems")
-      versions.each { |name, version| require_value(name.is_a?(String) && version.is_a?(String) && !version.empty?, "invalid gems") }
+      versions.each do |name, version|
+        next if unloaded_bundler && name == "bundler" && version.nil?
+
+        require_value(name.is_a?(String) && version.is_a?(String) && !version.empty?, "invalid gems")
+      end
       string(versions, "bindata")
       versions
     end
@@ -55,7 +59,7 @@ module EmfsvgComparison
       %w[version engine description platform executable].each { |key| string(value(env, "ruby"), key) }
       %w[sysname nodename release version machine].each { |key| string(value(env, "os"), key) }
       string(env, "host")
-      gems(env)
+      gems(env, unloaded_bundler: true)
     end
 
     def input_metadata
@@ -170,7 +174,8 @@ module EmfsvgComparison
       digest(fixture, "sha256")
       size = value(fixture, "size_bytes")
       require_value(size.is_a?(Integer) && size >= 0, "invalid fixture size_bytes")
-      string(fixture, "outcome")
+      require_value(data.fetch("inputs").fetch("selected_outcomes").include?(string(fixture, "outcome")),
+                    "fixture outcome is not selected")
       require_value(value(golden, "fixture") == path, "golden inventory fixture mismatch")
       string(golden, "path")
       digest(golden, "sha256")

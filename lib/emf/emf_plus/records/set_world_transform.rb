@@ -9,7 +9,7 @@ module Emf
       class SetWorldTransform < Base
         TYPE = 0x402A
 
-        class SetWorldTransformBody < BinData::Record
+        class SetWorldTransformBody < Body
           endian :little
           transform_matrix :matrix
         end

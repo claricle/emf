@@ -11,7 +11,7 @@ module Emf
       module Primitives
         # `point_count` points in the form the record flags select: relative
         # (PointR) wins over compressed (Point); otherwise PointF.
-        class PointArray < BinData::Record
+        class PointArray < Body
           endian :little
           mandatory_parameter :point_count, :relative, :compressed
           array :relative_points, type: PointR, initial_length: :point_count, onlyif: -> { relative }

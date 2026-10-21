@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/binary/float32_le"
 require "emf/emf_plus/records/primitives/point_array"
 
 module Emf
@@ -11,10 +12,10 @@ module Emf
 
         TYPE = 0x4017
 
-        class DrawClosedCurveBody < BinData::Record
+        class DrawClosedCurveBody < Body
           endian :little
           mandatory_parameter :flags
-          float :tension
+          float32_le :tension
           uint32 :item_count
           point_array :point_data,
                       point_count: :item_count,

@@ -216,8 +216,8 @@ fn wrong_fixed_state_family_edits_reject_atomically_before_and_after_valid_edits
 }
 
 #[test]
-fn unknown_types_remain_raw_without_diagnostics() {
-    for kind in [23, 69, 97, 999] {
+fn unsupported_types_remain_raw_without_diagnostics() {
+    for kind in [999, 1000] {
         let mut input = header();
         input.extend(record(kind, &payload(62, VALUES[1])));
         let doc = parse(&input, &ParseLimits::default()).unwrap();

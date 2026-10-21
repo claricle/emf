@@ -7,7 +7,7 @@ module Emf
       class ResetClip < Base
         TYPE = 0x4031
 
-        class ResetClipBody < BinData::Record
+        class ResetClipBody < Body
           endian :little
         end
         BODY = ResetClipBody

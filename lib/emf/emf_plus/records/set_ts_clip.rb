@@ -16,7 +16,7 @@ module Emf
         COMPRESSED_FLAG = 0x8000
         COUNT_MASK = 0x7FFF
 
-        class SetTSClipBody < BinData::Record
+        class SetTSClipBody < Body
           endian :little
           mandatory_parameter :data_size
           string :rect_data, read_length: :data_size

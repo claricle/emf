@@ -7,6 +7,7 @@ module Emf
     module Records
       autoload :Primitives, "emf/emf_plus/records/primitives"
       autoload :Base, "emf/emf_plus/records/base"
+      autoload :Body, "emf/emf_plus/records/body"
       autoload :Unknown, "emf/emf_plus/records/unknown"
       autoload :Header, "emf/emf_plus/records/header"
       autoload :EndOfFile, "emf/emf_plus/records/end_of_file"

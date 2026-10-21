@@ -10,7 +10,7 @@ module Emf
       module Primitives
         # EmfPlusBitmap (2.2.2.2). BitmapDataType 0 is pixel data, 1 is a
         # compressed image; any other value keeps its bytes in unrecognized_data.
-        class Bitmap < BinData::Record
+        class Bitmap < Body
           PIXEL = 0
           COMPRESSED = 1
           INDEXED_FLAG = 0x10000
