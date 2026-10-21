@@ -239,6 +239,13 @@ int32_t emf_wmf_document_snapshot(const emf_wmf_document *document, emf_buffer *
 int32_t emf_wmf_record_view(const emf_wmf_document *document, uint64_t index, const emf_limits *limits, emf_buffer **out_buffer, emf_error **out_error);
 /* Owned WMFE v1 list of embedded-EMF escape sequences. limits may be NULL. */
 int32_t emf_wmf_embedded_emf(const emf_wmf_document *document, const emf_limits *limits, emf_buffer **out_buffer, emf_error **out_error);
+/* Owned WMFR v1 answer to "which phase of the Ruby WMF contract rejects this input first":
+ * `WMFR`, u32 version/present/codec/reason/has_offset/has_function/function, u64 offset/detail
+ * (little-endian, 48 bytes). max_input_bytes / max_records are the contract's two ceilings, owned by the
+ * caller (200 MiB / 1,000,000 in Ruby). present 0 means the contract accepts the input. Needs no document, so it
+ * also answers after emf_wmf_parse failed. Reason codes are codec*100+n; layout: wmf-rejection-v1.md.
+ * Free with emf_buffer_free. */
+int32_t emf_wmf_rejection(const uint8_t *data, uint64_t length, uint64_t max_input_bytes, uint64_t max_records, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_wmf_serialize(const emf_wmf_document *document, emf_buffer **out_buffer, emf_error **out_error);
 void emf_wmf_document_free(emf_wmf_document *document);
 int32_t emf_buffer_view(const emf_buffer *buffer, const uint8_t **out_data, uint64_t *out_length);
