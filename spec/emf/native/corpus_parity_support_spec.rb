@@ -3,6 +3,34 @@
 require "spec_helper"
 require_relative "../../support/native_corpus_parity"
 
+RSpec.describe BackendParity::WireWalker do
+  subject(:walker) { described_class.new }
+
+  let(:wire_class) { Emf::Emr::Binary::Records::ExtSelectClipRgn }
+
+  it "records absent optional region data without reading its nonexistent fields" do
+    wire = wire_class.read([75, 16, 0, 5].pack("V4"))
+
+    expect(walker.call(wire).fetch("fields").fetch("rgn_data")).to eq("absent" => true)
+  end
+
+  it "walks present region data and retains its rectangle count" do
+    region = [32, 1, 0, 0].pack("V4") + [0, 0, 1, 1].pack("l<4")
+    wire = wire_class.read([75, 48, region.bytesize, 5].pack("V4") + region)
+
+    fields = walker.call(wire).fetch("fields").fetch("rgn_data").fetch("fields")
+    expect(fields.fetch("count_rects")).to eq(0)
+    expect(fields.fetch("rectangles")).to eq("array" => [])
+  end
+
+  it "continues to reject a present region whose count exceeds its byte length" do
+    region = [32, 1, 0xFFFFFFFF, 0].pack("V4") + [0, 0, 1, 1].pack("l<4")
+
+    expect { wire_class.read([75, 48, region.bytesize, 5].pack("V4") + region) }
+      .to raise_error(BinData::ValidityError, /region rectangles exceed/)
+  end
+end
+
 RSpec.describe NativeCorpusParity::Runner do
   subject(:verdict) { runner.call("unused.emf") }
 

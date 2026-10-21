@@ -159,3 +159,26 @@ wire-heavy performance remain separate acceptance gates. No Rust rebuild or
 corpus replay is required for this focused check. A fallback run is never native
 evidence: these cases instantiate `Emf::Native.backend` directly with an explicit
 real-library path and skip if that file is absent.
+
+## Current valid-corpus native parity
+
+The current Ruby production inputs at `7204a677b125ebbefdb022ca54b51e2dd579d2b5`
+passed the complete valid-corpus native comparison on Apple arm64 / Ruby 3.4.8:
+**214 examples, zero failures**, seed 48328 (208 valid fixtures, five mutation
+controls and the inventory check). The existing debug library built at
+`d3588c5d8f590233c125e5aa97fb4ad53056a5cd` has identical Rust inputs at this
+source; its SHA-256 is
+`b010fe7e9686673a3e575bd4254b14ace7a333ed9dc14ba1bbef3d21aac99089`.
+
+The observation helper now records absent conditional BinData fields explicitly
+rather than traversing them. Present invalid region fields still raise the
+allocation-bound error. This corrects the harness without relaxing production
+bounds. Related observation checks passed 30/0, including short-header recovery
+with exact trailing bytes, serialization and reparse preservation.
+
+Evidence: `/private/tmp/emf-execution/p05-current-corpus-parity/optional-corrected/`
+contains the exact source patch/provenance, library identity, command, full RSpec
+JSON and terminal result (284.81 seconds). The earlier 200/14 run and its absent
+optional-field failure are retained in the parent evidence directory. This valid
+corpus result does not close malformed-input parity, release performance,
+platform matrix, installed-package or final whole-issue acceptance.
