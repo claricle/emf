@@ -23,6 +23,39 @@ pub(crate) fn parse_segments_budget(
     segments: &[&[u8]],
     budget: &mut Budget<'_>,
 ) -> Result<Stream, Error> {
+    parse_segments_mode(segments, budget, false)
+}
+
+/// Like [`parse_segments_budget`], but frames each segment on its own the way a
+/// reader that cannot let a record span comments does: a header that is
+/// truncated, has an invalid Size/DataSize or overruns its segment ends that
+/// segment's framing, and the next segment starts afresh. `segment_lengths` then
+/// holds the framed byte count of each segment; the remainder is not retained.
+/// Typed layout failures of a correctly framed record still fail the parse.
+pub(crate) fn parse_segments_recovering(
+    segments: &[&[u8]],
+    budget: &mut Budget<'_>,
+) -> Result<Stream, Error> {
+    parse_segments_mode(segments, budget, true)
+}
+
+/// A header that frames a record inside `bytes[..end]` at `offset`.
+fn frames_within(bytes: &[u8], offset: usize, end: usize) -> bool {
+    let available = end - offset;
+    if available < 12 {
+        return false;
+    }
+    let b = &bytes[offset..];
+    let size = u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize;
+    let data_len = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
+    size >= 12 && size % 4 == 0 && data_len <= size - 12 && size <= available
+}
+
+fn parse_segments_mode(
+    segments: &[&[u8]],
+    budget: &mut Budget<'_>,
+    recover: bool,
+) -> Result<Stream, Error> {
     let len = segments.iter().try_fold(0usize, |n, b| {
         n.checked_add(b.len())
             .ok_or(ParseFailure::ArithmeticOverflow { offset: n })
@@ -44,100 +77,115 @@ pub(crate) fn parse_segments_budget(
         bytes.extend_from_slice(b);
     }
     let mut records = Vec::new();
-    let mut offset = 0;
-    while offset < bytes.len() {
-        let available = bytes.len() - offset;
-        if available < 12 {
-            return Err(ParseFailure::Truncated {
-                offset,
-                needed: 12,
-                available,
+    // Each framing window is a whole segment in recovering mode, otherwise the
+    // concatenated stream; recovering `lengths` end up as the framed bytes per window.
+    let windows = if recover { lengths.len() } else { 1 };
+    let mut cursor = 0;
+    for slot in lengths.iter_mut().take(windows) {
+        let start = cursor;
+        let end = if recover { start + *slot } else { len };
+        cursor = end;
+        let mut offset = start;
+        while offset < end {
+            if recover && !frames_within(&bytes, offset, end) {
+                break;
             }
-            .into());
-        }
-        let b = &bytes[offset..];
-        let kind = u16::from_le_bytes([b[0], b[1]]);
-        let flags = u16::from_le_bytes([b[2], b[3]]);
-        let size = u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize;
-        let data_len = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
-        if size < 12 || size % 4 != 0 || data_len > size - 12 {
-            return Err(Error::InvalidRecord {
-                offset,
-                reason: "invalid Size/DataSize",
-            });
-        }
-        budget.check_record_bytes(size)?;
-        budget.charge_record(size)?;
-        if size > available {
-            return Err(ParseFailure::Truncated {
-                offset,
-                needed: size,
-                available,
+            let available = end - offset;
+            if available < 12 {
+                return Err(ParseFailure::Truncated {
+                    offset,
+                    needed: 12,
+                    available,
+                }
+                .into());
             }
-            .into());
-        }
-        let data_bytes = &b[12..12 + data_len];
-        let data = if let Some(expected) = fixed_len(kind) {
-            if data_len != expected {
+            let b = &bytes[offset..];
+            let kind = u16::from_le_bytes([b[0], b[1]]);
+            let flags = u16::from_le_bytes([b[2], b[3]]);
+            let size = u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize;
+            let data_len = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
+            if size < 12 || size % 4 != 0 || data_len > size - 12 {
                 return Err(Error::InvalidRecord {
                     offset,
-                    reason: "invalid fixed record DataSize",
+                    reason: "invalid Size/DataSize",
                 });
             }
-            decode_fixed(kind, data_bytes)
-        } else if kind == 0x4003 {
-            if data_len % 4 != 0 || size != 12 + data_len {
-                return Err(Error::InvalidRecord {
+            budget.check_record_bytes(size)?;
+            budget.charge_record(size)?;
+            if size > available {
+                return Err(ParseFailure::Truncated {
                     offset,
-                    reason: "invalid Comment DataSize/padding",
-                });
+                    needed: size,
+                    available,
+                }
+                .into());
             }
-            RecordData::Comment(copy(data_bytes, budget)?)
-        } else if super::drawing::supported(kind) {
-            RecordData::Drawing(super::drawing::decode(
-                kind, flags, data_bytes, offset, budget,
-            )?)
-        } else if matches!(kind, 0x401c | 0x4036) {
-            RecordData::Text(super::text::decode(kind, data_bytes, offset, budget)?)
-        } else if kind == 0x403a && flags & 0x8000 == 0 {
-            RecordData::TSClip(super::tsclip::decode(data_bytes, flags, offset, budget)?)
-        } else if kind == 0x4039 {
-            RecordData::TSGraphics(super::tsgraphics::decode(
-                data_bytes, flags, offset, budget,
-            )?)
-        } else if kind == 0x4038 {
-            RecordData::Effect(super::effects::decode(data_bytes, offset, budget)?)
-        } else if kind == 0x4008 {
-            let (total_size, object_bytes) = if flags & 0x8000 != 0 {
-                if data_bytes.len() < 4 {
+            let data_bytes = &b[12..12 + data_len];
+            let data = if let Some(expected) = fixed_len(kind) {
+                if data_len != expected {
                     return Err(Error::InvalidRecord {
                         offset,
-                        reason: "missing TotalObjectSize",
+                        reason: "invalid fixed record DataSize",
                     });
                 }
-                (
-                    Some(u32::from_le_bytes(data_bytes[..4].try_into().unwrap())),
-                    &data_bytes[4..],
-                )
+                decode_fixed(kind, data_bytes)
+            } else if kind == 0x4003 {
+                if data_len % 4 != 0 || size != 12 + data_len {
+                    return Err(Error::InvalidRecord {
+                        offset,
+                        reason: "invalid Comment DataSize/padding",
+                    });
+                }
+                RecordData::Comment(copy(data_bytes, budget)?)
+            } else if super::drawing::supported(kind) {
+                RecordData::Drawing(super::drawing::decode(
+                    kind, flags, data_bytes, offset, budget,
+                )?)
+            } else if matches!(kind, 0x401c | 0x4036) {
+                RecordData::Text(super::text::decode(kind, data_bytes, offset, budget)?)
+            } else if kind == 0x403a && flags & 0x8000 == 0 {
+                RecordData::TSClip(super::tsclip::decode(data_bytes, flags, offset, budget)?)
+            } else if kind == 0x4039 {
+                RecordData::TSGraphics(super::tsgraphics::decode(
+                    data_bytes, flags, offset, budget,
+                )?)
+            } else if kind == 0x4038 {
+                RecordData::Effect(super::effects::decode(data_bytes, offset, budget)?)
+            } else if kind == 0x4008 {
+                let (total_size, object_bytes) = if flags & 0x8000 != 0 {
+                    if data_bytes.len() < 4 {
+                        return Err(Error::InvalidRecord {
+                            offset,
+                            reason: "missing TotalObjectSize",
+                        });
+                    }
+                    (
+                        Some(u32::from_le_bytes(data_bytes[..4].try_into().unwrap())),
+                        &data_bytes[4..],
+                    )
+                } else {
+                    (None, data_bytes)
+                };
+                RecordData::Object(super::ObjectFragment {
+                    total_size,
+                    bytes: copy(object_bytes, budget)?,
+                })
             } else {
-                (None, data_bytes)
+                RecordData::Opaque(copy(data_bytes, budget)?)
             };
-            RecordData::Object(super::ObjectFragment {
-                total_size,
-                bytes: copy(object_bytes, budget)?,
-            })
-        } else {
-            RecordData::Opaque(copy(data_bytes, budget)?)
-        };
-        let padding = copy(&b[12 + data_len..size], budget)?;
-        budget.reserve_one(&mut records)?;
-        records.push(Record {
-            record_type: kind,
-            flags,
-            data,
-            padding,
-        });
-        offset += size;
+            let padding = copy(&b[12 + data_len..size], budget)?;
+            budget.reserve_one(&mut records)?;
+            records.push(Record {
+                record_type: kind,
+                flags,
+                data,
+                padding,
+            });
+            offset += size;
+        }
+        if recover {
+            *slot = offset - start;
+        }
     }
     let stream = Stream {
         records,

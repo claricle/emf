@@ -2,7 +2,7 @@
 
 module Emf
   module Native
-    # Reader for the native EMF+ snapshot (EPSN version 1, emf-plus-snapshot-v1.md).
+    # Reader for the native EMF+ snapshot (EPSN versions 1 and 2, emf-plus-snapshot-v1.md).
     # It validates every length against the buffer, so a truncated or inconsistent
     # snapshot raises FormatError rather than yielding partial data.
     class EmfPlusSnapshot
@@ -23,7 +23,8 @@ module Emf
       FAMILIES = { 0 => :opaque, 1 => :header, 2 => :empty, 3 => :clear, 4 => :rendering_origin, 5 => :stack_index,
                    6 => :begin_container, 7 => :matrix, 8 => :pair, 9 => :scalar, 10 => :clip_rect,
                    0x101 => :drawing, 0x102 => :text, 0x103 => :effect, 0x104 => :ts_graphics,
-                   0x105 => :object }.freeze
+                   0x105 => :object, 0x106 => :ts_clip }.freeze
+      VERSIONS = [1, 2].freeze
 
       attr_reader :segments, :frames, :diagnostics
 
@@ -43,7 +44,7 @@ module Emf
 
         magic, version, total, @segment_count, @frame_count, @diagnostic_count = @buffer.unpack("a4VQ<4")
         raise FormatError, "not an EMF+ snapshot" unless magic == "EPSN"
-        raise FormatError, "unsupported EMF+ snapshot version #{version}" unless version == 1
+        raise FormatError, "unsupported EMF+ snapshot version #{version}" unless VERSIONS.include?(version)
         raise FormatError, "EMF+ snapshot length mismatch" unless total == @buffer.bytesize
 
         @cursor = HEADER_BYTES

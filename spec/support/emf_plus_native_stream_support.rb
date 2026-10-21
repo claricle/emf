@@ -8,14 +8,6 @@ module Emf
     module EmfPlusNativeStreamSupport
       module_function
 
-      # Fixtures the native snapshot cannot stand in for: corrupted nested EMF+
-      # (a malformed Size/DataSize, or an EMR_COMMENT whose cbData exceeds its data).
-      NATIVE_FALLBACK = %w[
-        spec/fixtures/emf-corrupted/bad_corrupted_2014-12-07-163010.emf
-        spec/fixtures/emf-corrupted/bad_corrupted_2017-02-11-230400.emf
-        spec/fixtures/emf-corrupted/bad_corrupted_2017-02-12-010400.emf
-      ].freeze
-
       # Flag-only records have a typed empty body.
       EMPTY_BODY = %i[EndOfFile GetDC ResetClip ResetWorldTransform SetAntiAliasMode SetClipPath SetClipRegion
                       SetCompositingMode SetCompositingQuality SetInterpolationMode SetPixelOffsetMode SetTextContrast
@@ -45,8 +37,7 @@ module Emf
         Emf::EmfPlus::Records::SetTSGraphics => :ts_graphics,
         Emf::EmfPlus::Records::DrawString => :text,
         Emf::EmfPlus::Records::DrawDriverString => :text,
-        # Typed in core but opaque in the frozen v1 schema.
-        Emf::EmfPlus::Records::SetTSClip => :opaque,
+        Emf::EmfPlus::Records::SetTSClip => :ts_clip,
         Emf::EmfPlus::Records::Comment => :opaque,
         Emf::EmfPlus::Records::Unknown => :opaque,
         **EMPTY_BODY.to_h { |name| [Emf::EmfPlus::Records.const_get(name), :empty] },
@@ -79,7 +70,8 @@ module Emf
           [segment.record_index, segment.payload_range, segment.payload, segment.unframed, segment.tail, segment.dirty?]
         end,
           records: stream.records.map do |handle|
-            [handle.record.class, handle.record.to_binary, handle.record.offset, handle.record.comment_index,
+            located = handle.record.respond_to?(:frame) ? handle.record.frame : handle.record
+            [handle.record.class, handle.record.to_binary, located.offset, located.comment_index,
              handle.segment_index, handle.offset, handle.stream_index]
           end,
           gaps: stream.entries.select(&:gap?).map(&:range),

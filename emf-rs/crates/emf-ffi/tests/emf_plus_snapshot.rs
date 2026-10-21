@@ -199,7 +199,7 @@ fn rejects_nulls_metadata_and_resource_limits_and_cleans_outputs() {
         for supplied in [
             options(expected.len() as u64 - 1),
             EmfPlusSnapshotOptions {
-                version: 2,
+                version: 3,
                 ..options(10000)
             },
             EmfPlusSnapshotOptions {

@@ -98,6 +98,8 @@ extern "C" {
 #define EMF_FAMILY_SETTEXTJUSTIFICATION 73u
 
 #define EMF_PLUS_SNAPSHOT_VERSION 1u
+/* Adds per-comment recovering framing and the typed SetTSClip family (0x106). */
+#define EMF_PLUS_SNAPSHOT_VERSION_2 2u
 /* Independent read-only EMF+ snapshot options, not an outer snapshot version. */
 typedef struct emf_plus_snapshot_options {
   uint32_t struct_size;
