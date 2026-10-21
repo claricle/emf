@@ -51,8 +51,10 @@ module Emf
           return Model::Emr::Records::WireAdapter.new(wire: wire, offset: offset)
         end
 
-        klass, fields = wire_fields(record, raw)
-        source = LazyWire.new(klass, fields, raw, record)
+        source = FilledWire.for(record, raw) || begin
+          klass, fields = wire_fields(record, raw)
+          LazyWire.new(klass, fields, raw, record)
+        end
         Model::Emr::Records::WireAdapter.lazy(source: source, offset: offset)
       end
 
