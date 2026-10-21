@@ -36,20 +36,18 @@ RSpec.describe DownstreamNativeGoldens do
   end
 
   # Stands in for rspec: writes the JSON report and probe record a real child would.
-  def executor(rspec_status: 0, failures: 0, emf_path: File.join(emf_root, "lib", "emf.rb"), classes: nil, files: nil)
+  def executor(rspec_status: 0, failures: 0, emf_path: File.join(emf_root, "lib", "emf.rb"), classes: nil, files: nil, failed_examples: [])
     lambda do |argv, env:, log:, **|
       backend = env.fetch("EMF_BACKEND")
       selected = classes || { DownstreamNativeGoldens::SELECTED_CLASS.fetch(backend) => 3 }
       names = files || %w[spec/golden_spec.rb spec/round_trip_spec.rb spec/round_trip_golden_spec.rb]
-      File.write(argv[argv.index("--out") + 1], JSON.generate(
-                                                  "summary" => { "example_count" => 3, "failure_count" => failures, "pending_count" => 1,
-                                                                 "errors_outside_of_examples_count" => 0 },
-                                                  "examples" => names.map { |name| { "file_path" => "./#{name}" } }
-                                                ))
-      File.write(env.fetch("DOWNSTREAM_PROBE_OUT"), JSON.generate(
-                                                      "emf_path" => emf_path, "requested_backend" => backend,
-                                                      "native_library" => env["EMF_NATIVE_LIBRARY"], "selections" => selected
-                                                    ))
+      passed = names.map { |name| { "file_path" => "./#{name}", "status" => "passed" } }
+      counts = { "example_count" => 3, "failure_count" => failures, "pending_count" => 1,
+                 "errors_outside_of_examples_count" => 0 }
+      File.write(argv[argv.index("--out") + 1], JSON.generate("summary" => counts, "examples" => passed + failed_examples))
+      probe = { "emf_path" => emf_path, "requested_backend" => backend,
+                "native_library" => env["EMF_NATIVE_LIBRARY"], "selections" => selected }
+      File.write(env.fetch("DOWNSTREAM_PROBE_OUT"), JSON.generate(probe))
       File.write(log, "log")
       rspec_status
     end
@@ -124,6 +122,20 @@ RSpec.describe DownstreamNativeGoldens do
     it "fails when rspec reports a failing example even if it exited zero" do
       expect(run_main(args(build_consumer), failures: 1)).to eq(1)
       expect(err.string).to include("1 failing examples")
+    end
+
+    it "names each failing example with its id, description and first message lines" do
+      failing = [{ "id" => "./spec/golden_spec.rb[1:7]", "status" => "failed", "file_path" => "./spec/golden_spec.rb",
+                   "full_description" => "emfsvg golden master emfsvg output for foo matches golden baseline",
+                   "exception" => { "class" => "RSpec::Expectations::ExpectationNotMetError",
+                                    "message" => (1..20).map { |n| "line #{n}" }.join("\n") } }]
+
+      expect(run_main(args(build_consumer, "--backend", "ruby"), failures: 1, failed_examples: failing)).to eq(1)
+
+      entry = JSON.parse(File.read(File.join(tmp, "out.json"))).dig("backends", "ruby", "failed_examples").first
+      expect(entry).to include("id" => "./spec/golden_spec.rb[1:7]", "message" => (1..8).map { |n| "line #{n}" })
+      expect(entry.fetch("description")).to include("output for foo")
+      expect(err.string).to include("failed: ./spec/golden_spec.rb[1:7] emfsvg golden master")
     end
 
     it "fails on a nonzero rspec exit" do

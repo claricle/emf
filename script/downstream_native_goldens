@@ -21,6 +21,9 @@ module DownstreamNativeGoldens
   DEFAULT_SPECS = %w[spec/golden_spec.rb spec/round_trip_spec.rb spec/round_trip_golden_spec.rb].freeze
   BACKENDS = %w[ruby native].freeze
   SELECTED_CLASS = { "ruby" => "Emf::Backend::Ruby", "native" => "Emf::Native::Adapter" }.freeze
+  FAILURE_LINES = 8
+  # Families used by the consumer's goldens; emfsvg resolves glyph indices through fc-match.
+  FONT_FAMILIES = ["Arial", "Calibri", "Carlito", "Courier New", "Times New Roman", "Wingdings 2", "Symbol", "David"].freeze
   EMF_ROOT = File.expand_path("..", __dir__)
 
   class UsageError < StandardError; end
@@ -123,6 +126,7 @@ module DownstreamNativeGoldens
     found = []
     found << "no examples ran" unless summary.fetch("example_count", 0).positive?
     found << "#{summary['failure_count']} failing examples" if summary.fetch("failure_count", 0).positive?
+    failed_examples(rspec).each { |example| found << "failed: #{example['id']} #{example['description']}" }
     outside = summary.fetch("errors_outside_of_examples_count", 0)
     found << "#{outside} errors outside examples" if outside.positive?
     unless options.example
@@ -130,6 +134,17 @@ module DownstreamNativeGoldens
       (options.specs.map { |s| File.basename(s) } - ran).each { |s| found << "#{s} contributed no examples" }
     end
     found
+  end
+
+  # The failing examples of an rspec JSON report: id, description and the first lines of the message.
+  def self.failed_examples(rspec)
+    return [] unless rspec
+
+    rspec.fetch("examples", []).select { |e| e["status"] == "failed" }.map do |example|
+      message = example.dig("exception", "message").to_s.lines.first(FAILURE_LINES).map(&:chomp)
+      { "id" => example["id"], "description" => example["full_description"],
+        "exception" => example.dig("exception", "class"), "message" => message.map { |l| l[0, 300] } }
+    end
   end
 
   def self.probe_problems(backend, probe, options)
@@ -152,6 +167,17 @@ module DownstreamNativeGoldens
     expected = File.realpath(options.native_library)
     actual = probe["native_library"] && File.exist?(probe["native_library"]) && File.realpath(probe["native_library"])
     actual == expected ? [] : ["native library was #{probe['native_library'].inspect}, expected #{expected}"]
+  end
+
+  # What fc-match resolves each golden font family to on this host; font differences explain golden drift.
+  def self.font_environment
+    FONT_FAMILIES.to_h do |family|
+      pattern = "%{family} | %{file}" # rubocop:disable Style/FormatStringToken -- fontconfig syntax
+      resolved = IO.popen(["fc-match", "-f", pattern, family], err: File::NULL, &:read)
+      [family, resolved.to_s.strip]
+    rescue SystemCallError
+      [family, nil]
+    end
   end
 
   def self.read_json(path)
@@ -215,7 +241,7 @@ module DownstreamNativeGoldens
       rspec = DownstreamNativeGoldens.read_json(json_path)
       probe = DownstreamNativeGoldens.read_json(probe_out)
       found = DownstreamNativeGoldens.problems(backend, rspec, probe, @options, status)
-      { backend: backend, rspec: rspec, probe: probe, problems: found, log: log }
+      { backend: backend, rspec: rspec, probe: probe, problems: found, log: log, json: json_path }
     end
 
     def command(json_path)
@@ -237,6 +263,7 @@ module DownstreamNativeGoldens
     def build_summary(results)
       { "consumer" => { "revision" => @options.revision },
         "emf" => { "path" => File.realpath(@options.emf) },
+        "fc_match" => DownstreamNativeGoldens.font_environment,
         "trial_filter" => @options.example,
         "specs" => @options.specs,
         "passed" => results.all? { |r| r[:problems].empty? },
@@ -248,7 +275,8 @@ module DownstreamNativeGoldens
       entry = { "passed" => result[:problems].empty?, "problems" => result[:problems],
                 "examples" => counts["example_count"], "failures" => counts["failure_count"],
                 "pending" => counts["pending_count"], "selections" => result[:probe]&.fetch("selections", nil),
-                "emf_path" => result[:probe]&.fetch("emf_path", nil), "log" => kept_log(result) }
+                "emf_path" => result[:probe]&.fetch("emf_path", nil), "log" => kept_log(result),
+                "failed_examples" => DownstreamNativeGoldens.failed_examples(result[:rspec]) }
       entry["native_library_sha256"] = Digest::SHA256.file(@options.native_library).hexdigest if result[:backend] == "native"
       entry
     end
@@ -257,8 +285,10 @@ module DownstreamNativeGoldens
     def kept_log(result)
       return result[:log] unless @options.output
 
-      dest = "#{@options.output.delete_suffix('.json')}-#{result[:backend]}.log"
+      base = "#{@options.output.delete_suffix('.json')}-#{result[:backend]}"
+      dest = "#{base}.log"
       FileUtils.mkdir_p(File.dirname(File.expand_path(dest)))
+      FileUtils.cp(result[:json], "#{base}-rspec.json") if File.file?(result[:json])
       FileUtils.cp(result[:log], dest) if File.file?(result[:log])
       dest
     end
@@ -288,6 +318,7 @@ module DownstreamNativeGoldens
       out.puts "#{backend}: #{entry['passed'] ? 'PASS' : 'FAIL'} examples=#{entry['examples']} failures=#{entry['failures']} " \
                "pending=#{entry['pending']} selections=#{entry['selections'].inspect}"
       entry["problems"].each { |problem| err.puts "  #{backend}: #{problem}" }
+      entry["failed_examples"].each { |example| err.puts "  #{backend}: #{example['id']}\n    #{example['message'].join("\n    ")}" }
       tail_log(entry["log"], err) unless entry["passed"]
     end
   end
