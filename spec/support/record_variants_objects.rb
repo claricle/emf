@@ -7,6 +7,7 @@ require_relative "record_variants_bitmap"
 # 2.3.5.12 GradientFill): font layout forms, user-style pens with bitmap
 # brushes, palette entry flags and counts, and gradient vertex/mode payloads.
 module RecordVariants
+  self.catalog = :objects
   FACENAME = [0xD800, 0x0041, 0xFFFF].freeze
   FONT_NAMES = [FACENAME + ([0] * 29), (1..64).to_a, (101..132).to_a].freeze
 

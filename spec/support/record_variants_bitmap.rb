@@ -6,6 +6,7 @@ require_relative "record_variants"
 # brushes): no bitmap, adjacent, reversed and gapped bitmap buffers, source and
 # mask pairs, and offsets or sizes outside the record.
 module RecordVariants
+  self.catalog = :bitmap
   BMI = [40, 2, -2, 1, 32, 0, 16, 0, 0, 0, 0].pack("VllvvVVllVV").freeze
   BITS = (1..16).to_a.pack("C*").freeze
   XFORM_BK_USAGE = ([1.0, 0.0, 0.0, 1.0, 5.0, -5.0].pack("e6") + [0x00FF8040, 1].pack("V2")).freeze

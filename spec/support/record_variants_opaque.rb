@@ -8,6 +8,7 @@ require_relative "record_variants"
 # escapes, 2.3.8 / 2.3.11 color records). Each variant supplies the body bytes
 # and the accessor values those bytes must produce on both backends.
 module RecordVariants
+  self.catalog = :opaque
   ADJUSTMENT_DIAGNOSTIC = "native reports ParseError 108 for a SetColorAdjustment body below 24 bytes; Ruby reports no diagnostic"
   TAIL = "\xDE\xAD\xBE\xEF".b.freeze
   NAME_A = "icc.pro\0".b.freeze

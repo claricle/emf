@@ -18,6 +18,12 @@ module RecordVariants
   INT_MAX = (2**31) - 1
 
   REGISTRY = {} # rubocop:disable Style/MutableConstant
+  # Registry class names declared by each catalog file, keyed by catalog symbol.
+  CATALOGS = Hash.new { |hash, key| hash[key] = [] }
+
+  class << self
+    attr_accessor :catalog
+  end
   EOF_RECORD = [14, 20, 0, 0, 20].pack("V5")
   HEADER_BYTES = lambda do
     Emf::Emr::Binary::Header.new(i_type: 1, n_size: 108, d_signature: 0x464D4520).to_binary_s
@@ -113,6 +119,7 @@ module RecordVariants
 
   def define(name, type, hydrated: false, &)
     entry = Entry.new(name, type, hydrated: hydrated)
+    CATALOGS[catalog] << name
     entry.instance_eval(&)
     REGISTRY[name] = entry
   end

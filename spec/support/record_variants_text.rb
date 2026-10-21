@@ -6,6 +6,9 @@ require_relative "record_variants"
 # 2.3.5.37): option-dependent rectangle, 8/16-bit characters, optional and
 # doubled (ETO_PDY) spacing arrays, empty strings and out-of-range spans.
 module RecordVariants
+  self.catalog = :text
+  SMALL_TEXT_DIAGNOSTIC = "a SmallTextOut body below the fixed prefix stays Raw on both backends, but Ruby reports " \
+                          "ParseError 108 and native reports no diagnostic"
   ETO_NO_RECT = 0x100
   ETO_SMALL_CHARS = 0x200
   ETO_PDY = 0x2000
@@ -129,5 +132,6 @@ module RecordVariants
     end
     malformed("character count exceeds payload", i32("x_dest", 0), i32("y_dest", 0), u32("c_chars", 9), u32("fu_options", 0),
               u32("i_graphics_mode", 1), f32("ex_scale", 1.0), f32("ey_scale", 1.0), pad("\0" * 16))
+    malformed("body shorter than fixed prefix", pad("\0" * 4), raw: true, pending: SMALL_TEXT_DIAGNOSTIC)
   end
 end

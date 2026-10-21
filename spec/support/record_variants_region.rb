@@ -8,6 +8,7 @@ require_relative "record_variants"
 # empty, single and multi-rectangle regions, trailing region bytes, absent
 # clip region data and counts that exceed the declared byte length.
 module RecordVariants
+  self.catalog = :region
   REGION_BOUNDS = [-8, -9, 100, 120].freeze
   REGION_RECTS = [[-8, -9, 10, 11], [20, 21, 100, 120], [0, 0, 0, 0]].freeze
   CLIP_MODE_DIAGNOSTIC = "native falls back to Raw with ParseError 108 for a clip mode outside 1..5; " \

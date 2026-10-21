@@ -6,6 +6,7 @@ require_relative "record_variants"
 # (2.3.3.1, including the EMF+ and public comment identifiers) and Raw, the
 # fallback for type codes the registry does not name.
 module RecordVariants
+  self.catalog = :control
   COMMENT_DIAGNOSTIC = "native falls back to Raw with a ParseError when cb_data exceeds the record; Ruby keeps the typed Comment"
   EMF_PLUS_HEADER = [0x4001, 1, 28, 16, 0xDBC0_1002, 1, 96, 96].pack("vvV2V4").freeze
 

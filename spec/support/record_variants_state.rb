@@ -6,6 +6,7 @@ require_relative "record_variants"
 # (MS-EMF 2.3.11 and 2.3.7 control/path records). Values cover zero, boundary
 # and sign-sensitive cases that the corpus fixtures do not reach.
 module RecordVariants
+  self.catalog = :state
   {
     "SetBkMode" => [18, "bk_mode", [1, 2]], "SetMapMode" => [17, "map_mode", [1, 8]],
     "SetRop2" => [20, "rop2", [1, 16]], "SetPolyFillMode" => [19, "poly_fill_mode", [1, 2]],

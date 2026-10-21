@@ -6,6 +6,7 @@ require_relative "record_variants"
 # many points, signed and extreme coordinates, PolyDraw type bytes, PolyPoly
 # count arrays, and counts that disagree with the payload.
 module RecordVariants
+  self.catalog = :poly
   POLY_BOUNDS = [-5, -6, 70, 80].freeze
 
   module PolyBuilders
