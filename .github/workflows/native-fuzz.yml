@@ -5,12 +5,18 @@ on:
     paths:
       - 'emf-rs/**'
       - 'spec/fixtures/**'
+      - 'spec/emf/wmf_resilience_spec.rb'
+      - 'spec/support/wmf_resilience.rb'
+      - 'script/wmf_resilience_seeds'
       - '.github/workflows/native-fuzz.yml'
   push:
     branches: [main]
     paths:
       - 'emf-rs/**'
       - 'spec/fixtures/**'
+      - 'spec/emf/wmf_resilience_spec.rb'
+      - 'spec/support/wmf_resilience.rb'
+      - 'script/wmf_resilience_seeds'
       - '.github/workflows/native-fuzz.yml'
   schedule:
     - cron: '23 2 * * *'
@@ -65,3 +71,30 @@ jobs:
             emf-rs/fuzz/artifacts/
           if-no-files-found: warn
           retention-days: 14
+
+  wmf-resilience:
+    name: WMF seed replay on both backends
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: 1
+      CARGO_TARGET_DIR: ${{ github.workspace }}/emf-rs/target
+      EMF_TEST_NATIVE_LIBRARY: ${{ github.workspace }}/emf-rs/target/release/libemf_ffi.so
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby 3.4
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Install stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Build release native library
+        timeout-minutes: 15
+        run: timeout 900s cargo build --release --locked -p emf-ffi --manifest-path emf-rs/Cargo.toml
+      - name: Replay committed WMF seeds under supervision on Ruby and native backends
+        run: |
+          test -f "$EMF_TEST_NATIVE_LIBRARY"
+          bundle exec rspec spec/emf/wmf_resilience_spec.rb spec/emf/native_wmf_resilience_seeds_spec.rb
