@@ -138,3 +138,18 @@ identity is recorded in [03](03-rust-core.md). Complete Ruby/native valid-corpus
 observations, visitor/CLI parity, corrupted-input equivalence and the pinned
 downstream native golden suite remain acceptance work; do not infer them from
 the adapter examples or unchanged Rust serialization alone.
+
+### Current Ruby public API acceptance
+
+At source `7be55ce3f6d75d52c269071508330ef8fabaf0c7`, the forced-Ruby
+public API, backend-selection, model, detector and visitor checks passed
+**64 examples, 0 failures** (seed 40715; 3.61 seconds). Both native library
+environment paths were cleared. The checks include binary file API behavior,
+scalar/nested/array mutation after prior serialization, sibling preservation,
+fresh-process availability and controlled no-retry error propagation.
+
+Exact command, source revision, log digest and remaining scope are recorded in
+`/private/tmp/emf-execution/p05-current-ruby-public/result.json`; output is
+`rspec.log` in the same directory. This does not establish final-head native
+execution, complete corpus/CLI equivalence, downstream native golden behavior
+or installed-platform acceptance. Those R1–R5 gates remain open.
