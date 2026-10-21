@@ -113,9 +113,16 @@ module PlatformAcceptance
     end
 
     def self.workload_passes?(log)
-      log.match?(/^installed gem: emf-/) && log.match?(/^parsed: format=.+ records=\d+$/) &&
+      log.match?(/^installed gem: emf-/) && log.match?(/^parsed: format=emf records=\d+$/) &&
         log.lines.include?("discovery_without_env=works\n") && log.lines.include?("dump: roundtrip_identical=true\n") &&
-        log.match?(/^mutate: SetTextColor color.red \d+ -> \d+, reparse\+reserialize identical$/) && log.lines.last == "ok\n"
+        log.match?(/^mutate: SetTextColor color.red \d+ -> \d+, reparse\+reserialize identical$/) &&
+        %w[standard placeable].all? { |kind| wmf_workload_passes?(log, kind) } && log.lines.last == "ok\n"
+    end
+
+    def self.wmf_workload_passes?(log, kind)
+      log.match?(/^parsed: format=wmf kind=#{kind} records=\d+$/) &&
+        log.lines.include?("dump: wmf #{kind} roundtrip_identical=true\n") &&
+        log.match?(/^mutate: wmf #{kind} MoveTo x -?\d+ -> -123, reparse\+reserialize identical$/)
     end
   end
 

@@ -19,6 +19,25 @@ RSpec.describe PlatformAcceptance::Report do
   let(:probe_logs) { %w[build.log linkage.txt] }
   let(:modes) { %w[auto native] }
   let(:report) { described_class.new(@tmp).call }
+  let(:emf_workload) do
+    <<~LOG
+      installed gem: emf-0.1.2-arm64-darwin /isolated/gems/emf
+      discovery_without_env=works
+      parsed: format=emf records=3
+      dump: roundtrip_identical=true
+      mutate: SetTextColor color.red 0 -> 171, reparse+reserialize identical
+    LOG
+  end
+  let(:workload) do
+    wmf = %w[standard placeable].map do |kind|
+      <<~LOG
+        parsed: format=wmf kind=#{kind} records=2
+        dump: wmf #{kind} roundtrip_identical=true
+        mutate: wmf #{kind} MoveTo x 7 -> -123, reparse+reserialize identical
+      LOG
+    end.join
+    "#{emf_workload}#{wmf}ok\n"
+  end
   let(:run_cli) do
     lambda do |*arguments|
       script = File.expand_path("../../script/platform_probe/acceptance_report.rb", __dir__)
@@ -102,14 +121,7 @@ RSpec.describe PlatformAcceptance::Report do
     File.write(File.join(@directory, "load-direct.jsonl"), "#{JSON.generate(load_record)}\n")
     resolution = { intended_platform: platform, installed_platform: platform, native_gem_selected: true, gem_install_ok: true }
     File.write(File.join(@directory, "platform-gem.jsonl"), "#{JSON.generate(resolution)}\n#{JSON.generate(load_record)}\n")
-    File.write(File.join(@real, "workload.log"), <<~LOG)
-      installed gem: emf-0.1.2-arm64-darwin /isolated/gems/emf
-      discovery_without_env=works
-      parsed: format=emf records=3
-      dump: roundtrip_identical=true
-      mutate: SetTextColor color.red 0 -> 171, reparse+reserialize identical
-      ok
-    LOG
+    File.write(File.join(@real, "workload.log"), workload)
     availability = PlatformAcceptance::AVAILABILITY.flat_map do |name|
       modes.map { |mode| "availability #{name}/#{mode}=native" }
     end
@@ -118,7 +130,7 @@ RSpec.describe PlatformAcceptance::Report do
 
   after { FileUtils.rm_rf(@tmp) }
 
-  it "retains complete existing-format evidence and every proposed target/Ruby gap" do
+  it "retains complete EMF and both WMF workload evidence and every proposed target/Ruby gap" do
     expect(row).to include(status: "PASS", revision: revision)
     expect(row.fetch(:checks).values.uniq).to eq(["PASS"])
     expect(report.fetch(:targets).size).to eq(8)
@@ -126,6 +138,37 @@ RSpec.describe PlatformAcceptance::Report do
     excluded = report.fetch(:targets).last.fetch(:rubies).first
     expect(excluded).to include(status: "OPEN", excluded: true, revision: nil)
     expect(excluded.fetch(:exclusion)).to include("unavailable")
+  end
+
+  it "keeps the old EMF-only installed workload open" do
+    File.write(File.join(@real, "workload.log"), "#{emf_workload}ok\n")
+    expect(row.fetch(:status)).to eq("OPEN")
+    expect(row.fetch(:checks)).to include("real.forced_native_workload" => "OPEN", "real.installed_workload" => "PASS")
+    expect(row.fetch(:conflicts)).to be_empty
+    expect(row.fetch(:revision)).to eq(revision)
+  end
+
+  %w[standard placeable].product(%w[parsed dump mutate], %w[missing failed]).each do |kind, phase, condition|
+    it "keeps #{kind} WMF #{phase} #{condition} evidence open despite passing summaries" do
+      lines = workload.lines.map do |line|
+        next line unless line.start_with?("#{phase}:") && line.include?(kind)
+
+        condition == "missing" ? "" : "#{phase}: wmf #{kind} failed\n"
+      end
+      File.write(File.join(@real, "workload.log"), lines.join)
+      expect(row.fetch(:status)).to eq("OPEN")
+      expect(row.fetch(:checks)).to include("real.forced_native_workload" => "OPEN", "real.summary" => "PASS")
+      expect(row.fetch(:conflicts)).to be_empty
+    end
+  end
+
+  %w[parsed dump mutate].each do |phase|
+    it "requires the EMF #{phase} evidence alongside both WMF workloads" do
+      lines = workload.lines.reject { |line| line.start_with?("#{phase}:") && !line.include?("wmf") }
+      File.write(File.join(@real, "workload.log"), lines.join)
+      expect(row.fetch(:status)).to eq("OPEN")
+      expect(row.fetch(:checks)).to include("real.forced_native_workload" => "OPEN")
+    end
   end
 
   it "keeps an absent real phase open despite a passing throwaway probe" do
