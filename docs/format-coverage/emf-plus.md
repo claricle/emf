@@ -93,10 +93,10 @@ variant has a mapped ABI/Ruby consumer, Model visitor or CLI rendering path.
 ## Remaining acceptance
 
 Resolve compressed TSClip, establish
-independent rendering/conditional-version oracles, and measure the advertised
-ABI/Ruby mapping for every family. Keep licensed embedded corpus, EMF+ Only/dual
-mode behavior, full ordering/reference validation, fuzz/performance evidence and
-cross-platform native execution distinct from synthetic unit acceptance. No full
+independent rendering/conditional-version oracles, and extend the Ruby mapping
+beyond native framing (below). Keep licensed embedded corpus, EMF+ Only/dual
+mode behavior, fuzz/performance evidence and cross-platform native execution
+distinct from synthetic unit acceptance. No full
 format completion, Windows/Linux execution, full corpus rerun or rendering oracle
 is claimed by this checkpoint.
 
@@ -122,3 +122,31 @@ changed container file was rerun after adding nested-decode rejection and passes
 without compiler warnings. The checks use the same one-job local debug target;
 no production repair or new platform/corpus claim accompanies these acceptance
 assertions.
+
+## Object-reference validation and Ruby consumer (feature/native-emfplus-references-ruby)
+
+Core `Stream::object_references` resolves, per record, the objects a known
+Drawing, Text, image or clip record references against the most recently
+completed definition of each of the 64 slots (a definition counts from its last
+continuation record). Targets: `Definition`, `SolidColor` (S flag), `EmptySlot`,
+`WrongType`, `OutOfRange`. Only invalid chains and resource limits are errors;
+unresolved references are data. Tests: `emf_plus_references.rs` (valid, dangling,
+type mismatch, redefinition and type change, continuation, solid color, budget).
+
+The EPSN snapshot appends unresolved references as nonfatal diagnostics
+(`emf-plus-snapshot-v1.md`, "Reference diagnostics").
+
+`Emf::Native::EmfPlusStream.from_metafile` (lib/emf/native/emf_plus_stream.rb)
+builds an `Emf::EmfPlus::Stream` from the snapshot: native framing, object-chain
+and reference validation; Ruby `Records` classes decode each frame's validated raw
+bytes. Over the 27 EMF+ fixtures it equals the Ruby Stream (segments, records,
+offsets, gaps, errors, object diagnostics) for 24; the other three (corrupted
+Size/DataSize, an EMR_COMMENT whose cbData exceeds its data) return nil and the
+caller keeps Ruby's error-collecting parse. A frame spanning comments also returns
+nil. The normalized native payloads are not mapped into Ruby values: only the
+family tag, the fixed-family bodies and the reference diagnostics are consumed.
+`SetTSClip` is typed in core but family 0 (opaque) in schema v1.
+
+MetafileImage and texture metafile images now retain any bytes after
+MetafileDataSize in `suffix` (corpus test-109/test-118 carry 24-26); they were
+previously rejected, failing the whole snapshot.

@@ -1,9 +1,13 @@
 //! Independent read-only EMF+ snapshot schema; see emf-plus-snapshot-v1.md.
 use crate::emf_plus_typed::Sink;
 use crate::*;
-use emf_core::emf_plus::{Error, ObjectData, ObjectDefinition, RecordData};
+use emf_core::emf_plus::{
+    Error, ObjectData, ObjectDefinition, ObjectReference, RecordData, ReferenceTarget,
+};
 
 pub const EMF_PLUS_SNAPSHOT_VERSION: u32 = 1;
+/// kind u32, role u32, frame index u64, raw ID u32, actual object type u32.
+const REFERENCE_DIAGNOSTIC_BYTES: usize = 24;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -80,6 +84,17 @@ fn nested_error(error: Error) -> Failure {
     }
 }
 
+/// Diagnostic kind and the actual object type for a reference that does not
+/// resolve; valid and solid-color references produce no diagnostic.
+fn reference_diagnostic(reference: &ObjectReference) -> Option<(u32, u32)> {
+    match reference.target {
+        ReferenceTarget::EmptySlot => Some((1, 0)),
+        ReferenceTarget::WrongType { actual_type } => Some((2, actual_type as u32)),
+        ReferenceTarget::OutOfRange => Some((3, 0)),
+        ReferenceTarget::Definition { .. } | ReferenceTarget::SolidColor => None,
+    }
+}
+
 pub(super) fn overflow() -> Failure {
     Failure::new(
         EMF_LIMIT_EXCEEDED,
@@ -146,6 +161,16 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             definition.bytes = Vec::new();
             objects.push((definition, value));
         }
+        // Unresolved references are nonfatal diagnostics appended after the frames.
+        let references = stream
+            .object_references_with_budget(&mut budget)
+            .map_err(nested_error)?;
+        let mut diagnostics = budget.vector::<(ObjectReference, (u32, u32))>(references.len())?;
+        diagnostics.extend(
+            references
+                .into_iter()
+                .filter_map(|r| reference_diagnostic(&r).map(|d| (r, d))),
+        );
         let lengths = stream.segment_lengths();
         let raw_len = lengths
             .iter()
@@ -177,6 +202,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             .and_then(|n| n.checked_add(40))
             .and_then(|n| n.checked_add(raw_len))
             .and_then(|n| n.checked_add(typed_total))
+            .and_then(|n| n.checked_add(diagnostics.len().checked_mul(REFERENCE_DIAGNOSTIC_BYTES)?))
             .filter(|n| *n as u64 <= options.max_output_bytes && *n <= isize::MAX as usize)
             .ok_or_else(overflow)?;
         // Charge raw copying, table/record scans and both enclosing source scans.
@@ -203,7 +229,7 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
             total as u64,
             lengths.len() as u64,
             stream.records.len() as u64,
-            0,
+            diagnostics.len() as u64,
         ] {
             word(&mut bytes, value);
         }
@@ -317,6 +343,14 @@ pub unsafe extern "C" fn emf_document_emf_plus_snapshot_v1(
                 object_index += 1;
             }
             offset += size;
+        }
+        for (reference, (kind, actual_type)) in &diagnostics {
+            let role = reference.role.object_type() as u32;
+            bytes.extend_from_slice(&kind.to_le_bytes());
+            bytes.extend_from_slice(&role.to_le_bytes());
+            word(&mut bytes, reference.record_index as u64);
+            bytes.extend_from_slice(&reference.raw_id.to_le_bytes());
+            bytes.extend_from_slice(&actual_type.to_le_bytes());
         }
         debug_assert_eq!(bytes.len(), total);
         out_buffer.write(Box::into_raw(Box::new(EmfBuffer { bytes })));

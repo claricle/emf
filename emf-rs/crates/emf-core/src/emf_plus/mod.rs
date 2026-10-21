@@ -22,6 +22,8 @@ pub use text::Text;
 mod drawing;
 pub use drawing::{Drawing, ImageSource, PointData, Rectangle, RelativeCoordinate};
 mod objects;
+mod references;
+pub use references::{ObjectReference, ObjectRole, ReferenceTarget};
 mod parser;
 pub use objects::{ObjectBody, ObjectDefinition, ObjectFragment};
 mod records;
