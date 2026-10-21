@@ -125,6 +125,11 @@ module Emf
 
         def to_s
           <<~RUBY
+            def copy_template
+              #{@copy.join("\n  ")}
+              wire
+            end
+
             def build_attrs(attrs)
               #{@fetches.join("\n  ")}
               seen = 0
@@ -245,23 +250,29 @@ module Emf
         end
 
         def verify_template(fresh)
-          copy = WireCopy.call(@template, nil)
+          [WireCopy.call(@template, nil), copy_template].each { |copy| verify_copy_of(copy, fresh) }
+          unverified!("slots do not cover the field list") unless @slots.keys == fresh.field_names
+        end
+
+        def verify_copy_of(copy, fresh)
           same = copy.instance_of?(@wire_class) && copy.snapshot == fresh.snapshot &&
                  copy.num_bytes == fresh.num_bytes && bindata_bytes(copy) == bindata_bytes(fresh)
           unverified!("template copy differs from a fresh instance") unless same
-          unverified!("slots do not cover the field list") unless @slots.keys == fresh.field_names
         end
 
         # No object of a copy is shared with the template, and every parent
         # link points into the copy.
         def verify_independent
-          copy = WireCopy.call(@template, nil)
+          [-> { WireCopy.call(@template, nil) }, -> { copy_template }].each { |copier| verify_independent_copy(copier) }
+        end
+
+        def verify_independent_copy(copier)
+          copy = copier.call
           shared = tree_objects(@template).map(&:object_id) & tree_objects(copy).map(&:object_id)
           unverified!("copy shares objects with the template") unless shared.empty?
           unverified!("copy parent links are wrong") unless parents_consistent?(copy)
           edit_leaf(copy)
-          again = WireCopy.call(@template, nil)
-          unverified!("editing a copy changed the template") unless again.snapshot == @wire_class.new.snapshot
+          unverified!("editing a copy changed the template") unless copier.call.snapshot == @wire_class.new.snapshot
         end
 
         def tree_objects(struct)
@@ -442,7 +453,7 @@ module Emf
           define_generated(:call, <<~RUBY)
             def call(record_bytes)
               #{locals.join(', ')} = record_bytes.unpack(@format)
-              wire = WireCopy.call(@template, nil)
+              wire = copy_template
               #{lines.join("\n  ")}
               [wire, suffix(record_bytes)]
             end
@@ -489,6 +500,97 @@ module Emf
       end
 
       class FastFill
+        # Extended onto the template's array (clones keep it). A built
+        # record holds its coordinates as one flat list of integers; the
+        # BinData points are made the first time anything reads the array's
+        # elements, so a record built and serialized untouched never pays
+        # for them. Every reader of @elements in BinData::Array goes through
+        # `elements`, `clear?` or `assign`, which are the methods covered here.
+        module FlatPoints
+          def hold_flat_points(flat, filler)
+            @elements = nil
+            @flat_points = flat
+            @point_filler = filler
+          end
+
+          def clear?
+            @flat_points ? false : super
+          end
+
+          def assign(array)
+            return if equal?(array)
+
+            @flat_points = @point_filler = nil
+            super
+          end
+
+          # The coordinates of the given points as one list of Integers, the
+          # values `assign` would store; nil when any is not an Integer or
+          # there are no points, leaving those to the element-by-element copy.
+          def self.coords_of(points)
+            return if points.empty?
+
+            flat = Array.new(points.size * 2)
+            points.each_with_index do |source, index|
+              x, y = source.is_a?(Hash) ? [source[:x], source[:y]] : [source.x, source.y]
+              flat[index * 2] = x.respond_to?(:snapshot) ? x.snapshot : x
+              flat[(index * 2) + 1] = y.respond_to?(:snapshot) ? y.snapshot : y
+            end
+            return unless flat.all?(Integer)
+
+            flat
+          end
+
+          private
+
+          def elements
+            materialize_points if @flat_points
+            super
+          end
+
+          # Build the full element list before publishing it, so a concurrent
+          # reader sees either the flat list or complete elements.
+          def materialize_points
+            list = @point_filler.points_from(self, @flat_points)
+            @elements = list
+            @flat_points = @point_filler = nil
+          end
+        end
+
+        # Builds BinData points from the filler's point template (`@point`
+        # and its x and y leaves, set up by PointArrayFill).
+        module PointCopying
+          # Points as BinData elements, built from one flat coordinate list.
+          def points_from(array, flat)
+            Array.new(flat.size / 2) do |index|
+              point, x, y = point_copy(array)
+              x.assign(flat[index * 2])
+              y.assign(flat[(index * 2) + 1])
+              point
+            end
+          end
+
+          private
+
+          def point_copy(array)
+            point = @point.dup
+            x = @x_leaf.dup
+            y = @y_leaf.dup
+            point.instance_variable_set(:@parent, array)
+            x.instance_variable_set(:@parent, point)
+            y.instance_variable_set(:@parent, point)
+            point.instance_variable_set(:@field_objs, [x, y])
+            [point, x, y]
+          end
+
+          def copy_point(array, source)
+            point, x, y = point_copy(array)
+            x.assign(source.is_a?(Hash) ? source[:x] : source.x)
+            y.assign(source.is_a?(Hash) ? source[:y] : source.y)
+            point
+          end
+        end
+
         # Header plus one counted array of PointL (32-bit) or PointS (16-bit)
         # points. The array field, its count field, the point class, the
         # unpack directive and the coordinate range are all read from the
@@ -498,6 +600,8 @@ module Emf
         # `call` returns nil when the count overruns the bytes, and `pack`
         # when a coordinate is not an int32, leaving those to BinData.
         class PointArrayFill < FastFill
+          include PointCopying
+
           LAYOUTS = {
             "BinData::Int32le" => { directive: "l<", bytes: 8, range: (-(2**31))..((2**31) - 1) },
             "BinData::Int16le" => { directive: "s<", bytes: 4, range: (-(2**15))..((2**15) - 1) }
@@ -517,6 +621,8 @@ module Emf
             # neither.
             array.instance_variable_set(:@elements, nil)
             [@template, array, @point, @x_leaf, @y_leaf].each { |object| WireCopy.forget_evaluator(object) }
+            array.extend(FlatPoints)
+            @pack_points_format = "#{@format}#{@directive}*"
           end
 
           # Keyword construction; the points are built from template copies
@@ -529,19 +635,28 @@ module Emf
             return unless wire
 
             array = wire.public_send(array_name)
-            array.instance_variable_set(:@elements, points.map { |source| copy_point(array, source) })
+            flat = FlatPoints.coords_of(points)
+            if flat
+              array.hold_flat_points(flat, self)
+            else
+              array.instance_variable_set(:@elements, points.map { |source| copy_point(array, source) })
+            end
             wire
           end
 
           def pack(wire)
-            coords = []
-            wire.public_send(array_name).each { |point| coords << point.x.value << point.y.value }
-            return unless coords.all? { |v| v.is_a?(Integer) && @range.cover?(v) }
+            array = wire.public_send(array_name)
+            coords = array.instance_variable_get(:@flat_points) || collect_coords(array)
+            return unless coords.all?(Integer) && coords.all?(@range)
 
-            [*header_values(wire), *coords].pack("#{@format}#{@directive}*")
+            header_values(wire).concat(coords).pack(@pack_points_format)
           end
 
           private
+
+          def collect_coords(array)
+            array.each_with_object([]) { |point, coords| coords << point.x.value << point.y.value }
+          end
 
           # Two points, so the counted array is exercised by the self-check.
           def verification_record
@@ -569,37 +684,6 @@ module Emf
               (point.instance_of?(Hash) && point.size == 2 && point.key?(:x) && point.key?(:y))
           end
 
-          def point_copy(array)
-            point = @point.dup
-            x = @x_leaf.dup
-            y = @y_leaf.dup
-            point.instance_variable_set(:@parent, array)
-            x.instance_variable_set(:@parent, point)
-            y.instance_variable_set(:@parent, point)
-            point.instance_variable_set(:@field_objs, [x, y])
-            [point, x, y]
-          end
-
-          def copy_point(array, source)
-            point, x, y = point_copy(array)
-            x.assign(source.is_a?(Hash) ? source[:x] : source.x)
-            y.assign(source.is_a?(Hash) ? source[:y] : source.y)
-            point
-          end
-
-          def points_from(array, flat)
-            list = Array.new(flat.size / 2)
-            index = 0
-            while index < list.size
-              point, x, y = point_copy(array)
-              x.assign(flat[index * 2])
-              y.assign(flat[(index * 2) + 1])
-              list[index] = point
-              index += 1
-            end
-            list
-          end
-
           def generate_call(leaves)
             count = leaves.index { |path, _| path == [count_name] }
             array = array_name
@@ -610,7 +694,7 @@ module Emf
                 #{locals.join(', ')} = record_bytes.unpack(@format)
                 consumed = @size + v#{count} * @point_bytes
                 return if record_bytes.bytesize < consumed
-                wire = WireCopy.call(@template, nil)
+                wire = copy_template
                 #{lines.join("\n  ")}
                 array = wire.#{array}
                 flat = record_bytes.unpack("\#{@directive}\#{v#{count} * 2}", offset: @size)
@@ -761,7 +845,7 @@ module Emf
             define_generated(name, <<~RUBY)
               def #{name}(record_bytes)
                 #{locals.join(', ')} = record_bytes.unpack("#{format}")
-                wire = WireCopy.call(@template, nil)
+                wire = copy_template
                 #{lines.join("\n  ")}
                 wire.trailing.assign(record_bytes.byteslice(#{size}, record_bytes.bytesize - #{size}))
                 [wire, EMPTY_SUFFIX]
