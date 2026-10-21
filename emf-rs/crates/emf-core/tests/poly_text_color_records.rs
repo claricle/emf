@@ -290,6 +290,9 @@ fn color_adjustment_owns_signed_and_unsigned_words_and_preserves_suffix() {
         .unwrap();
     let output = serialize(&doc).unwrap();
     let mut expected = input.clone();
+    // Edited documents rebuild header totals, including the header and EOF records.
+    put(&mut expected, 48, input.len() as u32);
+    put(&mut expected, 52, 4);
     expected[132..134].copy_from_slice(&i16::MAX.to_le_bytes());
     expected[138..140].copy_from_slice(&i16::MIN.to_le_bytes());
     assert_eq!(output, expected);
