@@ -9,6 +9,7 @@ and this project adheres to http://semver.org/spec/v2.0.0.html[Semantic Versioni
 
 === Added
 
+* Native (Rust) backend, selected automatically when a compatible library is available, with the pure-Ruby parser as fallback (issue #15).
 * WMF parser (TODO 07).
 * EMF+ structured parser (TODO 12–14).
 * Semantic domain records to replace `WireAdapter` (TODO 10).
