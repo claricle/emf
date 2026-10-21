@@ -3,6 +3,32 @@
 module Emf
   module Emr
     module Binary
+      # Copy of an instantiated BinData struct tree. BinData builds each lazy
+      # field by cloning a prototype, which dominates `new` plus first access
+      # for a record; cloning the finished tree gives the same objects (same
+      # classes, params, nil values, parent links) at a fraction of the cost.
+      # Relies on BinData::Struct#@field_objs and Base#@parent, as
+      # Emf::Binary::ClassFieldAccessors already does for @field_objs.
+      module WireCopy
+        module_function
+
+        def call(template, parent)
+          copy = template.dup
+          copy.instance_variable_set(:@parent, parent)
+          objs = template.instance_variable_get(:@field_objs).map do |field|
+            field.respond_to?(:field_names) ? call(field, copy) : leaf(field, copy)
+          end
+          copy.instance_variable_set(:@field_objs, objs)
+          copy
+        end
+
+        def leaf(leaf, parent)
+          copy = leaf.dup
+          copy.instance_variable_set(:@parent, parent)
+          copy
+        end
+      end
+
       # Eager fill of fixed-layout records: one String#unpack for the whole
       # record, then leaf assignment into a fresh instance of the same wire
       # class. The unpack format and leaf paths are derived once per class
@@ -33,37 +59,15 @@ module Emf
           sample = klass.new
           @size = sample.num_bytes
           leaves = leaf_paths(sample, [])
+          # leaf_paths touched every field, so the sample is fully instantiated.
+          @template = sample
           @format = leaves.map { |_, field| DIRECTIVES.fetch(field.name) }.join
           # Float layouts are not packed: measured on test-000, BinData writes
           # SETWORLDTRANSFORM in 15 objects against 18+ for a value pack, and
           # Float32Le must write its retained NaN bits itself.
           @pack_format = @format unless leaves.any? { |_, field| float?(field) }
-          @value_readers = leaves.map { |path, _| path.freeze }.freeze
-          @setters = leaves.map { |path, field| setter_for(path, field) }.freeze
-        end
-
-        def call(record_bytes)
-          wire = @wire_class.new
-          values = record_bytes.unpack(@format)
-          i = 0
-          while i < @setters.size
-            getters, setter = @setters[i]
-            target = wire
-            getters.each { |getter| target = target.public_send(getter) }
-            target.public_send(setter, values[i])
-            i += 1
-          end
-          [wire, suffix(record_bytes)]
-        end
-
-        # Bytes of the fixed layout, equal to wire.to_binary_s, or nil for a
-        # float layout (the caller falls back to BinData). Values are read
-        # from the live leaves, so edits are reflected; BinData clamps integers
-        # on assignment, so the stored values are always in range.
-        def pack(wire)
-          return unless @pack_format
-
-          @value_readers.map { |path| path.inject(wire) { |target, getter| target.public_send(getter) }.value }.pack(@pack_format)
+          generate_call(leaves)
+          generate_pack(leaves)
         end
 
         private
@@ -89,10 +93,45 @@ module Emf
           end
         end
 
-        def setter_for(path, field_class)
-          return [path, :assign_bits] if field_class == Emf::Binary::Float32Le
+        # One specialized `call` per wire class: the record is unpacked into
+        # locals and each leaf is assigned through the accessors BinData
+        # already resolved for the class, with no per-leaf dispatch loop.
+        def generate_call(leaves)
+          locals = []
+          lines = leaves.each_with_index.map do |(path, field), index|
+            value = "v#{index}"
+            locals << value
+            target = accessor_chain(path)
+            verb = float?(field) ? "assign_bits" : "assign"
+            "#{target}.#{verb}(#{value})"
+          end
+          define_generated(:call, <<~RUBY)
+            def call(record_bytes)
+              #{locals.join(', ')} = record_bytes.unpack(@format)
+              wire = WireCopy.call(@template, nil)
+              #{lines.join("\n  ")}
+              [wire, suffix(record_bytes)]
+            end
+          RUBY
+        end
 
-          [path[0..-2], :"#{path.last}="]
+        def generate_pack(leaves)
+          if @pack_format
+            reads = leaves.map { |path, _| "#{accessor_chain(path)}.value" }
+            body = "[#{reads.join(', ')}].pack(@pack_format)"
+          else
+            body = "nil"
+          end
+          define_generated(:pack, "def pack(wire)\n  #{body}\nend\n")
+        end
+
+        def accessor_chain(path)
+          path.inject("wire") { |expr, name| "#{expr}.#{name}" }
+        end
+
+        def define_generated(name, source)
+          singleton_class.class_eval(source, __FILE__, __LINE__)
+          singleton_class.send(:public, name)
         end
 
         ENABLED_TYPES = [
