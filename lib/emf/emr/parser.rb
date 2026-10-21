@@ -23,7 +23,10 @@ module Emf
         until io.eof?
           offset = io.pos
           wire, suffix = read_record(io, offset, errors)
-          break if wire.nil?
+          if wire.nil?
+            trailing << bytes.byteslice(offset..)
+            break
+          end
 
           records << Model::Emr::Records::WireAdapter.new(wire: wire, offset: offset, suffix: suffix)
           emf_plus_bytes << extract_emf_plus(wire) if wire.is_a?(Emf::Emr::Binary::Records::Comment)

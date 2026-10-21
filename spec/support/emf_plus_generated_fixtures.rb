@@ -122,6 +122,22 @@ module Emf
                                                 record(klass(:EndContainer)::TYPE, u32(1)),
                                                 record(klass(:EndContainer)::TYPE, u32(2))) }
       end
+
+      # A malformed frame followed by a plausible frame must stay opaque until
+      # the next comment boundary, even when Size claims an enormous payload.
+      def malformed_frames
+        type = klass(:Clear)::TYPE
+        { zero_size: record(type, "", size: 0),
+          size_below_header: record(type, "", size: 8),
+          unaligned_size: record(type, "", size: 13),
+          oversized_data: record(type, "", data_size: 0xFFFFFFFF),
+          oversized_record: record(type, "", size: 0xFFFFFFFC) }
+      end
+
+      def malformed_comment_file(malformed)
+        clear = typed_record(:Clear)
+        emf_file([plus_header + clear + malformed + clear, clear + plus_eof])
+      end
     end
   end
 end
