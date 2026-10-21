@@ -12,6 +12,14 @@ module Emf
       module WireCopy
         module_function
 
+        # Drops a cached BinData lazy evaluator so a template copy does not
+        # evaluate parameters against the template.
+        def forget_evaluator(object)
+          return unless object.instance_variable_defined?(:@lazy_evaluator)
+
+          object.send(:remove_instance_variable, :@lazy_evaluator)
+        end
+
         def call(template, parent)
           copy = template.dup
           copy.instance_variable_set(:@parent, parent)
@@ -347,50 +355,56 @@ module Emf
       end
 
       class FastFill
-        # Header plus a counted array of 32-bit PointL (POLYGON, POLYLINE).
-        # The header is unpacked and assigned like a fixed layout; the points
+        # Header plus one counted array of PointL (32-bit) or PointS (16-bit)
+        # points. The array field, its count field, the point class, the
+        # unpack directive and the coordinate range are all read from the
+        # record template, so one class serves every such record. The header is unpacked and assigned like a fixed layout; the points
         # come from one `unpack` and are built by copying a PointL template,
         # so the array holds the same BinData elements a read produces.
         # `call` returns nil when the count overruns the bytes, and `pack`
         # when a coordinate is not an int32, leaving those to BinData.
         class PointArrayFill < FastFill
-          POINT_BYTES = 8
-          INT32 = (-(2**31))..((2**31) - 1)
-          private_constant :POINT_BYTES, :INT32
+          LAYOUTS = {
+            "BinData::Int32le" => { directive: "l<", bytes: 8, range: (-(2**31))..((2**31) - 1) },
+            "BinData::Int16le" => { directive: "s<", bytes: 4, range: (-(2**15))..((2**15) - 1) }
+          }.freeze
+          private_constant :LAYOUTS
 
           def initialize(klass)
             super
-            array = @template.aptl
+            array = @template.public_send(array_name)
             @point = array.send(:new_element)
+            @point_class = @point.class
+            @directive, @point_bytes, @range = LAYOUTS.fetch(@point.x.class.name).values_at(:directive, :bytes, :range)
             @x_leaf = @point.x
             @y_leaf = @point.y
             # The sample's num_bytes built the array's (empty) element list and
             # cached evaluators that read the template's cptl; copies share
             # neither.
             array.instance_variable_set(:@elements, nil)
-            [@template, array, @point, @x_leaf, @y_leaf].each { |object| forget_evaluator(object) }
+            [@template, array, @point, @x_leaf, @y_leaf].each { |object| WireCopy.forget_evaluator(object) }
           end
 
           # Keyword construction; the points are built from template copies
           # when every element is a PointL or an {x:, y:} hash, else BinData's.
           def build(attrs)
-            points = attrs[:aptl]
+            points = attrs[array_name]
             return super unless points.is_a?(::Array) && points.all? { |source| fast_point?(source) }
 
-            wire = super(attrs.except(:aptl))
+            wire = super(attrs.except(array_name))
             return unless wire
 
-            array = wire.aptl
+            array = wire.public_send(array_name)
             array.instance_variable_set(:@elements, points.map { |source| copy_point(array, source) })
             wire
           end
 
           def pack(wire)
             coords = []
-            wire.aptl.each { |point| coords << point.x.value << point.y.value }
-            return unless coords.all? { |v| v.is_a?(Integer) && INT32.cover?(v) }
+            wire.public_send(array_name).each { |point| coords << point.x.value << point.y.value }
+            return unless coords.all? { |v| v.is_a?(Integer) && @range.cover?(v) }
 
-            [*header_values(wire), *coords].pack("#{@format}l<*")
+            [*header_values(wire), *coords].pack("#{@format}#{@directive}*")
           end
 
           private
@@ -398,23 +412,26 @@ module Emf
           # Two points, so the counted array is exercised by the self-check.
           def verification_record
             wire = super
-            wire.cptl.assign(2)
-            wire.aptl.assign([{ x: 3, y: 4 }, { x: -5, y: 6 }])
+            wire.public_send(count_name).assign(2)
+            wire.public_send(array_name).assign([{ x: 3, y: 4 }, { x: -5, y: 6 }])
             wire
           end
 
-          def forget_evaluator(object)
-            return unless object.instance_variable_defined?(:@lazy_evaluator)
+          # The record's one counted array field.
+          def array_name
+            @array_name ||= @template.field_names.find { |name| @template.public_send(name).is_a?(BinData::Array) }
+          end
 
-            object.send(:remove_instance_variable, :@lazy_evaluator)
+          def count_name
+            @template.public_send(array_name).send(:get_parameter, :initial_length)
           end
 
           def leaf_paths(record, prefix)
-            super.reject { |path, _| path == [:aptl] }
+            super.reject { |_, field| field <= BinData::Array }
           end
 
           def fast_point?(point)
-            point.instance_of?(Emf::Binary::Types::PointL) ||
+            point.instance_of?(@point_class) ||
               (point.instance_of?(Hash) && point.size == 2 && point.key?(:x) && point.key?(:y))
           end
 
@@ -450,18 +467,19 @@ module Emf
           end
 
           def generate_call(leaves)
-            count = leaves.index { |path, _| path == [:cptl] }
+            count = leaves.index { |path, _| path == [count_name] }
+            array = array_name
             locals = leaves.each_index.map { |i| "v#{i}" }
             lines = leaves.each_with_index.map { |(path, _), i| "#{accessor_chain(path)}.assign(v#{i})" }
             define_generated(:call, <<~RUBY)
               def call(record_bytes)
                 #{locals.join(', ')} = record_bytes.unpack(@format)
-                consumed = @size + v#{count} * #{POINT_BYTES}
+                consumed = @size + v#{count} * @point_bytes
                 return if record_bytes.bytesize < consumed
                 wire = WireCopy.call(@template, nil)
                 #{lines.join("\n  ")}
-                array = wire.aptl
-                flat = record_bytes.unpack("l<\#{v#{count} * 2}", offset: @size)
+                array = wire.#{array}
+                flat = record_bytes.unpack("\#{@directive}\#{v#{count} * 2}", offset: @size)
                 array.instance_variable_set(:@elements, points_from(array, flat))
                 [wire, suffix(record_bytes, consumed)]
               end
@@ -474,7 +492,10 @@ module Emf
           end
         end
 
-        POINT_ARRAY_TYPES = [TypeCodes::POLYGON, TypeCodes::POLYLINE].freeze
+        POINT_ARRAY_TYPES = [
+          TypeCodes::POLYGON, TypeCodes::POLYLINE, TypeCodes::POLYGON16, TypeCodes::POLYLINE16,
+          TypeCodes::POLYBEZIER16, TypeCodes::POLYBEZIERTO16, TypeCodes::POLYLINETO16
+        ].freeze
         POINT_ARRAY_BY_TYPE = POINT_ARRAY_TYPES.to_h do |type_id|
           [type_id, PointArrayFill.guarded(Records.lookup(type_id))]
         end.compact.freeze
