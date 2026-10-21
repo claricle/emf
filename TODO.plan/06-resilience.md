@@ -86,7 +86,7 @@ scheduled budgets, and complete allocation/work boundary coverage across the
 implemented record/accessor paths. Native C lifetime controls are tracked in
 [04](04-c-abi.md). Do not infer whole-phase completion from Linux smoke checks.
 
-### Windows supervision implementation and remaining runtime acceptance
+### Windows supervision implementation and demonstrated runtime acceptance
 
 `spec/support/process_supervisor.rb` selects the Windows implementation in
 `spec/support/windows_process_supervisor.rb` through the existing public API.
@@ -101,10 +101,15 @@ The affected POSIX and Windows contract specs passed together on macOS Ruby
 changed Ruby files passed RuboCop. These checks establish contract behavior and
 preservation of POSIX supervision, not Windows ABI or runtime acceptance.
 The workflow now runs `spec/scripts/windows_process_supervisor_spec.rb` on
-`windows-2025` and `windows-11-arm`; each real Windows run must execute all
-26 examples, including deadline/RSS/output enforcement and descendant cleanup.
-Until those jobs pass, Windows supervision qualification remains **OPEN**.
-The workflow passed actionlint; no native build or installation was performed.
+`windows-2025` and `windows-11-arm`. At source revision
+`29858fc0065399e1766dfe33f6b988878fbebd8e`, both real runners passed **32 examples,
+0 failures**, including deadline/RSS/output enforcement and descendant cleanup:
+[Windows x64 job](https://github.com/claricle/emf/actions/runs/39583032372/job/119165030525)
+and [Windows ARM64 job](https://github.com/claricle/emf/actions/runs/39583032372/job/119165030936).
+This demonstrates the supervision contract on those runners at that revision.
+Supported-platform valid-corpus RSS calibration, installed native qualification
+and the remaining resilience acceptance above remain **OPEN**; these runner
+results do not certify those separate criteria.
 
 ### Additional bounded WMF malformed-input evidence
 
