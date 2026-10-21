@@ -42,9 +42,17 @@ module Emf
 
       private
 
+      EMPTY_PAYLOAD = "".b.freeze
+      private_constant :EMPTY_PAYLOAD
+
+      # One unpack in place per record; most fixed-layout records carry no payload.
       def read_record
-        index, offset, length, type, family, payload_length = take(40).unpack("Q<3V2Q<")
-        { index: index, offset: offset, length: length, type: type, family: family, payload: take(payload_length) }
+        raise FormatError, "truncated native snapshot" if @bytes.bytesize - @position < 40
+
+        index, offset, length, type, family, payload_length = @bytes.unpack("Q<3V2Q<", offset: @position)
+        @position += 40
+        payload = payload_length.zero? ? EMPTY_PAYLOAD : take(payload_length)
+        { index: index, offset: offset, length: length, type: type, family: family, payload: payload }
       end
     end
   end

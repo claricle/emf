@@ -19,6 +19,8 @@ module Emf
       def initialize(snapshot, input)
         @snapshot = snapshot
         @input = input
+        # Filled wires read their fields from this frozen view, as Ruby-parsed wires do.
+        @data = input.frozen? ? input : input.dup.freeze
       end
 
       def call
@@ -41,6 +43,9 @@ module Emf
           raise FormatError, "invalid native record span"
         end
 
+        filled = FilledWire.for(record, @data)
+        return Model::Emr::Records::WireAdapter.lazy(source: filled, offset: offset) if filled
+
         raw = @input.byteslice(offset, length)
 
         if record.fetch(:family) == 90
@@ -48,11 +53,8 @@ module Emf
           return Model::Emr::Records::WireAdapter.new(wire: wire, offset: offset)
         end
 
-        source = FilledWire.for(record, raw) || begin
-          klass, fields = wire_fields(record, raw)
-          LazyWire.new(klass, fields, raw, record)
-        end
-        Model::Emr::Records::WireAdapter.lazy(source: source, offset: offset)
+        klass, fields = wire_fields(record, raw)
+        Model::Emr::Records::WireAdapter.lazy(source: LazyWire.new(klass, fields, raw, record), offset: offset)
       end
 
       def wire_fields(record, raw)

@@ -60,35 +60,44 @@ module Emf
     class FilledWire
       # Snapshot families whose records the Ruby backend's fillers read from
       # bytes alone; any other family keeps its own validation in the Hydrator.
-      FAMILIES = [2, 3, *5..32, *35..57, *60..86].freeze
-      private_constant :FAMILIES
+      FAMILIES = [2, 3, *5..32, *35..57, *60..86].to_h { |family| [family, true] }.freeze
+      # The filler of each EMR type, indexed by type; types past the table have none.
+      FILLERS = Array.new(128) { |type| Emr::Binary::FastFill.for(type) || Emr::Binary::FastFill.for_points(type) }.freeze
+      private_constant :FAMILIES, :FILLERS
 
-      # The source for a fixed-layout or point-array record, or nil. Recovered
-      # (family 0, including a count that overruns the bytes) records and a
-      # header disagreeing with the span keep the field path.
-      def self.for(record, raw)
+      # The source for the fixed-layout or point-array record the snapshot
+      # places in the frozen `data`, or nil. Recovered (family 0, including a
+      # count that overruns the bytes) records and a header disagreeing with
+      # the span keep the field path. The caller has bounds-checked the span.
+      def self.for(record, data)
         type = record.fetch(:type)
-        filler = Emr::Binary::FastFill.for(type) || Emr::Binary::FastFill.for_points(type)
-        return unless filler && FAMILIES.include?(record.fetch(:family)) && raw.bytesize >= filler.size
-        return unless raw.unpack1("V") == type && raw.unpack1("V", offset: 4) == raw.bytesize
+        filler = FILLERS[type]
+        return unless filler && FAMILIES[record.fetch(:family)]
 
-        new(filler, raw, type)
+        offset = record.fetch(:offset)
+        length = record.fetch(:length)
+        return unless length >= filler.size
+        return unless data.unpack1("V", offset: offset) == type && data.unpack1("V", offset: offset + 4) == length
+
+        new(filler, data, offset, length, type)
       end
 
-      def initialize(filler, bytes, type_id)
+      def initialize(filler, data, offset, length, type_id)
         @filler = filler
-        @bytes = bytes
+        @data = data
+        @offset = offset
+        @length = length
         @type_id = type_id
       end
 
       attr_reader :type_id
 
       def to_binary_s
-        @bytes
+        @data.byteslice(@offset, @length)
       end
 
       def materialize
-        wire, @suffix = @filler.call(@bytes)
+        wire, @suffix = @filler.call_at(@data, @offset, @length)
         raise FormatError, "native record disagrees with its bytes" unless wire
 
         wire
