@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 # Usage: script/build_native_gem --platform NAME --output DIR
-#          [--library PATH --abi-version N --target TRIPLE [--revision SHA]]
+#          [--library PATH --abi-version N --target TRIPLE] [--revision SHA]
 #
 # Builds a platform gem (or, with --platform ruby, the source gem) from
 # emf.gemspec in a temporary staging tree. The repository is never modified:
@@ -18,6 +18,8 @@ require "open3"
 require "optparse"
 require "rubygems/package"
 require "tmpdir"
+
+load File.expand_path("build_source_release_gem", __dir__)
 
 class NativeGemBuilder
   ROOT = File.expand_path("..", __dir__)
@@ -36,6 +38,8 @@ class NativeGemBuilder
 
   def build
     validate
+    return SourceReleaseGemBuilder.new(output: @output, revision: @revision).build if source?
+
     FileUtils.mkdir_p(@output)
     Dir.mktmpdir("emf-native-gem") { |stage| build_in(stage) }
   end
@@ -59,7 +63,7 @@ class NativeGemBuilder
   def build_in(stage)
     spec = Dir.chdir(ROOT) { Gem::Specification.load("emf.gemspec") }
     spec.files.each { |file| stage_file(stage, File.join(ROOT, file), file) }
-    spec = add_native(stage, spec) unless source?
+    spec = add_native(stage, spec)
     gem_file = package(stage, spec)
     FileUtils.mv(File.join(stage, gem_file), @output)
     puts File.join(@output, gem_file)
@@ -129,7 +133,7 @@ OptionParser.new do |o|
   o.on("--library PATH", "built native library (platform gems)") { |v| options[:library] = v }
   o.on("--abi-version N", "ABI version the library reports") { |v| options[:abi_version] = v }
   o.on("--target TRIPLE", "Rust target triple the library was built for") { |v| options[:target] = v }
-  o.on("--revision SHA", "git revision (default: HEAD)") { |v| options[:revision] = v }
+  o.on("--revision SHA", "git revision (source gems require checkout match; default: HEAD)") { |v| options[:revision] = v }
 end.parse!
 
 abort "--platform and --output are required" unless options[:platform] && options[:output]

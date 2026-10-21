@@ -1,11 +1,12 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Usage: script/check_native_package --directory DIR
+# Usage: script/check_native_package --directory DIR [--revision SHA]
 #
 # Opens every .gem in DIR and checks its contents against emf.gemspec and,
 # for platform gems, against the generated lib/emf/native/platforms.json and
-# provenance.json. With --revision SHA the recorded git revision must equal it.
+# provenance.json. With --revision SHA the recorded git revision must equal it;
+# source gems must also match the checkout's Cargo.lock and crate version.
 # Prints one line per violation and exits 1 if there is any.
 
 require "digest"
@@ -13,6 +14,8 @@ require "json"
 require "optparse"
 require "rubygems/package"
 require "tmpdir"
+
+load File.expand_path("build_source_release_gem", __dir__)
 
 class NativePackageChecker
   ROOT = File.expand_path("..", __dir__)
@@ -26,6 +29,8 @@ class NativePackageChecker
   REVISION = /\A\h{40}\z/
 
   def initialize(directory, revision: nil)
+    abort "--revision must be a full 40-character lowercase git SHA" if revision && !revision.match?(/\A[0-9a-f]{40}\z/)
+
     @directory = directory
     @revision = revision
     @source_files = Dir.chdir(ROOT) { Gem::Specification.load("emf.gemspec").files }
@@ -64,6 +69,7 @@ class NativePackageChecker
     problems = contents.grep(LIBRARY).map { |file| "source gem contains native library #{file}" }
     problems += contents.grep(RUST_FILE).map { |file| "source gem contains Rust file #{file}" }
     problems << "source gem declares extensions" unless spec.extensions.empty?
+    problems += SourceReleaseGemBuilder.problems(spec, @revision) if @revision
     problems
   end
 
@@ -135,7 +141,7 @@ end
 options = {}
 OptionParser.new do |o|
   o.on("--directory DIR", "directory holding the .gem files") { |v| options[:directory] = v }
-  o.on("--revision SHA", "git revision the provenance must record") { |v| options[:revision] = v }
+  o.on("--revision SHA", "full git revision the source or native provenance must record") { |v| options[:revision] = v }
 end.parse!
 abort "--directory is required" unless options[:directory]
 
