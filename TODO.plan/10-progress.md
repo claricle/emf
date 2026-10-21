@@ -1,6 +1,34 @@
 # Delivery progress and handoff
 
-Status: execution plan merged; baseline, Rust core and Ruby integration work in progress.
+Status: implementation and qualification in progress. Passing source-level checks
+do not close native, performance or installed-platform acceptance.
+
+## Current acceptance checkpoint
+
+- **Ruby corpus:** exact source `0f63318655f49dcdc65756d780b94fda0e1602c0`
+  completed all 231 fixture captures: 219 parsed, 10 recovered and two explicit
+  format errors. Canonical controls verified 229 byte-exact round trips,
+  reparse/file equality and unchanged input identities, with zero safety failures.
+  See [the revision-bound evidence](02-baseline-and-parity.md). Later parser
+  changes require affected qualification; this result does not certify them.
+- **Ruby API:** source `7be55ce3f6d75d52c269071508330ef8fabaf0c7` passed
+  64 forced-Ruby public API, backend-selection, model, detector and visitor
+  examples. Native execution is a separate remaining criterion in
+  [05](05-ruby-execution.md).
+- **Performance harness:** bounded benchmark-series deadlines are implemented
+  in `9b4f0e6b225ef25f3c56dc9ac52e94d2c304a39f`; its affected benchmark
+  checks passed 38 examples. Ordinary deadlines retain their 60-second ceiling;
+  explicit series deadlines permit up to 1,200 seconds with resource and cleanup
+  controls retained. This enables the measurement policy in
+  [07](07-performance.md); it is not evidence that the speed target is met.
+- **Native and distribution:** the earlier workspace run at `7165bf2` stopped
+  on obsolete unknown-record test controls. The source correction is integrated,
+  but a passing final-source workspace run, linked ABI/public Ruby checks and
+  real installed/platform rows remain open. See [03](03-rust-core.md),
+  [04](04-c-abi.md) and [08](08-platform-delivery.md).
+
+The detailed records below retain earlier observations. Their revisions and
+limits apply; they do not override this checkpoint or certify later source.
 
 ## Work record
 
@@ -62,13 +90,23 @@ on the new implementation before the evidence describes that version.
 
 ## Next action
 
-Continue [02](02-baseline-and-parity.md): identify the reported slow workload and
-retain the pinned downstream baseline as the native compatibility oracle. Use the canonical
-oracle and timing drivers for the bounded native slice in [03](03-rust-core.md),
-and extend the working [04](04-c-abi.md) / [05](05-ruby-binding.md) slice across
-remaining record families. Preserve full-wire parity and mutation checks for each cohort.
-The initial estimates in [00](00-overview.md) should be revised after this milestone
-and after the integrated native slice.
+Complete the remaining end-to-end qualification rather than repeat the historical
+baseline discovery:
+
+1. Validate the corrected Rust workspace and linked ABI/Ruby public path at one
+   recorded source revision; retain failures and qualify the actual library used.
+2. Refresh affected corpus/parity controls for that source after parser changes,
+   including forced-native execution, edits, recovery and downstream golden output.
+3. Use the bounded series harness to collect the required comparable distributions
+   for the named slow workload. The sub-second target remains unmet; record any
+   remaining gap instead of treating source optimizations as measured acceptance.
+4. Complete real source/native installed-platform rows and required CI. Keep
+   missing evidence open in the corresponding package, then perform the final
+   whole-issue implementation review once the implementation is finalized.
+
+See [02](02-baseline-and-parity.md), [05](05-ruby-execution.md),
+[07](07-performance.md) and [08](08-platform-delivery.md) for exact contracts.
+A run certifies only its recorded source, artifact and workload identities.
 
 ### Ruby API and mutable wire controls
 
@@ -95,7 +133,7 @@ limits for recording a baseline, not performance or resource-budget acceptance.
 Timeout, process failure and unexpected backend exceptions remain distinct from
 format rejection and make the capture unsafe.
 
-The latest 231-fixture capture is **not an accepted baseline**: 221 parsed,
+The historical pre-qualification 231-fixture capture was **not an accepted baseline**: 221 parsed,
 six recovered, two raised format errors and two hit the 15-second child deadline.
 Source files were held stable throughout this capture. Both timeouts are 1.5 MB
 inputs: `emf/test-031.emf` and `emf-corrupted/bad_corrupted_2014-12-09-002112.emf`.
