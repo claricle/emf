@@ -66,17 +66,15 @@ module Emf
       private_constant :FAMILIES, :FILLERS
 
       # The source for the fixed-layout or point-array record the snapshot
-      # places in the frozen `data`, or nil. Recovered (family 0, including a
-      # count that overruns the bytes) records and a header disagreeing with
-      # the span keep the field path. The caller has bounds-checked the span.
-      def self.for(record, data)
-        type = record.fetch(:type)
+      # places at `offset` of the frozen `data`, or nil. Recovered (family 0,
+      # including a count that overruns the bytes) records and a header
+      # disagreeing with the span keep the field path. The caller has
+      # bounds-checked the span.
+      # `type_family` is the snapshot table word: type | family << 32.
+      def self.for(type_family, offset, length, data)
+        type = type_family & 0xFFFF_FFFF
         filler = FILLERS[type]
-        return unless filler && FAMILIES[record.fetch(:family)]
-
-        offset = record.fetch(:offset)
-        length = record.fetch(:length)
-        return unless length >= filler.size
+        return unless filler && FAMILIES[type_family >> 32] && length >= filler.size
         return unless data.unpack1("V", offset: offset) == type && data.unpack1("V", offset: offset + 4) == length
 
         new(filler, data, offset, length, type)

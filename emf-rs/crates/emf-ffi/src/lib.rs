@@ -14,7 +14,7 @@ pub use wmf_rejection::*;
 pub use wmf_snapshot::*;
 pub use wmf_view::*;
 
-use emf_core::{Format, ParseFailure, ParseLimits, SerializeFailure};
+use emf_core::{Document, Format, ParseFailure, ParseLimits, SerializeFailure};
 use std::{
     fmt,
     mem::size_of,
@@ -324,6 +324,28 @@ pub unsafe extern "C" fn emf_document_snapshot(
     out_buffer: *mut *mut EmfBuffer,
     out_error: *mut *mut EmfError,
 ) -> i32 {
+    document_snapshot(document, out_buffer, out_error, snapshot::encode)
+}
+
+/// Schema 3 snapshot (snapshot-v3.md); same status, output and lifetime rules.
+///
+/// # Safety
+/// The document must be live; non-NULL output pointers must reference writable handle slots.
+#[no_mangle]
+pub unsafe extern "C" fn emf_document_snapshot_v3(
+    document: *const EmfDocument,
+    out_buffer: *mut *mut EmfBuffer,
+    out_error: *mut *mut EmfError,
+) -> i32 {
+    document_snapshot(document, out_buffer, out_error, snapshot::encode_v3)
+}
+
+unsafe fn document_snapshot(
+    document: *const EmfDocument,
+    out_buffer: *mut *mut EmfBuffer,
+    out_error: *mut *mut EmfError,
+    encode: fn(&Document) -> Result<Vec<u8>, snapshot::Error>,
+) -> i32 {
     if !out_buffer.is_null() {
         out_buffer.write(ptr::null_mut());
     }
@@ -335,7 +357,7 @@ pub unsafe extern "C" fn emf_document_snapshot(
             .as_ref()
             .ok_or_else(|| Failure::invalid("document is NULL"))?
             .document;
-        let bytes = snapshot::encode(document).map_err(|error| match error {
+        let bytes = encode(document).map_err(|error| match error {
             snapshot::Error::SizeOverflow => Failure::new(
                 EMF_LIMIT_EXCEEDED,
                 None,

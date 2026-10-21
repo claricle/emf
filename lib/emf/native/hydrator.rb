@@ -25,7 +25,10 @@ module Emf
 
       def call
         diagnostics = Diagnostics.new(@snapshot, @input)
-        records = @snapshot.records.map { |record| diagnostics.adapter_at(record.fetch(:offset)) || hydrate_record(record) }
+        table = @snapshot.table
+        records = Array.new(@snapshot.record_count) do |index|
+          diagnostics.adapter_at(table[(index * 5) + 1]) || hydrate_at(index, table)
+        end
         emf_plus = emf_plus_stream(diagnostics)
         Model::Metafile.new(
           format: emf_plus.empty? ? :emf : :emf_plus, header: Header.new.call(@snapshot.header, @snapshot.raw_header), records: records,
@@ -36,16 +39,19 @@ module Emf
 
       private
 
-      def hydrate_record(record)
-        offset = record.fetch(:offset)
-        length = record.fetch(:length)
-        if offset.negative? || length < 8 || offset > @input.bytesize || length > @input.bytesize - offset
-          raise FormatError, "invalid native record span"
-        end
+      def hydrate_at(index, table)
+        base = index * 5
+        offset = table[base + 1]
+        length = table[base + 2]
+        raise FormatError, "invalid native record span" unless length >= 8 && (0..(@input.bytesize - length)).cover?(offset)
 
-        filled = FilledWire.for(record, @data)
+        filled = FilledWire.for(table[base + 3], offset, length, @data)
         return Model::Emr::Records::WireAdapter.lazy(source: filled, offset: offset) if filled
 
+        hydrate_record(@snapshot.record(index), offset, length)
+      end
+
+      def hydrate_record(record, offset, length)
         raw = @input.byteslice(offset, length)
 
         if record.fetch(:family) == 90
@@ -63,7 +69,7 @@ module Emf
         case family
         when 93..103 then BitmapFields.call(payload, family, raw)
         when 0 then raw_fields(record, raw)
-        when 1 then eof_fields(payload, raw)
+        when 1 then Fields.eof(payload, raw)
         when 3, 45..53 then Fields.point_array(payload, record.fetch(:family))
         when 54..57 then Fields.multi_point_array(payload, record.fetch(:family))
         when 58, 59 then Fields.poly_draw(payload, record.fetch(:family))
@@ -116,15 +122,6 @@ module Emf
         [Emr::Binary::Records::Raw, { payload: raw.byteslice(8..) }]
       end
 
-      def eof_fields(payload, raw)
-        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 12 && raw.bytesize >= 20
-
-        # The public Ruby wire keeps the fixed word and opaque remainder even
-        # when the native EOF model reads nSizeLast from the record's final word.
-        entries, offset, last = raw.byteslice(8, 12).unpack("V3")
-        [Emr::Binary::Records::Eof, { n_pal_entries: entries, off_pal_entries: offset, n_size_last: last, body: raw.byteslice(20..) }]
-      end
-
       def comment_fields(payload, raw)
         raise FormatError, "invalid native COMMENT payload" if payload.bytesize < 8
 
@@ -136,12 +133,13 @@ module Emf
       end
 
       def emf_plus_stream(diagnostics)
-        @snapshot.records.filter_map do |record|
-          offset = record.fetch(:offset)
+        table = @snapshot.table
+        @snapshot.record_count.times.filter_map do |index|
+          offset = table[(index * 5) + 1]
           next diagnostics.emf_plus_at(offset) if diagnostics.recovered?(offset)
-          next unless record.fetch(:family) == 4
+          next unless table[(index * 5) + 3] >> 32 == 4
 
-          _klass, fields = comment_fields(record.fetch(:payload), @input.byteslice(offset, record.fetch(:length)))
+          _klass, fields = comment_fields(@snapshot.payload(index), @input.byteslice(offset, table[(index * 5) + 2]))
           data = fields.fetch(:data)
           data.byteslice(4..) if fields.fetch(:cb_data) >= 4 && data.start_with?("EMF+")
         end.join.b

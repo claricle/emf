@@ -87,6 +87,15 @@ module Emf
         53 => [Emr::Binary::Records::PolylineTo16, 4, :cpts, :apts]
       }.freeze
 
+      def self.eof(payload, raw)
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 12 && raw.bytesize >= 20
+
+        # The public Ruby wire keeps the fixed word and opaque remainder even
+        # when the native EOF model reads nSizeLast from the record's final word.
+        entries, offset, last = raw.byteslice(8, 12).unpack("V3")
+        [Emr::Binary::Records::Eof, { n_pal_entries: entries, off_pal_entries: offset, n_size_last: last, body: raw.byteslice(20..) }]
+      end
+
       def self.point_array(payload, family)
         klass, width, count_field, points_field = POINT_ARRAYS.fetch(family)
         raise FormatError, "invalid native point array payload" if payload.bytesize < 24

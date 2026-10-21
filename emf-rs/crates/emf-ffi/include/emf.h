@@ -212,6 +212,10 @@ int32_t emf_record_batch(const emf_document *document, uint64_t start, uint64_t 
  * No raw record bytes are duplicated; use emf_record_bytes for wire hydration.
  */
 int32_t emf_document_snapshot(const emf_document *document, emf_buffer **out_buffer, emf_error **out_error);
+/* Schema 3 bulk snapshot: same buffer, status and lifetime rules as
+ * emf_document_snapshot. Record entries form one fixed-stride table. See snapshot-v3.md.
+ */
+int32_t emf_document_snapshot_v3(const emf_document *document, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_record_bytes(const emf_document *document, uint64_t index, emf_buffer **out_buffer, emf_error **out_error);
 int32_t emf_serialize(const emf_document *document, emf_buffer **out_buffer, emf_error **out_error);
 /* WMF handles use the same limits, statuses, buffer ownership and descriptor layouts.

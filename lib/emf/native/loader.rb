@@ -24,6 +24,8 @@ module Emf
         emf_buffer_free: [[POINTER], Fiddle::TYPE_VOID],
         emf_error_free: [[POINTER], Fiddle::TYPE_VOID]
       }.freeze
+      # Present in newer libraries only; an older one keeps the schema 2 snapshot.
+      SNAPSHOT_V3 = :emf_document_snapshot_v3
 
       def initialize(path)
         raise Unavailable, "native backend requires a 64-bit process" unless Fiddle::SIZEOF_VOIDP == 8
@@ -33,6 +35,8 @@ module Emf
           [name, Fiddle::Function.new(@library[name.to_s], arguments, result)]
         end
         raise Unavailable, "native backend ABI version mismatch (expected 1)" unless invoke(:emf_abi_version) == 1
+
+        @snapshot_function = optional(SNAPSHOT_V3, [POINTER, POINTER, POINTER]) ? SNAPSHOT_V3 : :emf_document_snapshot
       rescue Fiddle::DLError => e
         raise Unavailable, "native backend could not load: #{e.message}"
       end
@@ -46,7 +50,7 @@ module Emf
       end
 
       def snapshot(document)
-        buffer(:emf_document_snapshot, document)
+        buffer(@snapshot_function, document)
       end
 
       def record_bytes(document, index)
@@ -54,6 +58,12 @@ module Emf
       end
 
       private
+
+      def optional(name, arguments)
+        @functions[name] = Fiddle::Function.new(@library[name.to_s], arguments, Fiddle::TYPE_INT)
+      rescue Fiddle::DLError
+        nil
+      end
 
       def invoke(name, *arguments)
         @functions.fetch(name).call(*arguments)
