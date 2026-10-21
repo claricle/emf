@@ -7,7 +7,6 @@ require_relative "record_variants"
 # fallback for type codes the registry does not name.
 module RecordVariants
   self.catalog = :control
-  COMMENT_DIAGNOSTIC = "native falls back to Raw with a ParseError when cb_data exceeds the record; Ruby keeps the typed Comment"
   EMF_PLUS_HEADER = [0x4001, 1, 28, 16, 0xDBC0_1002, 1, 96, 96].pack("vvV2V4").freeze
 
   module ControlBuilders
@@ -33,7 +32,7 @@ module RecordVariants
     valid("EMF+ header", comment("EMF+#{EMF_PLUS_HEADER}"))
     valid("length not 4-aligned", comment("abcde"))
     valid("declared length below payload", u32("cb_data", 2), raw("data", "abcdefgh"), check("data", "abcdefgh"))
-    malformed("declared length exceeds record", u32("cb_data", 4096), raw("data", "abcd"), pending: COMMENT_DIAGNOSTIC)
+    malformed("declared length exceeds record", u32("cb_data", 4096), raw("data", "abcd"))
     malformed("body shorter than length field", raw("data", "\0\0".b))
   end
 
