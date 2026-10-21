@@ -77,11 +77,12 @@ module RecordVariants
   class Entry
     include Fields
 
-    attr_reader :name, :type, :variants, :derived_pending
+    attr_reader :name, :type, :variants, :derived_pending, :hydrated
 
-    def initialize(name, type)
+    def initialize(name, type, hydrated: false)
       @name = name
       @type = type
+      @hydrated = hydrated
       @variants = []
       @derived_pending = {}
     end
@@ -91,27 +92,27 @@ module RecordVariants
       @derived_pending[label] = reason
     end
 
-    def valid(label, *fields, pending: nil)
-      add(label, fields.flatten, :valid, pending: pending)
+    def valid(label, *fields, pending: nil, type_code: nil)
+      add(label, fields.flatten, :valid, pending: pending, type_code: type_code)
     end
 
     # Well-formed framing whose body the parsers must treat identically but
     # whose fields are not asserted (bounds-check and recovery controls).
-    def malformed(label, *fields, size: nil, pending: nil, raw: false)
-      add(label, fields.flatten, :malformed, size: size, pending: pending, raw: raw)
+    def malformed(label, *fields, size: nil, pending: nil, raw: false, type_code: nil)
+      add(label, fields.flatten, :malformed, size: size, pending: pending, raw: raw, type_code: type_code)
     end
 
     private
 
-    def add(label, fields, kind, pending:, size: nil, raw: false)
-      @variants << Variant.new(name, label, type, fields, size, kind, pending, raw)
+    def add(label, fields, kind, pending:, size: nil, raw: false, type_code: nil)
+      @variants << Variant.new(name, label, type_code || type, fields, size, kind, pending, raw)
     end
   end
 
   module_function
 
-  def define(name, type, &)
-    entry = Entry.new(name, type)
+  def define(name, type, hydrated: false, &)
+    entry = Entry.new(name, type, hydrated: hydrated)
     entry.instance_eval(&)
     REGISTRY[name] = entry
   end
