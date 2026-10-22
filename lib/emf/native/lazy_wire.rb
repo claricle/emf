@@ -68,6 +68,9 @@ module Emf
     # materialising reads the record bytes with the same FastFill the Ruby
     # backend parses with. Float leaves keep their original bits there.
     class FilledWire < Emr::FilledRecord
+      # Native records have always answered a plain Integer type id.
+      attr_reader :type_id
+
       # Snapshot families whose records the Ruby backend's fillers read from
       # bytes alone; any other family keeps its own validation in the Hydrator.
       FAMILIES = [2, 3, *5..32, *35..57, *60..86].to_h { |family| [family, true] }.freeze

@@ -8,6 +8,15 @@ require_relative "../../support/native_library_context"
 RSpec.describe "Native WireAdapter#values source" do
   include_context "with native library"
 
+  # CI sets only EMF_TEST_NATIVE_LIBRARY; the native backend loads EMF_NATIVE_LIBRARY.
+  around do |example|
+    previous = ENV.fetch("EMF_NATIVE_LIBRARY", nil)
+    ENV["EMF_NATIVE_LIBRARY"] = ENV.fetch("EMF_TEST_NATIVE_LIBRARY", previous)
+    example.run
+  ensure
+    ENV["EMF_NATIVE_LIBRARY"] = previous
+  end
+
   let(:bytes) { Emf::SpecSupport::FixturePath.read_fixture("emf", "test-031.emf") }
   let(:records) do
     ENV["EMF_BACKEND"] = "native"

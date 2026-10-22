@@ -28,7 +28,13 @@ module Emf
         @type_id = type_id
       end
 
-      attr_reader :type_id, :length
+      attr_reader :length
+
+      # The Ruby parser has always answered a BinData Uint32le here (the wire's
+      # i_type), so a byte-backed record keeps that type.
+      def type_id
+        BinData::Uint32le.new(@type_id)
+      end
 
       def to_binary_s
         @data.byteslice(@offset, @length)
