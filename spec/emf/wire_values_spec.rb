@@ -21,11 +21,14 @@ RSpec.describe "WireAdapter#values" do
     end
   end
 
+  # CI sets only EMF_TEST_NATIVE_LIBRARY; the native backend loads EMF_NATIVE_LIBRARY.
   def parse_with(backend, bytes)
+    previous = ENV.to_h.slice("EMF_BACKEND", "EMF_NATIVE_LIBRARY")
     ENV["EMF_BACKEND"] = backend
+    ENV["EMF_NATIVE_LIBRARY"] ||= ENV.fetch("EMF_TEST_NATIVE_LIBRARY", nil) if backend == "native"
     Emf.parse(bytes)
   ensure
-    ENV.delete("EMF_BACKEND")
+    %w[EMF_BACKEND EMF_NATIVE_LIBRARY].each { |key| ENV[key] = previous[key] }
   end
 
   def equivalence(backend, directory, name)
