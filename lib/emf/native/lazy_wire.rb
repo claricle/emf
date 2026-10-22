@@ -33,6 +33,16 @@ module Emf
         @bytes
       end
 
+      def wire_class
+        @klass
+      end
+
+      # No byte reader: these fields come from the hydrator, which may
+      # disagree with the raw bytes (recovered records).
+      def value_source
+        nil
+      end
+
       def materialize
         @klass.new(**@fields).tap { |wire| restore_float_bits(wire) }
       end
@@ -92,6 +102,16 @@ module Emf
 
       def to_binary_s
         @data.byteslice(@offset, @length)
+      end
+
+      def wire_class
+        @filler.wire_class
+      end
+
+      # [frozen binary data, record offset, untouched]: the bytes the wire is
+      # filled from, and no wire exists yet.
+      def value_source
+        [@data, @offset, true]
       end
 
       def materialize
