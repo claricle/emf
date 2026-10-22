@@ -13,7 +13,18 @@ module Emf
             @offset = offset
           end
 
-          attr_reader :type_id, :offset
+          attr_reader :type_id, :offset, :declared_size_words
+
+          # The record's rdSize as written in the source file, in 16-bit words; nil for a record built in memory.
+          # Set by the parsers; it is not rewritten when the record is edited.
+          def declare_size(words)
+            @declared_size_words = words
+            self
+          end
+
+          def declared_size_bytes
+            @declared_size_words && (@declared_size_words * 2)
+          end
 
           def accept(visitor)
             visitor.visit_wmf_record(self)

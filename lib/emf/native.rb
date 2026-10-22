@@ -29,6 +29,8 @@ module Emf
         return parse_wmf(input) if %i[wmf_apm wmf_standard].include?(Detector.call(input))
 
         parse_emf(input)
+      rescue FormatError, ParseError => e
+        raise ParseEvidenceBuilder.attach(e, input)
       end
 
       def parse_emf(input)

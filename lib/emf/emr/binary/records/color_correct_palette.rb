@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/emr/binary/variable_buffers"
 require "emf/emr/binary/record"
 
 module Emf
@@ -8,6 +9,10 @@ module Emf
     module Binary
       module Records
         class ColorCorrectPalette < Emf::Emr::Binary::Record
+          include Emf::Emr::Binary::VariableBuffers
+
+          fixed_layout 24
+
           rest :body
 
           def ih_palette

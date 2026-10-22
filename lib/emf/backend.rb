@@ -9,6 +9,8 @@ module Emf
           when :wmf_apm, :wmf_standard then Wmf::Parser.call(bytes)
           when :emf then Emr::Parser.call(bytes)
           end
+        rescue FormatError, ParseError => e
+          raise ParseEvidenceBuilder.attach(e, bytes)
         end
 
         def serialize(metafile)

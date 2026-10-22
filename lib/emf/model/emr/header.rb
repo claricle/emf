@@ -37,7 +37,31 @@ module Emf
                     :n_handles, :s_reserved, :n_description, :off_description,
                     :n_pal_entries, :device_pixels, :device_mm, :cb_pixel_format,
                     :off_pixel_format, :b_open_gl, :szl_micrometers, :n_size,
-                    :trailing, :description
+                    :trailing
+
+        # The description as UTF-8 (UTF-16LE nDescription chars at offDescription,
+        # trailing NULs dropped), or nil when absent or outside the header record.
+        # An explicit `description:` given at construction wins.
+        def description
+          return @description if @description
+
+          bytes = description_bytes
+          return unless bytes
+
+          bytes.dup.force_encoding(Encoding::UTF_16LE).encode(Encoding::UTF_8, invalid: :replace, undef: :replace).sub(/\0+\z/, "")
+        end
+
+        # Raw description bytes (2 * nDescription at offDescription from record
+        # start), or nil when nDescription is 0 or the range leaves the record.
+        def description_bytes
+          slice_of_record(off_description, n_description * 2)
+        end
+
+        # Raw PIXELFORMATDESCRIPTOR bytes (cbPixelFormat at offPixelFormat), or
+        # nil when cbPixelFormat is 0/absent or the range leaves the record.
+        def pixel_format_bytes
+          slice_of_record(off_pixel_format, cb_pixel_format)
+        end
 
         def self.from_wire(wire)
           new(
@@ -63,6 +87,12 @@ module Emf
           )
         end
 
+        # The header record bytes as #to_wire writes them now (equal to the source bytes until an edit).
+        # Not cached: the fields and `trailing` stay mutable, and the buffers must follow them.
+        def record_bytes
+          to_wire.to_binary_s
+        end
+
         def to_wire
           Emf::Emr::Binary::Header.new(
             i_type: 1,
@@ -86,6 +116,15 @@ module Emf
             szl_micrometers: szl_micrometers.to_wire,
             trailing: trailing
           )
+        end
+
+        private
+
+        def slice_of_record(offset, length)
+          return unless offset&.positive? && length&.positive?
+
+          bytes = record_bytes
+          bytes.byteslice(offset, length) if offset + length <= bytes.bytesize
         end
       end
     end

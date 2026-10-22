@@ -56,7 +56,7 @@ module Emf
           words, function = bytes.byteslice(offset, 6).unpack("Vv")
           parse_error(offset, function, "invalid record length #{words}") if words < 3 || words > (limit - offset) / 2
           raw = bytes.byteslice(offset, words * 2)
-          record = decode_record(raw, function, offset)
+          record = decode_record(raw, function, offset).declare_size(words)
           records << record
           offset += raw.bytesize
           next unless record.is_a?(Model::Wmf::Records::Eof)

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/emr/binary/variable_buffers"
 require "emf/emr/binary/record"
 require "emf/emr/binary/extended_pen_buffers"
 
@@ -9,6 +10,12 @@ module Emf
     module Binary
       module Records
         class ExtCreatePen < Emf::Emr::Binary::Record
+          include Emf::Emr::Binary::VariableBuffers
+
+          fixed_layout -> { 52 + (num_style_entries * 4) }
+          variable_buffer :bmi_bytes, offset: :off_bmi, length: :cb_bmi
+          variable_buffer :bits_bytes, offset: :off_bits, length: :cb_bits
+
           class Body < String
             def initialize(record, bytes)
               @record = record

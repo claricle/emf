@@ -10,5 +10,6 @@ module Emf
     autoload :BitmapImage, "emf/wmf/dib"
     autoload :EscapeViews, "emf/wmf/escape_views"
     autoload :EmbeddedEmf, "emf/wmf/embedded_emf"
+    autoload :Evidence, "emf/wmf/evidence"
   end
 end
