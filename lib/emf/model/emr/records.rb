@@ -13,6 +13,7 @@ module Emf
         # `offset` is the byte offset within the source stream (for diagnostics).
         class WireAdapter < Emf::Model::Record
           Emf::Model::Visitor.register_visit(:visit_emr_wire_record, self)
+          include Emf::Model::Emr::WireValues
 
           # Internal native construction path; the source owns copied Ruby data only.
           # One per parsed record, so it skips keyword construction; the suffix

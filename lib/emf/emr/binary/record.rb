@@ -53,6 +53,14 @@ module Emf
           packed || super
         end
 
+        # [data, offset, untouched] of the bytes a shell is filled from, nil
+        # for any other record. `untouched` is true while no field has been
+        # made: a field not made is still its bytes, a field made may have
+        # been edited and is read from the wire.
+        def lazy_source
+          [@lazy_data, @lazy_base, @field_objs.all?(&:nil?)] if @lazy_filler
+        end
+
         private
 
         def instantiate_obj_at(index)

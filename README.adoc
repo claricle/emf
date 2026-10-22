@@ -89,6 +89,20 @@ the source implementation alone does not establish an available platform gem.
   # Serialise the model back to binary
   bytes = Emf.serialize(metafile)
 
+=== Reading field values without BinData
+
+`record.values` returns a record's field values as a frozen, plain Ruby object
+(a `Data` with the wire's member names; nested structs as nested `Data`; a counted
+point array as an Array of `Data` points with `x` and `y`) without making
+BinData field objects. It is `nil` for records without a fixed layout or a
+counted point array (for example ExtTextOut, bitmaps, fonts, Comment, Raw); use
+`record.wire` for those. The values are equal on the Ruby and native backends and
+always reflect edits made through `record.wire`.
+
+  record = metafile.records.find { |r| r.type_id == 86 } # POLYGON16
+  record.values.rcl_bounds.left
+  record.values.apts.map { |point| [point.x, point.y] }
+
 == Command-line tool
 
   emf version                  Print version

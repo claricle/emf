@@ -9,6 +9,7 @@ module Emf
       autoload :TypeCodes, "emf/emr/binary/type_codes"
       autoload :FastFill, "emf/emr/binary/fast_fill"
       autoload :WireCopy, "emf/emr/binary/fast_fill"
+      autoload :ValueView, "emf/emr/binary/value_view"
       autoload :Records, "emf/emr/binary/records"
     end
   end
