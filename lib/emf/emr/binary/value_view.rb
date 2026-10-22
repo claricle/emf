@@ -37,6 +37,9 @@ module Emf
         private_constant :BINDATA_WRITER
 
         @views = {}.compare_by_identity
+        # Marks every value class, whichever base class it is built on.
+        module Value; end
+
         @value_classes = {}.compare_by_identity
         @lock = Mutex.new
 
@@ -46,15 +49,31 @@ module Emf
             @views.fetch(wire_class) { @lock.synchronize { @views[wire_class] = build(wire_class) } }
           end
 
-          # The shared `Data` class of a BinData struct class with these members.
+          # The shared value class of a BinData struct class with these members.
           def value_class(struct_class, members)
-            @value_classes[struct_class] ||= Data.define(*members).tap do |klass|
+            @value_classes[struct_class] ||= define_value_class(members).tap do |klass|
               name = struct_class.name&.split("::")&.last
               Values.const_set(name, klass) if name&.match?(/\A[A-Z]\w*\z/) && !Values.const_defined?(name, false)
             end
           end
 
           private
+
+          # Data (Ruby 3.2+) where it exists; on Ruby 3.1 a Struct whose
+          # instances freeze themselves, so values stay frozen everywhere.
+          def define_value_class(members)
+            klass = defined?(::Data.define) ? ::Data.define(*members) : frozen_struct(members)
+            klass.include(Value)
+          end
+
+          def frozen_struct(members)
+            Struct.new(*members) do
+              def initialize(*)
+                super
+                freeze
+              end
+            end
+          end
 
           def build(wire_class)
             filler = FastFill.for_class(wire_class)

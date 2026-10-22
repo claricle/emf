@@ -13,7 +13,7 @@ RSpec.describe "WireAdapter#values" do
   # their double bits so that NaN payloads and -0.0 compare exactly.
   def normalize(node)
     case node
-    when Data then node.to_h.transform_values { |child| normalize(child) }
+    when Emf::Emr::Binary::ValueView::Value then node.to_h.transform_values { |child| normalize(child) }
     when Hash then node.transform_values { |child| normalize(child) }
     when Array then node.map { |child| normalize(child) }
     when Float then [:float, [node].pack("G")]
