@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/emr/binary/variable_buffers"
 require "emf/emr/binary/with_bounds"
 require "emf/emr/binary/dib_header"
 
@@ -17,6 +18,12 @@ module Emf
         # a fixed-length :string (NOT :rest, which would consume the
         # whole tail).
         class BitBlt < Emf::Emr::Binary::WithBounds
+          include Emf::Emr::Binary::VariableBuffers
+
+          fixed_layout 100
+          variable_buffer :bmi_bytes, offset: :off_bmi_src, length: :cb_bmi_src
+          variable_buffer :bits_bytes, offset: :off_bits_src, length: :cb_bits_src
+
           int32le :x_dest
           int32le :y_dest
           int32le :cx_dest

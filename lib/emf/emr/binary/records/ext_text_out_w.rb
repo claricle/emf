@@ -2,6 +2,7 @@
 
 require "bindata"
 require "emf/emr/binary/with_bounds"
+require "emf/emr/binary/ext_text_out_fields"
 
 module Emf
   module Emr
@@ -34,6 +35,16 @@ module Emf
           rectl :rcl, onlyif: -> { f_options.nobits?(0x100) }
           uint32 :off_dx
           rest :trailing
+
+          include Emf::Emr::Binary::ExtTextOutFields
+
+          private
+
+          def char_size = 2
+
+          def decode_text(bytes)
+            bytes.dup.force_encoding(Encoding::UTF_16LE).encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
+          end
         end
       end
     end

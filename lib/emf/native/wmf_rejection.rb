@@ -63,12 +63,14 @@ module Emf
         Found.new(codec, reason, has_offset == 1 ? offset : nil, has_function == 1 ? function : nil, detail)
       end
 
-      def error(found)
-        return FormatError.new(INPUT.fetch(found.reason)) if INPUT.key?(found.reason)
+      def error(found, input)
+        evidence = Wmf::Evidence.build(found.reason, input, found.offset, found.detail)
+        return FormatError.new(INPUT.fetch(found.reason)).with_evidence(evidence) if INPUT.key?(found.reason)
 
         template = RECORD.fetch(found.reason) { raise FormatError, "unknown native WMF rejection #{found.reason}" }
         text = template.sub("%d", found.detail.to_s)
         ParseError.new(offset: found.offset, record_code: found.function, message: "WMF #{text} at offset #{found.offset}")
+                  .with_evidence(evidence)
       end
     end
   end

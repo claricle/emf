@@ -1,7 +1,15 @@
 # frozen_string_literal: true
 
 module Emf
-  class Error < StandardError; end
+  class Error < StandardError
+    # Backend-neutral ParseEvidence for a failed header or framing check, or nil when none is available.
+    attr_reader :evidence
+
+    def with_evidence(evidence)
+      @evidence ||= evidence
+      self
+    end
+  end
 
   class FormatError < Error; end
 

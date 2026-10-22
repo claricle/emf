@@ -14,6 +14,15 @@ module Emf
           uint32 :off_pal_entries
           uint32 :n_size_last
           rest :body
+
+          # Raw palette bytes (nPalEntries * 4 at offPalEntries from record start),
+          # or nil when there are no entries or the range leaves the record.
+          def palette_bytes
+            return unless n_pal_entries.positive? && off_pal_entries.positive?
+
+            bytes = to_binary_s
+            bytes.byteslice(off_pal_entries, n_pal_entries * 4) if off_pal_entries + (n_pal_entries * 4) <= bytes.bytesize
+          end
         end
       end
     end

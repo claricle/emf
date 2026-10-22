@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/emr/binary/variable_buffers"
 require "emf/emr/binary/record"
 
 module Emf
@@ -9,6 +10,12 @@ module Emf
       module Records
         # MS-EMF 2.3.11.15: name and profile lengths are byte counts.
         class SetIcmProfileA < Emf::Emr::Binary::Record
+          include Emf::Emr::Binary::VariableBuffers
+
+          fixed_layout 20
+          variable_buffer :icm_name_bytes, offset: 20, length: -> { u32_at(12) }
+          variable_buffer :icm_profile_bytes, offset: -> { 20 + u32_at(12) }, length: -> { u32_at(16) }
+
           # Byte counts and opaque spans retain the original body layout.
           rest :body
 

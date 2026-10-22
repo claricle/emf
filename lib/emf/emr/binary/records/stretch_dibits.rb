@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/emr/binary/variable_buffers"
 require "emf/emr/binary/with_bounds"
 require "emf/emr/binary/dib_header"
 
@@ -21,6 +22,12 @@ module Emf
         #   cxDest, cyDest (int32)
         #   [trailing BITMAPINFO + pixel array]
         class StretchDIBits < Emf::Emr::Binary::WithBounds
+          include Emf::Emr::Binary::VariableBuffers
+
+          fixed_layout 80
+          variable_buffer :bmi_bytes, offset: :off_bmi_src, length: :cb_bmi_src
+          variable_buffer :bits_bytes, offset: :off_bits_src, length: :cb_bits_src
+
           int32 :x_dest
           int32 :y_dest
           int32 :x_src

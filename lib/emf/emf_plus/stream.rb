@@ -133,8 +133,10 @@ module Emf
           gap = gap_before(cursor, segment.record_index)
           cursor = segment.record_index + 1
           offset = 0
+          comment_offset = source.records[segment.record_index].then { |record| record.offset if record.respond_to?(:offset) }
           handles = segment.records.map do |record|
-            handle = RecordHandle.new(record: record, segment_index: segment_index, offset: offset, stream_index: stream_index)
+            handle = RecordHandle.new(record: record, segment_index: segment_index, offset: offset, stream_index: stream_index,
+                                      comment_offset: comment_offset)
             offset += record.to_binary.bytesize
             stream_index += 1
             handle

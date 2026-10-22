@@ -8,6 +8,8 @@ module Emf
   autoload :FormatError, "emf/error"
   autoload :ParseError, "emf/error"
   autoload :SerializeError, "emf/error"
+  autoload :ParseEvidence, "emf/parse_evidence"
+  autoload :ParseEvidenceBuilder, "emf/parse_evidence"
   autoload :Backend, "emf/backend"
   autoload :Native, "emf/native"
   autoload :Detector, "emf/detector"

@@ -16,7 +16,7 @@ module Emf
         end
       rescue Emf::Error => e
         found = WmfRejection.read(loader.wmf_rejection(input, Wmf::Binary::MAX_INPUT_BYTES, Wmf::Binary::MAX_RECORDS))
-        raise WmfRejection.error(found) if found
+        raise WmfRejection.error(found, input) if found
 
         raise e
       end
@@ -98,7 +98,7 @@ module Emf
           offset = record.fetch(:offset)
           validate_span(record, index, position)
           position += length
-          WmfFields.new(record, @input.byteslice(offset, length)).call
+          WmfFields.new(record, @input.byteslice(offset, length)).call.declare_size(length / 2)
         end
         unless position == @limit && records.last.is_a?(Model::Wmf::Records::Eof) && records.one?(Model::Wmf::Records::Eof)
           raise FormatError, "WMF requires one final EOF record"
