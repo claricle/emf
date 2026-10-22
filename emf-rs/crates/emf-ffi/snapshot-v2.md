@@ -4,6 +4,8 @@ The emitted snapshot schema is 2; the C ABI remains version 1. Snapshot schema
 versions are independent of ABI versions and do not change C layouts or functions.
 Schema 2 is unreleased; its family table includes the typed cohorts below.
 The historical [snapshot v1 contract](snapshot-v1.md) remains unchanged.
+Schema 3, emitted by `emf_document_snapshot_v3`, uses this layout with the record
+entries in one fixed-stride table first; see [snapshot v3](snapshot-v3.md).
 
 `emf_document_snapshot(document, &buffer, &error)` returns one independently owned
 buffer. It follows the header's status, output reset and lifetime rules. Copy

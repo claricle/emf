@@ -910,6 +910,37 @@ pub(crate) fn encode(document: &Document) -> Result<Vec<u8>, Error> {
     Ok(out)
 }
 
+/// Schema 3: the schema 2 sections with every 40-byte record entry first, as
+/// one fixed-stride table, and the typed payloads after it in record order.
+/// A reader decodes the whole table at once. Other sections are unchanged.
+pub(crate) fn encode_v3(document: &Document) -> Result<Vec<u8>, Error> {
+    let v2 = encode(document)?;
+    let start = 56 + 112 + document.header_bytes().len();
+    let count = document.records().len();
+    let mut payloads = Vec::new();
+    payloads
+        .try_reserve_exact(count)
+        .map_err(|_| Error::AllocationFailed)?;
+    let mut out = Vec::new();
+    out.try_reserve_exact(v2.len())
+        .map_err(|_| Error::AllocationFailed)?;
+    out.extend_from_slice(&v2[..start]);
+    out[4..8].copy_from_slice(&3u32.to_le_bytes());
+    let mut position = start;
+    for _ in 0..count {
+        let entry = &v2[position..position + 40];
+        let len = u64::from_le_bytes(entry[32..].try_into().expect("8-byte length")) as usize;
+        out.extend_from_slice(entry);
+        payloads.push(position + 40..position + 40 + len);
+        position += 40 + len;
+    }
+    for payload in payloads {
+        out.extend_from_slice(&v2[payload]);
+    }
+    out.extend_from_slice(&v2[position..]);
+    Ok(out)
+}
+
 fn u32_field(out: &mut Vec<u8>, value: u32) {
     out.extend_from_slice(&value.to_le_bytes());
 }
@@ -1642,6 +1673,38 @@ mod tests {
             assert_eq!(cursor.take(tail.len()), tail);
             assert_eq!(cursor.position, encoded.len());
         }
+    }
+
+    #[test]
+    fn schema_3_moves_record_entries_into_one_table_and_keeps_every_byte() {
+        let mut input = fixture_header(88);
+        record(&mut input, 17, &1u32.to_le_bytes());
+        record(&mut input, 96, &[0u8; 32]);
+        record(&mut input, 14, &[0u8; 12]);
+        let document = parse(&input, &ParseLimits::default()).unwrap();
+        let v2 = encode(&document).unwrap();
+        let v3 = encode_v3(&document).unwrap();
+        assert_eq!(v3.len(), v2.len());
+        assert_eq!(&v3[..4], b"EMFS");
+        assert_eq!(u32::from_le_bytes(v3[4..8].try_into().unwrap()), 3);
+        let start = 56 + 112 + 88;
+        assert_eq!(&v3[8..start], &v2[8..start]);
+        let mut v2_cursor = Cursor {
+            bytes: &v2,
+            position: start,
+        };
+        let mut entries = Vec::new();
+        let mut payloads = Vec::new();
+        for _ in 0..document.records().len() {
+            let entry = v2_cursor.take(40);
+            let len = u64::from_le_bytes(entry[32..].try_into().unwrap()) as usize;
+            entries.extend_from_slice(entry);
+            payloads.extend_from_slice(v2_cursor.take(len));
+        }
+        let table_end = start + entries.len();
+        assert_eq!(&v3[start..table_end], &entries[..]);
+        assert_eq!(&v3[table_end..table_end + payloads.len()], &payloads[..]);
+        assert_eq!(&v3[table_end + payloads.len()..], &v2[v2_cursor.position..]);
     }
 
     #[test]

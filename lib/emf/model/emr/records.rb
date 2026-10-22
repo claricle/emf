@@ -15,10 +15,10 @@ module Emf
           Emf::Model::Visitor.register_visit(:visit_emr_wire_record, self)
 
           # Internal native construction path; the source owns copied Ruby data only.
+          # One per parsed record, so it skips keyword construction; the suffix
+          # is the source's once the wire is made.
           def self.lazy(source:, offset: nil)
-            adapter = new(wire: nil, offset: offset)
-            adapter.instance_variable_set(:@wire_source, source)
-            adapter
+            allocate.__send__(:init_lazy, source, offset)
           end
 
           # Bytes of a record that follow its typed layout (declared nSize larger
@@ -84,6 +84,16 @@ module Emf
 
           def inspect
             "#<#{self.class.name} type_id=#{type_id} (#{(wire.class.name || '').split('::').last})>"
+          end
+
+          private
+
+          def init_lazy(source, offset)
+            @wire = nil
+            @offset = offset
+            @suffix = EMPTY_SUFFIX
+            @wire_source = source
+            self
           end
         end
       end

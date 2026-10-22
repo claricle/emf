@@ -1175,8 +1175,8 @@ RSpec.describe Emf::Native do
     loader = backend.instance_variable_get(:@loader)
     snapshot = loader.document(header + eof) { |document| loader.snapshot(document) }
     expect { Emf::Native::Snapshot.new(snapshot.byteslice(0, 20)) }.to raise_error(Emf::FormatError)
-    expect(snapshot.byteslice(4, 4).unpack1("V")).to eq(2)
-    [1, 9].each do |schema|
+    expect(snapshot.byteslice(4, 4).unpack1("V")).to eq(3)
+    [1, 4, 9].each do |schema|
       snapshot[4, 4] = [schema].pack("V")
       expect { Emf::Native::Snapshot.new(snapshot) }.to raise_error(Emf::FormatError, /schema/)
     end
@@ -1207,7 +1207,7 @@ RSpec.describe Emf::Native do
     [[-1, 12], [108, -1], [108, 7], [bytes.bytesize, 12], [108, bytes.bytesize]].each do |offset, length|
       allow(Emf::Native::Snapshot).to receive(:new).and_wrap_original do |original, transport|
         snapshot = original.call(transport)
-        snapshot.records.first.merge!(offset: offset, length: length)
+        snapshot.table[1, 2] = [offset, length]
         snapshot
       end
       expect(loader).to receive(:invoke).with(:emf_document_free, anything).and_call_original
@@ -1223,7 +1223,7 @@ RSpec.describe Emf::Native do
     expect(Emf::Emr::Parser).not_to receive(:call)
     allow(Emf::Native::Snapshot).to receive(:new).and_wrap_original do |original, transport|
       snapshot = original.call(transport)
-      snapshot.records.first[:family] = 999
+      snapshot.table[3] = (snapshot.table[3] & 0xFFFF_FFFF) | (999 << 32)
       snapshot
     end
     expect { backend.parse(header + map_mode + eof) }

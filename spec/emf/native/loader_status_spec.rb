@@ -72,6 +72,7 @@ RSpec.describe Emf::Native::Loader do
       output[0, 8] = [789].pack("J")
       0
     end
+    loader.instance_variable_set(:@snapshot_function, :emf_document_snapshot)
 
     expect { loader.snapshot(123) }.to(raise_error do |error|
       expect(error.class).to eq(Emf::Error)

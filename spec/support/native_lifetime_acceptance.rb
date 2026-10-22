@@ -5,7 +5,7 @@ require "weakref"
 module NativeLifetimeAcceptance
   ALLOCATIONS = {
     emf_parse: :document, emf_wmf_parse: :wmf_document,
-    emf_document_snapshot: :buffer, emf_wmf_document_snapshot: :buffer, emf_record_bytes: :buffer
+    emf_document_snapshot: :buffer, emf_document_snapshot_v3: :buffer, emf_wmf_document_snapshot: :buffer, emf_record_bytes: :buffer
   }.freeze
   RELEASES = {
     emf_document_free: :document, emf_wmf_document_free: :wmf_document,

@@ -371,6 +371,53 @@ static int check_snapshot(void) {
     return 0;
 }
 
+/* Schema 3 holds the schema 2 bytes with the record entries gathered into one
+ * fixed-stride table ahead of the payloads. */
+static int check_snapshot_v3(void) {
+    make_snapshot_fixture();
+    emf_document *document = NULL;
+    emf_buffer *v2 = NULL, *v3 = NULL;
+    emf_error *error = NULL;
+    CHECK(emf_parse(input, input_length, NULL, &document, &error) == EMF_OK);
+    CHECK(emf_document_snapshot(document, &v2, &error) == EMF_OK);
+    CHECK(emf_document_snapshot_v3(document, &v3, &error) == EMF_OK);
+    CHECK(v3 != NULL && error == NULL);
+    const uint8_t *a = NULL, *b = NULL;
+    uint64_t a_length = 0, b_length = 0;
+    CHECK(emf_buffer_view(v2, &a, &a_length) == EMF_OK);
+    CHECK(emf_buffer_view(v3, &b, &b_length) == EMF_OK);
+    CHECK(a_length == b_length && memcmp(b, "EMFS", 4) == 0);
+    cursor c = {b, (size_t)b_length, 4};
+    uint32_t schema;
+    uint64_t count;
+    CHECK(get_u32(&c, &schema) && schema == 3);
+    size_t start = 56 + 112 + HEADER_SIZE;
+    CHECK(memcmp(a + 8, b + 8, start - 8) == 0);
+    memcpy(&count, b + 24, 8);
+    CHECK(count == 5);
+
+    size_t entry = start, table = start, payloads = start + (size_t)count * 40;
+    for (uint64_t i = 0; i < count; i++) {
+        uint64_t length;
+        memcpy(&length, a + entry + 32, 8);
+        CHECK(memcmp(a + entry, b + table, 40) == 0);
+        CHECK(memcmp(a + entry + 40, b + payloads, (size_t)length) == 0);
+        entry += 40 + (size_t)length;
+        table += 40;
+        payloads += (size_t)length;
+    }
+    CHECK(payloads == entry);
+    CHECK(memcmp(a + entry, b + payloads, (size_t)a_length - entry) == 0);
+    emf_buffer_free(v2);
+    emf_buffer_free(v3);
+    emf_document_free(document);
+
+    CHECK(emf_document_snapshot_v3(NULL, &v3, &error) == EMF_INVALID_ARGUMENT);
+    CHECK(v3 == NULL && error != NULL);
+    emf_error_free(error);
+    return 0;
+}
+
 static int check_scalar_state_snapshots(void) {
     const uint32_t families[] = {EMF_FAMILY_SETBKMODE, EMF_FAMILY_SETPOLYFILLMODE,
         EMF_FAMILY_SETROP2, EMF_FAMILY_SETSTRETCHBLTMODE};
@@ -1043,6 +1090,7 @@ int main(void) {
     CHECK(check_layout() == 0);
     CHECK(check_lifetimes_and_recovery() == 0);
     CHECK(check_snapshot() == 0);
+    CHECK(check_snapshot_v3() == 0);
     CHECK(check_scalar_state_snapshots() == 0);
     CHECK(check_coordinate_snapshots() == 0);
     CHECK(check_color_shape_snapshots() == 0);
