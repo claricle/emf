@@ -24,11 +24,12 @@ RSpec.describe "EMF+ stream compatibility" do
   RUBY
 
   def with_backend(name)
-    previous = ENV.fetch("EMF_BACKEND", nil)
+    previous = ENV.to_h.slice("EMF_BACKEND", "EMF_NATIVE_LIBRARY")
     ENV["EMF_BACKEND"] = name
+    ENV["EMF_NATIVE_LIBRARY"] = ENV.fetch("EMF_TEST_NATIVE_LIBRARY") if name == "native" && ENV.key?("EMF_TEST_NATIVE_LIBRARY")
     yield
   ensure
-    previous.nil? ? ENV.delete("EMF_BACKEND") : ENV["EMF_BACKEND"] = previous
+    %w[EMF_BACKEND EMF_NATIVE_LIBRARY].each { |key| previous.key?(key) ? ENV[key] = previous[key] : ENV.delete(key) }
   end
 
   def comment_payload(metafile, segment)

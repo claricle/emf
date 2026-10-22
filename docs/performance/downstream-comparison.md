@@ -6,11 +6,16 @@ and exercise the reporting path. Two concurrent samples without warmups do not
 establish a controlled speed comparison or the under-one-second requirement in
 issue #15. The reported roughly 12-second workload remains unidentified.
 
+Current state: native parse is faster than Ruby at `666f45d` (PR #54, open, not
+on `main`). Native conversion was slower than Ruby at `5c45ab9`, and no conversion
+was measured at `666f45d`. The under-one-second round trip is unmet.
+See [the release comparison](#release-comparison-on-the-large-representative-fixture)
+and [the slow-workload guide](issue-15-slow-workload.md).
+
 ## Saved inputs and provenance
 
-The original reports are local execution artifacts, not checked-in baselines:
-`/private/tmp/emf-execution/downstream-native/{ruby,native}.json` and
-`input-manifest.json`. They were generated at `2026-10-20T09:47:58Z`.
+The original reports are execution artifacts, not checked-in baselines:
+`ruby.json`, `native.json` and `input-manifest.json`. They were generated at `2026-10-20T09:47:58Z`.
 Retain these files with their hashes when sharing the result; the commands below
 need the saved files or equivalent newly captured reports.
 
@@ -27,17 +32,16 @@ Those edits were subsequently delivered in
 not measurements of the current branch. Both the loaded parser-source digest
 and manifest parser-source digest are
 `97329cec4f1313eb5875ae17b1f41945763087d29c0d5f0cebbcb8db57e38fc3`.
-The loaded parser path is `/private/tmp/emf-benchmark-mutation/lib/emf.rb`.
+The parser was loaded from a checkout of that revision.
 
-The consumer checkout `/private/tmp/emfsvg-issue15-baseline` was clean at
-`101356dcf673841fda0693076131bca7a0f34948`, with this gem supplied through
-`/private/tmp/emf-benchmark-mutation/lib`. Its source digest is
+The emfsvg consumer checkout was clean at
+`101356dcf673841fda0693076131bca7a0f34948`, with this gem supplied from the
+same parser checkout. Its source digest is
 `3132e11eb58c873f9d7e6912b4efe62f5364142b984fac5984ba8c30824a5aba`;
 `spec/golden_spec.rb` has digest
 `d3796af97ca1e7645099706cd3ef0ab0450d2ae1aaca5801017f5a07b69ae0bf`.
 
-The selected native library was
-`/private/tmp/emf-pr-bitmap-core/emf-rs/target/debug/libemf_ffi.dylib`,
+The selected native library was a debug `libemf_ffi.dylib` build,
 1,166,512 bytes, SHA-256
 `d8525c4648f14efbc943b9c90e5a3fa9c26c586a77dc53f2a8d2a8bf607c3e8a`.
 Its build profile and Rust compiler are unknown; the path does not prove either.
@@ -105,8 +109,8 @@ or rendering job. Run from this repository:
 ```sh
 mkdir -p tmp/bench
 bundle exec ruby bench/compare_emfsvg.rb \
-  --ruby /private/tmp/emf-execution/downstream-native/ruby.json \
-  --native /private/tmp/emf-execution/downstream-native/native.json \
+  --ruby path/to/ruby.json \
+  --native path/to/native.json \
   --output tmp/bench/saved-emfsvg-comparison.json
 ```
 
@@ -206,8 +210,22 @@ post-cleanup consumer and mutation guards passed. Component instrumentation,
 cached loader boundaries and Ruby allocation measurements do not isolate a pure
 Rust kernel or total process allocations.
 
+Native parse at `666f45d` (PR #54, open; not an ancestor of `main` at
+`da21ae2`) was measured on the same `test-031` input (79,055 records) on macOS
+arm64 with Ruby 3.4.8 and the release library, CPU time, best of five. Native
+`Emf.parse` took 0.186 s at `da21ae2` and 0.092–0.098 s at `666f45d`; Ruby
+`Emf.parse` took 0.115–0.121 s in the same runs. Parse plus reading every wire
+took 0.154–0.167 s native against 0.127 s Ruby in the same runs; that figure is
+not split by revision. So native parse is faster than Ruby at `666f45d`, but a
+full wire read is still slower. No conversion was measured at `666f45d`.
+
 This evidence replaces neither full consumer round-trip measurements nor repeated
-calibrated baselines. Native conversion is slower on this named workload and the
-subsecond requirement remains open. Profile hydration and subsequent wire access
-before choosing another optimization, then preserve complete conversion timing
-and golden/parity checks when measuring its effect.
+calibrated baselines. At `5c45ab9`, native conversion was slower than Ruby on this
+named workload (median `from_bytes` 2.337 s against 1.805 s), so the conversion
+comparison above is not updated by the parse result. The subsecond requirement
+remains open. The consumer round trip at `3108916` splits into about 3.7 s of
+emf and about 5.4 s of emfsvg's own code, as recorded in
+[the slow-workload guide](issue-15-slow-workload.md); emf work alone cannot reach
+one second. Profile hydration and subsequent wire access before choosing another
+optimization, then preserve complete conversion timing and golden/parity checks
+when measuring its effect.

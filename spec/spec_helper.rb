@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "emf"
+require_relative "support/native_library_required"
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
@@ -21,6 +22,8 @@ RSpec.configure do |config|
   config.profile_examples = 10
   config.order = :random
   Kernel.srand config.seed
+
+  config.include Emf::SpecSupport::NativeLibraryRequired
 end
 
 module Emf
