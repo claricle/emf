@@ -100,6 +100,14 @@ RSpec.describe "native gem packaging scripts" do
     )
   end
 
+  it "declares fiddle in the platform gem only, as a range that covers Ruby 3.1 to 4.0" do
+    fiddle = ->(path) { Gem::Package.new(path).spec.runtime_dependencies.find { |d| d.name == "fiddle" } }
+    requirement = fiddle.call(platform_gem)&.requirement
+    expect(requirement).to eq(Gem::Requirement.new("~> 1.1"))
+    expect(%w[1.1.0 1.1.6 1.1.8].map { |v| requirement.satisfied_by?(Gem::Version.new(v)) }).to all(be(true))
+    expect(fiddle.call(ruby_gem)).to be_nil
+  end
+
   it "installs the platform gem without compiling and loads it through Fiddle" do
     out, _err, status = script.call("native_install_smoke", "--directory", @good, "--platform", @platform,
                                     "--abi-symbol", "emf_probe_abi_version", "--require-native")
@@ -152,6 +160,12 @@ RSpec.describe "native gem packaging scripts" do
     end
     _out, err, status = check.call(dir)
     expect([status.exitstatus, err]).to match([1, %r{source gem contains native library lib/stray.dylib}])
+  end
+
+  it "rejects a platform gem without the fiddle dependency" do
+    dir = rebuild.call(platform_gem) { |_extracted, spec| spec.dependencies.reject! { |d| d.name == "fiddle" } }
+    _out, err, status = check.call(dir)
+    expect([status.exitstatus, err]).to match([1, /does not depend on fiddle/])
   end
 
   it "rejects a platform gem whose sha256 does not match its library" do

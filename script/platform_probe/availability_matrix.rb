@@ -159,8 +159,8 @@ module AvailabilityMatrix
 
     def run(scenario, mode)
       home = scenario.gem_home || @gem_home
-      env = CLEAN_ENV.merge("GEM_HOME" => home, "GEM_PATH" => home, "PATH" => File.dirname(@ruby),
-                            "EMF_BACKEND" => mode, "EMF_NATIVE_LIBRARY" => scenario.library)
+      env = CLEAN_ENV.merge("GEM_HOME" => home, "GEM_PATH" => [home, Gem.default_dir].join(File::PATH_SEPARATOR),
+                            "PATH" => File.dirname(@ruby), "EMF_BACKEND" => mode, "EMF_NATIVE_LIBRARY" => scenario.library)
       out, err, status = Open3.capture3(env, @ruby, *flags(scenario), "-e", CHILD, scenario.input, chdir: @directory)
       raise "#{scenario.name}/#{mode} child failed: #{err}#{out}" unless status.success?
 

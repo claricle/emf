@@ -25,6 +25,8 @@ class NativeGemBuilder
   ROOT = File.expand_path("..", __dir__)
   NATIVE_DIR = "lib/emf/native"
   CARGO_LOCK = "emf-rs/Cargo.lock"
+  # Default gem on Ruby 3.1-3.4 (1.1.x), bundled gem on 4.0 (1.1.8+).
+  FIDDLE_REQUIREMENT = "~> 1.1"
   FFI_MANIFEST = "emf-rs/crates/emf-ffi/Cargo.toml"
 
   def initialize(platform:, output:, library: nil, abi_version: nil, target: nil, revision: nil)
@@ -76,6 +78,8 @@ class NativeGemBuilder
     manifest = write_json(stage, "platforms.json", manifest_data(name))
     provenance = write_json(stage, "provenance.json", provenance_data(spec))
     spec.platform = @platform
+    # Ruby 4.0 moved fiddle out of the default gems; the loader requires it, so a platform gem must pull it in.
+    spec.add_runtime_dependency "fiddle", FIDDLE_REQUIREMENT
     spec.files += [relative, manifest, provenance]
     spec
   end
