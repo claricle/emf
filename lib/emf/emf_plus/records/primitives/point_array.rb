@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "bindata"
+require "emf/emf_plus/records/primitives/bounded_array"
 require "emf/emf_plus/records/primitives/point"
 require "emf/emf_plus/records/primitives/point_f"
 require "emf/emf_plus/records/primitives/point_r"
@@ -14,9 +15,11 @@ module Emf
         class PointArray < Body
           endian :little
           mandatory_parameter :point_count, :relative, :compressed
-          array :relative_points, type: PointR, initial_length: :point_count, onlyif: -> { relative }
-          array :compressed_points, type: Point, initial_length: :point_count, onlyif: -> { !relative && compressed }
-          array :float_points, type: PointF, initial_length: :point_count, onlyif: -> { !relative && !compressed }
+          bounded_array :relative_points, type: PointR, element_size: 2, initial_length: :point_count, onlyif: -> { relative }
+          bounded_array :compressed_points, type: Point, element_size: 4, initial_length: :point_count, onlyif: lambda {
+            !relative && compressed
+          }
+          bounded_array :float_points, type: PointF, element_size: 8, initial_length: :point_count, onlyif: -> { !relative && !compressed }
 
           def points
             if relative
