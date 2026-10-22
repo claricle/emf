@@ -605,7 +605,15 @@ module Emf
           BY_CLASS[wire_class] || POINT_ARRAY_BY_CLASS[wire_class] || TEXT_BY_CLASS[wire_class]
         end
 
-        attr_reader :size, :wire_class
+        attr_reader :size, :wire_class, :template
+
+        # The PackPlan for the class (bytes straight from attributes), or nil
+        # when no verified plan exists.
+        def pack_plan
+          return @pack_plan if defined?(@pack_plan)
+
+          @pack_plan = PackPlan.build(self)
+        end
 
         def initialize(klass)
           @wire_class = klass
@@ -887,6 +895,11 @@ module Emf
               array.instance_variable_set(:@elements, points.map { |source| copy_point(array, source) })
             end
             wire
+          end
+
+          # [point class, coordinate directive, low, high, bytes per coordinate, count field]
+          def points_layout
+            [@point_class, @directive, @range.begin, @range.end, @point_bytes / 2, count_name]
           end
 
           def pack(wire)
