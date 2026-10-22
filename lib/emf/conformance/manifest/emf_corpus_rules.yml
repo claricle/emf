@@ -1,0 +1,21 @@
+- id: emf.select_object.corpus_corruption
+  format: emf
+  record_types: [EMR_SELECTOBJECT]
+  citation: "MS-EMF 2.3.8.5"
+  status: not_checkable
+  reason: "bad_corrupted_2014-12-07-140817.emf (README: corrupted EMR_SELECTOBJECT) has 28 SELECTOBJECT records, all Size 12 with a handle that is below header Handles, a defined stock index (0, 5, 7, 8, 13) or a live created object, and none is 0; no stream property distinguishes the corruption, so no rule can name it"
+# Deliberately split from emf.state.fixed_size by wire kind: that rule reads a decoded record and this one a Raw one,
+# so they never fire together. Also checks the record types with a layout size (EMR_PIXELFORMAT and
+# EMR_FORCEUFIMAPPING excepted: emf.opaque.fixed_size owns a Size below their layout), which record_types does not list.
+- id: emf.record.fixed_size_raw
+  format: emf
+  record_types: [EMR_SETMAPPERFLAGS, EMR_SETCOLORADJUSTMENT, EMR_RESTOREDC, EMR_SETARCDIRECTION, EMR_SETICMMODE, EMR_SETLAYOUT]
+  citation: "MS-EMF 2.3.11"
+  status: implemented
+  reason: null
+- id: emf.record.exttextout_fixed_part
+  format: emf
+  record_types: [EMR_EXTTEXTOUTA, EMR_EXTTEXTOUTW]
+  citation: "MS-EMF 2.2.5"
+  status: implemented
+  reason: null

@@ -1,0 +1,608 @@
+# W13/W14 manifest rows (issue #37). Implemented rows name a registered rule id.
+- id: emf.bitmap.record_size
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-EMF 2.3.1
+  status: implemented
+  reason:
+- id: emf.bitmap.usage
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-EMF 2.1.9
+  status: implemented
+  reason:
+- id: emf.bitmap.bmi_range
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-EMF 2.3.1
+  status: implemented
+  reason:
+- id: emf.bitmap.bits_range
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-EMF 2.3.1
+  status: implemented
+  reason:
+- id: emf.bitmap.buffer_fixed_overlap
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-EMF 2.3.1
+  status: implemented
+  reason:
+- id: emf.bitmap.buffer_overlap
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-EMF 2.3.1
+  status: implemented
+  reason:
+- id: emf.bitmap.bmi_header_size
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.9
+  status: implemented
+  reason:
+- id: emf.bitmap.bmi_extent
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.3
+  status: implemented
+  reason:
+- id: emf.bitmap.bmi_planes
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.3
+  status: implemented
+  reason:
+- id: emf.bitmap.bmi_bitcount
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.1.1.3
+  status: implemented
+  reason:
+- id: emf.bitmap.bmi_compression
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.1.1.7
+  status: implemented
+  reason:
+- id: emf.bitmap.bits_length
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.9
+  status: implemented
+  reason:
+- id: emf.bitmap.bmi_v5_intent
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.5
+  status: implemented
+  reason:
+# A packed DIB whose ColorUsed is nonzero is reported by emf.bitmap.color_table (the same shortfall); this rule then
+# stays silent.
+- id: emf.bitmap.color_table_length
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.9
+  status: implemented
+  reason:
+- id: emf.bitmap.mask_monochrome
+  format: emf
+  record_types:
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  citation: MS-EMF 2.3.1.2
+  status: implemented
+  reason:
+- id: emf.bitmap.raster_operation
+  format: emf
+  record_types:
+  - EMR_BITBLT
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  citation: MS-EMF 2.3.1.1
+  status: implemented
+  reason:
+- id: emf.bitmap.rop4_reserved
+  format: emf
+  record_types:
+  - EMR_MASKBLT
+  citation: MS-EMF 2.3.1.2
+  status: implemented
+  reason:
+- id: emf.bitmap.blend_operation
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  citation: MS-EMF 2.3.1.4
+  status: implemented
+  reason:
+- id: emf.bitmap.alpha_format
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  citation: MS-EMF 2.3.1.4
+  status: implemented
+  reason:
+- id: emf.bitmap.positive_extent
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  citation: MS-EMF 2.3.1.4
+  status: implemented
+  reason:
+- id: emf.comment.padding
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3
+  status: implemented
+  reason:
+- id: emf.comment.header_size
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.4
+  status: implemented
+  reason:
+- id: emf.comment.public_payload
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.4
+  status: implemented
+  reason:
+- id: emf.comment.public_identifier
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.4
+  status: implemented
+  reason:
+- id: emf.comment.windows_metafile_reserved
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.4.4
+  status: implemented
+  reason:
+- id: emf.comment.group_unclosed
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.4.1
+  status: implemented
+  reason:
+- id: emf.comment.group_end
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.4.2
+  status: implemented
+  reason:
+- id: emf.comment.multiformats_eps_version
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.2.4
+  status: implemented
+  reason:
+- id: emf.comment.multiformats_signature
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.2.4
+  status: implemented
+  reason:
+- id: emf.comment.group_description
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.4.1
+  status: implemented
+  reason:
+- id: emf.escape.record_size
+  format: emf
+  record_types:
+  - EMR_DRAWESCAPE
+  - EMR_EXTESCAPE
+  - EMR_NAMEDESCAPE
+  citation: MS-EMF 2.3.6
+  status: implemented
+  reason:
+- id: emf.escape.payload_bounds
+  format: emf
+  record_types:
+  - EMR_DRAWESCAPE
+  - EMR_EXTESCAPE
+  - EMR_NAMEDESCAPE
+  citation: MS-EMF 2.3.6
+  status: implemented
+  reason:
+- id: emf.escape.driver_name
+  format: emf
+  record_types:
+  - EMR_NAMEDESCAPE
+  citation: MS-EMF 2.3.6.3
+  status: implemented
+  reason:
+- id: emf.opengl.record_size
+  format: emf
+  record_types:
+  - EMR_GLSRECORD
+  - EMR_GLSBOUNDEDRECORD
+  citation: MS-EMF 2.3.9
+  status: implemented
+  reason:
+- id: emf.opengl.payload_bounds
+  format: emf
+  record_types:
+  - EMR_GLSRECORD
+  - EMR_GLSBOUNDEDRECORD
+  citation: MS-EMF 2.3.9
+  status: implemented
+  reason:
+# One diagnostic per defect (W37). A shortfall that a more specific rule also states is left to that rule:
+#   EMR_SETCOLORADJUSTMENT           emf.state.fixed_size (decoded), emf.record.fixed_size_raw (Raw)
+#   EMR_POLYTEXTOUTA / W             emf.opaque.text_arrays
+#   EMR_SETCOLORSPACE, EMR_COLORCORRECTPALETTE   emf.object.fixed_size
+#   EMR_SETICMPROFILEA / W, EMR_SETLINKEDUFIS, EMR_COLORMATCHTOTARGETW   emf.state.profile_bounds and
+#     emf.state.linked_ufis_bounds when the record decodes; this rule sees only a Raw one
+#   EMR_PIXELFORMAT, EMR_FORCEUFIMAPPING   this rule owns a Size below the layout; emf.state.layout_size owns an
+#     oversized one
+- id: emf.opaque.fixed_size
+  format: emf
+  record_types:
+  - EMR_CREATECOLORSPACE
+  - EMR_DELETECOLORSPACE
+  - EMR_PIXELFORMAT
+  - EMR_FORCEUFIMAPPING
+  - EMR_SETICMPROFILEA
+  - EMR_SETICMPROFILEW
+  - EMR_SETLINKEDUFIS
+  - EMR_COLORMATCHTOTARGETW
+  - EMR_CREATECOLORSPACEW
+  citation: MS-EMF 2.3
+  status: implemented
+  reason:
+# EMR_POLYTEXTOUTA / W are checked by emf.opaque.text_arrays. The ICM profile, linked UFI and color-match records are
+# checked here only when Raw; a decoded one gets emf.state.profile_bounds or emf.state.linked_ufis_bounds.
+- id: emf.opaque.payload_bounds
+  format: emf
+  record_types:
+  - EMR_SETICMPROFILEA
+  - EMR_SETICMPROFILEW
+  - EMR_SETLINKEDUFIS
+  - EMR_COLORMATCHTOTARGETW
+  - EMR_CREATECOLORSPACEW
+  citation: MS-EMF 2.3
+  status: implemented
+  reason:
+- id: emf.bitmap.raster_operation_enum
+  format: emf
+  record_types:
+  - EMR_BITBLT
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  citation: MS-WMF 2.1.1.31
+  status: not_checkable
+  reason: the TernaryRasterOperation enumeration in the reference text lists 247 distinct
+    codes for 256 values, so there is no complete oracle; only the reserved high byte
+    is checked
+- id: emf.bitmap.rop4_values
+  format: emf
+  record_types:
+  - EMR_MASKBLT
+  citation: MS-EMF 2.3.1.2
+  status: not_checkable
+  reason: BackgroundROP3/ForegroundROP3 are 8-bit indexes into the same incomplete
+    TernaryRasterOperation list
+- id: emf.bitmap.bits_pixels
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.9
+  status: deferred
+  reason: 'readable through the bits_bytes accessor, not written: the BI_JPEG/BI_PNG
+    signature and the RLE stream grammar (MS-WMF 3.1.6) have no MUST that names a
+    byte pattern, so a check would be derived from the format specifications [JFIF]/[RFC2083],
+    not the reference text'
+- id: emf.bitmap.bmi_extended_header
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.4
+  status: deferred
+  reason: 'readable through bmi_bytes, not written beyond the V5 Intent (emf.bitmap.bmi_v5_intent):
+    BitmapV4/V5 ColorSpaceType against ProfileData/ProfileSize ranges and the linked-profile
+    code-page-1252 name state no checkable MUST on the record'
+- id: emf.bitmap.color_table
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.3
+  status: implemented
+  reason:
+- id: emf.bitmap.colorref_reserved
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.8
+  status: implemented
+  reason:
+- id: emf.bitmap.source_rectangle
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-EMF 2.3.1
+  status: not_checkable
+  reason: the spec states no bound relating xSrc/ySrc/cxSrc/cySrc or iStartScan/cScans
+    to the bitmap size (cScans only bounds the stride check)
+- id: emf.bitmap.xform_src
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-EMF 2.2.28
+  status: not_checkable
+  reason: 'no normative clause: XForm (MS-EMF 2.2.28) types its six members as FLOAT
+    without a range, and the bitmap records say a transform SHOULD be applied, so
+    a non-finite XformSrc breaks no MUST'
+- id: emf.comment.private_identifier
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.1
+  status: not_checkable
+  reason: private data that begins with a predefined identifier is dispatched as that
+    comment type by definition
+- id: emf.comment.emfplus
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.2
+  status: not_checkable
+  reason: EMF+ comment payloads are covered by the emfplus.* rules, not this family
+- id: emf.comment.emfspool_payload
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.3
+  status: not_checkable
+  reason: the records after EMFSpoolRecordIdentifier are defined by [MS-EMFSPOOL],
+    which is not in the reference set; MS-EMF names only the identifier value 0x544F4E46
+    ("TONE")
+- id: emf.escape.escape_id
+  format: emf
+  record_types:
+  - EMR_DRAWESCAPE
+  - EMR_EXTESCAPE
+  - EMR_NAMEDESCAPE
+  citation: MS-EMF 2.3.6
+  status: not_checkable
+  reason: iEscape values are printer-driver defined and not enumerated by MS-EMF
+- id: emf.escape.payload_semantics
+  format: emf
+  record_types:
+  - EMR_DRAWESCAPE
+  - EMR_EXTESCAPE
+  - EMR_NAMEDESCAPE
+  citation: MS-EMF 2.3.6
+  status: not_checkable
+  reason: the escape Data is passed to the printer driver and defined by the driver;
+    MS-EMF states only that cjIn bytes MUST be available (checked by emf.escape.payload_bounds)
+- id: emf.opengl.payload_semantics
+  format: emf
+  record_types:
+  - EMR_GLSRECORD
+  - EMR_GLSBOUNDEDRECORD
+  citation: MS-EMF 2.3.9
+  status: not_checkable
+  reason: Data holds an OpenGL function call defined by [OPENGL]; MS-EMF states only
+    the cbData size (checked by emf.opengl.payload_bounds)
+- id: emf.opaque.text_arrays
+  format: emf
+  record_types:
+  - EMR_POLYTEXTOUTA
+  - EMR_POLYTEXTOUTW
+  citation: MS-EMF 2.3.5.32
+  status: implemented
+  reason: null
+- id: emf.opaque.colorspace_fields
+  format: emf
+  record_types:
+  - EMR_CREATECOLORSPACE
+  - EMR_CREATECOLORSPACEW
+  citation: MS-WMF 2.2.2.11
+  status: implemented
+  reason:
+- id: emf.opaque.state_fields
+  format: emf
+  record_types:
+  - EMR_SETCOLORADJUSTMENT
+  - EMR_PIXELFORMAT
+  - EMR_FORCEUFIMAPPING
+  - EMR_COLORCORRECTPALETTE
+  - EMR_SETLINKEDUFIS
+  - EMR_SETICMPROFILEA
+  - EMR_SETICMPROFILEW
+  - EMR_COLORMATCHTOTARGETW
+  citation: MS-EMF 2.3.11
+  status: deferred
+  reason: 'all fields are readable from the record bytes; the size/count/enum clauses
+    are covered by emf.opaque.*, emf.state.color_adjustment, emf.state.pixel_format_version,
+    emf.state.color_match_target, emf.state.profile_bounds and emf.state.linked_ufis_bounds;
+    not written: PixelFormatDescriptor value fields, UFI ids, COLORCORRECTPALETTE
+    index range and ICM flag values'
+- id: emf.comment.windows_metafile_content
+  format: emf
+  record_types:
+  - EMR_COMMENT
+  citation: MS-EMF 2.3.3.4.4
+  status: deferred
+  reason: 'WinMetafile bytes are readable from the comment, not written: checking
+    the embedded WMF would run the wmf.* rules on a nested buffer; the Checksum algorithm
+    is not given in the reference text'
+- id: emf.opaque.colorspace_handles
+  format: emf
+  record_types:
+  - EMR_SETCOLORSPACE
+  - EMR_DELETECOLORSPACE
+  - EMR_CREATECOLORSPACE
+  - EMR_CREATECOLORSPACEW
+  citation: MS-EMF 2.3.8
+  status: deferred
+  reason: ihCS lifecycle (set/delete against a created colour space) needs object-table
+    tracking; the handle is readable from the record bytes

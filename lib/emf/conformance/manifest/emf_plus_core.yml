@@ -1,0 +1,33 @@
+# Chunk-1 EMF+ rules (record typing, header placement, stream framing).
+- id: emfplus.record.reserved_type
+  format: emf_plus
+  record_types: []
+  citation: "MS-EMFPLUS 2.1.1.1"
+  status: implemented
+  reason: null
+- id: emfplus.record.stroke_fill_path
+  format: emf_plus
+  record_types: []
+  citation: "MS-EMFPLUS 2.1.1.1"
+  status: implemented
+  reason: null
+- id: emfplus.record.unknown_type
+  format: emf_plus
+  record_types: []
+  citation: "MS-EMFPLUS 2.1.1.1"
+  status: implemented
+  reason: null
+- id: emfplus.header.placement
+  format: emf_plus
+  record_types: [EmfPlusHeader]
+  citation: "MS-EMFPLUS 2.3.3.3"
+  status: implemented
+  reason: null
+# Drops the copy of a defect that emfplus.record.body_bounds (undecodable body, located) or
+# emfplus.object.effect_missing already reports.
+- id: emfplus.stream.framing
+  format: emf_plus
+  record_types: []
+  citation: "MS-EMFPLUS 2.3"
+  status: implemented
+  reason: null

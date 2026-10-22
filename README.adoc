@@ -112,6 +112,145 @@ always reflect edits made through `record.wire`.
   emf validate FILE            Parse + report errors (exit 0 ok, 1 invalid)
   emf round-trip FILE [--out]  Re-serialize after parse, compare or write
 
+== Conformance lens
+
+`Emf::Conformance` checks a metafile against the Microsoft specifications
+(MS-EMF, MS-EMFPLUS and MS-WMF) and reports what it finds. It does not repair
+files and it does not change what the parser returns. The report uses the key
+layout of `svg_conform`, so tools that read one can read the other.
+
+  require "emf"
+
+  report = Emf::Conformance.check("image.emf", profile: :tolerant)
+  report.valid?   # => true when there are no errors (warnings do not count)
+  report.to_h     # => Hash with string keys
+  report.to_yaml
+
+The lens reads only the public model, so the Ruby and the native backend give
+the same report. It adds no runtime dependency: `bindata` is still the only one.
+
+=== Input
+
+`check` accepts four forms:
+
+[cols="1,3",options="header"]
+|===
+|Input |Behavior
+|path `String` |Read with `File.binread`. The path becomes the report's `filename`.
+|`Pathname` |Same as a path `String`.
+|bytes `String` |Parsed once. `filename` is `nil`. A `String` is taken as a path only when it names an existing file, has no NUL byte and is under 4096 bytes long.
+|`Emf::Model::Metafile` |Evaluated without parsing again. `filename` is `nil`.
+|===
+
+A parsed `Metafile` carries no input bytes. Rules that compare a declared
+length with the real input length are skipped for it. One example is
+`emf.header.bytes`. The WMF size check against the input is another. Pass the
+path or the bytes when you want those rules to run.
+
+=== Profiles
+
+`profile:` is `:strict` (the default) or `:tolerant`. Any other value raises
+`ArgumentError`.
+
+* `:strict` reports every spec violation as an error.
+* `:tolerant` accepts what real producers write. A rule that carries a
+  `tolerant_reason` becomes a warning instead of an error. The warning keeps
+  its `requirement_id`, `kind`, citation and offset. The reason appears as
+  `context.waiver`.
+
+A waiver belongs to the rule, not to a file. Every input that triggers that
+rule gets the downgrade. There is no per-file allowlist. A rule without a
+`tolerant_reason` is an error under both profiles.
+
+Two files in `spec/fixtures/emf-corrupted/` cannot be parsed into a model. One
+has a truncated header and one has an unrecognised first word. They report
+`valid: false` under both profiles, with the error `emf.parse.unparseable`.
+The other 19 corrupted fixtures are `valid: true` under `:tolerant`.
+
+=== The report
+
+`Report#to_h` has these keys: `filename`, `profile`, `tool`, `version`,
+`timestamp`, `valid`, `errors` and `warnings`. `errors` and `warnings` each hold
+`total_count`, `by_requirement` and the ordered `issues`. Issues are ordered by
+offset, then requirement id. Each issue has `type`, `requirement_id`,
+`message`, `element`, `attribute`, `value`, `offset`, `severity`, `kind`,
+`category`, `spec_citation`, `remediation_available` and `context`.
+`offset` is the absolute byte offset in the file. `kind` is a stable
+machine-readable name. `category` repeats `kind` and `severity` repeats `type`,
+for `svg_conform` compatibility.
+
+This is the strict report for a repo fixture. It comes from
+`Emf::Conformance.check("spec/fixtures/emf/test-000.emf").to_h(timestamp: false).to_yaml`.
+The `timestamp` line is left out by `timestamp: false`.
+
+  filename: spec/fixtures/emf/test-000.emf
+  profile: strict
+  tool: emf
+  version: 0.1.2
+  valid: false
+  errors:
+    total_count: 1
+    by_requirement:
+      emfplus.property.enum: 1
+    issues:
+    - type: error
+      requirement_id: emfplus.property.enum
+      message: SetCompositingQuality CompositingQuality value 0 is outside 1..5 (EMF+
+        record 0x4024 at offset 0 of EMR_COMMENT_EMFPLUS record 50)
+      element: emf_plus:0x4024
+      attribute:
+      value:
+      offset: 52152
+      severity: error
+      kind: property_enum
+      category: property_enum
+      spec_citation: MS-EMFPLUS 2.3.6
+      remediation_available: false
+      context:
+        spec_citation: MS-EMFPLUS 2.3.6
+        format: emf_plus
+        record_index: 50
+        record_type: 16420
+  warnings:
+    total_count: 0
+    by_requirement: {}
+    issues: []
+
+With `profile: :tolerant` the same file is `valid: true`. The finding moves to
+`warnings`, and `context.waiver` carries the written reason.
+
+=== Comparing backends
+
+The report holds a creation `timestamp`, so two runs never compare equal as they
+are. To compare two reports, drop the timestamp or pin it:
+
+  Emf::Conformance.check(path).to_h(timestamp: false)
+  Emf::Conformance.check(path, now: Time.utc(2026, 1, 1)).to_h   # "timestamp" => "2026-01-01T00:00:00Z"
+
+Run once with `EMF_BACKEND=ruby` and once with `EMF_BACKEND=native` (see
+<<Backend selection>>) and compare the two results. They must be equal. The
+`native` value raises `Emf::Native::Unavailable` when no native library loads.
+
+=== The rule manifest
+
+Every rule the lens implements, and every check it does not yet make, is listed
+in `lib/emf/conformance/manifest/*.yml`. A row has an `id`, a `format`, the
+`record_types` it covers, a `citation`, a `status` and a `reason`. The reason is
+required for every status except `implemented`.
+
+[cols="1,3",options="header"]
+|===
+|Status |Meaning
+|`implemented` |A registered rule with this id exists.
+|`deferred` |The data is readable from the public model today, but no rule is written yet.
+|`blocked:model` |The check needs a public model field that does not exist yet. The reason names the field.
+|`not_checkable` |No input can violate it, or the bytes are ignored on receipt.
+|===
+
+Read the manifest to see what a clean report does not prove. A `deferred` or
+`blocked:model` row is a check the lens does not make. Every record type of the
+three specifications appears in at least one row.
+
 == Architecture
 
 Three layers, kept strictly separate (MECE):

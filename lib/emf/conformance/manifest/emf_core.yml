@@ -1,0 +1,117 @@
+# Chunk-1 EMF rules: framing, header, EOF, parse recovery. Empty record_types = not tied to one record type.
+- id: emf.record.size_alignment
+  format: emf
+  record_types: []
+  citation: "MS-EMF 2.3"
+  status: implemented
+  reason: null
+- id: emf.record.undefined_type
+  format: emf
+  record_types: []
+  citation: "MS-EMF 2.1.1"
+  status: implemented
+  reason: null
+- id: emf.eof.missing
+  format: emf
+  record_types: [EMR_EOF]
+  citation: "MS-EMF 2.3.4.1"
+  status: implemented
+  reason: null
+- id: emf.eof.size_last
+  format: emf
+  record_types: [EMR_EOF]
+  citation: "MS-EMF 2.3.4.1"
+  status: implemented
+  reason: null
+- id: emf.eof.trailing_bytes
+  format: emf
+  record_types: [EMR_EOF]
+  citation: "MS-EMF 2.3.4.1"
+  status: implemented
+  reason: null
+- id: emf.comment.data_size
+  format: emf
+  record_types: [EMR_COMMENT]
+  citation: "MS-EMF 2.3.3"
+  status: implemented
+  reason: null
+- id: emf.header.signature
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.9"
+  status: implemented
+  reason: null
+- id: emf.header.size_bounds
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.3.4.2"
+  status: implemented
+  reason: null
+- id: emf.header.bytes
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.9"
+  status: implemented
+  reason: null
+- id: emf.header.records
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.9"
+  status: implemented
+  reason: null
+- id: emf.header.handles
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.9"
+  status: implemented
+  reason: null
+- id: emf.header.description_bounds
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.9"
+  status: implemented
+  reason: null
+- id: emf.header.pixel_format_bounds
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.10"
+  status: implemented
+  reason: null
+- id: emf.record.truncated_header
+  format: emf
+  record_types: []
+  citation: "MS-EMF 2.3"
+  status: implemented
+  reason: null
+- id: emf.record.size_minimum
+  format: emf
+  record_types: []
+  citation: "MS-EMF 2.3"
+  status: implemented
+  reason: null
+- id: emf.record.size_bounds
+  format: emf
+  record_types: []
+  citation: "MS-EMF 2.3"
+  status: implemented
+  reason: null
+# Where emf.exttextout.string_bounds, emf.exttextout.dx_bounds or emf.record.exttextout_fixed_part fires on the same
+# EXTTEXTOUT record, that rule reports the defect and this one stays silent.
+- id: emf.record.array_exceeds_size
+  format: emf
+  record_types: []
+  citation: "MS-EMF 2.3"
+  status: implemented
+  reason: null
+- id: emf.record.undecodable
+  format: emf
+  record_types: []
+  citation: "MS-EMF 2.3"
+  status: implemented
+  reason: null
+- id: emf.parse.unparseable
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.3.4.2"
+  status: implemented
+  reason: null

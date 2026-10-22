@@ -1,0 +1,320 @@
+# EMF+ lens manifest rows for rules/emf_plus_{framing,properties,drawing,objects,state}.rb.
+# Rows for emf_plus.rb (chunk 1) belong to that file's owner.
+- id: emfplus.record.fixed_size
+  format: emf_plus
+  record_types: [EmfPlusOffsetClip, EmfPlusResetClip, EmfPlusSetClipPath, EmfPlusSetClipRect, EmfPlusSetClipRegion, EmfPlusEndOfFile, EmfPlusGetDC, EmfPlusHeader, EmfPlusClear, EmfPlusDrawPath, EmfPlusFillPath, EmfPlusFillRegion, EmfPlusSetAntiAliasMode, EmfPlusSetCompositingMode, EmfPlusSetCompositingQuality, EmfPlusSetInterpolationMode, EmfPlusSetPixelOffsetMode, EmfPlusSetRenderingOrigin, EmfPlusSetTextContrast, EmfPlusSetTextRenderingHint, EmfPlusBeginContainer, EmfPlusBeginContainerNoParams, EmfPlusEndContainer, EmfPlusRestore, EmfPlusSave, EmfPlusMultiplyWorldTransform, EmfPlusResetWorldTransform, EmfPlusRotateWorldTransform, EmfPlusScaleWorldTransform, EmfPlusSetPageTransform, EmfPlusSetWorldTransform, EmfPlusTranslateWorldTransform]
+  citation: "MS-EMFPLUS 2.3"
+  status: implemented
+  reason: null
+# Silent where a formula rule (ellipse_size, draw.driver_string, draw.string, draw.image, object.serializable,
+# terminal.graphics, terminal.clip) states the same DataSize; stays for the rest. An unaligned but exact DataSize is
+# emfplus.record.data_size_alignment, not this rule.
+- id: emfplus.record.data_size
+  format: emf_plus
+  record_types: [every typed record not in the fixed-size set]
+  citation: "MS-EMFPLUS 2.3"
+  status: implemented
+  reason: null
+- id: emfplus.record.data_size_alignment
+  format: emf_plus
+  record_types: [all]
+  citation: "MS-EMFPLUS 2.3.3"
+  status: implemented
+  reason: null
+# Silent where emfplus.draw.driver_string, draw.string or draw.image already states that the count runs past DataSize.
+# Also reports the malformed-body error that emfplus.stream.framing would otherwise repeat without an offset.
+- id: emfplus.record.body_bounds
+  format: emf_plus
+  record_types: [all defined types]
+  citation: "MS-EMFPLUS 2.3"
+  status: implemented
+  reason: null
+- id: emfplus.header.signature
+  format: emf_plus
+  record_types: [EmfPlusHeader]
+  citation: "MS-EMFPLUS 2.2.2.19"
+  status: implemented
+  reason: null
+- id: emfplus.eof.placement
+  format: emf_plus
+  record_types: [EmfPlusEndOfFile]
+  citation: "MS-EMFPLUS 1.3"
+  status: implemented
+  reason: null
+- id: emfplus.property.enum
+  format: emf_plus
+  record_types: [EmfPlusSetAntiAliasMode, EmfPlusSetTextRenderingHint, EmfPlusSetInterpolationMode, EmfPlusSetPixelOffsetMode, EmfPlusSetCompositingMode, EmfPlusSetCompositingQuality, EmfPlusSetClipRect, EmfPlusSetClipPath, EmfPlusSetClipRegion]
+  citation: "MS-EMFPLUS 2.3.6"
+  status: implemented
+  reason: null
+- id: emfplus.property.text_contrast
+  format: emf_plus
+  record_types: [EmfPlusSetTextContrast]
+  citation: "MS-EMFPLUS 2.3.6.7"
+  status: implemented
+  reason: null
+- id: emfplus.transform.page_unit
+  format: emf_plus
+  record_types: [EmfPlusSetPageTransform, EmfPlusBeginContainer]
+  citation: "MS-EMFPLUS 2.3.9"
+  status: implemented
+  reason: null
+- id: emfplus.transform.page_unit_discouraged
+  format: emf_plus
+  record_types: [EmfPlusSetPageTransform, EmfPlusBeginContainer]
+  citation: "MS-EMFPLUS 2.3.9"
+  status: implemented
+  reason: null
+- id: emfplus.draw.count
+  format: emf_plus
+  record_types: [EmfPlusDrawBeziers, EmfPlusDrawClosedCurve, EmfPlusDrawCurve, EmfPlusDrawLines, EmfPlusFillClosedCurve, EmfPlusFillPolygon, EmfPlusDrawImagePoints, EmfPlusDrawRects, EmfPlusFillRects]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: implemented
+  reason: null
+- id: emfplus.draw.ellipse_size
+  format: emf_plus
+  record_types: [EmfPlusDrawEllipse, EmfPlusFillEllipse]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: implemented
+  reason: null
+- id: emfplus.draw.image_source_unit
+  format: emf_plus
+  record_types: [EmfPlusDrawImage, EmfPlusDrawImagePoints]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: implemented
+  reason: null
+- id: emfplus.object.empty_slot
+  format: emf_plus
+  record_types: [every drawing and clip record that references an object]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: implemented
+  reason: null
+- id: emfplus.object.wrong_type
+  format: emf_plus
+  record_types: [every drawing and clip record that references an object]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: implemented
+  reason: null
+- id: emfplus.object.id_range
+  format: emf_plus
+  record_types: [every drawing and clip record that references an object]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: implemented
+  reason: null
+# Owns the missing and non-adjacent effect LinkError; emfplus.stream.framing no longer repeats it.
+- id: emfplus.object.effect_missing
+  format: emf_plus
+  record_types: [EmfPlusDrawImagePoints]
+  citation: "MS-EMFPLUS 2.3.4.9"
+  status: implemented
+  reason: null
+- id: emfplus.state.restore_unmatched
+  format: emf_plus
+  record_types: [EmfPlusSave, EmfPlusRestore]
+  citation: "MS-EMFPLUS 2.3.7"
+  status: implemented
+  reason: null
+- id: emfplus.state.end_container_unmatched
+  format: emf_plus
+  record_types: [EmfPlusBeginContainer, EmfPlusBeginContainerNoParams, EmfPlusEndContainer]
+  citation: "MS-EMFPLUS 2.3.7"
+  status: implemented
+  reason: null
+- id: emfplus.record.reserved_flag_bits
+  format: emf_plus
+  record_types: [all]
+  citation: "MS-EMFPLUS 2.3"
+  status: not_checkable
+  reason: "the spec says reserved Flags bits (X) MUST be ignored and unused Flags SHOULD be zero, so a set bit is not a violation"
+- id: emfplus.transform.finite_values
+  format: emf_plus
+  record_types: [EmfPlusSetWorldTransform, EmfPlusMultiplyWorldTransform, EmfPlusTranslateWorldTransform, EmfPlusScaleWorldTransform, EmfPlusRotateWorldTransform]
+  citation: "MS-EMFPLUS 2.3.9"
+  status: not_checkable
+  reason: "the transform sections state no finiteness or range requirement for the float fields (a search of ch02 for finite/NaN/infinity finds none about them)"
+- id: emfplus.transform.page_scale
+  format: emf_plus
+  record_types: [EmfPlusSetPageTransform]
+  citation: "MS-EMFPLUS 2.3.9"
+  status: not_checkable
+  reason: "PageScale is described only as a scale factor; no range is stated in the section read"
+- id: emfplus.draw.angles
+  format: emf_plus
+  record_types: [EmfPlusDrawArc, EmfPlusDrawPie, EmfPlusFillPie]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: not_checkable
+  reason: "StartAngle and SweepAngle accept any value (interpreted modulo 360 / clamped by the consumer), so no value is a violation"
+- id: emfplus.draw.curve_segments
+  format: emf_plus
+  record_types: [EmfPlusDrawCurve]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: not_checkable
+  reason: "Offset and NumSegments have no stated relation to Count in the section read"
+- id: emfplus.draw.compressed_flag_with_relative
+  format: emf_plus
+  record_types: [EmfPlusDrawLines, EmfPlusDrawBeziers, EmfPlusDrawClosedCurve, EmfPlusFillPolygon, EmfPlusFillClosedCurve, EmfPlusDrawImagePoints]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: not_checkable
+  reason: "when P (relative) is set the C flag is undefined and MUST be ignored, so C with P is not a violation"
+- id: emfplus.draw.size_formula
+  format: emf_plus
+  record_types: [all counted drawing records]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: not_checkable
+  reason: "the Size/DataSize formulas (Count * element size + fixed part) are exactly what emfplus.record.data_size checks against the decoded body, so they have no separate rule"
+- id: emfplus.object.definition
+  format: emf_plus
+  record_types: [EmfPlusObject]
+  citation: "MS-EMFPLUS 2.3.5"
+  status: not_checkable
+  reason: "object chain and definition-ID problems are ObjectTable#errors, already reported with the stream's framing errors as emfplus.stream.framing (emf_plus.rb); a second rule would duplicate it"
+- id: emfplus.state.unclosed
+  format: emf_plus
+  record_types: [EmfPlusSave, EmfPlusBeginContainer, EmfPlusBeginContainerNoParams]
+  citation: "MS-EMFPLUS 2.3.7"
+  status: not_checkable
+  reason: "no requirement read that a Save or container must be closed by the end of the stream"
+- id: emfplus.state.clip_transform
+  format: emf_plus
+  record_types: [EmfPlusSetClipRect, EmfPlusSetWorldTransform]
+  citation: "MS-EMFPLUS 2.3.1"
+  status: not_checkable
+  reason: "no clip or transform constraint that depends on earlier state was read; the lens would have to replay the graphics state"
+- id: emfplus.comment.private_data
+  format: emf_plus
+  record_types: [EmfPlusComment]
+  citation: "MS-EMFPLUS 2.3.2.1"
+  status: not_checkable
+  reason: "the payload is application-defined and opaque; only its DataSize is checked, by emfplus.record.data_size_alignment"
+- id: emfplus.draw.driver_string
+  format: emf_plus
+  record_types: [EmfPlusDrawDriverString]
+  citation: "MS-EMFPLUS 2.3.4.6"
+  status: implemented
+  reason: null
+- id: emfplus.draw.driver_string_matrix
+  format: emf_plus
+  record_types: [EmfPlusDrawDriverString]
+  citation: "MS-EMFPLUS 2.3.4.6"
+  status: implemented
+  reason: null
+- id: emfplus.draw.driver_string_options
+  format: emf_plus
+  record_types: [EmfPlusDrawDriverString]
+  citation: "MS-EMFPLUS 2.3.4.6"
+  status: implemented
+  reason: null
+- id: emfplus.draw.driver_string_glyphs
+  format: emf_plus
+  record_types: [EmfPlusDrawDriverString]
+  citation: "MS-EMFPLUS 2.3.4.6"
+  status: not_checkable
+  reason: "a glyph index is valid only against the font's glyph table, which lives in the font file and is not carried by EmfPlusFont; GlyphPos against the glyph array is by-construction one-to-one, since both arrays are sized by GlyphCount (emfplus.draw.driver_string). The RealizedAdvance sentence (GlyphPos holds the first glyph only) contradicts the DataSize formula that counts GlyphCount positions, so no clause is enforced from it"
+- id: emfplus.draw.string
+  format: emf_plus
+  record_types: [EmfPlusDrawString]
+  citation: "MS-EMFPLUS 2.3.4.14"
+  status: implemented
+  reason: null
+- id: emfplus.draw.string_format
+  format: emf_plus
+  record_types: [EmfPlusDrawString]
+  citation: "MS-EMFPLUS 2.3.4.14"
+  status: not_checkable
+  reason: "the public EmfPlusFont and EmfPlusStringFormat objects now decode (Objects::Font, Objects::StringFormat) and are bound-checked by emfplus.object.payload; the record text states no MUST tying Length, LayoutRect or FormatID to their contents"
+- id: emfplus.draw.image
+  format: emf_plus
+  record_types: [EmfPlusDrawImage, EmfPlusDrawImagePoints]
+  citation: "MS-EMFPLUS 2.3.4.8"
+  status: implemented
+  reason: null
+- id: emfplus.image.fields
+  format: emf_plus
+  record_types: [EmfPlusObject]
+  citation: "MS-EMFPLUS 2.2.1.4"
+  status: implemented
+  reason: null
+- id: emfplus.image.pixel_data
+  format: emf_plus
+  record_types: [EmfPlusObject]
+  citation: "MS-EMFPLUS 2.2.2.3"
+  status: deferred
+  reason: "Objects::Image#bitmap exposes width, height, stride, pixel format and the pixel bytes, so PixelData length against Stride * Height (and BitsPerPixel against Stride) is readable; no rule is written yet"
+- id: emfplus.object.type
+  format: emf_plus
+  record_types: [EmfPlusObject]
+  citation: "MS-EMFPLUS 2.3.5.1"
+  status: implemented
+  reason: null
+- id: emfplus.object.payload
+  format: emf_plus
+  record_types: [EmfPlusObject]
+  citation: "MS-EMFPLUS 2.3.5.1"
+  status: implemented
+  reason: null
+- id: emfplus.object.fields
+  format: emf_plus
+  record_types: [EmfPlusObject]
+  citation: "MS-EMFPLUS 2.2.1"
+  status: deferred
+  reason: "Objects::Brush, Pen, Path, Region, Font, StringFormat, ImageAttributes and CustomLineCap decode publicly, so their field enumerations and ranges (BrushType, PenData flags, PathPointType, FamilyName length, WrapMode, ObjectClamp) are readable; only the bounds are checked (emfplus.object.payload) and no per-field rule is written yet"
+- id: emfplus.object.serializable
+  format: emf_plus
+  record_types: [EmfPlusSerializableObject]
+  citation: "MS-EMFPLUS 2.3.5.2"
+  status: implemented
+  reason: null
+- id: emfplus.object.serializable_guid
+  format: emf_plus
+  record_types: [EmfPlusSerializableObject]
+  citation: "MS-EMFPLUS 2.3.5.2"
+  status: implemented
+  reason: null
+- id: emfplus.object.serializable_buffer
+  format: emf_plus
+  record_types: [EmfPlusSerializableObject]
+  citation: "MS-EMFPLUS 2.3.5.2"
+  status: implemented
+  reason: null
+- id: emfplus.object.effect_parameters
+  format: emf_plus
+  record_types: [EmfPlusSerializableObject]
+  citation: "MS-EMFPLUS 2.2.3"
+  status: deferred
+  reason: "Records::SerializableObject#effect decodes each effect (Blur, BrightnessContrast, ColorBalance, HueSaturationLightness, Levels, Sharpen, Tint, ColorMatrix, ...), so the per-effect ranges (BlurRadius 0..255, BrightnessLevel -255..255, ContrastLevel -100..100, ColorBalance -100..100, ColorMatrix row 4 columns 0..3 = 0.0) are readable; no rule is written yet"
+- id: emfplus.terminal.graphics
+  format: emf_plus
+  record_types: [EmfPlusSetTSGraphics]
+  citation: "MS-EMFPLUS 2.3.8.2"
+  status: implemented
+  reason: null
+- id: emfplus.terminal.graphics_palette
+  format: emf_plus
+  record_types: [EmfPlusSetTSGraphics]
+  citation: "MS-EMFPLUS 2.3.8.2"
+  status: implemented
+  reason: null
+- id: emfplus.terminal.graphics_enums
+  format: emf_plus
+  record_types: [EmfPlusSetTSGraphics]
+  citation: "MS-EMFPLUS 2.3.8.2"
+  status: implemented
+  reason: null
+- id: emfplus.terminal.clip
+  format: emf_plus
+  record_types: [EmfPlusSetTSClip]
+  citation: "MS-EMFPLUS 2.3.8.1"
+  status: implemented
+  reason: null
+- id: emfplus.terminal.clip_compressed
+  format: emf_plus
+  record_types: [EmfPlusSetTSClip]
+  citation: "MS-EMFPLUS 2.3.8.1"
+  status: blocked:model
+  reason: "with C set the rectangles stay raw bytes (SetTSClip#rect_data): the model does not decode the 1-or-2-byte delta scheme, whose first-rectangle reference and two-byte sign rule the text does not give, and which contradicts the 4-bytes-per-rectangle DataSize formula; emfplus.terminal.clip checks only the lower bound both readings imply"
+- id: emfplus.stroke_fill_path.fields
+  format: emf_plus
+  record_types: [EmfPlusStrokeFillPath]
+  citation: "MS-EMFPLUS 2.1.1.1"
+  status: blocked:model
+  reason: "0x4037 appears in MS-EMFPLUS only as a RecordType enumeration entry and a one-line description, with no record layout, so the model decodes it as Records::Unknown and there are no public fields to check; emfplus.record.stroke_fill_path (emf_plus.rb) reports its presence"

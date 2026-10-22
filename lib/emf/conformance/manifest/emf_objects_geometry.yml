@@ -1,0 +1,229 @@
+# Rule manifest for the object and geometry families (issue #37, W09 and W11).
+- id: emf.object.fixed_size
+  format: emf
+  record_types: [EMR_CREATEPEN, EMR_CREATEBRUSHINDIRECT, EMR_SELECTPALETTE, EMR_SETCOLORSPACE, EMR_COLORCORRECTPALETTE]
+  citation: "MS-EMF 2.3.7"
+  status: implemented
+  reason: null
+- id: emf.object.font_size
+  format: emf
+  record_types: [EMR_EXTCREATEFONTINDIRECTW]
+  citation: "MS-EMF 2.3.7.8"
+  status: implemented
+  reason: null
+- id: emf.object.pen_style
+  format: emf
+  record_types: [EMR_CREATEPEN, EMR_EXTCREATEPEN]
+  citation: "MS-EMF 2.1.25"
+  status: implemented
+  reason: null
+- id: emf.object.pen_cosmetic_width
+  format: emf
+  record_types: [EMR_CREATEPEN, EMR_EXTCREATEPEN]
+  citation: "MS-EMF 2.2.19"
+  status: implemented
+  reason: null
+- id: emf.object.brush_style
+  format: emf
+  record_types: [EMR_CREATEBRUSHINDIRECT]
+  citation: "MS-EMF 2.3.7.1"
+  status: implemented
+  reason: null
+- id: emf.object.extpen_brush
+  format: emf
+  record_types: [EMR_EXTCREATEPEN]
+  citation: "MS-EMF 2.2.20"
+  status: implemented
+  reason: null
+- id: emf.object.palette_version
+  format: emf
+  record_types: [EMR_CREATEPALETTE]
+  citation: "MS-EMF 2.3.7.6"
+  status: implemented
+  reason: null
+- id: emf.object.palette_entries
+  format: emf
+  record_types: [EMR_CREATEPALETTE, EMR_RESIZEPALETTE]
+  citation: "MS-EMF 2.3.8.4"
+  status: implemented
+  reason: null
+- id: emf.object.palette_size
+  format: emf
+  record_types: [EMR_CREATEPALETTE, EMR_SETPALETTEENTRIES]
+  citation: "MS-EMF 2.3.7.6"
+  status: implemented
+  reason: null
+- id: emf.object.index_zero
+  format: emf
+  record_types: [EMR_SELECTOBJECT, EMR_DELETEOBJECT, EMR_SELECTPALETTE]
+  citation: "MS-EMF 2.3.8.5"
+  status: implemented
+  reason: null
+- id: emf.object.delete_stock
+  format: emf
+  record_types: [EMR_DELETEOBJECT]
+  citation: "MS-EMF 2.3.8.3"
+  status: implemented
+  reason: null
+- id: emf.object.handle_range
+  format: emf
+  record_types: [EMR_SELECTOBJECT, EMR_DELETEOBJECT, EMR_SELECTPALETTE, EMR_SETPALETTEENTRIES, EMR_RESIZEPALETTE, EMR_SETCOLORSPACE, EMR_DELETECOLORSPACE]
+  citation: "MS-EMF 2.3.8"
+  status: implemented
+  reason: null
+- id: emf.object.lifecycle
+  format: emf
+  record_types: [EMR_SELECTOBJECT, EMR_DELETEOBJECT, EMR_SELECTPALETTE, EMR_SETPALETTEENTRIES, EMR_RESIZEPALETTE, EMR_SETCOLORSPACE, EMR_DELETECOLORSPACE]
+  citation: "MS-EMF 2.3.8"
+  status: implemented
+  reason: null
+- id: emf.geometry.point_array_size
+  format: emf
+  record_types: [EMR_POLYBEZIER, EMR_POLYGON, EMR_POLYLINE, EMR_POLYBEZIERTO, EMR_POLYLINETO, EMR_POLYBEZIER16, EMR_POLYGON16, EMR_POLYLINE16, EMR_POLYBEZIERTO16, EMR_POLYLINETO16]
+  citation: "MS-EMF 2.3.5"
+  status: implemented
+  reason: null
+- id: emf.geometry.bezier_count
+  format: emf
+  record_types: [EMR_POLYBEZIER, EMR_POLYBEZIERTO, EMR_POLYBEZIER16, EMR_POLYBEZIERTO16]
+  citation: "MS-EMF 2.3.5.16"
+  status: implemented
+  reason: null
+- id: emf.geometry.poly_poly_size
+  format: emf
+  record_types: [EMR_POLYPOLYLINE, EMR_POLYPOLYGON, EMR_POLYPOLYLINE16, EMR_POLYPOLYGON16]
+  citation: "MS-EMF 2.3.5.28"
+  status: implemented
+  reason: null
+- id: emf.geometry.poly_poly_counts
+  format: emf
+  record_types: [EMR_POLYPOLYLINE, EMR_POLYPOLYGON, EMR_POLYPOLYLINE16, EMR_POLYPOLYGON16]
+  citation: "MS-EMF 2.3.5.28"
+  status: implemented
+  reason: null
+- id: emf.geometry.poly_draw_size
+  format: emf
+  record_types: [EMR_POLYDRAW, EMR_POLYDRAW16]
+  citation: "MS-EMF 2.3.5.20"
+  status: implemented
+  reason: null
+- id: emf.geometry.poly_draw_types
+  format: emf
+  record_types: [EMR_POLYDRAW, EMR_POLYDRAW16]
+  citation: "MS-EMF 2.1.26"
+  status: implemented
+  reason: null
+- id: emf.geometry.gradient_mode
+  format: emf
+  record_types: [EMR_GRADIENTFILL]
+  citation: "MS-EMF 2.1.15"
+  status: implemented
+  reason: null
+- id: emf.geometry.gradient_size
+  format: emf
+  record_types: [EMR_GRADIENTFILL]
+  citation: "MS-EMF 2.3.5.12"
+  status: implemented
+  reason: null
+- id: emf.geometry.gradient_index
+  format: emf
+  record_types: [EMR_GRADIENTFILL]
+  citation: "MS-EMF 2.2.7"
+  status: implemented
+  reason: null
+- id: emf.region.header
+  format: emf
+  record_types: [EMR_FILLRGN, EMR_FRAMERGN, EMR_INVERTRGN, EMR_PAINTRGN, EMR_EXTSELECTCLIPRGN]
+  citation: "MS-EMF 2.2.25"
+  status: implemented
+  reason: null
+- id: emf.region.rects
+  format: emf
+  record_types: [EMR_FILLRGN, EMR_FRAMERGN, EMR_INVERTRGN, EMR_PAINTRGN, EMR_EXTSELECTCLIPRGN]
+  citation: "MS-EMF 2.2.25"
+  status: implemented
+  reason: null
+- id: emf.region.size
+  format: emf
+  record_types: [EMR_FILLRGN, EMR_FRAMERGN, EMR_INVERTRGN, EMR_PAINTRGN, EMR_EXTSELECTCLIPRGN]
+  citation: "MS-EMF 2.3.5"
+  status: implemented
+  reason: null
+- id: emf.object.fixed_size.unstated
+  format: emf
+  record_types: [EMR_SELECTOBJECT, EMR_DELETEOBJECT, EMR_RESIZEPALETTE, EMR_DELETECOLORSPACE]
+  citation: "MS-EMF 2.3.8"
+  status: not_checkable
+  reason: "the spec states no Size value for these records; a record shorter than its fields is caught by emf.record.size_minimum"
+- id: emf.geometry.fixed_size.unstated
+  format: emf
+  record_types: [EMR_ANGLEARC, EMR_ARC, EMR_ARCTO, EMR_CHORD, EMR_ELLIPSE, EMR_EXTFLOODFILL, EMR_LINETO, EMR_PIE, EMR_RECTANGLE, EMR_ROUNDRECT, EMR_SETPIXELV, EMR_FILLPATH, EMR_STROKEANDFILLPATH, EMR_STROKEPATH]
+  citation: "MS-EMF 2.3.5"
+  status: not_checkable
+  reason: "the spec states no Size value for these fixed-layout records; shorter records are caught by emf.record.size_minimum and surplus bytes have no normative text"
+- id: emf.geometry.polygon_min_points
+  format: emf
+  record_types: [EMR_POLYGON, EMR_POLYGON16, EMR_POLYLINE, EMR_POLYLINE16, EMR_POLYLINETO, EMR_POLYLINETO16]
+  citation: "MS-EMF 2.3.5"
+  status: not_checkable
+  reason: "the spec says 'two or more vertexes' only in descriptive prose; no MUST gives a minimum Count"
+- id: emf.geometry.polygon_fill_draw_semantics
+  format: emf
+  record_types: [EMR_POLYGON, EMR_POLYBEZIER, EMR_POLYDRAW, EMR_POLYPOLYGON, EMR_GRADIENTFILL]
+  citation: "MS-EMF 2.3.5"
+  status: not_checkable
+  reason: "drawing with the current pen, brush and fill mode is playback behaviour (SHOULD), not a property of the bytes"
+- id: emf.geometry.gradient_alpha_ignored
+  format: emf
+  record_types: [EMR_GRADIENTFILL]
+  citation: "MS-EMF 2.3.5.12"
+  status: not_checkable
+  reason: "the Alpha fields of TriVertex MUST be ignored by the renderer; nothing in the stream can violate it"
+- id: emf.object.extpen_style_entries
+  format: emf
+  record_types: [EMR_EXTCREATEPEN]
+  citation: "MS-EMF 2.2.20"
+  status: not_checkable
+  reason: "NumStyleEntries SHOULD be zero unless PenStyle is PS_USERSTYLE; SHOULD-level advice, not enforced"
+- id: emf.object.extpen_dib
+  format: emf
+  record_types: [EMR_EXTCREATEPEN, EMR_CREATEMONOBRUSH, EMR_CREATEDIBPATTERNBRUSHPT]
+  citation: "MS-EMF 2.3.7"
+  status: not_checkable
+  reason: "offBmi/cbBmi/offBits/cbBits bounds and DIB contents are assigned to the bitmap-buffer rules (emf_bitmap), not checked in this lane"
+- id: emf.object.colorspace_content
+  format: emf
+  record_types: [EMR_CREATECOLORSPACE, EMR_CREATECOLORSPACEW]
+  citation: "MS-EMF 2.3.7.2"
+  status: not_checkable
+  reason: "LogColorSpace and LogColorSpaceW are defined in MS-WMF 2.2.2.11/2.2.2.12, which is not among the reference documents read for this lane; only the handle is checked"
+- id: emf.object.font_content
+  format: emf
+  record_types: [EMR_EXTCREATEFONTINDIRECTW]
+  citation: "MS-EMF 2.2.13"
+  status: not_checkable
+  reason: "LogFont/LogFontExDv field enums were not read for this lane; only the record size is checked"
+- id: emf.object.palette_entry_reserved
+  format: emf
+  record_types: [EMR_CREATEPALETTE, EMR_SETPALETTEENTRIES]
+  citation: "MS-EMF 2.2.18"
+  status: not_checkable
+  reason: "the Reserved byte of a LogPaletteEntry MUST be ignored; nothing can violate it"
+- id: emf.object.palette_start
+  format: emf
+  record_types: [EMR_SETPALETTEENTRIES]
+  citation: "MS-EMF 2.3.8.8"
+  status: not_checkable
+  reason: "Start is checked against the palette size, which the lens does not track (palette sizes change through RESIZEPALETTE)"
+- id: emf.object.select_playback
+  format: emf
+  record_types: [EMR_SELECTOBJECT, EMR_SELECTPALETTE, EMR_SETCOLORSPACE]
+  citation: "MS-EMF 2.3.8"
+  status: not_checkable
+  reason: "the selected object being used in later drawing is playback behaviour, not a property of the bytes"
+- id: emf.object.deleted_selected_default
+  format: emf
+  record_types: [EMR_DELETEOBJECT, EMR_DELETECOLORSPACE]
+  citation: "MS-EMF 2.3.8.3"
+  status: not_checkable
+  reason: "restoring the default object when a selected object is deleted is playback behaviour"
