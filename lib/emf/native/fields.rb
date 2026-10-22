@@ -87,6 +87,16 @@ module Emf
         53 => [Emr::Binary::Records::PolylineTo16, 4, :cpts, :apts]
       }.freeze
 
+      def self.comment(payload, raw)
+        raise FormatError, "invalid native COMMENT payload" if payload.bytesize < 8
+
+        count = payload.unpack1("Q<")
+        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 8 + count
+
+        data = payload.byteslice(8..) + (raw.byteslice((12 + count)..) || "".b)
+        [Emr::Binary::Records::Comment, { cb_data: count, data: data }]
+      end
+
       def self.eof(payload, raw)
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == 12 && raw.bytesize >= 20
 

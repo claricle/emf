@@ -653,6 +653,10 @@ module Emf
           [lazy_wire(data, offset), suffix(data, offset, n_size)]
         end
 
+        # Whether `call_at` reads the n_size-byte record at `offset`: always
+        # for a fixed layout.
+        def fits?(_data, _offset, _n_size) = true
+
         # Called by a lazy wire's field copy for a field `call` has no
         # unpacked leaf value for (subclasses with such a field override it).
         def fill_unvalued(_field, _data, _base); end
@@ -865,6 +869,10 @@ module Emf
             return if n_size < consumed
 
             [lazy_wire(data, offset), suffix(data, offset, n_size, consumed)]
+          end
+
+          def fits?(data, offset, n_size)
+            @size + (data.unpack1("V", offset: offset + @count_offset) * @point_bytes) <= n_size
           end
 
           # The array field of a lazy wire: its points, held flat or built.

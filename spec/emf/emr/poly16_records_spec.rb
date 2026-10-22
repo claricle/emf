@@ -97,8 +97,8 @@ RSpec.describe "16-bit point array records" do
     bytes = File.binread(File.expand_path("../../fixtures/emf/test-031.emf", __dir__))
     parsed = Emf.parse(bytes)
     expect(Emf.serialize(parsed)).to eq(bytes)
-    wires = parsed.records.filter_map { |r| r.instance_variable_get(:@wire) }
-    pointed = wires.select { |w| types.values.any? { |t| w.instance_of?(records.lookup(t)) } }
+    classes = types.values.map { |t| records.lookup(t) }
+    pointed = parsed.records.select { |r| classes.include?(r.wire_class) }.map(&:wire)
     expect(pointed.size).to be > 1000
     pointed.first(500).each do |wire|
       reference = wire.class.read(wire.to_binary_s)
