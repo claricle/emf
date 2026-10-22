@@ -30,7 +30,8 @@ module RecordVariants
       with_backend(backend, library) do
         metafile = Emf.parse(bytes)
         record = metafile.records.first
-        lazy = !record&.instance_variable_get(:@wire_source).nil?
+        # Both backends now parse lazily; the native backend's sources live under Emf::Native.
+        lazy = record&.instance_variable_get(:@wire_source).class.name.to_s.start_with?("Emf::Native::")
         serialized = Emf.serialize(metafile)
         wire = record&.wire
         Observed.new(metafile, normalized(Section.new(bytes).call(metafile)), serialized, metafile.errors, wire,

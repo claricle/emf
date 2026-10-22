@@ -67,7 +67,10 @@ module Emf
     # define the wire: no per-record field Hash is built at parse time, and
     # materialising reads the record bytes with the same FastFill the Ruby
     # backend parses with. Float leaves keep their original bits there.
-    class FilledWire
+    class FilledWire < Emr::FilledRecord
+      # Native records have always answered a plain Integer type id.
+      attr_reader :type_id
+
       # Snapshot families whose records the Ruby backend's fillers read from
       # bytes alone; any other family keeps its own validation in the Hydrator.
       FAMILIES = [2, 3, *5..32, *35..57, *60..86].to_h { |family| [family, true] }.freeze
@@ -85,44 +88,9 @@ module Emf
         type = type_family & 0xFFFF_FFFF
         filler = FILLERS[type]
         return unless filler && FAMILIES[type_family >> 32] && length >= filler.size
-        return unless data.unpack1("V", offset: offset) == type && data.unpack1("V", offset: offset + 4) == length
+        return unless data.unpack1("Q<", offset: offset) == (type | (length << 32))
 
         new(filler, data, offset, length, type)
-      end
-
-      def initialize(filler, data, offset, length, type_id)
-        @filler = filler
-        @data = data
-        @offset = offset
-        @length = length
-        @type_id = type_id
-      end
-
-      attr_reader :type_id
-
-      def to_binary_s
-        @data.byteslice(@offset, @length)
-      end
-
-      def wire_class
-        @filler.wire_class
-      end
-
-      # [frozen binary data, record offset, untouched]: the bytes the wire is
-      # filled from, and no wire exists yet.
-      def value_source
-        [@data, @offset, true]
-      end
-
-      def materialize
-        wire, @suffix = @filler.call_at(@data, @offset, @length)
-        raise FormatError, "native record disagrees with its bytes" unless wire
-
-        wire
-      end
-
-      def suffix(_wire)
-        @suffix
       end
     end
   end

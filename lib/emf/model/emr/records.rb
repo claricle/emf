@@ -61,6 +61,14 @@ module Emf
               @bytes.unpack1("V")
             end
 
+            def wire_class
+              @klass
+            end
+
+            def value_source
+              [@bytes, 0, true]
+            end
+
             def to_binary_s
               @bytes.dup
             end
@@ -120,6 +128,11 @@ module Emf
 
           def type_id
             @wire ? @wire.i_type : @wire_source.type_id
+          end
+
+          # The wire class of the record, without making the wire.
+          def wire_class
+            @wire ? @wire.class : @wire_source.wire_class
           end
 
           def accept(visitor)

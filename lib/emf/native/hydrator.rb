@@ -26,10 +26,12 @@ module Emf
       def call
         diagnostics = Diagnostics.new(@snapshot, @input)
         table = @snapshot.table
+        plus_candidates = []
         records = Array.new(@snapshot.record_count) do |index|
+          plus_candidates << index if diagnostics.recovered?(table[(index * 5) + 1]) || table[(index * 5) + 3] >> 32 == 4
           diagnostics.adapter_at(table[(index * 5) + 1]) || hydrate_at(index, table)
         end
-        emf_plus = emf_plus_stream(diagnostics)
+        emf_plus = emf_plus_stream(diagnostics, plus_candidates)
         Model::Metafile.new(
           format: emf_plus.empty? ? :emf : :emf_plus, header: Header.new.call(@snapshot.header, @snapshot.raw_header), records: records,
           errors: diagnostics.errors, emf_plus: emf_plus.empty? ? nil : emf_plus,
@@ -73,7 +75,7 @@ module Emf
         when 3, 45..53 then Fields.point_array(payload, record.fetch(:family))
         when 54..57 then Fields.multi_point_array(payload, record.fetch(:family))
         when 58, 59 then Fields.poly_draw(payload, record.fetch(:family))
-        when 4 then comment_fields(payload, raw)
+        when 4 then Fields.comment(payload, raw)
         when 33
           klass, fields = Fields.call(payload, 33)
           [klass, fields.merge(trailing: raw.byteslice(12..))]
@@ -122,24 +124,15 @@ module Emf
         [Emr::Binary::Records::Raw, { payload: raw.byteslice(8..) }]
       end
 
-      def comment_fields(payload, raw)
-        raise FormatError, "invalid native COMMENT payload" if payload.bytesize < 8
-
-        count = payload.unpack1("Q<")
-        raise FormatError, "invalid native typed payload length" unless payload.bytesize == 8 + count
-
-        data = payload.byteslice(8..) + (raw.byteslice((12 + count)..) || "".b)
-        [Emr::Binary::Records::Comment, { cb_data: count, data: data }]
-      end
-
-      def emf_plus_stream(diagnostics)
+      # Only recovered records and COMMENTs can carry EMF+ bytes, in record order.
+      def emf_plus_stream(diagnostics, candidates)
         table = @snapshot.table
-        @snapshot.record_count.times.filter_map do |index|
+        candidates.filter_map do |index|
           offset = table[(index * 5) + 1]
           next diagnostics.emf_plus_at(offset) if diagnostics.recovered?(offset)
           next unless table[(index * 5) + 3] >> 32 == 4
 
-          _klass, fields = comment_fields(@snapshot.payload(index), @input.byteslice(offset, table[(index * 5) + 2]))
+          _klass, fields = Fields.comment(@snapshot.payload(index), @input.byteslice(offset, table[(index * 5) + 2]))
           data = fields.fetch(:data)
           data.byteslice(4..) if fields.fetch(:cb_data) >= 4 && data.start_with?("EMF+")
         end.join.b

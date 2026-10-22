@@ -411,6 +411,9 @@ RSpec.describe Emf::Native do
   end
 
   it "hydrates fixed state and path fields directly and preserves edits" do
+    # FastFill verifies itself with real reads when it first loads; load it
+    # before the spies below so they see only the code under test.
+    expect(Emf::Emr::Binary::FastFill).to be_a(Class)
     expect(Emf::Emr::Parser).not_to receive(:call)
     fixed_state_records.each do |type, klass, fields|
       expect(klass).not_to receive(:read)

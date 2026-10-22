@@ -24,6 +24,12 @@ module Emf
 
         while pos < data.bytesize
           offset = pos
+          if (source = filled_record_at(data, offset))
+            records << Model::Emr::Records::WireAdapter.lazy(source: source, offset: offset)
+            pos = offset + source.length
+            next
+          end
+
           wire, suffix = read_record_at(data, offset, errors)
           if wire.nil?
             trailing << bytes.byteslice(offset..)
@@ -33,7 +39,7 @@ module Emf
           pos = offset + data.unpack1("V", offset: offset + 4)
 
           records << Model::Emr::Records::WireAdapter.new(wire: wire, offset: offset, suffix: suffix)
-          emf_plus_bytes << extract_emf_plus(wire) if wire.is_a?(Emf::Emr::Binary::Records::Comment)
+          emf_plus_bytes << comment_emf_plus(wire)
 
           if wire.is_a?(Emf::Emr::Binary::Records::Eof)
             trailing << data.byteslice(pos..) if pos < data.bytesize
@@ -41,6 +47,10 @@ module Emf
           end
         end
 
+        metafile(header, records, errors, emf_plus_bytes, trailing)
+      end
+
+      def metafile(header, records, errors, emf_plus_bytes, trailing)
         Model::Metafile.new(
           format: emf_plus_bytes.empty? ? :emf : :emf_plus,
           header: header,
@@ -220,6 +230,25 @@ module Emf
         result
       end
 
+      # The byte-backed source of the fixed-layout or point-array record at
+      # `offset` of the frozen binary `data`, or nil when the record needs
+      # `read_record_at` (any other type, a short or truncated span, a count
+      # that overruns its record, or an error to report). The wire is made
+      # only when asked for, from the same filler `read_typed` uses.
+      def filled_record_at(data, offset)
+        return if data.bytesize - offset < 8
+
+        type_id = data.unpack1("V", offset: offset)
+        n_size = data.unpack1("V", offset: offset + 4)
+        return if n_size < 8 || data.bytesize - offset < n_size
+
+        source = Emr::FilledRecord.for(type_id, offset, n_size, data)
+        return unless source
+        return source unless CHECKED_TYPES.key?(type_id)
+
+        source if variable_array_sane?(type_id, n_size, data.byteslice(offset, n_size))
+      end
+
       # The record starting at `offset` of the binary `data` as [wire, suffix],
       # or nil when none can be read there (the caller keeps the rest as
       # trailing bytes).
@@ -276,6 +305,10 @@ module Emf
       end
 
       EMF_PLUS_IDENTIFIER = 0x2B464D45 # "EMF+" little-endian
+
+      def comment_emf_plus(wire)
+        wire.is_a?(Emf::Emr::Binary::Records::Comment) ? extract_emf_plus(wire) : ""
+      end
 
       def extract_emf_plus(comment_wire)
         data = comment_wire.data.to_s.b
