@@ -21,6 +21,58 @@ module Emf
             allocate.__send__(:init_lazy, source, offset)
           end
 
+          # Opt-in construction of a wire record from keyword attributes, with
+          # n_size set to the record's size, as `klass.new(**attrs)` followed by
+          # `n_size = num_bytes`. For a class with a PackPlan and attributes it
+          # accepts (values BinData stores unchanged), the adapter holds only the
+          # finished bytes; `to_binary_s` serves them until `#wire` is called,
+          # after which the adapter serializes that wire like any other. Any
+          # other class or attribute shape, or an error while packing, takes the
+          # BinData path unchanged, so the result and the errors are those of
+          # `klass.new`.
+          def self.build(klass, **attrs)
+            filler = Emf::Emr::Binary::FastFill.for_class(klass)
+            bytes = filler && packed_bytes(filler, attrs)
+            return allocate.__send__(:init_lazy, BuiltBytes.new(klass, filler, bytes), nil) if bytes
+
+            wire = klass.new(**attrs)
+            wire.n_size = wire.num_bytes
+            new(wire: wire)
+          end
+
+          def self.packed_bytes(filler, attrs)
+            filler.pack_plan&.pack(attrs)
+          rescue StandardError
+            nil
+          end
+          private_class_method :packed_bytes
+
+          # The lazy source of a record built by `build`: its bytes, and a
+          # wire read back from them when one is asked for.
+          class BuiltBytes
+            def initialize(klass, filler, bytes)
+              @klass = klass
+              @filler = filler
+              @bytes = (bytes.encoding == Encoding::BINARY ? bytes : bytes.b).freeze
+            end
+
+            def type_id
+              @bytes.unpack1("V")
+            end
+
+            def to_binary_s
+              @bytes.dup
+            end
+
+            def materialize
+              @filler.call_at(@bytes, 0, @bytes.bytesize)&.first || @klass.read(@bytes)
+            end
+
+            def suffix(_wire)
+              EMPTY_SUFFIX
+            end
+          end
+
           # Bytes of a record that follow its typed layout (declared nSize larger
           # than the layout consumes). Kept verbatim beside the wire.
           EMPTY_SUFFIX = "".b.freeze
