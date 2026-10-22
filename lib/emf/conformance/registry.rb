@@ -19,8 +19,10 @@ module Emf
       end
 
       def register(id:, formats:, citation:, kind:, severity: :error, tolerant_reason: nil, &check)
-        raise ArgumentError, "rule #{id} already registered" if @rules.key?(id)
         raise ArgumentError, "rule #{id} needs a check block" unless check
+        # The same rule file running twice (loaded here, then required) registers from the same line: keep the first.
+        return @rules[id] if @rules.key?(id) && @rules[id].check.source_location == check.source_location
+        raise ArgumentError, "rule #{id} already registered" if @rules.key?(id)
 
         @rules[id] = Rule.new(id: id, formats: Array(formats), citation: citation, kind: kind,
                               severity: severity, tolerant_reason: tolerant_reason, check: check)
@@ -41,7 +43,11 @@ module Emf
       def self.load_from(directory)
         new.tap do |registry|
           Thread.current[:emf_conformance_registry] = registry
-          Dir[File.join(directory, "*.rb")].each { |file| load file }
+          Dir[File.join(directory, "*.rb")].each do |file|
+            load file
+            # Mark it loaded, so a later `require` of the same file does not run it a second time.
+            $LOADED_FEATURES << File.expand_path(file) if directory == RULES_DIR
+          end
         ensure
           Thread.current[:emf_conformance_registry] = nil
         end

@@ -29,4 +29,18 @@ RSpec.describe Emf::Conformance::Registry do
     expect(default["emf.header.bytes"].applies_to?(:emf_plus)).to be(true)
     expect(default["emfplus.record.unknown_type"].applies_to?(:emf)).to be(false)
   end
+  it "keeps a rule file it loaded from running again when something requires it later" do
+    registry = Emf::Conformance::Registry.default
+    ids = registry.map(&:id)
+    file = File.expand_path("../../../lib/emf/conformance/rules/emf_bitmap.rb", __dir__)
+    expect { require file }.not_to raise_error
+    expect(registry.map(&:id)).to eq(ids)
+  end
+
+  it "still rejects a second rule with the same id from another place" do
+    registry = described_class.new
+    registry.register(id: "x.dup", formats: [:emf], citation: "c", kind: :k) { [] }
+    expect { registry.register(id: "x.dup", formats: [:emf], citation: "c", kind: :k) { [] } }
+      .to raise_error(ArgumentError, /already registered/)
+  end
 end
