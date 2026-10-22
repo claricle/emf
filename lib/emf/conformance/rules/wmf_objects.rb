@@ -6,6 +6,8 @@
 # a created object takes the lowest free index below header NumberOfObjects,
 # META_DELETEOBJECT frees it, and later records must refer to live indexes of the
 # right object type. Records the model keeps opaque (UnknownRecord) are skipped.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module WmfObjectRules

@@ -2,6 +2,8 @@
 
 # Parse-recovery errors (Metafile#errors) and unparseable input become
 # diagnostics. The record count and offsets come from the ParseError itself.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module ParseRecoveryRules

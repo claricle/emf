@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 require_relative "emf_plus_common"
 
 # Save/Restore and BeginContainer/EndContainer matching over the record sequence.

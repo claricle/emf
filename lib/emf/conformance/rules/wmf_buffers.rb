@@ -5,6 +5,8 @@
 # records). Only values the model exposes are judged: records the model keeps opaque
 # (UnknownRecord, escape subtypes without a view, undecodable bytes) are preserved and never
 # reported, and no rule here needs the declared record size.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module WmfBufferRules

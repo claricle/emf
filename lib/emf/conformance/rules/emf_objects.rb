@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 # Object creation and manipulation rules (MS-EMF 2.3.7, 2.3.8, 2.1.31, 2.2.17-2.2.20).
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module ObjectRules

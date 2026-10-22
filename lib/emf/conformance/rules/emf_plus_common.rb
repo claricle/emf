@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 return if defined?(Emf::Conformance::EmfPlusSupport)
 
 # Shared helper for the emf_plus_*.rb rule files (no rules of its own). It walks

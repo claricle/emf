@@ -25,7 +25,6 @@ module Emf
 
       def register(id:, formats:, citation:, kind:, severity: :error, tolerant_reason: nil, &check)
         raise ArgumentError, "rule #{id} needs a check block" unless check
-        return @rules[id] if @rules.key?(id) && replay?(check)
         raise ArgumentError, "rule #{id} already registered" if @rules.key?(id)
 
         @rules[id] = Rule.new(id: id, formats: Array(formats), citation: citation, kind: kind,
@@ -35,6 +34,8 @@ module Emf
       def each(&) = @rules.each_value(&)
 
       def loaded(file) = @loaded_files << File.expand_path(file)
+
+      def loaded?(file) = @loaded_files.include?(File.expand_path(file))
 
       def [](id) = @rules[id]
 
@@ -63,12 +64,12 @@ module Emf
       # The registry rule files register into while they load.
       def self.loading = Thread.current[:emf_conformance_registry] || default
 
-      private
+      # Every rule file starts with `return if Registry.loaded_elsewhere?(__FILE__)`. Inside load_from it is false and the
+      # file runs. Required directly, the default registry loads it (once) and the direct run stops before registering.
+      def self.loaded_elsewhere?(file)
+        return false if Thread.current[:emf_conformance_registry]
 
-      # A file this registry already loaded, running again after loading finished (a later `require` of it):
-      # its rules are already here. Any duplicate while loading, even from one line in a loop, still raises.
-      def replay?(check)
-        Thread.current[:emf_conformance_registry].nil? && @loaded_files.include?(File.expand_path(check.source_location.first))
+        default.loaded?(file)
       end
     end
   end

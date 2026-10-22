@@ -5,6 +5,8 @@
 # families skip:
 #   bad_corrupted_2014-12-13-132605.emf   EMR_SETICMMODE with Size 8 (stated 12)
 #   bad_corrupted_2017-05-12-074000.emf   EMR_EXTTEXTOUTW with Size 12 (EmrText needs 24 bytes)
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module CorpusNamedRules

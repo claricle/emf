@@ -2,6 +2,8 @@
 
 # Path bracket (MS-EMF 2.3.10) and clipping (2.3.2) record rules, plus the
 # RESTOREDC depth sequence rule (2.3.11.6).
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module PathClipRules

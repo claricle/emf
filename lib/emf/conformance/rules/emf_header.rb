@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 # EMR_HEADER / Header object rules (MS-EMF 2.2.9, 2.3.4.2).
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module HeaderRules

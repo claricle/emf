@@ -2,6 +2,8 @@
 
 # State record rules (MS-EMF 2.3.11): fixed sizes, enumeration domains, nonzero
 # divisors, RESTOREDC sign, and the length fields of the profile and UFI records.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module StateRules

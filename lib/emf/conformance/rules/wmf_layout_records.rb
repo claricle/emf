@@ -5,6 +5,8 @@
 # after the last field in `suffix`, so a record can pass decoding with a RecordSize larger than its
 # layout. Records whose size is exact at decoding time (the rectangle, point and offset records of
 # Binary::FIXED_RECORDS) are checked by wmf.record.declared_size instead.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module WmfLayoutRules

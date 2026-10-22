@@ -52,19 +52,22 @@ RSpec.describe Emf::Conformance::Registry do
     end
   end
 
-  it "keeps the first registration when a file it loaded runs again after loading" do
-    Dir.mktmpdir do |dir|
-      file = File.join(dir, "once.rb")
-      File.write(file, <<~RUBY)
-        (Thread.current[:emf_registry_probe] || Emf::Conformance::Registry.loading).register(id: "x.once", formats: [:emf], citation: "c", kind: :k) { [] }
-      RUBY
-      registry = described_class.load_from(dir)
-      Thread.current[:emf_registry_probe] = registry
-      expect { load file }.not_to raise_error
-      expect(registry.map(&:id)).to eq(["x.once"])
-    ensure
-      Thread.current[:emf_registry_probe] = nil
+  it "starts every rule file with the load guard, so a direct require never runs it a second time" do
+    guard = "return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)"
+    files = Dir[File.join(described_class::RULES_DIR, "*.rb")]
+    expect(files).not_to be_empty
+    files.each do |file|
+      code = File.readlines(file).map(&:strip).reject { |line| line.empty? || line.start_with?("#") }
+      expect(code.first).to eq(guard), file
     end
+  end
+
+  it "rejects a duplicate id registered after loading, even from a helper in a loaded rule file" do
+    registry = described_class.default
+    rule = registry.first
+    expect do
+      registry.register(id: rule.id, formats: rule.formats, citation: "other", kind: rule.kind, &rule.check)
+    end.to raise_error(ArgumentError, /already registered/)
   end
 
   it "builds one default registry when first used from several threads" do

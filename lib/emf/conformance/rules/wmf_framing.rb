@@ -4,6 +4,8 @@
 # model (MS-WMF 2.2.2 headers, 2.3.2 control records). They read only
 # Metafile#header, Metafile#records and the input length; declared record sizes
 # are not on the public WMF model, so size rules stay blocked (see manifest).
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module WmfFramingRules

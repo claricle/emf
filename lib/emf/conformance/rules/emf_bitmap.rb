@@ -3,6 +3,8 @@
 # Bitmap record rules (MS-EMF 2.3.1.x, MS-WMF 2.2.2.3 / 2.2.2.9). The BMI and bits
 # bytes are read from the record's own bytes: only offsets, lengths and the fixed
 # BITMAPINFOHEADER fields, never the pixels.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module BitmapRules

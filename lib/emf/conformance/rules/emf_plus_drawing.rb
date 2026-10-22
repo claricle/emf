@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 require_relative "emf_plus_common"
 
 # EMF+ drawing geometry rules over the public decoded records: minimum point and

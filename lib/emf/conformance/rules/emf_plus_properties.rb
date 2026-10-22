@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 require_relative "emf_plus_common"
 
 # EMF+ property, clip combine-mode and page-unit rules: enum domains and ranges

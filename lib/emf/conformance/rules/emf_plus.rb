@@ -3,6 +3,8 @@
 # EMF+ adapter: maps the existing Emf::EmfPlus::Stream::Conformance diagnostics
 # (and the stream's other framing errors) onto lens rules. Offsets are the file
 # offset of the EMR_COMMENT that carries the EMF+ record.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module EmfPlusRules

@@ -2,6 +2,8 @@
 
 # Drawing geometry rules: point arrays, PolyDraw, GradientFill and region data
 # (MS-EMF 2.3.5, 2.2.7, 2.2.8, 2.2.24-2.2.26, 2.1.15, 2.1.26).
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module GeometryRules

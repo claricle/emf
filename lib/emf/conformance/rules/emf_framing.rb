@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 # Record framing, EOF and comment rules (MS-EMF 2.1.1, 2.3, 2.3.3, 2.3.4.1).
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module FramingRules

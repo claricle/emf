@@ -3,6 +3,8 @@
 # WMF fixed-field, enum and point-array rules over typed public records
 # (MS-WMF 2.3.3 drawing, 2.3.4 object, 2.3.5 state records). Records the model
 # keeps opaque (UnknownRecord) are never judged here.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module WmfRecordRules

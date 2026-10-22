@@ -3,6 +3,8 @@
 # Text output rules (MS-EMF 2.2.5 EmrText, 2.3.5.7/.8 EXTTEXTOUT, 2.3.5.32/.33 POLYTEXTOUT,
 # 2.3.5.37 SMALLTEXTOUT). Offsets, counts and option bits are read from the record's own
 # bytes; the characters themselves are never decoded.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module TextRules

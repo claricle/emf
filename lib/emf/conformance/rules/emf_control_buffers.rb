@@ -4,6 +4,8 @@
 # (MS-EMF 2.2.9, 2.2.10, 2.2.22, 2.3.4.1, 2.3.4.2). Reads the buffers through
 # the public accessors: header.description_bytes / pixel_format_bytes and the
 # EOF wire's palette_bytes.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module ControlBufferRules

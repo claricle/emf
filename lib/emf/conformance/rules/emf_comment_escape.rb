@@ -3,6 +3,8 @@
 # COMMENT dispatch, Escape, OpenGL and the opaque record types' outer size and count
 # bounds (MS-EMF 2.3.3, 2.3.6, 2.3.9 and the record sections cited per rule). Payload
 # semantics stay out: only offsets, sizes and counts are read from the record bytes.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module CommentEscapeRules

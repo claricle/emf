@@ -12,6 +12,8 @@
 # Declared size: on an accepted model each record carries the rdSize read from the source file
 # (Record#declared_size_words, nil for records built in memory). The rules compare it with the layout and with the
 # header's MaxRecord and Size.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module WmfRejectionRules

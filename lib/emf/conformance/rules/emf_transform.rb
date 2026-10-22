@@ -2,6 +2,8 @@
 
 # Transform record rules (MS-EMF 2.3.12, 2.2.28): fixed sizes, the
 # ModifyWorldTransformMode enumeration and the XForm matrix values.
+return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
+
 module Emf
   module Conformance
     module TransformRules
