@@ -19,6 +19,7 @@ module Emf
   autoload :Wmf, "emf/wmf"
   autoload :Emr, "emf/emr"
   autoload :EmfPlus, "emf/emf_plus"
+  autoload :Conformance, "emf/conformance"
 
   class << self
     def parse(bytes)

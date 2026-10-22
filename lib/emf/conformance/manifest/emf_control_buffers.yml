@@ -1,0 +1,61 @@
+# EMF control-record buffers (work item W07): header description / pixel format and the EOF palette.
+- id: emf.header.description_terminator
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.3.4.2"
+  status: implemented
+  reason: null
+- id: emf.header.description_string
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.9"
+  status: not_checkable
+  reason: "The spec gives the description arbitrary content and length (only null termination, checked by emf.header.description_terminator, and the record bounds, checked by emf.header.description_bounds, are requirements), so nDescription cannot be compared with any other string length."
+- id: emf.header.pixel_format_size
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.10"
+  status: implemented
+  reason: null
+- id: emf.header.pixel_format_content
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.22"
+  status: implemented
+  reason: null
+- id: emf.header.buffers_overlap
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.3.4.2"
+  status: implemented
+  reason: null
+- id: emf.header.extension_field_order
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.3.4.2"
+  status: not_checkable
+  reason: "The spec lets the optional variable-length fields appear in any order after the fixed part; the only checkable constraint, that the description and pixel format do not overlap, is emf.header.buffers_overlap. The HeaderSize determination algorithm (figure 3) is an image, so the exact fixed-part size per header type is not machine-readable."
+- id: emf.header.reserved_and_padding
+  format: emf
+  record_types: [EMR_HEADER]
+  citation: "MS-EMF 2.2.9"
+  status: not_checkable
+  reason: "The Reserved field and the up-to-3 alignment padding bytes MUST be ignored on receipt, so the spec puts no requirement on their values."
+- id: emf.eof.palette_entries
+  format: emf
+  record_types: [EMR_EOF]
+  citation: "MS-EMF 2.2.9"
+  status: implemented
+  reason: null
+- id: emf.eof.palette_bounds
+  format: emf
+  record_types: [EMR_EOF]
+  citation: "MS-EMF 2.3.4.1"
+  status: implemented
+  reason: null
+- id: emf.eof.size_last_position
+  format: emf
+  record_types: [EMR_EOF]
+  citation: "MS-EMF 2.3.4.1"
+  status: not_checkable
+  reason: "Covered by emf.eof.size_last (rules/emf_framing.rb), which reads the last four serialized bytes of the EOF record and so checks both the value and that SizeLast is the final field after any palette. emf.eof.palette_bounds checks the palette precedes it. No separate rule."

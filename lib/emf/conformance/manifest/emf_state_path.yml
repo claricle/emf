@@ -1,0 +1,403 @@
+# State, transform, path bracket and clipping rule manifest (issue #37 W08, W10).
+- id: emf.state.fixed_size
+  format: emf
+  record_types:
+  - EMR_SETMAPPERFLAGS
+  - EMR_SETCOLORADJUSTMENT
+  - EMR_RESTOREDC
+  - EMR_SETARCDIRECTION
+  - EMR_SETICMMODE
+  - EMR_SETLAYOUT
+  citation: MS-EMF 2.3.11
+  status: implemented
+  reason:
+# For EMR_PIXELFORMAT and EMR_FORCEUFIMAPPING only an oversized record is reported here; a Size below the layout is
+# emf.opaque.fixed_size.
+- id: emf.state.layout_size
+  format: emf
+  record_types:
+  - EMR_SETWINDOWEXTEX
+  - EMR_SETWINDOWORGEX
+  - EMR_SETVIEWPORTEXTEX
+  - EMR_SETVIEWPORTORGEX
+  - EMR_SETBRUSHORGEX
+  - EMR_SETMAPMODE
+  - EMR_SETBKMODE
+  - EMR_SETPOLYFILLMODE
+  - EMR_SETROP2
+  - EMR_SETSTRETCHBLTMODE
+  - EMR_SETTEXTALIGN
+  - EMR_SETTEXTCOLOR
+  - EMR_SETBKCOLOR
+  - EMR_MOVETOEX
+  - EMR_SCALEVIEWPORTEXTEX
+  - EMR_SCALEWINDOWEXTEX
+  - EMR_SAVEDC
+  - EMR_REALIZEPALETTE
+  - EMR_SETMITERLIMIT
+  - EMR_PIXELFORMAT
+  - EMR_FORCEUFIMAPPING
+  - EMR_SETTEXTJUSTIFICATION
+  citation: MS-EMF 2.3.11
+  status: implemented
+  reason:
+- id: emf.state.map_mode
+  format: emf
+  record_types:
+  - EMR_SETMAPMODE
+  citation: MS-EMF 2.3.11.19
+  status: implemented
+  reason:
+- id: emf.state.bk_mode
+  format: emf
+  record_types:
+  - EMR_SETBKMODE
+  citation: MS-EMF 2.3.11.11
+  status: implemented
+  reason:
+- id: emf.state.poly_fill_mode
+  format: emf
+  record_types:
+  - EMR_SETPOLYFILLMODE
+  citation: MS-EMF 2.3.11.22
+  status: implemented
+  reason:
+- id: emf.state.rop2
+  format: emf
+  record_types:
+  - EMR_SETROP2
+  citation: MS-EMF 2.3.11.23
+  status: implemented
+  reason:
+- id: emf.state.stretch_mode
+  format: emf
+  record_types:
+  - EMR_SETSTRETCHBLTMODE
+  citation: MS-EMF 2.3.11.24
+  status: implemented
+  reason:
+- id: emf.state.arc_direction
+  format: emf
+  record_types:
+  - EMR_SETARCDIRECTION
+  citation: MS-EMF 2.3.11.9
+  status: implemented
+  reason:
+- id: emf.state.icm_mode
+  format: emf
+  record_types:
+  - EMR_SETICMMODE
+  citation: MS-EMF 2.3.11.14
+  status: implemented
+  reason:
+- id: emf.state.layout_mode
+  format: emf
+  record_types:
+  - EMR_SETLAYOUT
+  citation: MS-EMF 2.3.11.17
+  status: implemented
+  reason:
+- id: emf.state.mapper_flags
+  format: emf
+  record_types:
+  - EMR_SETMAPPERFLAGS
+  citation: MS-EMF 2.3.11.20
+  status: implemented
+  reason:
+- id: emf.state.text_align
+  format: emf
+  record_types:
+  - EMR_SETTEXTALIGN
+  citation: MS-EMF 2.3.11.25
+  status: implemented
+  reason:
+- id: emf.state.scale_viewport_ext
+  format: emf
+  record_types:
+  - EMR_SCALEVIEWPORTEXTEX
+  citation: MS-EMF 2.3.11.7
+  status: implemented
+  reason:
+- id: emf.state.scale_window_ext
+  format: emf
+  record_types:
+  - EMR_SCALEWINDOWEXTEX
+  citation: MS-EMF 2.3.11.8
+  status: implemented
+  reason:
+- id: emf.state.restoredc_negative
+  format: emf
+  record_types:
+  - EMR_RESTOREDC
+  citation: MS-EMF 2.3.11.6
+  status: implemented
+  reason:
+- id: emf.state.color_adjustment
+  format: emf
+  record_types:
+  - EMR_SETCOLORADJUSTMENT
+  citation: MS-EMF 2.2.2
+  status: implemented
+  reason:
+- id: emf.state.pixel_format_version
+  format: emf
+  record_types:
+  - EMR_PIXELFORMAT
+  citation: MS-EMF 2.2.22
+  status: implemented
+  reason:
+- id: emf.state.color_match_target
+  format: emf
+  record_types:
+  - EMR_COLORMATCHTOTARGETW
+  citation: MS-EMF 2.3.11.1
+  status: implemented
+  reason:
+- id: emf.state.profile_bounds
+  format: emf
+  record_types:
+  - EMR_SETICMPROFILEA
+  - EMR_SETICMPROFILEW
+  - EMR_COLORMATCHTOTARGETW
+  citation: MS-EMF 2.3.11.15
+  status: implemented
+  reason:
+- id: emf.state.linked_ufis_bounds
+  format: emf
+  record_types:
+  - EMR_SETLINKEDUFIS
+  citation: MS-EMF 2.3.11.18
+  status: implemented
+  reason:
+- id: emf.transform.fixed_size
+  format: emf
+  record_types:
+  - EMR_SETWORLDTRANSFORM
+  - EMR_MODIFYWORLDTRANSFORM
+  citation: MS-EMF 2.3.12
+  status: implemented
+  reason:
+- id: emf.transform.modify_mode
+  format: emf
+  record_types:
+  - EMR_MODIFYWORLDTRANSFORM
+  citation: MS-EMF 2.3.12.1
+  status: implemented
+  reason:
+- id: emf.transform.finite_matrix
+  format: emf
+  record_types:
+  - EMR_SETWORLDTRANSFORM
+  - EMR_MODIFYWORLDTRANSFORM
+  citation: MS-EMF 2.2.28
+  status: implemented
+  reason:
+- id: emf.path.fixed_size
+  format: emf
+  record_types:
+  - EMR_ABORTPATH
+  - EMR_BEGINPATH
+  - EMR_CLOSEFIGURE
+  - EMR_ENDPATH
+  - EMR_FLATTENPATH
+  - EMR_WIDENPATH
+  citation: MS-EMF 2.3.10
+  status: implemented
+  reason:
+- id: emf.path.begin_nested
+  format: emf
+  record_types:
+  - EMR_BEGINPATH
+  citation: MS-EMF 2.3.10
+  status: implemented
+  reason:
+- id: emf.path.unclosed
+  format: emf
+  record_types:
+  - EMR_BEGINPATH
+  citation: MS-EMF 2.3.10
+  status: implemented
+  reason:
+- id: emf.path.end_unopened
+  format: emf
+  record_types:
+  - EMR_ENDPATH
+  citation: MS-EMF 2.3.10
+  status: implemented
+  reason:
+- id: emf.path.closefigure_outside
+  format: emf
+  record_types:
+  - EMR_CLOSEFIGURE
+  citation: MS-EMF 2.3.10
+  status: implemented
+  reason:
+- id: emf.clip.layout_size
+  format: emf
+  record_types:
+  - EMR_EXCLUDECLIPRECT
+  - EMR_INTERSECTCLIPRECT
+  - EMR_OFFSETCLIPRGN
+  - EMR_SELECTCLIPPATH
+  - EMR_SETMETARGN
+  citation: MS-EMF 2.3.2
+  status: implemented
+  reason:
+- id: emf.clip.select_clip_path_mode
+  format: emf
+  record_types:
+  - EMR_SELECTCLIPPATH
+  citation: MS-EMF 2.3.2.5
+  status: implemented
+  reason:
+- id: emf.clip.ext_select_clip_rgn_mode
+  format: emf
+  record_types:
+  - EMR_EXTSELECTCLIPRGN
+  citation: MS-EMF 2.3.2.2
+  status: implemented
+  reason:
+- id: emf.dc.restore_depth
+  format: emf
+  record_types:
+  - EMR_SAVEDC
+  - EMR_RESTOREDC
+  citation: MS-EMF 2.3.11.6
+  status: implemented
+  reason:
+- id: emf.state.setmiterlimit.value
+  format: emf
+  record_types:
+  - EMR_SETMITERLIMIT
+  citation: MS-EMF 2.3.11.21
+  status: not_checkable
+  reason: the section types MiterLimit as an unsigned integer while the wire exposes
+    a float32; the section states no range, so no clause is checkable
+- id: emf.state.pixel_format_flags
+  format: emf
+  record_types:
+  - EMR_PIXELFORMAT
+  citation: MS-EMF 2.2.22
+  status: deferred
+  reason: PFD_DOUBLEBUFFER and PFD_SUPPORT_GDI MUST NOT both be set. dw_flags is exposed and
+    readable, but the converted reference text drops the flag bit values (the flag diagram
+    labels cannot be mapped to bit positions from the text alone, and no fixture carries
+    an EMR_PIXELFORMAT to measure them), so the check waits for the wingdi.h constants
+- id: emf.state.icm_profile_flags_encoding
+  format: emf
+  record_types:
+  - EMR_SETICMPROFILEA
+  - EMR_SETICMPROFILEW
+  citation: MS-EMF 2.3.11.15
+  status: not_checkable
+  reason: dwFlags values and the ASCII/UTF-16LE content of the name are not constrained
+    by the section beyond the cbName+cbData length (checked by emf.state.profile_bounds)
+- id: emf.state.color_adjustment_ranges
+  format: emf
+  record_types:
+  - EMR_SETCOLORADJUSTMENT
+  citation: MS-EMF 2.2.2
+  status: not_checkable
+  reason: gamma, contrast, brightness, colorfulness and tint ranges are SHOULD, and
+    Values is any combination of the ColorAdjustment enumeration; only Size and IlluminantIndex
+    are normative (checked)
+- id: emf.state.color_match_delete_transform
+  format: emf
+  record_types:
+  - EMR_COLORMATCHTOTARGETW
+  citation: MS-EMF 2.3.11.1
+  status: not_checkable
+  reason: CS_DELETE_TRANSFORM SHOULD NOT be used before an EMR_SETICMMODE is a SHOULD
+    NOT sequence statement
+- id: emf.state.scale_fixed_mapping_mode
+  format: emf
+  record_types:
+  - EMR_SCALEVIEWPORTEXTEX
+  - EMR_SCALEWINDOWEXTEX
+  citation: MS-EMF 2.3.11.7
+  status: not_checkable
+  reason: the extent MUST NOT change under a fixed-scale mapping mode is playback
+    behaviour of the device context, not a property of the record stream
+- id: emf.state.ufi_content
+  format: emf
+  record_types:
+  - EMR_FORCEUFIMAPPING
+  - EMR_SETLINKEDUFIS
+  citation: MS-EMF 2.3.11.2
+  status: not_checkable
+  reason: UniversalFontId checksum and index have no stated value constraints; SETLINKEDUFIS
+    Reserved MUST be ignored
+- id: emf.state.point_size_values
+  format: emf
+  record_types:
+  - EMR_SETWINDOWEXTEX
+  - EMR_SETWINDOWORGEX
+  - EMR_SETVIEWPORTEXTEX
+  - EMR_SETVIEWPORTORGEX
+  - EMR_SETBRUSHORGEX
+  - EMR_MOVETOEX
+  - EMR_SETTEXTCOLOR
+  - EMR_SETBKCOLOR
+  - EMR_SETTEXTJUSTIFICATION
+  - EMR_REALIZEPALETTE
+  - EMR_SAVEDC
+  citation: MS-EMF 2.3.11
+  status: not_checkable
+  reason: the sections state no value constraint beyond the fixed layout (checked
+    by emf.state.layout_size)
+- id: emf.state.invert_rgn_data
+  format: emf
+  record_types:
+  - EMR_INVERTRGN
+  citation: MS-EMF 2.3.11.3
+  status: not_checkable
+  reason: an RgnDataSize larger than the record is recovered by the parser as a Raw
+    record and reported by emf.record.array_exceeds_size; RegionData internals belong
+    to the region rules of W11
+- id: emf.clip.ext_select_clip_rgn_data
+  format: emf
+  record_types:
+  - EMR_EXTSELECTCLIPRGN
+  citation: MS-EMF 2.3.2.2
+  status: not_checkable
+  reason: an RgnDataSize larger than the record is reported by emf.record.array_exceeds_size;
+    RGN_COPY may omit RgnData (SHOULD); RegionData internals belong to the region
+    rules of W11
+- id: emf.clip.rect_values
+  format: emf
+  record_types:
+  - EMR_EXCLUDECLIPRECT
+  - EMR_INTERSECTCLIPRECT
+  - EMR_OFFSETCLIPRGN
+  citation: MS-EMF 2.3.2.1
+  status: not_checkable
+  reason: the sections state no value constraint on the rectangle or offset beyond
+    the fixed layout (checked by emf.clip.layout_size)
+- id: emf.clip.select_clip_path_needs_path
+  format: emf
+  record_types:
+  - EMR_SELECTCLIPPATH
+  citation: MS-EMF 2.3.2.5
+  status: not_checkable
+  reason: the section states no requirement that a path bracket exist or be closed
+    when the record is processed
+- id: emf.path.records_inside_bracket
+  format: emf
+  record_types:
+  - EMR_FLATTENPATH
+  - EMR_WIDENPATH
+  - EMR_FILLPATH
+  - EMR_STROKEPATH
+  - EMR_STROKEANDFILLPATH
+  citation: MS-EMF 2.3.10
+  status: not_checkable
+  reason: the section does not say these records must occur inside or outside a bracket;
+    only BEGINPATH nesting and bracket closure carry MUST
+- id: emf.state.restoredc_positive_depth
+  format: emf
+  record_types:
+  - EMR_RESTOREDC
+  citation: MS-EMF 2.3.11.6
+  status: not_checkable
+  reason: a non-negative SavedDC is reported by emf.state.restoredc_negative; its
+    depth is not interpreted

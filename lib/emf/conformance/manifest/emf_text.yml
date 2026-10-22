@@ -1,0 +1,97 @@
+# EMF text records (work item W12). Offsets, counts and option bits are read from the record bytes.
+- id: emf.exttextout.string_bounds
+  format: emf
+  record_types: [EMR_EXTTEXTOUTA, EMR_EXTTEXTOUTW]
+  citation: "MS-EMF 2.2.5"
+  status: implemented
+  reason: null
+- id: emf.exttextout.string_offset_alignment
+  format: emf
+  record_types: [EMR_EXTTEXTOUTA, EMR_EXTTEXTOUTW]
+  citation: "MS-EMF 2.2.5"
+  status: implemented
+  reason: null
+- id: emf.exttextout.dx_bounds
+  format: emf
+  record_types: [EMR_EXTTEXTOUTA, EMR_EXTTEXTOUTW]
+  citation: "MS-EMF 2.2.5"
+  status: implemented
+  reason: null
+- id: emf.exttextout.dx_offset_alignment
+  format: emf
+  record_types: [EMR_EXTTEXTOUTA, EMR_EXTTEXTOUTW]
+  citation: "MS-EMF 2.2.5"
+  status: implemented
+  reason: null
+- id: emf.exttextout.string_encoding
+  format: emf
+  record_types: [EMR_EXTTEXTOUTW]
+  citation: "MS-EMF 2.2.5"
+  status: implemented
+  reason: null
+- id: emf.exttextout.options_defined
+  format: emf
+  record_types: [EMR_EXTTEXTOUTA, EMR_EXTTEXTOUTW]
+  citation: "MS-EMF 2.1.11"
+  status: implemented
+  reason: null
+- id: emf.exttextout.chars_count
+  format: emf
+  record_types: [EMR_EXTTEXTOUTA, EMR_EXTTEXTOUTW]
+  citation: "MS-EMF 2.2.5"
+  status: not_checkable
+  reason: "Chars is the only length of OutputString (no terminator or second count exists to compare); what can be checked is that Chars characters lie inside the record, which string_bounds covers."
+- id: emf.exttextout.string_encoding_ansi
+  format: emf
+  record_types: [EMR_EXTTEXTOUTA]
+  citation: "MS-EMF 2.2.5"
+  status: not_checkable
+  reason: "The 8-bit characters are ASCII per the spec but the producer's code page is the selected font charset, which the record does not carry, so no byte value is invalid."
+- id: emf.exttextout.bounds_ignored
+  format: emf
+  record_types: [EMR_EXTTEXTOUTA, EMR_EXTTEXTOUTW]
+  citation: "MS-EMF EMR_EXTTEXTOUTA Record"
+  status: not_checkable
+  reason: "The Bounds rectangle MUST be ignored on receipt, and exScale/eyScale only SHOULD be used when iGraphicsMode is GM_COMPATIBLE, so neither field carries a checkable requirement."
+- id: emf.smalltextout.text_string
+  format: emf
+  record_types: [EMR_SMALLTEXTOUT]
+  citation: "MS-EMF 2.3.5.37"
+  status: implemented
+  reason: null
+- id: emf.smalltextout.options_defined
+  format: emf
+  record_types: [EMR_SMALLTEXTOUT]
+  citation: "MS-EMF 2.1.11"
+  status: implemented
+  reason: null
+- id: emf.smalltextout.char_width
+  format: emf
+  record_types: [EMR_SMALLTEXTOUT]
+  citation: "MS-EMF EMR_SMALLTEXTOUT Record"
+  status: not_checkable
+  reason: "The spec contradicts itself: the cChars bullet says 16-bit characters while TextString says 8- or 16-bit by fuOptions (ETO_SMALL_CHARS), so no single normative width exists; text_string uses the fuOptions width."
+- id: emf.smalltextout.bounds_presence
+  format: emf
+  record_types: [EMR_SMALLTEXTOUT]
+  citation: "MS-EMF EMR_SMALLTEXTOUT Record"
+  status: not_checkable
+  reason: "The spec states no condition under which the optional Bounds rectangle is present beyond ETO_NO_RECT, which text_string already follows to locate TextString."
+- id: emf.polytextout.strings
+  format: emf
+  record_types: [EMR_POLYTEXTOUTA, EMR_POLYTEXTOUTW]
+  citation: "MS-EMF 2.3.5.32"
+  status: implemented
+  reason: null
+- id: emf.polytextout.dx
+  format: emf
+  record_types: [EMR_POLYTEXTOUTA, EMR_POLYTEXTOUTW]
+  citation: "MS-EMF 2.3.5.32"
+  status: implemented
+  reason: null
+- id: emf.polytextout.options_defined
+  format: emf
+  record_types: [EMR_POLYTEXTOUTA, EMR_POLYTEXTOUTW]
+  citation: "MS-EMF 2.1.11"
+  status: implemented
+  reason: null
