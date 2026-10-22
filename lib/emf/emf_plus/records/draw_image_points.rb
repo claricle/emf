@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "emf/emf_plus/records/primitives/bounded_array"
 require "emf/emf_plus/records/primitives/rect_f"
 require "emf/emf_plus/records/primitives/point_f"
 require "emf/emf_plus/records/primitives/point"
@@ -26,11 +27,13 @@ module Emf
           int32 :src_unit
           rect_f :src_rect
           uint32 :point_count
-          array :relative_points, type: :point_r, initial_length: :point_count, onlyif: -> { flags.anybits?(RELATIVE_FLAG) }
-          array :compressed_points, type: :point, initial_length: :point_count,
-                                    onlyif: -> { !flags.anybits?(RELATIVE_FLAG) && flags.anybits?(COMPRESSED_FLAG) }
-          array :float_points, type: :point_f, initial_length: :point_count,
-                               onlyif: -> { !flags.anybits?(RELATIVE_FLAG) && !flags.anybits?(COMPRESSED_FLAG) }
+          bounded_array :relative_points, type: :point_r, element_size: 2, initial_length: :point_count, onlyif: lambda {
+            flags.anybits?(RELATIVE_FLAG)
+          }
+          bounded_array :compressed_points, type: :point, element_size: 4, initial_length: :point_count,
+                                            onlyif: -> { !flags.anybits?(RELATIVE_FLAG) && flags.anybits?(COMPRESSED_FLAG) }
+          bounded_array :float_points, type: :point_f, element_size: 8, initial_length: :point_count,
+                                       onlyif: -> { !flags.anybits?(RELATIVE_FLAG) && !flags.anybits?(COMPRESSED_FLAG) }
         end
         BODY = DrawImagePointsBody
 
