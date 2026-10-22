@@ -278,16 +278,13 @@ module Emf
       EMF_PLUS_IDENTIFIER = 0x2B464D45 # "EMF+" little-endian
 
       def extract_emf_plus(comment_wire)
-        return +"" unless comment_wire.cb_data&.>= 4
-
-        identifier = comment_wire.data.getbyte(0) |
-                     (comment_wire.data.getbyte(1) << 8) |
-                     (comment_wire.data.getbyte(2) << 16) |
-                     (comment_wire.data.getbyte(3) << 24)
-        return +"" unless identifier == EMF_PLUS_IDENTIFIER
+        data = comment_wire.data.to_s.b
+        # cbData can claim more bytes than the record holds; read only what is there.
+        return +"" unless comment_wire.cb_data&.>=(4) && data.bytesize >= 4
+        return +"" unless data.unpack1("V") == EMF_PLUS_IDENTIFIER
 
         # Payload after the 4-byte identifier is the EMF+ record(s).
-        comment_wire.data.bytes[4..].pack("C*")
+        data.byteslice(4..)
       end
     end
   end
