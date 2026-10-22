@@ -43,4 +43,33 @@ RSpec.describe Emf::Conformance::Registry do
     expect { registry.register(id: "x.dup", formats: [:emf], citation: "c", kind: :k) { [] } }
       .to raise_error(ArgumentError, /already registered/)
   end
+  it "rejects a duplicate id registered from the same line while loading, as in a loop" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "loop.rb"), <<~RUBY)
+        2.times { |n| Emf::Conformance::Registry.loading.register(id: "x.loop", formats: [:emf], citation: "c\#{n}", kind: :k) { [] } }
+      RUBY
+      expect { described_class.load_from(dir) }.to raise_error(ArgumentError, /x.loop already registered/)
+    end
+  end
+
+  it "keeps the first registration when a file it loaded runs again after loading" do
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, "once.rb")
+      File.write(file, <<~RUBY)
+        (Thread.current[:emf_registry_probe] || Emf::Conformance::Registry.loading).register(id: "x.once", formats: [:emf], citation: "c", kind: :k) { [] }
+      RUBY
+      registry = described_class.load_from(dir)
+      Thread.current[:emf_registry_probe] = registry
+      expect { load file }.not_to raise_error
+      expect(registry.map(&:id)).to eq(["x.once"])
+    ensure
+      Thread.current[:emf_registry_probe] = nil
+    end
+  end
+
+  it "builds one default registry when first used from several threads" do
+    described_class.instance_variable_set(:@default, nil)
+    defaults = Array.new(4) { Thread.new { described_class.default } }.map(&:value)
+    expect(defaults.map(&:object_id).uniq.size).to eq(1)
+  end
 end
