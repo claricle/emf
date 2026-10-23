@@ -46,16 +46,15 @@ RSpec.describe "Parse failure evidence" do
   end
 
   it "names the failed check, where, and declared against actual" do
-    bytes = WmfRejectionCases.cases.fetch(203)
-    expect { Emf.parse(bytes) }.to raise_error(Emf::FormatError) do |error|
-      expect(error.evidence).to eq(Emf::ParseEvidence.new(check: :placeable_checksum_mismatch, offset: 20, declared: 65_535,
-                                                          actual: 22_385))
+    bytes = WmfRejectionCases.cases.fetch(403)
+    expect { Emf.parse(bytes) }.to raise_error(Emf::ParseError) do |error|
+      expect(error.evidence).to eq(Emf::ParseEvidence.new(check: :record_length_invalid, offset: 18, declared: 2, actual: 3))
     end
   end
 
   it "keeps the evidence table in step with the native rejection table" do
     native = Emf::Native::WmfRejection
-    reasons = Emf::Wmf::Evidence::REASONS.except(*Emf::Wmf::Evidence::DRIFT_REASONS)
+    reasons = Emf::Wmf::Evidence::REASONS.except(*Emf::Wmf::Evidence::DRIFT_REASONS, *Emf::Wmf::Evidence::RETIRED_REASONS)
     expect(reasons.keys).to match_array(native::INPUT.keys + native::RECORD.keys)
     texts = reasons.transform_values(&:last)
     expect(texts.slice(*native::INPUT.keys)).to eq(native::INPUT)

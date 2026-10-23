@@ -93,9 +93,10 @@ RSpec.describe "Emf::Conformance WMF forced-backend parity" do
   end
 
   describe "accepted and rejected inputs classify the same on both backends" do
-    # file-size.wmf and max-record.wmf carry header drift, which both backends recover from (tolerant-valid).
-    it "accepts exactly the valid and header-drift files and rejects the other seeds" do
-      recovered = %w[file-size.wmf max-record.wmf]
+    # file-size.wmf and max-record.wmf carry header drift, and placeable-checksum.wmf and negative-text-count.wmf a
+    # recovered checksum and text length; both backends recover from them (tolerant-valid).
+    it "accepts exactly the valid and recovered files and rejects the other seeds" do
+      recovered = %w[file-size.wmf max-record.wmf placeable-checksum.wmf negative-text-count.wmf]
       files.each do |name, bytes|
         backends.each do |backend|
           expect(rejected?(report(backend, bytes, :tolerant))).to eq(!base.key?(name) && !recovered.include?(name)), "#{name} on #{backend}"

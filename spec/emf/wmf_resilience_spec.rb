@@ -17,7 +17,7 @@ RSpec.describe WmfResilience do
     name = File.basename(path)
     return "parsed" if name.start_with?("valid-")
 
-    %w[file-size.wmf max-record.wmf].include?(name) ? "recovered" : "rejected"
+    %w[file-size.wmf max-record.wmf negative-text-count.wmf placeable-checksum.wmf].include?(name) ? "recovered" : "rejected"
   end
 
   def expect_every_seed_defined(results)

@@ -131,11 +131,6 @@ fn phase_cases() -> Vec<Case> {
             Reason::PlaceableReserved,
         ),
         case(
-            "placeable checksum",
-            [placeable(0, Some(0xFFFF), 0), wmf(&[eof()], 0)].concat(),
-            Reason::PlaceableChecksum,
-        ),
-        case(
             "truncated header",
             vec![1, 0, 9, 0, 0, 3],
             Reason::HeaderTruncated,
@@ -194,12 +189,6 @@ fn framing_cases() -> Vec<Case> {
                 Reason::MissingEof,
             )
         },
-        record_case(
-            "invalid eof length",
-            0,
-            vec![0, 0],
-            Reason::InvalidEofLength,
-        ),
     ]
 }
 
@@ -212,8 +201,8 @@ fn record_cases() -> Vec<Case> {
     vec![
         record_case("fixed", 0x14, words(&[0, 0, 0, 0]), Reason::FixedLength),
         record_case("state", 0x01, words(&[0]), Reason::StateLength),
-        record_case("font", 0xFB, vec![0; 20], Reason::FontLength),
-        record_case("object", 0x2D, words(&[0, 0]), Reason::ObjectLength),
+        record_case("font", 0xFB, vec![0; 10], Reason::FontLength),
+        record_case("object", 0x2D, vec![], Reason::ObjectLength),
         record_case(
             "point missing count",
             0x25,
@@ -244,12 +233,6 @@ fn record_cases() -> Vec<Case> {
             0x32,
             words(&[0, 0, 0, 2]),
             Reason::TextTruncatedRectangle,
-        ),
-        record_case(
-            "text negative",
-            0x21,
-            words(&[0xFFFF, 0, 0]),
-            Reason::TextNegativeLength,
         ),
         record_case(
             "text string",
@@ -390,15 +373,6 @@ fn object_cases() -> Vec<Case> {
             0,
         ),
         object_case(
-            "invalid reference",
-            1,
-            vec![record(0x2D, &words(&[5]))],
-            18,
-            0x2D,
-            Reason::ObjectInvalidReference,
-            5,
-        ),
-        object_case(
             "not palette",
             1,
             vec![brush(), palette_ref(0)],
@@ -409,10 +383,10 @@ fn object_cases() -> Vec<Case> {
         ),
         object_case(
             "not region",
-            1,
-            vec![brush(), record(0x2A, &words(&[0]))],
-            32,
-            0x2A,
+            2,
+            vec![brush(), brush(), record(0x28, &words(&[0, 1]))],
+            46,
+            0x28,
             Reason::ObjectNotRegion,
             0,
         ),
@@ -475,7 +449,7 @@ fn every_reason_names_its_codec_offset_function_and_detail() {
     seen.sort_unstable();
     seen.dedup();
     // Reasons without a crafted case here are the two that need a huge input; they have their own tests.
-    assert_eq!(seen.len(), 56 - 2 - 3, "{seen:?}");
+    assert_eq!(seen.len(), 56 - 2 - 3 - 4, "{seen:?}");
 }
 
 #[test]
@@ -496,6 +470,29 @@ fn input_size_and_record_limit() {
 }
 
 #[test]
+fn recovered_shapes_are_not_rejections() {
+    let pen = || record(0xFA, &words(&[0, 0, 0, 0, 0]));
+    let brush = || record(0xFC, &words(&[0, 0, 0, 0]));
+    let stream = |records: Vec<Vec<u8>>, objects| first_rejection(&wmf(&records, objects));
+    // EOF longer than three words
+    assert!(stream(vec![record(0, &words(&[0, 0]))], 0).is_none());
+    // object record with surplus bytes
+    assert!(stream(vec![pen(), record(0x2D, &words(&[0, 0])), eof()], 1).is_none());
+    // font with a short face name: the 18 fixed bytes are present
+    assert!(stream(vec![record(0xFB, &[0; 30]), eof()], 1).is_none());
+    // negative text length, in both text records
+    assert!(stream(vec![record(0x21, &words(&[0xFFFF, 0, 0])), eof()], 0).is_none());
+    assert!(stream(vec![record(0x32, &words(&[0, 0, 0xFFFF, 0])), eof()], 0).is_none());
+    // a reference to no live object, and a clip/paint/invert record naming a non-region
+    assert!(stream(vec![record(0x2D, &words(&[5])), eof()], 1).is_none());
+    assert!(stream(vec![record(0xF0, &words(&[0x8005])), eof()], 1).is_none());
+    assert!(stream(vec![brush(), record(0x2C, &words(&[0])), eof()], 1).is_none());
+    // a placeable checksum mismatch
+    let mismatched = [placeable(0, Some(0xFFFF), 0), wmf(&[eof()], 0)].concat();
+    assert!(first_rejection(&mismatched).is_none());
+}
+
+#[test]
 fn an_accepted_metafile_has_no_rejection() {
     let records = vec![record(0x14, &words(&[1, 2])), eof()];
     assert!(first_rejection(&wmf(&records, 0)).is_none());
@@ -503,13 +500,15 @@ fn an_accepted_metafile_has_no_rejection() {
 
 #[test]
 fn the_first_failure_in_contract_order_wins() {
-    // A later malformed record loses to an earlier bad object reference only when records decode first.
-    let bad_reference = record(0x2D, &words(&[3]));
+    // A later malformed record wins over an earlier object-table failure (a palette selection naming a brush),
+    // because every record decodes before the object table is walked.
+    let brush = record(0xFC, &words(&[0, 0, 0, 0]));
+    let bad_reference = record(0x34, &words(&[0]));
     let later_malformed = record(0x14, &words(&[0]));
-    let found = first_rejection(&wmf(&[bad_reference, later_malformed, eof()], 1)).unwrap();
+    let found = first_rejection(&wmf(&[brush, bad_reference, later_malformed, eof()], 1)).unwrap();
     assert_eq!(
         (found.reason, found.offset, found.function),
-        (Reason::FixedLength, Some(26), Some(0x14))
+        (Reason::FixedLength, Some(40), Some(0x14))
     );
 }
 

@@ -260,8 +260,8 @@
   format: wmf
   record_types: []
   citation: MS-WMF 2.3.2.3 META_PLACEABLE
-  status: implemented
-  reason:
+  status: not_checkable
+  reason: 'the spec MUST holds, but the parser no longer rejects it: the placeable checksum disagrees with the header words, the model keeps the declared value and wmf.placeable.checksum reports it (an error when strict, a warning when tolerant), so no WMF failure with this reason exists to report'
 - id: wmf.reject.r0301
   format: wmf
   record_types: []
@@ -332,8 +332,8 @@
   format: wmf
   record_types: []
   citation: MS-WMF 2.3.2.1 META_EOF (RecordSize)
-  status: implemented
-  reason:
+  status: not_checkable
+  reason: 'the spec MUST holds, but the parser no longer rejects it: an EOF record longer than three words still ends the stream, the model is kept and wmf.record.declared_size reports it (an error when strict, a warning when tolerant), so no WMF failure with this reason exists to report'
 - id: wmf.reject.r0501
   format: wmf
   record_types: []
@@ -398,8 +398,8 @@
   format: wmf
   record_types: []
   citation: MS-WMF 2.3.3.5 META_EXTTEXTOUT, 2.3.3.20 META_TEXTOUT
-  status: implemented
-  reason:
+  status: not_checkable
+  reason: 'the spec MUST holds, but the parser no longer rejects it: a text record with a negative StringLength is kept verbatim as an opaque record and wmf.text.negative_length reports it (an error when strict, a warning when tolerant), so no WMF failure with this reason exists to report'
 - id: wmf.reject.r1004
   format: wmf
   record_types: []
@@ -536,8 +536,8 @@
   format: wmf
   record_types: []
   citation: MS-WMF 3.1.4.1 WMF Object Table; 2.3.4.10 META_SELECTOBJECT, 2.3.4.7 META_DELETEOBJECT
-  status: implemented
-  reason:
+  status: not_checkable
+  reason: 'the spec MUST holds, but the parser no longer rejects it: a reference to no live object is ignored, the record is kept and wmf.object.select_reference, wmf.object.delete_reference, wmf.object.palette_reference or wmf.object.region_reference reports it (an error when strict, a warning when tolerant), so no WMF failure with this reason exists to report'
 - id: wmf.reject.r1703
   format: wmf
   record_types: []
@@ -664,6 +664,14 @@
   status: implemented
   reason:
 - id: wmf.text.length
+  format: wmf
+  record_types:
+  - META_TEXTOUT
+  - META_EXTTEXTOUT
+  citation: MS-WMF 2.3.3.20 META_TEXTOUT, 2.3.3.5 META_EXTTEXTOUT (StringLength, String)
+  status: implemented
+  reason:
+- id: wmf.text.negative_length
   format: wmf
   record_types:
   - META_TEXTOUT

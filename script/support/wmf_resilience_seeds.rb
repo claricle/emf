@@ -42,10 +42,12 @@ module WmfResilienceSeeds
         bytes.slice!(-6, 6)
         bytes[6, 4] = [bytes.bytesize / 2].pack("V")
       end,
-      malformed_seed("negative-text-count", family: "text", recipe: "set text count at byte 24 to signed -1") do |bytes|
+      malformed_seed("negative-text-count", expected_outcome: "recovered", family: "text",
+                                            recipe: "set text count at byte 24 to signed -1") do |bytes|
         bytes[24, 2] = [65_535].pack("v")
       end,
-      malformed_seed("placeable-checksum", placeable: true, recipe: "XOR placeable checksum byte 20 with 1") do |bytes|
+      malformed_seed("placeable-checksum", expected_outcome: "recovered", placeable: true,
+                                           recipe: "XOR placeable checksum byte 20 with 1") do |bytes|
         bytes.setbyte(20, bytes.getbyte(20) ^ 1)
       end,
       malformed_seed("bitmap-short-record", family: "bitmap", recipe: "set first bitmap record size at byte 18 to 3 words") do |bytes|

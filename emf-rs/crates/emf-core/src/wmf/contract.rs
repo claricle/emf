@@ -3,7 +3,11 @@
 //! `wmf::parse` recovers past malformed records and reports them as diagnostics; the Ruby contract stops at the
 //! first failure in a fixed order: placeable, standard header, record framing and per-codec payloads in stream
 //! order, then the object table. Header Size and MaxRecord drift are not rejections: the walk is bounded by the
-//! real input and ends at the first EOF record, and the Ruby side records the drift. This module walks the same phases without building
+//! real input and ends at the first EOF record, and the Ruby side records the drift. Also recovered, not
+//! rejected (the model is kept and the Ruby side records the evidence): a placeable checksum mismatch, an EOF
+//! record longer than three words, an object record with surplus bytes, a font record shorter than its face
+//! name, a negative text length, and an object reference that names no live object or, for a clip, paint or
+//! invert region record, a non-region. This module walks the same phases without building
 //! a document and names the first failure. It reports data only (codec, reason, offset, function, one number);
 //! the wording belongs to the caller. `None` means the contract accepts the input.
 
@@ -31,6 +35,7 @@ impl Default for Limits {
 
 const PLACEABLE_BYTES: usize = 22;
 const HEADER_BYTES: usize = 18;
+const FONT_FIXED_BYTES: usize = 18;
 const OBJECT_CREATORS: [u8; 7] = [0xFA, 0xFC, 0xFB, 0xF7, 0xF9, 0xFF, 0x42];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,15 +61,16 @@ pub enum Codec {
     MaxRecord = 18,
 }
 
-/// Stable reason codes: `codec * 100 + n`. Never renumber; append only. 305 (header Size), 404 (data after EOF
-/// inside the declared Size) and 1801 (MaxRecord) are retired: those mismatches are recovered, not rejected.
+/// Stable reason codes: `codec * 100 + n`. Never renumber; append only. 203 (placeable checksum), 305 (header
+/// Size), 404 (data after EOF inside the declared Size), 406 (EOF length), 1003 (negative text length), 1702
+/// (invalid object reference) and 1801 (MaxRecord) are retired: those are recovered, not rejected. 701 (font),
+/// 801 (object record) and 1704 (not a region) are narrowed: only the shapes the Ruby recovery cannot keep remain.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Reason {
     InputTooLarge = 101,
     PlaceableTruncated = 201,
     PlaceableReserved = 202,
-    PlaceableChecksum = 203,
     HeaderTruncated = 301,
     HeaderType = 302,
     HeaderSize = 303,
@@ -75,7 +81,6 @@ pub enum Reason {
     /// `detail` is the declared length in words.
     InvalidRecordLength = 403,
     MissingEof = 405,
-    InvalidEofLength = 406,
     FixedLength = 501,
     StateLength = 601,
     FontLength = 701,
@@ -86,7 +91,6 @@ pub enum Reason {
     PointLengthMismatch = 904,
     TextTruncated = 1001,
     TextTruncatedRectangle = 1002,
-    TextNegativeLength = 1003,
     TextTruncatedString = 1004,
     TextTruncatedSpacing = 1005,
     PaletteTruncatedPrefix = 1101,
@@ -110,7 +114,6 @@ pub enum Reason {
     DcEscapeTruncatedData = 1603,
     ObjectCapacity = 1701,
     /// `detail` is the referenced index.
-    ObjectInvalidReference = 1702,
     ObjectNotPalette = 1703,
     ObjectNotRegion = 1704,
     ObjectInvalidRegion = 1705,
@@ -229,10 +232,6 @@ fn placeable(input: &[u8]) -> Result<(Option<u16>, usize), Rejection> {
     if le32(input, 16) != 0 {
         return Err(Rejection::whole(Reason::PlaceableReserved));
     }
-    let sum = (0..10).fold(0u16, |sum, word| sum ^ le16(input, word * 2));
-    if le16(input, 20) != sum {
-        return Err(Rejection::whole(Reason::PlaceableChecksum));
-    }
     Ok((Some(le16(input, 4)), PLACEABLE_BYTES))
 }
 
@@ -306,16 +305,14 @@ fn records(
 fn decode(raw: &[u8], function: u16, offset: usize) -> Result<(), Rejection> {
     let fail = |reason| Err(Rejection::at(reason, offset, Some(function)));
     if function == 0 {
-        return if raw.len() == 6 {
-            Ok(())
-        } else {
-            fail(Reason::InvalidEofLength)
-        };
+        // An EOF longer than three words is recovered: it still ends the stream.
+        return Ok(());
     }
     let low = function as u8;
     match low {
         0xFB => {
-            if raw.len() < 6 + 50 {
+            // A face name shorter than 32 bytes is recovered; the 18 fixed bytes must be present.
+            if raw.len() < 6 + FONT_FIXED_BYTES {
                 return fail(Reason::FontLength);
             }
         }
@@ -343,7 +340,8 @@ fn decode(raw: &[u8], function: u16, offset: usize) -> Result<(), Rejection> {
                 0xFC => 8,
                 _ => 2,
             };
-            if raw.len() != 6 + payload {
+            // Surplus bytes after the payload are recovered and ignored.
+            if raw.len() < 6 + payload {
                 return fail(Reason::ObjectLength);
             }
         }
@@ -410,7 +408,8 @@ fn text(raw: &[u8], extended: bool, offset: usize, function: u16) -> Result<(), 
         start += 8;
     }
     if count < 0 {
-        return fail(Reason::TextNegativeLength);
+        // Recovered: the record is kept verbatim.
+        return Ok(());
     }
     let count = count as usize;
     let finish = start + count + count % 2;
@@ -617,14 +616,16 @@ fn object_table(records: &[Tracked], capacity: usize) -> Result<(), Rejection> {
             if low == 0x2D && index & 0x8000 != 0 {
                 continue;
             }
+            // A reference to no live object is recovered: the reference is ignored and the record kept.
             if index >= capacity || slots[index].is_none() {
-                return fail(Reason::ObjectInvalidReference, index as u64);
+                continue;
             }
             if low == 0x34 && slots[index] != Some(0xF7) {
                 return fail(Reason::ObjectNotPalette, index as u64);
             }
+            // A clip, paint or invert record naming a non-region is recovered the same way.
             if matches!(low, 0x2A..=0x2C) && slots[index] != Some(0xFF) {
-                return fail(Reason::ObjectNotRegion, index as u64);
+                continue;
             }
             if low == 0xF0 {
                 slots[index] = None;

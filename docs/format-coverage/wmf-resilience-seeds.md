@@ -29,9 +29,10 @@ Repeated generation produces identical bytes and manifest content. Keep generate
 output outside the checked-in fixture inventory.
 
 `expected_outcome` describes the Ruby parser: `parsed` inputs must serialize
-unchanged; `recovered` inputs (`file-size`, `max-record`) must parse, record the
-header drift in `Metafile#errors` and serialize to a header-corrected file whose
-reparse has no errors; `rejected` inputs must raise a format or parse error. Native checks
+unchanged; `recovered` inputs (`file-size`, `max-record`, `negative-text-count`,
+`placeable-checksum`) must parse, record the departure in `Metafile#errors` and
+serialize to a corrected file whose reparse gains no error (a negative text
+length is kept verbatim, so it is recorded again on reparse); `rejected` inputs must raise a format or parse error. Native checks
 cover exact round trips of all valid inputs and checksum rejection. Rust can
 report diagnostics and recover other malformed inputs, so the Ruby outcome is
 not a universal native rejection oracle. Bitmap mutations exercise record framing;

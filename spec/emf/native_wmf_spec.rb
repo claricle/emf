@@ -151,16 +151,29 @@ RSpec.describe "Native WMF bridge" do
     end
   end
 
-  it "rejects malformed Ruby typed families and invalid object references without Ruby retry" do
+  it "rejects malformed Ruby typed families without Ruby retry" do
     malformed = [
       native_wmf_record(0x0214, [1].pack("s<")),
-      native_wmf_record(0x0324, [1, 2, 3].pack("s<3")),
-      native_wmf_record(0x0521, [-1, 0, 0].pack("s<3")),
-      native_wmf_record(0x012D, [0].pack("v"))
+      native_wmf_record(0x0324, [1, 2, 3].pack("s<3"))
     ]
     expect(Emf::Wmf::Parser).not_to receive(:call)
     malformed.each do |record|
       expect { Emf.parse(native_wmf_bytes([record])) }.to raise_error(Emf::Error)
+    end
+  end
+
+  it "keeps a negative text length and an invalid object reference as recovered errors, like Ruby" do
+    recovered = {
+      native_wmf_record(0x0521, [-1, 0, 0].pack("s<3")) => [:text_length_negative],
+      native_wmf_record(0x012D, [0].pack("v")) => [:object_reference_invalid]
+    }
+    recovered.each do |record, checks|
+      bytes = native_wmf_bytes([record])
+      expect(Emf::Wmf::Parser.call(bytes).errors.map { |error| error.evidence.check }).to eq(checks)
+    end
+    expect(Emf::Wmf::Parser).not_to receive(:call)
+    recovered.each do |record, checks|
+      expect(Emf.parse(native_wmf_bytes([record])).errors.map { |error| error.evidence.check }).to eq(checks)
     end
   end
 
@@ -201,23 +214,33 @@ RSpec.describe "Native WMF bridge" do
     expect(reparsed.records[3].raw_bytes).to eq(unknown)
   end
 
-  it "matches Ruby rejection of invalid headers, EOF boundaries and object state" do
+  it "matches Ruby rejection of invalid headers and placeable fields" do
     ordinary = native_wmf_bytes([move])
     placeable = native_wmf_bytes([move], placeable: true)
     malformed = [
       ordinary.dup.tap { |bytes| bytes[4, 2] = [0x200].pack("v") },
-      placeable.dup.tap { |bytes| bytes[20, 2] = [1].pack("v") },
       placeable.dup.tap do |bytes|
         bytes[16, 4] = [1].pack("V")
         bytes[20, 2] = [Emf::Wmf::Binary.checksum(bytes.byteslice(0, 20))].pack("v")
-      end,
-      native_wmf_bytes([native_wmf_record(0, "xx")]),
-      native_wmf_bytes([native_wmf_record(0x01F0, [0].pack("v"))])
+      end
     ]
     malformed.each { |bytes| expect { Emf::Wmf::Parser.call(bytes) }.to raise_error(Emf::Error) }
     expect(Emf::Wmf::Parser).not_to receive(:call)
     expect(Emf::Wmf::TextCodec).not_to receive(:decode)
     malformed.each { |bytes| expect { Emf.parse(bytes) }.to raise_error(Emf::Error) }
+  end
+
+  it "matches Ruby recovery of a bad checksum, a long EOF and a dangling DeleteObject" do
+    placeable = native_wmf_bytes([move], placeable: true)
+    recovered = {
+      placeable.dup.tap { |bytes| bytes[20, 2] = [1].pack("v") } => %i[placeable_checksum_mismatch],
+      native_wmf_bytes([native_wmf_record(0, "xx")]) => %i[header_file_size_invalid eof_length_invalid],
+      native_wmf_bytes([native_wmf_record(0x01F0, [0].pack("v"))]) => %i[object_reference_invalid]
+    }
+    ruby = recovered.keys.map { |bytes| Emf::Wmf::Parser.call(bytes).errors.map { |error| error.evidence.check } }
+    expect(ruby).to eq(recovered.values)
+    expect(Emf::Wmf::Parser).not_to receive(:call)
+    expect(recovered.keys.map { |bytes| Emf.parse(bytes).errors.map { |error| error.evidence.check } }).to eq(recovered.values)
   end
 
   it "recovers from a wrong MaxRecord or Size, keeping the records and recording the drift" do
