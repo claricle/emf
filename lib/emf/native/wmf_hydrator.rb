@@ -27,13 +27,16 @@ module Emf
       end
 
       def call
+        @errors = []
         header = hydrate_header
         records = hydrate_records
-        Wmf::Binary.validate_objects(records, header.number_of_objects) do |record, message|
+        recovered = Wmf::Evidence.reference_recovery(@input, @errors)
+        Wmf::Binary.validate_objects(records, header.number_of_objects, recovered: recovered) do |record, message|
           fail_record(record.offset, record.type_id, message)
         end
-        Model::Metafile.new(format: :wmf, header: header, records: records, errors: Wmf::Evidence.drift_errors(@input),
-                            trailing: @snapshot.trailing)
+        Model::Metafile.new(format: :wmf, header: header, records: records,
+                            errors: Wmf::Evidence.ordered(@errors + Wmf::Evidence.drift_errors(@input)),
+                            trailing: @input.byteslice(@limit..).to_s)
       end
 
       private
@@ -42,11 +45,13 @@ module Emf
         type, size, version, words, objects, maximum, members, placeable, eof, reserved = @snapshot.header
         validate_header(type, size, version, placeable, eof, reserved)
         @start = placeable == 1 ? 22 : 0
-        # The record stream ends where the tail begins; the declared Size does not bound it (drift is recovered).
-        @limit = @input.bytesize - @snapshot.trailing.bytesize
+        # The record stream ends after the first EOF record, whatever its length or the declared Size (both are
+        # recovered); the core keeps reading past an EOF it does not accept as final, so the stream is cut here.
+        @records = framed_records
 
         placeable_header = hydrate_placeable(type) if placeable == 1
-        raise_framing_error unless eof_present?
+        raise_framing_error if @records.empty?
+        @limit = @records.last.fetch(:offset) + @records.last.fetch(:length)
 
         Model::Wmf::Header.new(type: type, version: version, size_words: words, number_of_objects: objects,
                                max_record_words: maximum, number_of_members: members, placeable: placeable_header)
@@ -60,8 +65,10 @@ module Emf
         raise FormatError, "WMF input too large" if @input.bytesize > Wmf::Binary::MAX_INPUT_BYTES
       end
 
-      def eof_present?
-        @snapshot.header.fetch(8) == 1
+      # The snapshot's records up to and including the first EOF record; empty when the core found none.
+      def framed_records
+        index = @snapshot.records.index { |record| record.fetch(:type).zero? }
+        index ? @snapshot.records.first(index + 1) : []
       end
 
       # Core diagnostics 6-10 are record framing failures; Ruby raises ParseError for them.
@@ -81,33 +88,43 @@ module Emf
 
       def hydrate_placeable(type)
         handle, left, top, right, bottom, inch, reserved, checksum = @snapshot.placeable
-        unless reserved.zero? && checksum == Wmf::Binary.checksum(@input.byteslice(0, 20)) && (type != 2 || handle.zero?)
-          raise FormatError, "invalid native WMF placeable header"
-        end
+        raise FormatError, "invalid native WMF placeable header" unless reserved.zero? && (type != 2 || handle.zero?)
+
+        @errors << Wmf::Evidence.recovered_error(203, @input, nil) unless checksum == Wmf::Binary.checksum(@input.byteslice(0, 20))
 
         Model::Wmf::PlaceableHeader.new(handle: handle, left: left, top: top, right: right, bottom: bottom,
                                         inch: inch, checksum: checksum)
       end
 
       def hydrate_records
-        if @snapshot.records.length > Wmf::Binary::MAX_RECORDS
+        if @records.length > Wmf::Binary::MAX_RECORDS
           raise ResourceLimitError.new(resource: :record_count, limit: Wmf::Binary::MAX_RECORDS,
                                        actual: Wmf::Binary::MAX_RECORDS + 1)
         end
 
         position = @start + 18
-        records = @snapshot.records.each_with_index.map do |record, index|
+        records = @records.each_with_index.map do |record, index|
           length = record.fetch(:length)
           offset = record.fetch(:offset)
           validate_span(record, index, position)
           position += length
-          WmfFields.new(record, @input.byteslice(offset, length)).call.declare_size(length / 2)
+          hydrate_record(record, @input.byteslice(offset, length)).declare_size(length / 2)
         end
         unless position == @limit && records.last.is_a?(Model::Wmf::Records::Eof) && records.one?(Model::Wmf::Records::Eof)
           raise FormatError, "WMF requires one final EOF record"
         end
 
         records
+      end
+
+      # A recoverable shape is decoded by the Ruby contract itself (Wmf::Recovery) on the record's own bytes, so both
+      # backends build the same record and error; every other record comes from the native typed fields.
+      def hydrate_record(record, raw)
+        recovered, reason = Wmf::Recovery.record(raw, record.fetch(:type), record.fetch(:offset))
+        return WmfFields.new(record, raw).call unless reason
+
+        @errors << Wmf::Evidence.recovered_error(reason, @input, record.fetch(:offset), record.fetch(:type))
+        recovered
       end
 
       def validate_span(record, index, position)

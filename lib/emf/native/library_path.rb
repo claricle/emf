@@ -2,7 +2,6 @@
 
 require "digest"
 require "json"
-require "rubygems/platform"
 
 module Emf
   module Native
@@ -38,7 +37,12 @@ module Emf
         raise Unavailable, "native backend manifest ABI version mismatch (expected 1)"
       end
 
+      # The bundled library's platform is RubyGems' to match; without
+      # RubyGems (ruby --disable-gems) only EMF_NATIVE_LIBRARY can name one.
       def compatible_platform?(platform)
+        raise Unavailable, "native backend needs RubyGems to match the bundled platform" unless defined?(::Gem)
+
+        require "rubygems/platform"
         case Gem::Platform.local
         when Gem::Platform.new(platform) then true
         else false

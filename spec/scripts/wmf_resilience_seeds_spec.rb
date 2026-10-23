@@ -32,10 +32,10 @@ RSpec.describe WmfResilienceSeeds do
     end
   end
 
-  it "builds the eight named malformed seeds: six the Ruby parser rejects, two it recovers" do
+  it "builds the eight named malformed seeds: four the Ruby parser rejects, four it recovers" do
     malformed = seeds.reject { |seed| seed.fetch("expected_outcome") == "parsed" }
     expect(malformed.select { |seed| seed.fetch("expected_outcome") == "recovered" }.map { |seed| seed.fetch("name") })
-      .to match_array(%w[file-size max-record])
+      .to match_array(%w[file-size max-record negative-text-count placeable-checksum])
 
     expect(malformed.map { |seed| seed.fetch("name") }).to match_array(
       %w[header-size file-size max-record zero-record missing-eof negative-text-count placeable-checksum
@@ -45,12 +45,11 @@ RSpec.describe WmfResilienceSeeds do
       "header-size" => [Emf::FormatError, /HeaderSize/],
       "zero-record" => [Emf::ParseError, /invalid record length/],
       "missing-eof" => [Emf::ParseError, /missing EOF/],
-      "negative-text-count" => [Emf::ParseError, /negative text length/],
-      "placeable-checksum" => [Emf::FormatError, /checksum mismatch/],
       "bitmap-short-record" => [Emf::ParseError, /truncated bitmap transfer prefix/]
     }
-    # file-size and max-record are header drift: the parser recovers and records the drift in Metafile#errors.
-    drift = { "file-size" => :header_file_size_invalid, "max-record" => :max_record_mismatch }
+    # The parser recovers these and records the departure in Metafile#errors.
+    drift = { "file-size" => :header_file_size_invalid, "max-record" => :max_record_mismatch,
+              "negative-text-count" => :text_length_negative, "placeable-checksum" => :placeable_checksum_mismatch }
     malformed.select { |seed| drift.key?(seed.fetch("name")) }.each do |seed|
       expect(Emf::Wmf::Parser.call(seed.fetch("bytes")).errors.map { |error| error.evidence.check })
         .to eq([drift.fetch(seed.fetch("name"))])

@@ -66,7 +66,7 @@ RSpec.describe "EMF+ object-reference and state rules" do
     def restore(index) = build.record(0x4026, body: [index].pack("V"))
 
     it "flags a Restore with no Save, and a repeated Restore" do
-      expect(found(build.stream(restore(0)), "emfplus.state.restore_unmatched").first.message).to include("StackIndex 0")
+      expect(found(build.stream(restore(0)), "emfplus.state.restore_unknown_state").first.message).to include("StackIndex 0")
       expect(found(build.stream(save(0), restore(0), restore(0)), "emfplus.state.restore_unmatched").size).to eq(1)
     end
 

@@ -109,10 +109,13 @@ RSpec.describe "WMF palette records" do
         delete = native_wmf_record(0x01F0, zero_handle)
         bytes = native_wmf_bytes([create, select, delete, create, select], capacity: 1)
         expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
-        expect { Emf.parse(native_wmf_bytes([select])) }.to raise_error(Emf::ParseError)
-        expect { Emf.parse(native_wmf_bytes([create, delete, select])) }.to raise_error(Emf::ParseError)
+        # A palette selection naming no live object is recovered (the reference is ignored and recorded), not rejected.
+        [[select], [create, delete, select], [create, native_wmf_record(0x0234, invalid_handle)]].each do |records|
+          file = native_wmf_bytes(records)
+          expect(Emf.parse(file).errors.map { |error| error.evidence.check }).to eq([:object_reference_invalid])
+          expect(Emf.serialize(Emf.parse(file))).to eq(file)
+        end
         expect { Emf.parse(native_wmf_bytes([create, create], capacity: 1)) }.to raise_error(Emf::ParseError)
-        expect { Emf.parse(native_wmf_bytes([create, native_wmf_record(0x0234, invalid_handle)])) }.to raise_error(Emf::ParseError)
         brush = native_wmf_record(0x02FC, brush_body)
         expect { Emf.parse(native_wmf_bytes([brush, select])) }.to raise_error(Emf::ParseError)
       end

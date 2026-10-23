@@ -47,10 +47,9 @@ RSpec.describe "Parse failure evidence" do
   end
 
   it "names the failed check, where, and declared against actual" do
-    bytes = WmfRejectionCases.cases.fetch(203)
-    expect { Emf.parse(bytes) }.to raise_error(Emf::FormatError) do |error|
-      expect(error.evidence).to eq(Emf::ParseEvidence.new(check: :placeable_checksum_mismatch, offset: 20, declared: 65_535,
-                                                          actual: 22_385))
+    bytes = WmfRejectionCases.cases.fetch(403)
+    expect { Emf.parse(bytes) }.to raise_error(Emf::ParseError) do |error|
+      expect(error.evidence).to eq(Emf::ParseEvidence.new(check: :record_length_invalid, offset: 18, declared: 2, actual: 3))
     end
   end
 
@@ -60,7 +59,7 @@ RSpec.describe "Parse failure evidence" do
       101 => [:input_too_large, "WMF input too large"],
       401 => [:record_limit_exceeded, "record limit exceeded"]
     }
-    reasons = Emf::Wmf::Evidence::REASONS.except(*Emf::Wmf::Evidence::DRIFT_REASONS)
+    reasons = Emf::Wmf::Evidence::REASONS.except(*Emf::Wmf::Evidence::DRIFT_REASONS, *Emf::Wmf::Evidence::RETIRED_REASONS)
     expect(reasons.keys).to match_array(native::INPUT.keys + native::RECORD.keys + resource_reasons.keys)
     expect(reasons.slice(*resource_reasons.keys)).to eq(resource_reasons)
     texts = reasons.transform_values(&:last)

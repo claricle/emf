@@ -42,6 +42,19 @@ RSpec.describe "Native WMF resource limits" do
         }
       end
 
+      it "does not count records after a recovered EOF against the record limit" do
+        records = Emf.parse(bytes).records.length
+        eof = "\x04\x00\x00\x00\x00\x00\x00\x00".b
+        trailing = "\x03\x00\x00\x00\x00\x00".b * records
+        recovered = bytes.byteslice(0, bytes.bytesize - 6) + eof + trailing
+        stub_const("Emf::Wmf::Binary::MAX_RECORDS", records)
+
+        parsed = Emf.parse(recovered)
+        expect(parsed.records.length).to eq(records)
+        expect(parsed.trailing).to eq(trailing)
+        expect(parsed.errors.map { |error| error.evidence.check }).to include(:eof_length_invalid)
+      end
+
       it "preserves unrelated malformed header failures" do
         malformed = bytes.dup
         malformed[4, 2] = "\x00\x00"
@@ -63,10 +76,10 @@ RSpec.describe "Native WMF resource limits" do
 
   it "reports the first refused record in the hydrator guard" do
     require "emf/native/wmf_hydrator"
-    snapshot = instance_double(Emf::Native::WmfSnapshot, records: [nil, nil, nil])
+    loader = Emf::Native::Loader.new(library)
     stub_const("Emf::Wmf::Binary::MAX_RECORDS", 1)
 
-    expect { Emf::Native::WmfHydrator.new(snapshot, bytes).send(:hydrate_records) }
+    expect { Emf::Native::WmfHydrator.parse(loader, bytes) }
       .to raise_error(Emf::ResourceLimitError) { |error|
         expect([error.resource, error.limit, error.actual]).to eq([:record_count, 1, 2])
       }

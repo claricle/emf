@@ -104,7 +104,10 @@ module Emf
         integer(value, 0..0xFFFFFFFF, name)
       end
 
-      def validate_objects(records, capacity)
+      # Yields (record, message) for a table violation the parser cannot recover from. A reference to no live object
+      # (1702) or, for a clip, paint or invert record, to a non-region (1704) is recovered: the reference is ignored,
+      # the record kept, and `recovered` (if given) is called with (record, reason, index).
+      def validate_objects(records, capacity, recovered: nil)
         slots = Array.new(capacity, false)
         records.each do |record|
           function = record.type_id & 0xFF
@@ -115,21 +118,28 @@ module Emf
           elsif record.is_a?(Model::Wmf::Records::FillRegion)
             validate_region_references(record, slots) { |message| yield record, message }
           elsif record.is_a?(Model::Wmf::Records::ObjectReference)
-            validate_object_reference(record, capacity, slots) { |message| yield record, message }
+            validate_object_reference(record, capacity, slots, recovered && lambda { |reason, index|
+              recovered.call(record, reason, index)
+            }) do |message|
+              yield record, message
+            end
           end
         end
       end
 
-      def validate_object_reference(record, capacity, slots)
+      def validate_object_reference(record, capacity, slots, recovered)
         index = record.object_index
         # Preserve high-bit stock selectors without interpreting their numeric ID.
         return if record.is_a?(Model::Wmf::Records::SelectObject) && index.anybits?(0x8000)
+        return recovered&.call(1702, index) unless index < capacity && slots[index]
 
-        yield "invalid object reference #{index}" unless index < capacity && slots[index]
         yield "object reference #{index} is not a palette" if record.is_a?(Model::Wmf::Records::SelectPalette) && slots[index] != 0xF7
-        yield "object reference #{index} is not a region" if record.is_a?(Model::Wmf::Records::RegionReference) && slots[index] != 0xFF
+        return recovered&.call(1704, index) if not_region?(record, slots[index])
+
         slots[index] = false if record.is_a?(Model::Wmf::Records::DeleteObject)
       end
+
+      def not_region?(record, slot) = record.is_a?(Model::Wmf::Records::RegionReference) && slot != 0xFF
 
       def validate_region_references(record, slots)
         region = record.region_index

@@ -10,7 +10,10 @@
 # the format detector, which turns such inputs into :unrecognised_signature before any WMF check runs. 305 (header
 # Size) and 1801 (MaxRecord) are not rejections: the parser recovers, keeps the model and records the drift in
 # Metafile#errors, so the declared-size rules below (wmf.header.size_matches_records, wmf.header.max_record) report
-# it, as a warning in the tolerant profile.
+# it, as a warning in the tolerant profile. The same holds for 203 (reported by wmf.placeable.checksum), 406, 701
+# (a font short of its face name) and 801 (an object record with surplus bytes), reported by wmf.record.declared_size,
+# 1003 (wmf.text.negative_length), and 1702 and the clip/paint/invert part of 1704 (the wmf.object.*_reference rules).
+# 701, 801 and 1704 stay rejections for the shapes that cannot be recovered.
 #
 # Declared size: on an accepted model each record carries the rdSize read from the source file
 # (Record#declared_size_words, nil for records built in memory). The rules compare it with the layout and with the
@@ -26,7 +29,8 @@ module Emf
       FIRST_RECORD_REASON = 402
 
       # evidence check => reason code, for every reason that can produce a named finding
-      CHECKS = Emf::Wmf::Evidence::REASONS.except(*SHADOWED, *Emf::Wmf::Evidence::DRIFT_REASONS).to_h do |reason, (check, _text)|
+      CHECKS = Emf::Wmf::Evidence::REASONS.except(*SHADOWED, *Emf::Wmf::Evidence::DRIFT_REASONS,
+                                                  *Emf::Wmf::Evidence::RETIRED_REASONS).to_h do |reason, (check, _text)|
         [check, reason]
       end.freeze
 
@@ -68,6 +72,9 @@ module Emf
       B = Emf::Wmf::Binary
       MIN_WORDS = 3
       HEADER_WORDS = 9
+      SIZE_RECOVERY = "the parser recovers by framing the record with its RecordSize: surplus bytes after an EOF or an " \
+                      "object payload are ignored and a font face name shorter than 32 bytes is zero-padded; the " \
+                      "departure is recorded in Metafile#errors (seen in LibreOffice test files)"
       HEADER_DRIFT = "the parser recovered: the model is built from the records actually present and the header drift " \
                      "is recorded in Metafile#errors (seen in files from Inkscape and ImageMagick)"
 
@@ -163,7 +170,7 @@ module Emf
     end
 
     [
-      ["wmf.record.declared_size", :declared_size, :declared_size],
+      ["wmf.record.declared_size", :declared_size, :declared_size, WmfDeclaredSizeRules::SIZE_RECOVERY],
       ["wmf.buffer.declared_size", :buffer_declared_size, :buffer_declared_size],
       ["wmf.header.max_record", :max_record, :max_record, WmfDeclaredSizeRules::HEADER_DRIFT],
       ["wmf.header.size_matches_records", :size_matches_records, :size_matches_records, WmfDeclaredSizeRules::HEADER_DRIFT]

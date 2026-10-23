@@ -75,15 +75,19 @@ RSpec.describe "WMF CreateFontIndirect" do
       end
 
       it "rejects truncated font bodies and retains font object allocation and slot reuse" do
-        truncated = native_wmf_record(0x02FB, prefix.byteslice(0, 48))
+        truncated = native_wmf_record(0x02FB, prefix.byteslice(0, 10))
         expect { Emf.parse(native_wmf_bytes([truncated])) }.to raise_error(Emf::ParseError)
+        # Holding the 18 fixed bytes, a font short of its face name is recovered: the name is zero-padded (701).
+        short = Emf.parse(native_wmf_bytes([native_wmf_record(0x02FB, prefix.byteslice(0, 48))]))
+        expect(short.errors.map { |error| error.evidence.check }).to eq([:font_record_length_invalid])
         font = native_wmf_record(0x02FB, prefix)
         select = native_wmf_record(0x012D, zero_handle)
         delete = native_wmf_record(0x01F0, zero_handle)
         bytes = native_wmf_bytes([font, select, delete, font, select], capacity: 1)
         expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
         expect { Emf.parse(native_wmf_bytes([font, font], capacity: 1)) }.to raise_error(Emf::ParseError)
-        expect { Emf.parse(native_wmf_bytes([font, delete, select], capacity: 1)) }.to raise_error(Emf::ParseError)
+        dangling = Emf.parse(native_wmf_bytes([font, delete, select], capacity: 1))
+        expect(dangling.errors.map { |error| error.evidence.check }).to eq([:object_reference_invalid])
       end
 
       it "rejects invalid edited field widths, face names, suffixes and function identities" do

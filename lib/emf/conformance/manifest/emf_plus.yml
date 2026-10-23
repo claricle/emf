@@ -133,6 +133,12 @@
   citation: "MS-EMFPLUS 2.3.7"
   status: implemented
   reason: null
+- id: emfplus.state.restore_unknown_state
+  format: emf_plus
+  record_types: [EmfPlusSave, EmfPlusRestore]
+  citation: "MS-EMFPLUS 2.3.7"
+  status: implemented
+  reason: null
 - id: emfplus.state.end_container_unmatched
   format: emf_plus
   record_types: [EmfPlusBeginContainer, EmfPlusBeginContainerNoParams, EmfPlusEndContainer]

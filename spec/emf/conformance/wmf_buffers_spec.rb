@@ -57,6 +57,8 @@ RSpec.describe "Emf::Conformance WMF buffer rules" do
       "wmf.bitmap.dib_layout" => model(blit(records::DibBitBlt, dib(width: 5000))),
       "wmf.bitmap.bitmap16_layout" => model(blit(records::BitBlt, "\x00".b * 4)),
       "wmf.text.length" => model(records::TextOut.new(text: "abc".b, padding: "".b, x: 0, y: 0, offset: 18)),
+      "wmf.text.negative_length" => model(records::UnknownRecord.new(type_id: 0x0521, raw_bytes: [3, 0x0521, -1, 0, 0].pack("Vvs<3"),
+                                                                     offset: 18)),
       "wmf.text.spacing_count" => model(records::ExtTextOut.new(text: "ab".b, padding: "".b, x: 0, y: 0, dx: [1], offset: 18)),
       "wmf.text.rectangle_options" => model(records::ExtTextOut.new(text: "ab".b, padding: "".b, x: 0, y: 0, options: 2, offset: 18)),
       "wmf.palette.entry_count" => model(records::ResizePalette.new(entry_count: 70_000, offset: 18)),
@@ -131,13 +133,15 @@ RSpec.describe "Emf::Conformance WMF buffer rules" do
     paths = Dir[File.expand_path("../fixtures/wmf/*.wmf", __dir__)] +
             Dir[File.expand_path("../../../emf-rs/fuzz/seeds/wmf-resilience/*.wmf", __dir__)]
     paths.each do |path|
-      it "#{File.basename(path)} has no buffer findings in tolerant" do
+      it "#{File.basename(path)} has no buffer findings in tolerant, except a recovered negative text length" do
         found = begin
           Emf::Conformance.check(path, profile: :tolerant).diagnostics.map(&:requirement_id)
         rescue Emf::Error
           []
         end
-        expect(found.grep(/\Awmf\.(bitmap|text|palette|region|escape)\./)).to eq([])
+        # negative-text-count.wmf is the one seed that carries a buffer finding: the recovered negative StringLength.
+        expected = File.basename(path) == "negative-text-count.wmf" ? ["wmf.text.negative_length"] : []
+        expect(found.grep(/\Awmf\.(bitmap|text|palette|region|escape)\./)).to eq(expected)
       end
     end
   end

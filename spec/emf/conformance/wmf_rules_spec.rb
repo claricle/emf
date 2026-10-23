@@ -171,13 +171,14 @@ RSpec.describe "Emf::Conformance WMF rules" do
       expect(blocked.map { |row| row["id"] }).to eq(%w[wmf.header.header_size wmf.placeable.reserved])
       expect(blocked.map { |row| row["reason"] }).to all(match(/does not retain/))
       unreachable = rejects.select { |row| row["status"] == "not_checkable" }.map { |row| row["id"] }
-      expect(unreachable).to eq(%w[wmf.reject.r0101 wmf.reject.r0301 wmf.reject.r0302 wmf.reject.r0303 wmf.reject.r0305
-                                   wmf.reject.r0401 wmf.reject.r0404 wmf.reject.r1801])
+      expect(unreachable).to eq(%w[wmf.reject.r0101 wmf.reject.r0203 wmf.reject.r0301 wmf.reject.r0302 wmf.reject.r0303
+                                   wmf.reject.r0305 wmf.reject.r0401 wmf.reject.r0404 wmf.reject.r0406 wmf.reject.r1003
+                                   wmf.reject.r1702 wmf.reject.r1801])
     end
   end
 
   describe "fixtures and seeds" do
-    drift_seeds = %w[file-size.wmf max-record.wmf].freeze
+    drift_seeds = %w[file-size.wmf max-record.wmf placeable-checksum.wmf negative-text-count.wmf].freeze
     (fixtures + seeds).each do |path|
       name = File.basename(path)
       metafile = begin

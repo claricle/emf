@@ -80,6 +80,32 @@ RSpec.describe Emf::Emr::Binary::Record, "thin shell" do
         expect(other.snapshot).to eq(klass.new.snapshot)
       end
 
+      it "shares its fields with a dup whether or not one was read first, as BinData's shallow dup does" do
+        shells.each_value do |wire|
+          name = wire.field_names.last
+          untouched_copy = wire.dup
+          expect(untouched_copy.public_send(name)).to equal(wire.public_send(name))
+          wire.snapshot
+          expect(wire.dup.public_send(name)).to equal(wire.public_send(name))
+        end
+      end
+
+      it "keeps an adapter's values current after an edit made through a dup" do
+        wire = klass.new(**full)
+        adapter = Emf::Model::Emr::Records::WireAdapter.new(wire: wire)
+        adapter.values
+        wire.dup.n_size = wire.num_bytes + 4
+        expect(adapter.values&.n_size).to eq(adapter.values && wire.n_size.value)
+      end
+
+      it "survives Marshal as the record it reads as" do
+        shells.each_value do |wire|
+          loaded = Marshal.load(Marshal.dump(wire))
+          expect(loaded.snapshot).to eq(wire.snapshot)
+          expect(loaded.to_binary_s).to eq(wire.to_binary_s)
+        end
+      end
+
       it "reads its fields after being frozen, as a BinData-built record does" do
         expected = reference.call(klass, full).tap { |ref| ref.n_size = ref.num_bytes }
         shells.each_value do |wire|

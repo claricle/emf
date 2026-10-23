@@ -13,8 +13,13 @@ going, so its diagnostics cannot say what Ruby would have raised first. The walk
 in `emf_core::wmf::contract` follows Ruby's order: placeable, standard header,
 records in stream order (framing, then that record's payload), then the object table.
 Header file Size (305) and MaxRecord (1801) drift are not rejections: the parser keeps
-the records up to the first META_EOF and reports the drift as a recovered error. It
-reports the failure; it carries no wording.
+the records up to the first META_EOF and reports the drift as a recovered error. So are
+a placeable checksum mismatch (203), an EOF record longer than three words (406), a
+negative text length (1003), a reference to no live object (1702) and, for a clip, paint
+or invert record, a non-region reference (1704): the Ruby parser records each as an error
+on the model instead of raising. An object record with surplus bytes (801) and a font
+record short of its face name but holding the 18 fixed bytes (701) are recovered too; a
+shorter one is still rejected. It reports the failure; it carries no wording.
 
 The two limits are the contract's own ceilings (Ruby: 200 MiB and 1,000,000 records,
 read from `Wmf::Binary` on each call), passed in so the answer never drifts from the
@@ -28,7 +33,7 @@ has-function, function, then u64 offset and detail. 48 bytes.
 - present 0: the contract accepts the input; every other field is zero.
 - offset / function: what the contract reports; each is zero unless its has-flag
   is 1. Header and whole-input reasons carry neither.
-- detail: the declared length in words for 403, the referenced index for 1702-1707,
+- detail: the declared length in words for 403, the referenced index for 1703-1707,
   otherwise zero.
 
 ## Reasons
@@ -38,7 +43,7 @@ A reason is `codec * 100 + n`. Codes are append-only. Codecs: 1 input, 2 placeab
 record, 9 point array, 10 text, 11 palette, 12 region, 13 brush, 14 bitmap,
 15 geometry, 16 DC/escape, 17 object table, 18 largest record.
 
-Whole-input reasons (a Ruby `FormatError`, no offset): 101, 201-203, 301-306, 1801.
+Whole-input reasons (a Ruby `FormatError`, no offset): 101, 201, 202, 301-306, 1801.
 Every other reason is a record failure (a Ruby `ParseError` with offset and record
 code). `lib/emf/native/wmf_rejection.rb` owns the wording; the exact set is the
 `Reason` enum in `emf-core/src/wmf/contract.rs`.

@@ -113,12 +113,15 @@ RSpec.describe "WMF pattern brush records" do
         bytes = native_wmf_bytes([create, select_zero, delete_zero, dib, select_zero], capacity: 1)
         expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
         expect { Emf.parse(native_wmf_bytes([create, dib], capacity: 1)) }.to raise_error(Emf::ParseError)
-        expect { Emf.parse(native_wmf_bytes([dib, delete_zero, select_zero])) }.to raise_error(Emf::ParseError)
+        dangling = native_wmf_bytes([dib, delete_zero, select_zero])
+        expect(Emf.parse(dangling).errors.map { |error| error.evidence.check }).to eq([:object_reference_invalid])
+        expect(Emf.serialize(Emf.parse(dangling))).to eq(dangling)
         parsed = Emf.parse(native_wmf_bytes([create, select_zero]))
         records = parsed.records.dup
         records.insert(1, Emf::Model::Wmf::Records::DeleteObject.new(object_index: 0))
         parsed = Emf::Model::Metafile.new(format: :wmf, header: parsed.header, records: records)
-        expect { Emf.serialize(parsed) }.to raise_error(Emf::SerializeError)
+        # A reference left dangling by an edit serializes as it is, like one parsed from a file (1702 is recovered).
+        expect(Emf.parse(Emf.serialize(parsed)).errors.map { |error| error.evidence.check }).to eq([:object_reference_invalid])
       end
 
       it "rejects truncated and invalid headers before reading calculated pattern bytes" do

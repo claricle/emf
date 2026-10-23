@@ -155,11 +155,16 @@ module Emf
         [polygon_count, *counts].pack("v*")
       end
 
+      # A text record with a negative StringLength, which the parser keeps verbatim (Recovery).
+      def kept_verbatim?(raw, function)
+        Recovery.record(raw, function, nil)&.last == 1003
+      end
+
       def serialize_unknown(record)
         raw = record.raw_bytes
         words, function = raw.unpack("Vv")
         unless raw.bytesize >= 6 && raw.bytesize.even? && words == raw.bytesize / 2 && function == record.type_id &&
-               !function.zero? && !Binary::TYPED_FUNCTIONS.include?(function & 0xFF)
+               !function.zero? && (!Binary::TYPED_FUNCTIONS.include?(function & 0xFF) || kept_verbatim?(raw, function))
           raise SerializeError, "invalid raw WMF record"
         end
 

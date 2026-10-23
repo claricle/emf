@@ -8,12 +8,13 @@ module Emf
     module WmfRejection
       Found = Struct.new(:codec, :reason, :offset, :function, :detail)
 
-      # Whole-input failures: FormatError with the message as is. 305 (Size) and 1801 (MaxRecord) are recovered, not
-      # rejected, and 404 is retired with them.
+      # Whole-input failures: FormatError with the message as is. 203 (placeable checksum), 305 (Size), 406 (EOF
+      # length), 1003 (negative text length), 1702 (no live object) and 1801 (MaxRecord) are recovered, not
+      # rejected, and 404 is retired with them. 701, 801 and 1704 are rejected only for the shapes Wmf::Recovery
+      # cannot keep.
       INPUT = {
         201 => "truncated WMF placeable header",
         202 => "WMF placeable reserved field must be zero",
-        203 => "WMF placeable checksum mismatch",
         301 => "truncated WMF standard header",
         302 => "invalid WMF Type",
         303 => "invalid WMF HeaderSize",
@@ -24,12 +25,12 @@ module Emf
       # Record failures: ParseError "WMF <text> at offset <offset>". `%d` takes the numeric detail.
       RECORD = {
         402 => "truncated record header", 403 => "invalid record length %d",
-        405 => "missing EOF record", 406 => "invalid EOF length",
+        405 => "missing EOF record",
         501 => "invalid fixed record length", 601 => "invalid state record length", 701 => "invalid font record length",
         801 => "invalid object record length",
         901 => "missing point array count", 902 => "truncated polygon counts", 903 => "invalid point count",
         904 => "point array length mismatch",
-        1001 => "truncated text record", 1002 => "truncated text rectangle", 1003 => "negative text length",
+        1001 => "truncated text record", 1002 => "truncated text rectangle",
         1004 => "truncated text string", 1005 => "truncated text spacing array",
         1101 => "truncated palette prefix", 1102 => "truncated palette entries",
         1201 => "truncated region/clipping prefix", 1202 => "truncated region header", 1203 => "invalid region header",
@@ -39,7 +40,7 @@ module Emf
         1401 => "truncated bitmap transfer prefix", 1402 => "empty bitmap transfer source",
         1501 => "truncated geometry prefix", 1502 => "invalid extended flood fill mode",
         1601 => "truncated RestoreDc prefix", 1602 => "truncated Escape prefix", 1603 => "truncated Escape data or padding",
-        1701 => "object table capacity exceeded", 1702 => "invalid object reference %d",
+        1701 => "object table capacity exceeded",
         1703 => "object reference %d is not a palette", 1704 => "object reference %d is not a region",
         1705 => "invalid region reference %d", 1706 => "invalid brush reference %d",
         1707 => "object reference %d is not a brush"

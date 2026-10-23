@@ -29,10 +29,10 @@ RSpec.describe "Emf::Conformance WMF rejection and declared-size rules" do
     end
 
     it "takes the offset from the evidence and states declared and actual in the message" do
-      diagnostic = check(WmfRejectionCases.cases.fetch(203)).diagnostics.first
-      expect(diagnostic.offset).to eq(20)
-      expect(diagnostic.message).to eq("WMF placeable checksum mismatch at offset 20 (declared 65535, actual 22385)")
-      expect(diagnostic.spec_citation).to start_with("MS-WMF 2.3.2.3")
+      diagnostic = check(WmfRejectionCases.cases.fetch(403)).diagnostics.first
+      expect(diagnostic.offset).to eq(18)
+      expect(diagnostic.message).to eq("invalid record length 2 at offset 18 (declared 2, actual 3)")
+      expect(diagnostic.spec_citation).to start_with("MS-WMF 2.3 (RecordSize)")
     end
 
     it "names the failing record's function for a record-level reason, and none for a header reason" do
@@ -57,18 +57,31 @@ RSpec.describe "Emf::Conformance WMF rejection and declared-size rules" do
       expect(Emf::Conformance::WmfRejectionRules::CHECKS.values & [101, 401, *shadowed]).to be_empty
     end
 
-    it "covers every reachable reason: 56 minus 101, 401, the shadowed three, and 305, 404 and 1801 (recovered or retired)" do
-      expect(Emf::Conformance::WmfRejectionRules::CHECKS.size).to eq(48)
+    it "covers every reachable reason: 56 minus 101, 401, the shadowed three, 305, 404, 1801 and the retired four" do
+      expect(Emf::Conformance::WmfRejectionRules::CHECKS.size).to eq(44)
       expect(WmfRejectionCases.cases.keys - shadowed).to match_array(Emf::Conformance::WmfRejectionRules::CHECKS.values)
     end
 
     {
-      "bitmap-short-record" => "wmf.reject.r1401", "missing-eof" => "wmf.reject.r0405", "negative-text-count" => "wmf.reject.r1003",
-      "placeable-checksum" => "wmf.reject.r0203", "zero-record" => "wmf.reject.r0403",
+      "bitmap-short-record" => "wmf.reject.r1401", "missing-eof" => "wmf.reject.r0405", "zero-record" => "wmf.reject.r0403",
       "header-size" => "emf.parse.unparseable"
     }.each do |name, id|
       it "seed #{name}.wmf gives #{id}" do
         profiles.each { |profile| expect(ids(File.join(seeds, "#{name}.wmf"), profile)).to eq([id]) }
+      end
+    end
+
+    # Recovered since PR #72 followed by the recover-more change: parsed, and reported by a lens rule instead.
+    {
+      "negative-text-count" => "wmf.text.negative_length", "placeable-checksum" => "wmf.placeable.checksum"
+    }.each do |name, id|
+      it "seed #{name}.wmf parses, and #{id} is an error in strict and a warning in tolerant" do
+        severities = profiles.map do |profile|
+          check(File.join(seeds, "#{name}.wmf"), profile).diagnostics.map do |d|
+            [d.requirement_id, d.severity]
+          end
+        end
+        expect(severities).to eq([[[id, :error]], [[id, :warning]]])
       end
     end
   end
@@ -147,7 +160,7 @@ RSpec.describe "Emf::Conformance WMF rejection and declared-size rules" do
     inputs = inputs.merge(Dir[File.join(seeds, "*.wmf")].to_h { |path| [File.basename(path), File.binread(path)] })
 
     it "gives byte-identical reports on both backends for every rejection case and seed, in both profiles" do
-      expect(inputs.size).to eq(51 + 16)
+      expect(inputs.size).to eq(47 + 16)
       differences = profiles.flat_map do |profile|
         inputs.filter_map do |label, bytes|
           run = ->(backend) { ConformanceParity.with_backend(backend, library) { check(bytes, profile).to_h.merge("timestamp" => nil) } }

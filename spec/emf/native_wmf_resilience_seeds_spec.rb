@@ -11,8 +11,7 @@ RSpec.describe "Native WMF resilience seeds" do
   let(:rejected_seeds) { seeds.select { |seed| seed.fetch("expected_outcome") == "rejected" } }
   let(:expected_rejected_seed_names) do
     %w[
-      header-size zero-record missing-eof negative-text-count
-      placeable-checksum bitmap-short-record
+      header-size zero-record missing-eof bitmap-short-record
     ]
   end
   let(:recovered_seeds) { seeds.select { |seed| seed.fetch("expected_outcome") == "recovered" } }
@@ -48,10 +47,12 @@ RSpec.describe "Native WMF resilience seeds" do
     end
   end
 
-  it "recovers header drift natively: the model is kept, the drift is recorded and the repair is clean" do
-    expect(recovered_seeds.map { |seed| seed.fetch("name") }).to match_array(%w[file-size max-record])
+  it "recovers drift, a negative text length and a bad checksum natively, recording each and gaining no error on repair" do
+    expect(recovered_seeds.map { |seed| seed.fetch("name") })
+      .to match_array(%w[file-size max-record negative-text-count placeable-checksum])
     expect(Emf::Wmf::Parser).not_to receive(:call)
-    checks = { "file-size" => :header_file_size_invalid, "max-record" => :max_record_mismatch }
+    checks = { "file-size" => :header_file_size_invalid, "max-record" => :max_record_mismatch,
+               "negative-text-count" => :text_length_negative, "placeable-checksum" => :placeable_checksum_mismatch }
 
     recovered_seeds.each do |seed|
       name = seed.fetch("name")
@@ -59,8 +60,12 @@ RSpec.describe "Native WMF resilience seeds" do
       repaired = Emf.serialize(parsed)
 
       expect(parsed.errors.map { |error| error.evidence.check }).to eq([checks.fetch(name)]), name
-      expect(repaired).not_to eq(seed.fetch("bytes")), name
-      expect(Emf.parse(repaired).errors).to be_empty, name
+      # The checksum and the header sizes are rewritten; a negative-length text record is kept verbatim, so its
+      # error is recorded again on reparse.
+      expect(repaired).not_to eq(seed.fetch("bytes")), name unless name == "negative-text-count"
+      expect(Emf.parse(repaired).errors.map do |error|
+        error.evidence.check
+      end).to eq(name == "negative-text-count" ? [checks.fetch(name)] : []), name
     end
   end
 
@@ -82,7 +87,7 @@ RSpec.describe "Native WMF resilience seeds" do
     classes = rejected_seeds.to_h { |seed| [seed.fetch("name"), capture_error { Emf.parse(seed.fetch("bytes")) }.class] }
 
     expect(classes.select { |_, klass| klass == Emf::ParseError }.keys)
-      .to match_array(%w[zero-record missing-eof negative-text-count bitmap-short-record])
+      .to match_array(%w[zero-record missing-eof bitmap-short-record])
     expect(classes.reject { |_, klass| klass == Emf::ParseError }.values.uniq).to eq([Emf::FormatError])
   end
 

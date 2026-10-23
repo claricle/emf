@@ -3006,7 +3006,7 @@
       "sha256": "004b084ceb1deaecc54f79ea6960cec08f6a5a6c59b58c193fd07d6182af31ea",
       "size_bytes": 46,
       "kind": "wmf",
-      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set text count at byte 24 to signed -1; Ruby outcome: rejected (native recovery may differ).",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set text count at byte 24 to signed -1; Ruby outcome: recovered (a negative text length kept as an opaque record).",
       "targets": [
         "parse",
         "serialize",
@@ -3018,7 +3018,7 @@
       "sha256": "add409bf94d49a7353acf99d2e63e32e3d083a34aa155a9d1b15497287bdbef9",
       "size_bytes": 66,
       "kind": "wmf",
-      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: XOR placeable checksum byte 20 with 1; Ruby outcome: rejected (native recovery may differ).",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: XOR placeable checksum byte 20 with 1; Ruby outcome: recovered (checksum mismatch kept as a ParseError).",
       "targets": [
         "parse",
         "serialize",

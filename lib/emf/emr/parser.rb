@@ -21,7 +21,7 @@ module Emf
         errors = []
         diagnostics = []
         emf_plus_bytes = +""
-        trailing = +""
+        trailing = "".b
 
         size = data.bytesize
         while pos < size

@@ -63,13 +63,21 @@ RSpec.describe Emf::Wmf::Parser do
     expect { described_class.call(standard.byteslice(0, standard.bytesize - 1)) }.to raise_error(Emf::ParseError, /truncated record header/)
   end
 
-  it "validates placeable checksum, reserved data and on-disk handle" do
-    [4, 16, 20].each do |offset|
+  it "validates placeable reserved data and on-disk handle" do
+    [4, 16].each do |offset|
       bytes = placeable.dup
       bytes.setbyte(offset, bytes.getbyte(offset) ^ 1)
-      bytes[20, 2] = [Emf::Wmf::Binary.checksum(bytes.byteslice(0, 20))].pack("v") unless offset == 20
+      bytes[20, 2] = [Emf::Wmf::Binary.checksum(bytes.byteslice(0, 20))].pack("v")
       expect { described_class.call(bytes) }.to raise_error(Emf::FormatError)
     end
+  end
+
+  it "recovers a placeable checksum mismatch: the declared value is kept and the mismatch recorded" do
+    bytes = placeable.dup
+    bytes.setbyte(20, bytes.getbyte(20) ^ 1)
+    metafile = described_class.call(bytes)
+    expect(metafile.header.placeable.checksum).to eq(bytes.byteslice(20, 2).unpack1("v"))
+    expect(metafile.errors.map { |error| [error.evidence.check, error.evidence.offset] }).to eq([[:placeable_checksum_mismatch, 20]])
   end
 
   it "preserves the resource handle for in-memory placeable WMF" do
@@ -105,7 +113,7 @@ RSpec.describe Emf::Wmf::Parser do
     expect(reparsed.records.map(&:type_id)).to eq([0])
   end
 
-  it "rejects EOF framing errors and partial record headers, and keeps what follows the first EOF as trailing data" do
+  it "recovers a long EOF, rejects partial record headers, and keeps what follows the first EOF as trailing data" do
     bytes = standard.dup
     bytes[6, 4] = [(standard.bytesize + 2) / 2].pack("V")
     bytes << "\x00\x00".b
@@ -115,7 +123,8 @@ RSpec.describe Emf::Wmf::Parser do
       } == [:header_file_size_invalid]
     })
     bytes[standard.bytesize - 6, 4] = [4].pack("V")
-    expect { described_class.call(bytes) }.to raise_error(Emf::ParseError, /EOF length/)
+    # An EOF longer than three words still ends the stream; the surplus is ignored and recorded (406).
+    expect(described_class.call(bytes).errors.map { |e| e.evidence.check }).to include(:eof_length_invalid)
     bytes = standard.byteslice(0, 20)
     bytes[6, 4] = [10].pack("V")
     expect { described_class.call(bytes) }.to raise_error(Emf::ParseError, /truncated record header/)
