@@ -5,7 +5,7 @@
 - `in progress` — assigned foundational work described by the issue owner.
 - `planned` — scoped but not started; execute after the listed plan dependencies.
 - `blocked` — requires the named model/native or product dependency.
-- `done` — landed on `feat/conformance-lens` with its specs green.
+- `done` — merged to `main` with its specs green.
 
 Manifest-row statuses (a different vocabulary, see `01-contract-and-decisions.md`)
 are `implemented`, `deferred`, `blocked:model` and `not_checkable`.
@@ -47,13 +47,13 @@ outside lens ownership.
 | W27 | done |  | Add strict/tolerant oracle specs for corrupted fixtures 15–21 and assert continuation after Raw/ParseError recovery. | W02–W19 and blocked text/font fields | 30–40m |
 | W28 | done |  | In the parity work stream, compare normalized full reports for forced Ruby/native EMF and EMF+ inputs, including Raw and recovery cases. | W05, relevant rules | 30–40m |
 | W29 | done |  | Extend forced-backend full-report parity to accepted and rejected WMF cases. | W21–W24, neutral rejection result | 30–40m |
-| W30 | planned |  | Amend Rust CI so `backend_parity*_spec.rb` runs explicitly with `EMF_TEST_NATIVE_LIBRARY`; make accidental non-selection/missing library fail there. | W28 | 20–30m |
+| W30 | done |  | Rust CI runs all of `spec/emf` with `EMF_TEST_NATIVE_LIBRARY` set and fails on library-missing skips (#56), so every `backend_parity*_spec.rb` runs natively there. The parity guard counts only native wire sources (#64). | W28 | 20–30m |
 | W31 | done |  | Document bytes/model input, report keys, profile semantics, blocked coverage and examples without adding a runtime dependency. | W05, W27 | 20–30m |
-| W32 | planned |  | Run manifest completeness, focused specs, full Ruby suite, native parity in Rust CI, lint and documentation checks; resolve every non-allowlisted failure. | W07–W31 and owner corpus decision | 30–40m |
+| W32 | done |  | Final run: main at `b79254a` passed Test, Rust, the corrupted-corpus resilience run and the downstream goldens. | W07–W31 and owner corpus decision | 30–40m |
 | W33 | done |  | Investigated EMF SELECTOBJECT in `2014-12-07-140817.emf`: all 28 SELECTOBJECT and 12 DELETEOBJECT records are valid (sizes, stock indices, handle lifecycle), so the corruption is not detectable from the stream. Recorded as `not_checkable` row `emf.select_object.corpus_corruption`; the corpus oracle references it. | W09, W25 | 20–30m |
 | W34 | done |  | Re-count `blocked:model`: move rows whose reason says the data is readable (EOF last position, bitmap and comment checks) to `deferred` or implement them; report `blocked:model` only for fields that are truly unreadable. Finding 4. | W06 | 20–30m |
 | W35 | done |  | Corpus oracle: each corrupted fixture asserts its exact expected requirement id(s) under strict and the matching warning(s) under tolerant, not a regex over ids. Finding 3. | W25–W27, W33 | 30–40m |
-| W36 | planned |  | When recovered `ParseError`s gain `#evidence`, classify `emf.record.*` from `evidence.check` and keep the message table as the fallback only for errors without evidence. `parse_recovery_spec.rb` is the tripwire. Finding 6. | model dependency | 20–30m |
+| W36 | blocked |  | Recovered `ParseError`s in `Metafile#errors` carry no `#evidence`, so `emf.record.*` ids still come from the message table. Needs evidence on recovered errors in the parser (issue #15 scope). `parse_recovery_spec.rb` is the tripwire that fails when it lands. | model dependency | 20–30m |
 | W37 | done |  | Review overlapping rules (same constraint checked by two rules, for example EMF+ rows already `not_checkable` because another rule covers them) and record the survivor per constraint in the manifest. Finding 9. | W06 | 20–30m |
 | W38 | done |  | Completeness gate: every record type of the 119 EMF, 55 EMF+ and 70 WMF RecordType entries appears in a manifest row (`manifest_completeness_spec.rb`); a type counts as covered only by an implemented, `not_checkable` or `blocked:model` row (W43 removed the interim `coverage_gaps.yml`). Finding 1. | W06 | 30–40m |
 | W39 | done |  | Report issues carry `kind` and `spec_citation` at the top level (with `category` and `context.spec_citation` kept). Finding 2. | W05 | 10–15m |
