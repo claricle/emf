@@ -90,7 +90,10 @@ module Emf
       end
 
       def hydrate_records(header)
-        raise FormatError, "WMF record limit exceeded" if @snapshot.records.length > Wmf::Binary::MAX_RECORDS
+        if @snapshot.records.length > Wmf::Binary::MAX_RECORDS
+          raise ResourceLimitError.new(resource: :record_count, limit: Wmf::Binary::MAX_RECORDS,
+                                       actual: Wmf::Binary::MAX_RECORDS + 1)
+        end
 
         position = @start + 18
         records = @snapshot.records.each_with_index.map do |record, index|
