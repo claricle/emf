@@ -14,7 +14,10 @@ RSpec.describe WmfResilience do
   end
 
   def expected_outcome(path)
-    File.basename(path).start_with?("valid-") ? "parsed" : "rejected"
+    name = File.basename(path)
+    return "parsed" if name.start_with?("valid-")
+
+    %w[file-size.wmf max-record.wmf].include?(name) ? "recovered" : "rejected"
   end
 
   def expect_every_seed_defined(results)
@@ -24,7 +27,7 @@ RSpec.describe WmfResilience do
       label = result.fetch("path")
       expect(result).to include("status" => "exited", "exit_code" => 0, "unchanged" => true), label
       expect(observation.fetch("outcome")).to eq(expected_outcome(label)), "#{label}: #{observation}"
-      expect(observation["round_trip"]).to eq("ok") if observation["outcome"] == "parsed"
+      expect(observation["round_trip"]).to eq("ok") if described_class::KEPT.include?(observation["outcome"])
       expect(observation.fetch("undefined")).to eq([]), "#{label}: #{observation['undefined']}"
       expect(observation.fetch("mutations")).to be > 40, label
     end

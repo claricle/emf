@@ -2,9 +2,10 @@
 
 module Emf
   module Wmf
-    # Neutral evidence for a WMF input the parser rejected. Both backends choose the failing check (the Ruby
-    # parser by its own raise, the native backend by its first-rejection reason) and the record offset; the
-    # declared and actual values are then read from the input bytes the same way for both.
+    # Neutral evidence for a WMF input the parser rejected, and for the two header drifts it recovers from. Both
+    # backends choose the failing check (the Ruby parser by its own raise, the native backend by its
+    # first-rejection reason) and the record offset;
+    # the declared and actual values are then read from the input bytes the same way for both.
     #
     # REASONS maps the stable rejection reason (codec * 100 + n, never renumbered) to its check name and the
     # message text the contract raises (`%d` stands for one number; record texts are wrapped as
@@ -25,7 +26,6 @@ module Emf
         401 => [:record_limit_exceeded, "record limit exceeded"],
         402 => [:record_header_truncated, "truncated record header"],
         403 => [:record_length_invalid, "invalid record length %d"],
-        404 => [:data_after_eof, "data after EOF inside declared WMF Size"],
         405 => [:eof_missing, "missing EOF record"],
         406 => [:eof_length_invalid, "invalid EOF length"],
         501 => [:fixed_record_length_invalid, "invalid fixed record length"],
@@ -69,11 +69,19 @@ module Emf
         1707 => [:object_reference_not_brush, "object reference %d is not a brush"]
       }.freeze
 
+      # Recovered, not rejected: the header's Size (305) or MaxRecord (1801) disagrees with the record stream. Both
+      # backends keep the model and add a ParseError carrying this evidence to Metafile#errors (see .drift_errors).
+      DRIFT_REASONS = [305, 1801].freeze
+      DRIFT_MESSAGES = {
+        305 => "WMF header Size is %<declared>d words but the records end at %<actual>d words",
+        1801 => "WMF header MaxRecord is %<declared>d words but the largest record is %<actual>d words"
+      }.freeze
+
       INPUT_REASONS = [101, 201, 202, 203, 301, 302, 303, 304, 305, 306, 1801].freeze
       REFERENCE_REASONS = (1702..1707).to_a.freeze
       WORD_BYTES = 2
 
-      MESSAGE_PATTERNS = REASONS.to_h do |reason, (_check, text)|
+      MESSAGE_PATTERNS = REASONS.except(*DRIFT_REASONS).to_h do |reason, (_check, text)|
         pattern = Regexp.escape(text).sub("%d", "(\\d+)")
         [reason, INPUT_REASONS.include?(reason) ? /\A#{pattern}\z/ : /\AWMF #{pattern} at offset (\d+)\z/]
       end.freeze
@@ -88,6 +96,19 @@ module Emf
 
         detail = REFERENCE_REASONS.include?(reason) ? pattern.match(error.message)[1].to_i : nil
         build(reason, bytes, error.respond_to?(:offset) ? error.offset : nil, detail)
+      end
+
+      # ParseErrors (with evidence) for each header field that disagrees with the record stream of `bytes`, which
+      # the parser has already accepted. Both backends call this, so their errors are identical.
+      def drift_errors(bytes)
+        DRIFT_REASONS.filter_map do |reason|
+          evidence = build(reason, bytes, nil)
+          next if evidence.declared == evidence.actual
+
+          ParseError.new(offset: evidence.offset, record_code: nil,
+                         message: format(DRIFT_MESSAGES.fetch(reason), declared: evidence.declared, actual: evidence.actual))
+                    .with_evidence(evidence)
+        end
       end
 
       # The one evidence builder both backends use once they know the reason and (for record failures) the offset.
@@ -116,7 +137,7 @@ module Emf
         when 302 then [view.start, view.u16(0), nil]
         when 303 then [view.start + 2, view.u16(2), 9]
         when 304 then [view.start + 4, view.u16(4), nil]
-        when 305 then [view.start + 6, view.u32(6), (bytes.bytesize - view.start) / WORD_BYTES]
+        when 305 then [view.start + 6, view.u32(6), view.stream_words]
         else [view.start + 12, view.u32(12), view.largest_record_words]
         end
       end
@@ -133,7 +154,7 @@ module Emf
         when 401 then [Binary::MAX_RECORDS, Binary::MAX_RECORDS]
         when 402 then [6, view.limit - offset]
         when 403 then [words, (view.limit - offset) / WORD_BYTES]
-        when 404, 405 then [view.limit, offset]
+        when 405 then [view.limit, offset]
         when 406 then [words, 3]
         when 501, 601, 701, 801 then [words, view.required_words(reason, offset)]
         when 1701 then [view.u16(10), nil]
@@ -164,17 +185,34 @@ module Emf
         end
 
         def limit
-          @start + (u32(6) * WORD_BYTES)
+          @bytes.bytesize
+        end
+
+        # Words from the standard header to the end of the first EOF record (or of the input without one).
+        def stream_words
+          (record_walk.last - @start) / WORD_BYTES
         end
 
         def largest_record_words
-          offset = @start + Binary::HEADER_BYTES
-          largest = 0
-          while offset + 4 <= limit && (words = u32_at(offset)).positive?
-            largest = [largest, words].max
-            offset += words * WORD_BYTES
+          record_walk.first
+        end
+
+        # [largest record in words, offset after the walk]; the walk follows the parser's: it ends after the
+        # first EOF record and never reads past the input, whatever the header declares.
+        def record_walk
+          @record_walk ||= begin
+            offset = @start + Binary::HEADER_BYTES
+            largest = 0
+            while offset + 6 <= limit
+              words = u32_at(offset)
+              break if words < 3
+
+              largest = [largest, words].max
+              offset += words * WORD_BYTES
+              break if @bytes.unpack1("v", offset: offset - (words * WORD_BYTES) + 4).zero?
+            end
+            [largest, [offset, limit].min]
           end
-          largest
         end
 
         def required_words(reason, offset)

@@ -290,8 +290,8 @@
   format: wmf
   record_types: []
   citation: MS-WMF 2.3.2.2 META_HEADER (SizeLow, SizeHigh)
-  status: implemented
-  reason:
+  status: not_checkable
+  reason: 'the spec MUST holds, but the parser no longer rejects it: the header Size disagrees with the record stream, the model is kept and wmf.header.size_matches_records reports the drift (an error when strict, a warning when tolerant), so no WMF failure with this reason exists to report'
 - id: wmf.reject.r0306
   format: wmf
   record_types: []
@@ -320,8 +320,8 @@
   format: wmf
   record_types: []
   citation: MS-WMF 2.3.2.1 META_EOF
-  status: implemented
-  reason:
+  status: not_checkable
+  reason: 'the spec MUST holds, but the parser no longer rejects it: the record walk ends at the first EOF and what follows is kept as trailing data, so a Size that reaches past that EOF is reported by wmf.header.size_matches_records and no WMF failure with this reason exists to report'
 - id: wmf.reject.r0405
   format: wmf
   record_types: []
@@ -572,8 +572,8 @@
   format: wmf
   record_types: []
   citation: MS-WMF 2.3.2.2 META_HEADER (MaxRecord)
-  status: implemented
-  reason:
+  status: not_checkable
+  reason: 'the spec MUST holds, but the parser no longer rejects it: the header MaxRecord disagrees with the largest record, the model is kept and wmf.header.max_record reports the drift (an error when strict, a warning when tolerant), so no WMF failure with this reason exists to report'
 - id: wmf.object.capacity
   format: wmf
   record_types:

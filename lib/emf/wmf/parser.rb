@@ -10,15 +10,15 @@ module Emf
 
         placeable, start = read_placeable(bytes)
         header = read_header(bytes, start, placeable)
-        limit = start + (header.size_words * 2)
-        records = read_records(bytes, start + Binary::HEADER_BYTES, limit)
+        records = read_records(bytes, start + Binary::HEADER_BYTES, bytes.bytesize)
         Binary.validate_objects(records, header.number_of_objects) do |record, message|
           parse_error(record.offset, record.type_id, message)
         end
-        largest = records.map { |record| record_size(record) }.max
-        raise FormatError, "WMF MaxRecord does not match largest record" unless header.max_record_words == largest
-
-        Model::Metafile.new(format: :wmf, header: header, records: records, trailing: bytes.byteslice(limit..).to_s)
+        # The walk is bounded by the real input and ends at the first EOF record, so a header Size or MaxRecord that
+        # disagrees with the records is recovered: the model is kept and the drift is recorded in errors.
+        stop = records.last.offset + (records.last.declared_size_words * 2)
+        Model::Metafile.new(format: :wmf, header: header, records: records, errors: Evidence.drift_errors(bytes),
+                            trailing: bytes.byteslice(stop..).to_s)
       end
 
       def read_placeable(bytes)
@@ -41,7 +41,6 @@ module Emf
         raise FormatError, "invalid WMF Type" unless [1, 2].include?(type)
         raise FormatError, "invalid WMF HeaderSize" unless header_size == 9
         raise FormatError, "invalid WMF Version" unless [0x100, 0x300].include?(version)
-        raise FormatError, "invalid WMF file Size" if size < 9 || size > (bytes.bytesize - start) / 2
         raise FormatError, "WMF on-disk placeable handle must be zero" if type == 2 && placeable && !placeable.handle.zero?
 
         Model::Wmf::Header.new(type: type, version: version, size_words: size, number_of_objects: objects,
@@ -59,10 +58,7 @@ module Emf
           record = decode_record(raw, function, offset).declare_size(words)
           records << record
           offset += raw.bytesize
-          next unless record.is_a?(Model::Wmf::Records::Eof)
-
-          parse_error(offset, function, "data after EOF inside declared WMF Size") unless offset == limit
-          return records
+          return records if record.is_a?(Model::Wmf::Records::Eof)
         end
         parse_error(offset, nil, "missing EOF record")
       end
@@ -145,24 +141,6 @@ module Emf
         fields = { points: points, type_id: function, offset: offset }
         fields[:points_per_polygon] = counts if counts
         record_class.new(**fields)
-      end
-
-      def record_size(record)
-        codec = Binary.prefix_codec(record)
-        return codec.byte_size(record) / 2 if codec
-
-        return record.raw_bytes.bytesize / 2 if record.is_a?(Model::Wmf::Records::UnknownRecord)
-        return TextCodec.byte_size(record) / 2 if record.is_a?(Model::Wmf::Records::TextOut)
-
-        return 3 + ((record.class::PAYLOAD_BYTES + record.suffix.bytesize) / 2) if record.is_a?(Model::Wmf::Records::StateRecord)
-        return 3 + ((record.class::PAYLOAD_BYTES + record.suffix.bytesize) / 2) if record.is_a?(Model::Wmf::Records::CreateFontIndirect)
-        return 3 + (record.class::PAYLOAD_BYTES / 2) if record.is_a?(Model::Wmf::Records::ObjectRecord)
-
-        if record.is_a?(Model::Wmf::Records::PointArrayRecord)
-          counts = record.is_a?(Model::Wmf::Records::PolyPolygon) ? record.points_per_polygon.length : 0
-          return 4 + counts + (record.points.length * 2)
-        end
-        record.is_a?(Model::Wmf::Records::Eof) ? 3 : 3 + record.class::WIRE_FIELDS.length
       end
 
       def parse_error(offset, function, message)

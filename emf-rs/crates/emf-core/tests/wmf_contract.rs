@@ -140,21 +140,11 @@ fn phase_cases() -> Vec<Case> {
             vec![1, 0, 9, 0, 0, 3],
             Reason::HeaderTruncated,
         ),
-        case(
-            "max record",
-            {
-                let mut bytes = wmf(&[eof()], 0);
-                bytes[12] = 9;
-                bytes
-            },
-            Reason::MaxRecordMismatch,
-        ),
     ];
     for (name, at, value, reason) in [
         ("type", 0, 3u8, Reason::HeaderType),
         ("header size", 2, 8, Reason::HeaderSize),
         ("version", 5, 2, Reason::HeaderVersion),
-        ("file size", 6, 8, Reason::HeaderFileSize),
     ] {
         let mut bytes = wmf(&[eof()], 0);
         bytes[at] = value;
@@ -194,15 +184,6 @@ fn framing_cases() -> Vec<Case> {
                 "invalid record length",
                 bad_length,
                 Reason::InvalidRecordLength,
-            )
-        },
-        Case {
-            offset: Some(24),
-            function: Some(0),
-            ..case(
-                "data after eof",
-                wmf(&[eof(), record(0x1E, &[])], 0),
-                Reason::DataAfterEof,
             )
         },
         Case {
@@ -494,7 +475,7 @@ fn every_reason_names_its_codec_offset_function_and_detail() {
     seen.sort_unstable();
     seen.dedup();
     // Reasons without a crafted case here are the two that need a huge input; they have their own tests.
-    assert_eq!(seen.len(), 56 - 2, "{seen:?}");
+    assert_eq!(seen.len(), 56 - 2 - 3, "{seen:?}");
 }
 
 #[test]
@@ -548,4 +529,34 @@ fn the_callers_limits_replace_the_defaults() {
     assert_eq!(at(bytes.len(), 2), None);
     assert_eq!(at(bytes.len() - 1, 2), Some(Reason::InputTooLarge));
     assert_eq!(at(bytes.len(), 1), Some(Reason::RecordLimit));
+}
+
+fn set_u32(bytes: &mut [u8], at: usize, value: u32) {
+    bytes[at..at + 4].copy_from_slice(&value.to_le_bytes());
+}
+
+#[test]
+fn header_size_and_max_record_drift_are_not_rejections() {
+    let base = wmf(&[record(0x14, &words(&[1, 2])), eof()], 0);
+    assert!(first_rejection(&base).is_none());
+    // Size too large (Inkscape), Size too small, Size zero and MaxRecord too small, too large, zero.
+    for (at, value) in [(6, 9 + 8 + 1000), (6, 9 + 2), (6, 0), (12, 1), (12, 9999), (12, 0)] {
+        let mut bytes = base.clone();
+        set_u32(&mut bytes, at, value);
+        assert!(first_rejection(&bytes).is_none(), "offset {at} value {value}");
+    }
+}
+
+#[test]
+fn records_after_eof_are_trailing_data_not_a_rejection() {
+    // The walk ends at the first EOF; what follows is retained as the tail, whatever the declared Size says.
+    assert!(first_rejection(&wmf(&[eof(), record(0x1E, &[])], 0)).is_none());
+}
+
+#[test]
+fn a_declared_size_past_the_input_does_not_extend_the_walk() {
+    let mut bytes = wmf(&[record(0x1E, &[])], 0);
+    set_u32(&mut bytes, 6, u32::MAX);
+    let found = first_rejection(&bytes).unwrap();
+    assert_eq!((found.reason, found.offset), (Reason::MissingEof, Some(24)));
 }

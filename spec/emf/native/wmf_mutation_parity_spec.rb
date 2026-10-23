@@ -60,8 +60,8 @@ RSpec.describe "WMF mutation parity between the native and Ruby backends" do
 
   it "answers native rejections without running any phase of the Ruby parser" do
     rejected = WmfMutation.corpus(seeds).map(&:last).reject { |bytes| WmfMutation.observe(bytes, "ruby", library).first == :parsed }
-    expect(rejected.length).to be > 6_000
-    phases = %i[call read_placeable read_header read_records decode_record record_size parse_error]
+    expect(rejected.length).to be > 5_900
+    phases = %i[call read_placeable read_header read_records decode_record parse_error]
     phases.each { |phase| allow(Emf::Wmf::Parser).to receive(phase).and_call_original }
     rejected.each { |bytes| expect(%i[parse_error error]).to include(WmfMutation.observe(bytes, "native", library).first) }
     phases.each { |phase| expect(Emf::Wmf::Parser).not_to have_received(phase) }

@@ -29,10 +29,10 @@ module WmfResilienceSeeds
       malformed_seed("header-size", recipe: "set standard header size at byte 2 to 8 words") do |bytes|
         bytes[2, 2] = [8].pack("v")
       end,
-      malformed_seed("file-size", recipe: "set standard file size at byte 6 to 8 words") do |bytes|
+      malformed_seed("file-size", expected_outcome: "recovered", recipe: "set standard file size at byte 6 to 8 words") do |bytes|
         bytes[6, 4] = [8].pack("V")
       end,
-      malformed_seed("max-record", recipe: "set maximum record size at byte 12 to zero") do |bytes|
+      malformed_seed("max-record", expected_outcome: "recovered", recipe: "set maximum record size at byte 12 to zero") do |bytes|
         bytes[12, 4] = [0].pack("V")
       end,
       malformed_seed("zero-record", recipe: "set first record size at byte 18 to zero") do |bytes|
@@ -55,10 +55,10 @@ module WmfResilienceSeeds
   end
   private_class_method :valid_seeds, :malformed_seeds
 
-  def malformed_seed(name, recipe:, family: "geometry", placeable: false)
+  def malformed_seed(name, recipe:, expected_outcome: "rejected", family: "geometry", placeable: false)
     bytes = ParserBenchmark::WmfWorkloads.build(family: family, repetitions: 1, placeable: placeable)
     yield bytes
-    { "name" => name, "family" => family, "placeable" => placeable, "expected_outcome" => "rejected",
+    { "name" => name, "family" => family, "placeable" => placeable, "expected_outcome" => expected_outcome,
       "recipe" => recipe, "bytes" => bytes }
   end
   private_class_method :malformed_seed

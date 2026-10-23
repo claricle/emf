@@ -2,7 +2,8 @@
 //!
 //! `wmf::parse` recovers past malformed records and reports them as diagnostics; the Ruby contract stops at the
 //! first failure in a fixed order: placeable, standard header, record framing and per-codec payloads in stream
-//! order, the object table, then the largest-record check. This module walks the same phases without building
+//! order, then the object table. Header Size and MaxRecord drift are not rejections: the walk is bounded by the
+//! real input and ends at the first EOF record, and the Ruby side records the drift. This module walks the same phases without building
 //! a document and names the first failure. It reports data only (codec, reason, offset, function, one number);
 //! the wording belongs to the caller. `None` means the contract accepts the input.
 
@@ -55,7 +56,8 @@ pub enum Codec {
     MaxRecord = 18,
 }
 
-/// Stable reason codes: `codec * 100 + n`. Never renumber; append only.
+/// Stable reason codes: `codec * 100 + n`. Never renumber; append only. 305 (header Size), 404 (data after EOF
+/// inside the declared Size) and 1801 (MaxRecord) are retired: those mismatches are recovered, not rejected.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Reason {
@@ -67,13 +69,11 @@ pub enum Reason {
     HeaderType = 302,
     HeaderSize = 303,
     HeaderVersion = 304,
-    HeaderFileSize = 305,
     HeaderPlaceableHandle = 306,
     RecordLimit = 401,
     TruncatedRecordHeader = 402,
     /// `detail` is the declared length in words.
     InvalidRecordLength = 403,
-    DataAfterEof = 404,
     MissingEof = 405,
     InvalidEofLength = 406,
     FixedLength = 501,
@@ -116,7 +116,6 @@ pub enum Reason {
     ObjectInvalidRegion = 1705,
     ObjectInvalidBrush = 1706,
     ObjectNotBrush = 1707,
-    MaxRecordMismatch = 1801,
 }
 
 impl Reason {
@@ -197,9 +196,7 @@ pub fn first_rejection(input: &[u8], limits: &Limits) -> Option<Rejection> {
 }
 
 struct Header {
-    size_words: u32,
     objects: u16,
-    max_record: u32,
 }
 
 /// A record the object-table phase must revisit.
@@ -216,12 +213,8 @@ fn check(input: &[u8], limits: &Limits) -> Result<(), Rejection> {
     }
     let (placeable, start) = placeable(input)?;
     let header = header(input, start, placeable)?;
-    let limit = start + header.size_words as usize * 2;
-    let (tracked, largest) = records(input, start + HEADER_BYTES, limit, limits.max_records)?;
+    let tracked = records(input, start + HEADER_BYTES, input.len(), limits.max_records)?;
     object_table(&tracked, usize::from(header.objects))?;
-    if header.max_record as usize != largest {
-        return Err(Rejection::whole(Reason::MaxRecordMismatch));
-    }
     Ok(())
 }
 
@@ -248,7 +241,6 @@ fn header(input: &[u8], start: usize, placeable: Option<u16>) -> Result<Header, 
         return Err(Rejection::whole(Reason::HeaderTruncated));
     }
     let kind = le16(input, start);
-    let size = le32(input, start + 6);
     if !matches!(kind, 1 | 2) {
         return Err(Rejection::whole(Reason::HeaderType));
     }
@@ -258,16 +250,11 @@ fn header(input: &[u8], start: usize, placeable: Option<u16>) -> Result<Header, 
     if !matches!(le16(input, start + 4), 0x100 | 0x300) {
         return Err(Rejection::whole(Reason::HeaderVersion));
     }
-    if size < 9 || size as usize > (input.len() - start) / 2 {
-        return Err(Rejection::whole(Reason::HeaderFileSize));
-    }
     if kind == 2 && placeable.is_some_and(|handle| handle != 0) {
         return Err(Rejection::whole(Reason::HeaderPlaceableHandle));
     }
     Ok(Header {
-        size_words: size,
         objects: le16(input, start + 10),
-        max_record: le32(input, start + 12),
     })
 }
 
@@ -276,10 +263,9 @@ fn records(
     mut offset: usize,
     limit: usize,
     max_records: usize,
-) -> Result<(Vec<Tracked>, usize), Rejection> {
+) -> Result<Vec<Tracked>, Rejection> {
     let mut tracked = Vec::new();
     let mut count = 0usize;
-    let mut largest = 0usize;
     while offset < limit {
         if count >= max_records {
             return Err(Rejection::at(Reason::RecordLimit, offset, None));
@@ -309,13 +295,9 @@ fn records(
             });
         }
         count += 1;
-        largest = largest.max(words);
         offset += raw.len();
         if function == 0 {
-            if offset != limit {
-                return Err(Rejection::at(Reason::DataAfterEof, offset, Some(function)));
-            }
-            return Ok((tracked, largest));
+            return Ok(tracked);
         }
     }
     Err(Rejection::at(Reason::MissingEof, offset, None))

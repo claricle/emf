@@ -6,12 +6,14 @@ require "rbconfig"
 require_relative "process_supervisor"
 
 # Runs each committed WMF resilience seed in a supervised child with the backend forced. A seed passes only when its
-# child exits 0 within the wall and RSS limits, reports the expected outcome (parsed or rejected), keeps the source
-# bytes through serialize/reparse/serialize for parsed input, and survives a deterministic battery of truncations and
+# child exits 0 within the wall and RSS limits, reports the expected outcome (parsed, recovered or rejected), keeps the
+# source bytes through serialize/reparse/serialize for parsed input, repairs a recovered input to a clean fixed point,
+# and survives a deterministic battery of truncations and
 # byte mutations whose every result is a parsed document or an Emf::Error.
 module WmfResilience
   SEED_DIR = "emf-rs/fuzz/seeds/wmf-resilience"
   BACKENDS = %w[native ruby].freeze
+  KEPT = %w[parsed recovered].freeze
   FLIPS = [0x00, 0xFF, 0x80, 0x01].freeze
 
   module_function
@@ -20,10 +22,14 @@ module WmfResilience
     Dir.glob(File.join(root, SEED_DIR, "*.wmf")).map { |path| path.delete_prefix("#{root}/") }
   end
 
-  # Parsed means a document that serializes back to the input; rejected means an Emf::Error. Nothing else is defined.
+  # Parsed means a document that serializes back to the input; recovered means a document that carries parse errors
+  # and serializes to a repaired file whose reparse has none, with the same records; rejected means an Emf::Error.
+  # Nothing else is defined.
   def classify(bytes)
     require "emf"
     document = Emf.parse(bytes)
+    return classify_recovered(document) unless document.errors.empty?
+
     again = Emf.serialize(Emf.parse(Emf.serialize(document)))
     { "outcome" => "parsed", "round_trip" => Emf.serialize(document) == bytes && again == bytes ? "ok" : "bytes_changed" }
   rescue Emf::Native::Unavailable => e
@@ -35,6 +41,21 @@ module WmfResilience
     { "outcome" => "undefined", "exception" => e.class.name, "message" => e.message.byteslice(0, 256) }
   end
 
+  def classify_recovered(document)
+    repaired = Emf.serialize(document)
+    reparsed = Emf.parse(repaired)
+    same_records = record_state(reparsed) == record_state(document)
+    fixed = reparsed.errors.empty? && Emf.serialize(reparsed) == repaired && same_records
+    { "outcome" => "recovered", "round_trip" => fixed ? "ok" : "bytes_changed" }
+  end
+
+  # Records have no value equality, so compare class and instance state.
+  def record_state(document)
+    document.records.map do |record|
+      [record.class, record.instance_variables.to_h { |name| [name, record.instance_variable_get(name)] }]
+    end
+  end
+
   def observe(path)
     bytes = File.binread(path)
     base = classify(bytes)
@@ -44,7 +65,7 @@ module WmfResilience
   end
 
   def defined_result?(result)
-    result["outcome"] == "rejected" || (result["outcome"] == "parsed" && result["round_trip"] == "ok")
+    result["outcome"] == "rejected" || (KEPT.include?(result["outcome"]) && result["round_trip"] == "ok")
   end
 
   def mutate(bytes)

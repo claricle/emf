@@ -171,11 +171,13 @@ RSpec.describe "Emf::Conformance WMF rules" do
       expect(blocked.map { |row| row["id"] }).to eq(%w[wmf.header.header_size wmf.placeable.reserved])
       expect(blocked.map { |row| row["reason"] }).to all(match(/does not retain/))
       unreachable = rejects.select { |row| row["status"] == "not_checkable" }.map { |row| row["id"] }
-      expect(unreachable).to eq(%w[wmf.reject.r0101 wmf.reject.r0301 wmf.reject.r0302 wmf.reject.r0303 wmf.reject.r0401])
+      expect(unreachable).to eq(%w[wmf.reject.r0101 wmf.reject.r0301 wmf.reject.r0302 wmf.reject.r0303 wmf.reject.r0305
+                                   wmf.reject.r0401 wmf.reject.r0404 wmf.reject.r1801])
     end
   end
 
   describe "fixtures and seeds" do
+    drift_seeds = %w[file-size.wmf max-record.wmf].freeze
     (fixtures + seeds).each do |path|
       name = File.basename(path)
       metafile = begin
@@ -188,6 +190,12 @@ RSpec.describe "Emf::Conformance WMF rules" do
           expect(ids_for(path, :strict)).to eq(["wmf.record.unknown_function"])
           tolerant = Emf::Conformance.check(path, profile: :tolerant)
           expect([tolerant.valid?, tolerant.diagnostics.map(&:severity)]).to eq([true, [:warning]])
+        end
+      elsif drift_seeds.include?(name)
+        it "#{name} is recovered: an error in strict, only warnings in tolerant" do
+          expect(Emf::Conformance.check(path, profile: :strict).errors).not_to be_empty
+          tolerant = Emf::Conformance.check(path, profile: :tolerant)
+          expect([tolerant.valid?, tolerant.diagnostics.map(&:severity).uniq]).to eq([true, [:warning]])
         end
       elsif metafile
         it "#{name} is clean in strict and tolerant profiles" do

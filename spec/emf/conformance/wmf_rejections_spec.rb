@@ -37,7 +37,7 @@ RSpec.describe "Emf::Conformance WMF rejection and declared-size rules" do
 
     it "names the failing record's function for a record-level reason, and none for a header reason" do
       expect(check(WmfRejectionCases.cases.fetch(1203)).diagnostics.first.record_type).to eq(0xFF)
-      expect(check(WmfRejectionCases.cases.fetch(1801)).diagnostics.first.record_type).to be_nil
+      expect(check(WmfRejectionCases.cases.fetch(306)).diagnostics.first.record_type).to be_nil
     end
 
     it "keeps emf.parse.unparseable for reasons the format detector shadows (301-303)" do
@@ -57,14 +57,13 @@ RSpec.describe "Emf::Conformance WMF rejection and declared-size rules" do
       expect(Emf::Conformance::WmfRejectionRules::CHECKS.values & [101, 401, *shadowed]).to be_empty
     end
 
-    it "covers every reachable reason: 56 minus 101, 401 and the shadowed three" do
-      expect(Emf::Conformance::WmfRejectionRules::CHECKS.size).to eq(51)
+    it "covers every reachable reason: 56 minus 101, 401, the shadowed three, and 305, 404 and 1801 (recovered or retired)" do
+      expect(Emf::Conformance::WmfRejectionRules::CHECKS.size).to eq(48)
       expect(WmfRejectionCases.cases.keys - shadowed).to match_array(Emf::Conformance::WmfRejectionRules::CHECKS.values)
     end
 
     {
-      "bitmap-short-record" => "wmf.reject.r1401", "file-size" => "wmf.reject.r0305", "max-record" => "wmf.reject.r1801",
-      "missing-eof" => "wmf.reject.r0405", "negative-text-count" => "wmf.reject.r1003",
+      "bitmap-short-record" => "wmf.reject.r1401", "missing-eof" => "wmf.reject.r0405", "negative-text-count" => "wmf.reject.r1003",
       "placeable-checksum" => "wmf.reject.r0203", "zero-record" => "wmf.reject.r0403",
       "header-size" => "emf.parse.unparseable"
     }.each do |name, id|
@@ -148,7 +147,7 @@ RSpec.describe "Emf::Conformance WMF rejection and declared-size rules" do
     inputs = inputs.merge(Dir[File.join(seeds, "*.wmf")].to_h { |path| [File.basename(path), File.binread(path)] })
 
     it "gives byte-identical reports on both backends for every rejection case and seed, in both profiles" do
-      expect(inputs.size).to eq(54 + 16)
+      expect(inputs.size).to eq(51 + 16)
       differences = profiles.flat_map do |profile|
         inputs.filter_map do |label, bytes|
           run = ->(backend) { ConformanceParity.with_backend(backend, library) { check(bytes, profile).to_h.merge("timestamp" => nil) } }
