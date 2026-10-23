@@ -52,7 +52,9 @@ module Emf
                                               %w[emf.bitmap.color_table_length]],
           "emf.bitmap.bmi_v5_intent" => [Base.file(bitmap(header: v5_header(3))), %w[emf.bitmap.bmi_v5_intent]],
           "emf.bitmap.colorref_reserved" => [Base.file(bitmap(header: bmi, fields: { 79 => ["C", 0x80] })),
-                                             %w[emf.bitmap.colorref_reserved]]
+                                             %w[emf.bitmap.colorref_reserved]],
+          "emf.bitmap.colorref_palette" => [Base.file(bitmap(header: bmi, fields: { 79 => ["C", 0x02] })),
+                                            %w[emf.bitmap.colorref_palette]]
         }
       end
 

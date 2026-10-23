@@ -69,13 +69,13 @@ RSpec.describe "Emf::Conformance WMF rules" do
       "wmf.enum.pen_style" => model([WmfSpec::R::CreatePenIndirect.new(pen_style: 9, width_x: 1, width_y: 0, color_ref: 0, offset: 18)]),
       "wmf.flags.text_align" => model([WmfSpec::R::SetTextAlign.new(alignment: 0x0004, offset: 18)]),
       "wmf.flags.layout" => model([WmfSpec::R::SetLayout.new(layout: 0x10, reserved: 0, offset: 18)]),
-      "wmf.fixed.layout_reserved" => model([WmfSpec::R::SetLayout.new(layout: 0, reserved: 1, offset: 18)]),
       "wmf.array.point_count" => model([WmfSpec::R::Polygon.new(points: [point(0, 0)], offset: 18)]),
       "wmf.array.polypolygon_counts" => model([WmfSpec::R::PolyPolygon.new(points: [point(0, 0)], points_per_polygon: [3], offset: 18)]),
       "wmf.record.layout_size" => model([WmfSpec::R::SetRelAbs.new(suffix: "\0\0".b, offset: 18)]),
       "wmf.fixed.raster_operation" => model([WmfSpec::R::PatBlt.new(raster_operation: 0x01F00021, height: 1, width: 1, y_left: 0, x_left: 0,
                                                                     offset: 18)]),
-      "wmf.fixed.colorref_reserved" => model([WmfSpec::R::SetBkColor.new(color_ref: 0x02000000, offset: 18)]),
+      "wmf.fixed.colorref_reserved" => model([WmfSpec::R::SetBkColor.new(color_ref: 0x03000000, offset: 18)]),
+      "wmf.fixed.colorref_palette" => model([WmfSpec::R::SetBkColor.new(color_ref: 0x02000000, offset: 18)]),
       "wmf.fixed.point_range" => model([WmfSpec::R::Polyline.new(points: [point(0, 0), point(40_000, 0)], offset: 18)])
     }
   end

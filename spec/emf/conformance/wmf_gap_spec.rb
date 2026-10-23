@@ -96,8 +96,9 @@ RSpec.describe "Emf::Conformance WMF gap records" do
       it "#{name}: flags a non-zero Reserved byte and accepts zero" do
         file = ->(color) { gap.file(gap.record(codes.fetch(name), *gap.dword(color), *tail)) }
         expect(gap.ids(file.call(0x00FFAA55))).to eq([])
-        expect(gap.ids(file.call(0x02FFAA55))).to eq(["wmf.fixed.colorref_reserved"])
-        expect(gap.report(file.call(0x02FFAA55)).diagnostics.first.message).to include("Reserved byte 0x02")
+        expect(gap.ids(file.call(0x03FFAA55))).to eq(["wmf.fixed.colorref_reserved"])
+        expect(gap.report(file.call(0x03FFAA55)).diagnostics.first.message).to include("Reserved byte 0x03")
+        expect(gap.ids(file.call(0x02FFAA55))).to eq(["wmf.fixed.colorref_palette"])
       end
     end
   end

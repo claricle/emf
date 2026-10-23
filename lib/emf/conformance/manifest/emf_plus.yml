@@ -6,6 +6,13 @@
   citation: "MS-EMFPLUS 2.3"
   status: implemented
   reason: null
+# The exact Size 12 / DataSize 0 SetPageTransform is emfplus.record.page_transform_bodyless, not this rule.
+- id: emfplus.record.page_transform_bodyless
+  format: emf_plus
+  record_types: [EmfPlusSetPageTransform]
+  citation: "MS-EMFPLUS 2.3"
+  status: implemented
+  reason: null
 # Silent where a formula rule (ellipse_size, draw.driver_string, draw.string, draw.image, object.serializable,
 # terminal.graphics, terminal.clip) states the same DataSize; stays for the rest. An unaligned but exact DataSize is
 # emfplus.record.data_size_alignment, not this rule.
@@ -98,6 +105,18 @@
 - id: emfplus.object.id_range
   format: emf_plus
   record_types: [every drawing and clip record that references an object]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: implemented
+  reason: null
+- id: emfplus.object.optional_empty_slot
+  format: emf_plus
+  record_types: [EmfPlusDrawString, EmfPlusDrawImage, EmfPlusDrawImagePoints, EmfPlusSetClipRegion]
+  citation: "MS-EMFPLUS 2.3.4"
+  status: implemented
+  reason: null
+- id: emfplus.object.optional_id_range
+  format: emf_plus
+  record_types: [EmfPlusDrawString, EmfPlusDrawImage, EmfPlusDrawImagePoints]
   citation: "MS-EMFPLUS 2.3.4"
   status: implemented
   reason: null
