@@ -26,6 +26,10 @@ module Emf
     private_constant :Ruby
 
     class << self
+      def resolved
+        selected.equal?(Ruby) ? :ruby : :native
+      end
+
       def parse(bytes)
         selected.parse(bytes)
       end

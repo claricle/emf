@@ -24,6 +24,10 @@ module Emf
   autoload :Conformance, "emf/conformance"
 
   class << self
+    def backend
+      Backend.resolved
+    end
+
     def parse(bytes)
       Backend.parse(bytes)
     end
