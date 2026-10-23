@@ -21,7 +21,7 @@ RSpec.describe Emf::Native::Loader do
   end
 
   # Numeric statuses are the public contract in emf-ffi/include/emf.h.
-  { 1 => Emf::Error, 2 => Emf::FormatError, 3 => Emf::FormatError,
+  { 1 => Emf::Error, 2 => Emf::FormatError,
     4 => Emf::SerializeError, 5 => Emf::Error, 6 => Emf::Error,
     99 => Emf::Error }.each do |status, error_class|
     it "maps ABI status #{status} to #{error_class}" do
@@ -35,6 +35,13 @@ RSpec.describe Emf::Native::Loader do
       expect(document_free).not_to have_received(:call)
       expect(error_free).not_to have_received(:call)
     end
+  end
+
+  it "does not invent resource metadata for an absent native error" do
+    allow(parse).to receive(:call).and_return(3)
+
+    expect { loader.document("bad") { raise "must not yield" } }
+      .to raise_error(Emf::Error, "native resource failure has no error detail")
   end
 
   it "yields successful handles and frees them after the caller returns" do

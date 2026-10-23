@@ -2,16 +2,18 @@
 
 require "fiddle"
 require_relative "wmf_loading"
+require_relative "resource_failure"
 
 module Emf
   module Native
     class Loader
       include WmfLoading
+      include ResourceFailure
 
       POINTER = Fiddle::TYPE_VOIDP
       UINT64 = Fiddle::TYPE_LONG_LONG
       # Version 1 status values from emf-ffi/include/emf.h.
-      STATUS_ERRORS = { 2 => FormatError, 3 => FormatError,
+      STATUS_ERRORS = { 2 => FormatError,
                         4 => SerializeError }.freeze
       SIGNATURES = {
         emf_abi_version: [[], Fiddle::TYPE_INT],
@@ -20,6 +22,7 @@ module Emf
         emf_record_bytes: [[POINTER, UINT64, POINTER, POINTER], Fiddle::TYPE_INT],
         emf_buffer_view: [[POINTER, POINTER, POINTER], Fiddle::TYPE_INT],
         emf_error_view: [[POINTER, POINTER], Fiddle::TYPE_INT],
+        emf_error_resource_view: [[POINTER, POINTER], Fiddle::TYPE_INT],
         emf_document_free: [[POINTER], Fiddle::TYPE_VOID],
         emf_buffer_free: [[POINTER], Fiddle::TYPE_VOID],
         emf_error_free: [[POINTER], Fiddle::TYPE_VOID]
@@ -81,6 +84,8 @@ module Emf
         error = slot
         status = invoke(name, *arguments, error)
         return if status.zero?
+
+        raise resource_failure(pointer(error)) if status == 3
 
         message = error_message(pointer(error), status)
         raise STATUS_ERRORS.fetch(status, Error), message

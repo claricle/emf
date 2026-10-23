@@ -254,6 +254,18 @@ int32_t emf_wmf_serialize(const emf_wmf_document *document, emf_buffer **out_buf
 void emf_wmf_document_free(emf_wmf_document *document);
 int32_t emf_buffer_view(const emf_buffer *buffer, const uint8_t **out_data, uint64_t *out_length);
 int32_t emf_error_view(const emf_error *error, emf_error_info *out_info);
+/* Resource codes: 0 = none, 1 = input_bytes, 2 = record_bytes, 3 = record_count,
+ * 4 = allocated_bytes, 5 = work_units, 6 = output_bytes. Values are inclusive
+ * ceilings; actual is the requested total. This view borrows the live error. */
+typedef struct emf_resource_info {
+  uint32_t struct_size;
+  uint32_t version;
+  uint32_t resource;
+  uint32_t reserved;
+  uint64_t limit;
+  uint64_t actual;
+} emf_resource_info;
+int32_t emf_error_resource_view(const emf_error *error, emf_resource_info *out_info);
 void emf_document_free(emf_document *document);
 void emf_buffer_free(emf_buffer *buffer);
 void emf_error_free(emf_error *error);

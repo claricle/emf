@@ -24,6 +24,7 @@ pub struct EmfError {
     pub(crate) status: i32,
     pub(crate) offset: Option<u64>,
     pub(crate) message: Vec<u8>,
+    pub(crate) resource: Option<(u32, u64, u64)>,
 }
 
 #[repr(C)]
@@ -83,4 +84,16 @@ pub struct EmfErrorInfo {
 #[repr(C)]
 pub struct WmfDocument {
     pub(crate) document: emf_core::wmf::Document,
+}
+
+/// Structured resource detail, independent of error message text.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct EmfResourceInfo {
+    pub struct_size: u32,
+    pub version: u32,
+    pub resource: u32,
+    pub reserved: u32,
+    pub limit: u64,
+    pub actual: u64,
 }
