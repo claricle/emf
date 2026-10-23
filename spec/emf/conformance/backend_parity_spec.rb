@@ -30,9 +30,11 @@ RSpec.describe "Emf::Conformance forced-backend parity" do
     calls
   end
 
-  def lazy_records(backend, bytes)
+  # Wire sources only the native hydrator creates (Native::LazyWire, Native::FilledWire). The Ruby parser has its
+  # own byte-backed source (Emr::FilledRecord), so counting any source would no longer tell the backends apart.
+  def native_sources(backend, bytes)
     ConformanceParity.with_backend(backend, library) do
-      Emf.parse(bytes).records.count { |record| record.instance_variable_get(:@wire_source) }
+      Emf.parse(bytes).records.count { |record| record.instance_variable_get(:@wire_source).class.name.to_s.start_with?("Emf::Native::") }
     end
   end
 
@@ -64,10 +66,10 @@ RSpec.describe "Emf::Conformance forced-backend parity" do
       expect(calls).to eq(0)
     end
 
-    it "hydrates native-only lazy wire sources, which the Ruby backend never produces" do
+    it "hydrates native-only wire sources, which the Ruby backend never produces" do
       bytes = File.binread(corpus.grep(/simple/).first)
-      expect(lazy_records("native", bytes)).to be_positive
-      expect(lazy_records("ruby", bytes)).to eq(0)
+      expect(native_sources("native", bytes)).to be_positive
+      expect(native_sources("ruby", bytes)).to eq(0)
     end
 
     # Conformance.check rescues Emf::Error into an "unparseable" report, so the
@@ -87,11 +89,11 @@ RSpec.describe "Emf::Conformance forced-backend parity" do
   end
 
   describe "native used for every corpus file" do
-    it "hydrates lazy wires for each parseable file with records" do
+    it "hydrates native wire sources for each parseable file with records" do
       unlazy = corpus.select do |path|
         bytes = File.binread(path)
         records = ConformanceParity.with_backend("ruby", library) { Emf.parse(bytes).records.size }
-        records.positive? && lazy_records("native", bytes).zero?
+        records.positive? && native_sources("native", bytes).zero?
       rescue Emf::Error
         false
       end
