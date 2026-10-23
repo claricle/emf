@@ -29,6 +29,24 @@ RSpec.describe Emf::ResourceLimitError do
     end
   end
 
+  it "uses the public error for direct WMF input refusals" do
+    stub_const("Emf::Wmf::Binary::MAX_INPUT_BYTES", bytes.bytesize - 1)
+    expect { Emf::Wmf::Parser.call(bytes) }.to raise_error(described_class) { |error|
+      expect([error.resource, error.limit, error.actual]).to eq([:input_bytes, bytes.bytesize - 1, bytes.bytesize])
+    }
+  end
+
+  it "counts WMF records at the exact boundary without changing malformed errors" do
+    count = Emf::Wmf::Parser.call(bytes).records.length
+    stub_const("Emf::Wmf::Binary::MAX_RECORDS", count)
+    expect(Emf::Wmf::Parser.call(bytes).records.length).to eq(count)
+    stub_const("Emf::Wmf::Binary::MAX_RECORDS", count - 1)
+    expect { Emf::Wmf::Parser.call(bytes) }.to raise_error(described_class) { |error|
+      expect([error.resource, error.limit, error.actual]).to eq([:record_count, count - 1, count])
+    }
+    expect { Emf::Wmf::Parser.call(bytes.byteslice(0, 10)) }.to raise_error(Emf::FormatError)
+  end
+
   { 1 => :input_bytes, 2 => :record_bytes, 3 => :record_count,
     4 => :allocated_bytes, 5 => :work_units, 6 => :output_bytes }.each do |code, resource|
     it "preserves native #{resource} metadata without reading the error message" do

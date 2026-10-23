@@ -112,7 +112,8 @@ module Emf
 
         count = payload.byteslice(16, 8).unpack1("Q<")
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == 24 + (count * width)
-        raise FormatError, "native point array exceeds Ruby model array limit" if count > 1_000_000
+
+        ResourceLimits::EmfRecords.check_count(count)
 
         bounds = %i[left top right bottom].zip(payload.unpack("l<4")).to_h
         format = width == 8 ? "l<*" : "s<*"
@@ -134,7 +135,9 @@ module Emf
         poly_count, point_count = payload.byteslice(16, 16).unpack("Q<2")
         counts_size = poly_count * 4
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == 32 + counts_size + (point_count * width)
-        raise FormatError, "native multi array exceeds Ruby model array limit" if poly_count > 1_000_000 || point_count > 1_000_000
+
+        ResourceLimits::EmfRecords.check_count(poly_count)
+        ResourceLimits::EmfRecords.check_count(point_count)
 
         bounds = %i[left top right bottom].zip(payload.unpack("l<4")).to_h
         counts = payload.byteslice(32, counts_size).unpack("V*")
@@ -155,7 +158,8 @@ module Emf
 
         count = payload.byteslice(16, 8).unpack1("Q<")
         raise FormatError, "invalid native typed payload length" unless payload.bytesize == 24 + (count * (width + 1))
-        raise FormatError, "native PolyDraw exceeds Ruby model array limit" if count > 1_000_000
+
+        ResourceLimits::EmfRecords.check_count(count)
 
         bounds = %i[left top right bottom].zip(payload.unpack("l<4")).to_h
         format = width == 8 ? "l<*" : "s<*"
@@ -241,9 +245,9 @@ module Emf
         info, bits, first = payload.byteslice(32, 12).unpack("V3")
         lengths = payload.byteslice(44, 32).unpack("Q<4")
         raise FormatError, "invalid native extended pen length" unless payload.bytesize == 76 + (count * 4) + lengths.sum
-        raise FormatError, "native extended pen exceeds Ruby model limit" if count > 1_000_000 || payload.bytesize > 0xFFFFFFFF
 
         pen_layout!([info, bits, first], lengths)
+        ResourceLimits::EmfRecords.check_count(count, record_bytes: payload.bytesize)
 
         cursor = 76 + (count * 4)
         parts = lengths.map do |length|
@@ -336,7 +340,8 @@ module Emf
         count, extra = payload.byteslice(20, 16).unpack("Q<2")
         expected = 36 + (count * 16) + extra
         raise FormatError, "invalid native region data length" unless payload.bytesize == expected
-        raise FormatError, "invalid native region count" if count > 1_000_000 || 32 + (count * 16) + extra > 0xFFFFFFFF
+
+        ResourceLimits::EmfRecords.check_count(count, record_bytes: 32 + (count * 16) + extra)
 
         axes = %i[left top right bottom]
         rectangles = payload.byteslice(36, count * 16).unpack("l<*").each_slice(4).map { |values| axes.zip(values).to_h }
