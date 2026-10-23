@@ -7,6 +7,12 @@
 
 use crate::error::{LimitKind, ParseFailure};
 
+// Portable charge shared with Ruby ResourceBudget. repr(Rust) FontRecord is
+// 392 or 400 bytes on supported 64-bit compilers. Admission must not depend on
+// that layout choice, and the charge must cover the actual boxed allocation.
+pub(crate) const FONT_RECORD_BYTES: usize = 400;
+const _: () = assert!(std::mem::size_of::<crate::model::FontRecord>() <= FONT_RECORD_BYTES);
+
 /// Ceilings checked before serialization allocates or copies output.
 /// Work counts two units per record (including the header), one per 16 output
 /// bytes, and one per point encoded from an edited polyline. Limits are inclusive.
@@ -36,7 +42,8 @@ pub struct ParseLimits {
     pub max_record_bytes: usize,
     /// Largest number of framed records, header included.
     pub max_records: usize,
-    /// Cumulative requested buffer bytes, including each vector growth request.
+    /// Cumulative charged buffer bytes, including each vector growth request.
+    /// Font records use a portable conservative charge across compiler layouts.
     /// Excludes allocator metadata and stack storage.
     pub max_allocated_bytes: usize,
     /// Cumulative work units.

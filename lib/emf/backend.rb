@@ -5,6 +5,7 @@ module Emf
     module Ruby
       class << self
         def parse(bytes)
+          ResourceLimits.preflight(bytes)
           case Detector.call(bytes)
           when :wmf_apm, :wmf_standard then Wmf::Parser.call(bytes)
           when :emf then Emr::Parser.call(bytes)
@@ -25,6 +26,10 @@ module Emf
     private_constant :Ruby
 
     class << self
+      def resolved
+        selected.equal?(Ruby) ? :ruby : :native
+      end
+
       def parse(bytes)
         selected.parse(bytes)
       end

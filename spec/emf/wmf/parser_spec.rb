@@ -141,13 +141,13 @@ RSpec.describe Emf::Wmf::Parser do
   it "enforces input and record resource limits" do
     metafile = described_class.call(placeable)
     stub_const("Emf::Wmf::Binary::MAX_RECORDS", 2)
-    expect { described_class.call(standard) }.to raise_error(Emf::ParseError, /record limit/)
+    expect { described_class.call(standard) }.to raise_error(Emf::ResourceLimitError, /record_count limit/)
     expect { Emf::Wmf::Serializer.call(metafile) }.to raise_error(Emf::SerializeError, /record limit/)
     stub_const("Emf::Wmf::Binary::MAX_RECORDS", 4)
     stub_const("Emf::Wmf::Binary::MAX_INPUT_BYTES", placeable.bytesize - 1)
     expect { Emf::Wmf::Serializer.call(metafile) }.to raise_error(Emf::SerializeError, /input too large/)
     stub_const("Emf::Wmf::Binary::MAX_INPUT_BYTES", 10)
-    expect { described_class.call(standard) }.to raise_error(Emf::FormatError, /input too large/)
+    expect { described_class.call(standard) }.to raise_error(Emf::ResourceLimitError, /input_bytes limit/)
   end
 
   it "rejects missing EOF, invalid raw framing and mismatched typed functions when serializing" do

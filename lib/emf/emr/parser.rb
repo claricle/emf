@@ -8,7 +8,7 @@ module Emf
       module_function
 
       def call(bytes)
-        raise FormatError, "input too large (#{bytes.bytesize} > #{MAX_INPUT_BYTES}); refusing to parse" if bytes.bytesize > MAX_INPUT_BYTES
+        ResourceLimits.check!(:input_bytes, MAX_INPUT_BYTES, bytes.bytesize)
         raise FormatError, "not an EMF file (signature mismatch)" unless Emf::Detector.call(bytes) == :emf
 
         io = StringIO.new(bytes, "rb")
@@ -19,6 +19,7 @@ module Emf
 
         records = []
         errors = []
+        diagnostics = []
         emf_plus_bytes = +""
         trailing = "".b
 
@@ -31,7 +32,7 @@ module Emf
             next
           end
 
-          wire, suffix = read_record_at(data, offset, errors)
+          wire, suffix = read_record_at(data, offset, errors, diagnostics: diagnostics, record_index: records.length + 1)
           if wire.nil?
             trailing << bytes.byteslice(offset..)
             break
@@ -48,15 +49,16 @@ module Emf
           end
         end
 
-        metafile(header, records, errors, emf_plus_bytes, trailing)
+        metafile(header, records, errors, emf_plus_bytes, trailing, diagnostics)
       end
 
-      def metafile(header, records, errors, emf_plus_bytes, trailing)
+      def metafile(header, records, errors, emf_plus_bytes, trailing, diagnostics = [])
         Model::Metafile.new(
           format: emf_plus_bytes.empty? ? :emf : :emf_plus,
           header: header,
           records: records,
           errors: errors,
+          diagnostics: diagnostics,
           emf_plus: emf_plus_bytes.empty? ? nil : emf_plus_bytes,
           trailing: trailing
         )
@@ -256,24 +258,11 @@ module Emf
       # The record starting at `offset` of the binary `data` as [wire, suffix],
       # or nil when none can be read there (the caller keeps the rest as
       # trailing bytes).
-      def read_record_at(data, offset, errors)
-        available = data.bytesize - offset
-        return nil if available.zero? || short_header?(available, offset, errors)
+      def read_record_at(data, offset, errors, diagnostics: nil, record_index: nil)
+        header = record_header_at(data, offset, errors, diagnostics, record_index)
+        return unless header
 
-        type_id = data.unpack1("V", offset: offset)
-        n_size = data.unpack1("V", offset: offset + 4)
-        if n_size < 8
-          errors << ParseError.new(offset: offset, record_code: type_id,
-                                   message: "record nSize #{n_size} < 8 bytes (offset #{offset})")
-          return nil
-        end
-
-        if available < n_size
-          errors << ParseError.new(offset: offset, record_code: type_id,
-                                   message: "truncated record at offset #{offset} (claimed #{n_size}, got #{available - 8})")
-          return nil
-        end
-
+        type_id, n_size = header
         record_bytes = data.byteslice(offset, n_size) if CHECKED_TYPES.key?(type_id)
         unless record_bytes.nil? || variable_array_sane?(type_id, n_size, record_bytes)
           errors << ParseError.new(
@@ -281,14 +270,53 @@ module Emf
             message: "variable-array record at offset #{offset} declares " \
                      "more entries than nSize allows; preserving as Raw"
           )
+          diagnostic(diagnostics, record_index, type_id, offset, :preserved_raw)
           return [build_raw(record_bytes), "".b]
         end
 
         read_typed(type_id, n_size, data, offset)
+      rescue ResourceLimitError
+        raise
       rescue StandardError => e
+        diagnostic(diagnostics, record_index, type_id, offset, :preserved_raw)
         errors << ParseError.new(offset: offset, record_code: type_id,
                                  message: "#{e.class}: #{e.message}")
         [build_raw(record_bytes || data.byteslice(offset, n_size)), "".b]
+      end
+
+      def record_header_at(data, offset, errors, diagnostics, record_index)
+        available = data.bytesize - offset
+        return nil if available.zero?
+
+        if short_header?(available, offset, errors)
+          diagnostic(diagnostics, record_index, data.unpack1("V", offset: offset) || 0, offset, :skipped)
+          return nil
+        end
+
+        type_id = data.unpack1("V", offset: offset)
+        n_size = data.unpack1("V", offset: offset + 4)
+        if n_size < 8
+          diagnostic(diagnostics, record_index, type_id, offset, :skipped)
+          errors << ParseError.new(offset: offset, record_code: type_id,
+                                   message: "record nSize #{n_size} < 8 bytes (offset #{offset})")
+          return nil
+        end
+
+        if available < n_size
+          diagnostic(diagnostics, record_index, type_id, offset, :skipped)
+          errors << ParseError.new(offset: offset, record_code: type_id,
+                                   message: "truncated record at offset #{offset} (claimed #{n_size}, got #{available - 8})")
+          return nil
+        end
+
+        [type_id, n_size]
+      end
+
+      def diagnostic(diagnostics, record_index, type_id, offset, disposition)
+        return unless diagnostics
+
+        diagnostics << Model::Diagnostic.new(record_index: record_index, record_code: type_id,
+                                             byte_offset: offset, disposition: disposition)
       end
 
       def read_typed(type_id, n_size, data, offset)

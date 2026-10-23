@@ -2,24 +2,26 @@
 
 require "fiddle"
 require_relative "wmf_loading"
+require_relative "resource_failure"
 
 module Emf
   module Native
     class Loader
       include WmfLoading
+      include ResourceFailure
 
       POINTER = Fiddle::TYPE_VOIDP
       UINT64 = Fiddle::TYPE_LONG_LONG
       # Version 1 status values from emf-ffi/include/emf.h.
-      STATUS_ERRORS = { 2 => FormatError, 3 => FormatError,
+      STATUS_ERRORS = { 2 => FormatError,
                         4 => SerializeError }.freeze
       SIGNATURES = {
-        emf_abi_version: [[], Fiddle::TYPE_INT],
         emf_parse: [[POINTER, UINT64, POINTER, POINTER, POINTER], Fiddle::TYPE_INT],
         emf_document_snapshot: [[POINTER, POINTER, POINTER], Fiddle::TYPE_INT],
         emf_record_bytes: [[POINTER, UINT64, POINTER, POINTER], Fiddle::TYPE_INT],
         emf_buffer_view: [[POINTER, POINTER, POINTER], Fiddle::TYPE_INT],
         emf_error_view: [[POINTER, POINTER], Fiddle::TYPE_INT],
+        emf_error_resource_view: [[POINTER, POINTER], Fiddle::TYPE_INT],
         emf_document_free: [[POINTER], Fiddle::TYPE_VOID],
         emf_buffer_free: [[POINTER], Fiddle::TYPE_VOID],
         emf_error_free: [[POINTER], Fiddle::TYPE_VOID]
@@ -31,11 +33,12 @@ module Emf
         raise Unavailable, "native backend requires a 64-bit process" unless Fiddle::SIZEOF_VOIDP == 8
 
         @library = Fiddle.dlopen(path)
-        @functions = SIGNATURES.to_h do |name, (arguments, result)|
-          [name, Fiddle::Function.new(@library[name.to_s], arguments, result)]
-        end
+        @functions = { emf_abi_version: Fiddle::Function.new(@library["emf_abi_version"], [], Fiddle::TYPE_INT) }
         raise Unavailable, "native backend ABI version mismatch (expected 1)" unless invoke(:emf_abi_version) == 1
 
+        SIGNATURES.each do |name, (arguments, result)|
+          @functions[name] = Fiddle::Function.new(@library[name.to_s], arguments, result)
+        end
         @snapshot_function = optional(SNAPSHOT_V3, [POINTER, POINTER, POINTER]) ? SNAPSHOT_V3 : :emf_document_snapshot
       rescue Fiddle::DLError => e
         raise Unavailable, "native backend could not load: #{e.message}"
@@ -81,6 +84,8 @@ module Emf
         error = slot
         status = invoke(name, *arguments, error)
         return if status.zero?
+
+        raise resource_failure(pointer(error)) if status == 3
 
         message = error_message(pointer(error), status)
         raise STATUS_ERRORS.fetch(status, Error), message

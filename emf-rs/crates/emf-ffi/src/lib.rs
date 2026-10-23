@@ -28,6 +28,7 @@ struct Failure {
     status: i32,
     offset: Option<u64>,
     message: Vec<u8>,
+    resource: Option<(u32, u64, u64)>,
 }
 
 struct Message {
@@ -63,6 +64,7 @@ impl Failure {
             status,
             offset,
             message,
+            resource: None,
         }
     }
 
@@ -83,7 +85,17 @@ impl From<ParseFailure> for Failure {
             | ParseFailure::ArithmeticOverflow { offset } => Some(*offset as u64),
             _ => None,
         };
-        Self::new(status, offset, error)
+        let resource = match &error {
+            ParseFailure::LimitExceeded {
+                kind,
+                limit,
+                requested,
+            } => Some((resource_code(*kind), *limit, *requested)),
+            _ => None,
+        };
+        let mut failure = Self::new(status, offset, error);
+        failure.resource = resource;
+        failure
     }
 }
 
@@ -97,7 +109,17 @@ impl From<SerializeFailure> for Failure {
                 (EMF_SERIALIZE_ERROR, Some(*offset as u64))
             }
         };
-        Self::new(status, offset, error)
+        let resource = match &error {
+            SerializeFailure::LimitExceeded {
+                kind,
+                limit,
+                requested,
+            } => Some((resource_code(*kind), *limit, *requested)),
+            _ => None,
+        };
+        let mut failure = Self::new(status, offset, error);
+        failure.resource = resource;
+        failure
     }
 }
 
@@ -114,6 +136,7 @@ unsafe fn run(out_error: *mut *mut EmfError, body: impl FnOnce() -> Result<(), F
                     status: failure.status,
                     offset: failure.offset,
                     message: failure.message,
+                    resource: failure.resource,
                 })));
             }
             failure.status
@@ -537,9 +560,118 @@ pub unsafe extern "C" fn emf_error_free(error: *mut EmfError) {
     }
 }
 
+fn resource_code(kind: emf_core::LimitKind) -> u32 {
+    match kind {
+        emf_core::LimitKind::InputBytes => 1,
+        emf_core::LimitKind::RecordBytes => 2,
+        emf_core::LimitKind::RecordCount => 3,
+        emf_core::LimitKind::AllocatedBytes => 4,
+        emf_core::LimitKind::WorkUnits => 5,
+        emf_core::LimitKind::OutputBytes => 6,
+    }
+}
+
+/// # Safety
+/// The error must be live; out_info must reference writable storage for its declared layout.
+#[no_mangle]
+pub unsafe extern "C" fn emf_error_resource_view(
+    error: *const EmfError,
+    out_info: *mut EmfResourceInfo,
+) -> i32 {
+    run(ptr::null_mut(), || {
+        if out_info.is_null() {
+            return Err(Failure::invalid("out_info is NULL"));
+        }
+        let struct_size = ptr::addr_of!((*out_info).struct_size).read();
+        if struct_size as usize != size_of::<EmfResourceInfo>() {
+            return Err(Failure::invalid("unsupported structure size"));
+        }
+        let version = ptr::addr_of!((*out_info).version).read();
+        metadata::<EmfResourceInfo>(struct_size, version)?;
+        let error = error
+            .as_ref()
+            .ok_or_else(|| Failure::invalid("error is NULL"))?;
+        let (resource, limit, actual) = error.resource.unwrap_or((0, 0, 0));
+        out_info.write(EmfResourceInfo {
+            struct_size,
+            version,
+            resource,
+            reserved: 0,
+            limit,
+            actual,
+        });
+        Ok(())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resource_accessor_preserves_each_parse_limit_and_ignores_unrelated_failures() {
+        use emf_core::LimitKind;
+        let kinds = [
+            LimitKind::InputBytes,
+            LimitKind::RecordBytes,
+            LimitKind::RecordCount,
+            LimitKind::AllocatedBytes,
+            LimitKind::WorkUnits,
+            LimitKind::OutputBytes,
+        ];
+        for (index, kind) in kinds.into_iter().enumerate() {
+            let failure = ParseFailure::LimitExceeded {
+                kind,
+                limit: 17,
+                requested: 23,
+            };
+            let mut error = ptr::null_mut();
+            unsafe {
+                assert_eq!(run(&mut error, || Err(failure.into())), EMF_LIMIT_EXCEEDED);
+                let mut info = EmfResourceInfo {
+                    struct_size: size_of::<EmfResourceInfo>() as u32,
+                    version: EMF_ABI_VERSION,
+                    ..Default::default()
+                };
+                assert_eq!(emf_error_resource_view(error, &mut info), EMF_OK);
+                assert_eq!(
+                    (info.resource, info.limit, info.actual),
+                    (index as u32 + 1, 17, 23)
+                );
+                emf_error_free(error);
+            }
+        }
+        let mut error = ptr::null_mut();
+        unsafe {
+            assert_eq!(
+                run(&mut error, || Err(Failure::invalid(
+                    "work_units limit exceeded"
+                ))),
+                EMF_INVALID_ARGUMENT
+            );
+            let mut info = EmfResourceInfo {
+                struct_size: size_of::<EmfResourceInfo>() as u32,
+                version: EMF_ABI_VERSION,
+                ..Default::default()
+            };
+            assert_eq!(emf_error_resource_view(error, &mut info), EMF_OK);
+            assert_eq!((info.resource, info.limit, info.actual), (0, 0, 0));
+            assert_eq!(
+                emf_error_resource_view(ptr::null(), &mut info),
+                EMF_INVALID_ARGUMENT
+            );
+            assert_eq!(
+                emf_error_resource_view(error, ptr::null_mut()),
+                EMF_INVALID_ARGUMENT
+            );
+            info.struct_size = 8;
+            assert_eq!(
+                emf_error_resource_view(error, &mut info),
+                EMF_INVALID_ARGUMENT
+            );
+            emf_error_free(error);
+        }
+    }
 
     #[test]
     fn serialization_limits_keep_their_status_and_detail_in_owned_errors() {

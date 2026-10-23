@@ -8,6 +8,8 @@ module Emf
   autoload :FormatError, "emf/error"
   autoload :ParseError, "emf/error"
   autoload :SerializeError, "emf/error"
+  autoload :ResourceLimitError, "emf/error"
+  autoload :ResourceLimits, "emf/resource_limits"
   autoload :ParseEvidence, "emf/parse_evidence"
   autoload :ParseEvidenceBuilder, "emf/parse_evidence"
   autoload :Backend, "emf/backend"
@@ -22,6 +24,10 @@ module Emf
   autoload :Conformance, "emf/conformance"
 
   class << self
+    def backend
+      Backend.resolved
+    end
+
     def parse(bytes)
       Backend.parse(bytes)
     end

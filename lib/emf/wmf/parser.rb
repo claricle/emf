@@ -6,7 +6,7 @@ module Emf
       module_function
 
       def call(bytes)
-        raise FormatError, "WMF input too large" if bytes.bytesize > Binary::MAX_INPUT_BYTES
+        ResourceLimits.check!(:input_bytes, Binary::MAX_INPUT_BYTES, bytes.bytesize)
 
         errors = []
         placeable, start = read_placeable(bytes, errors)
@@ -55,7 +55,7 @@ module Emf
       def read_records(bytes, offset, limit, errors)
         records = []
         while offset < limit
-          parse_error(offset, nil, "record limit exceeded") if records.length >= Binary::MAX_RECORDS
+          ResourceLimits.check!(:record_count, Binary::MAX_RECORDS, records.length + 1)
           parse_error(offset, nil, "truncated record header") if limit - offset < 6
           words, function = bytes.byteslice(offset, 6).unpack("Vv")
           parse_error(offset, function, "invalid record length #{words}") if words < 3 || words > (limit - offset) / 2
