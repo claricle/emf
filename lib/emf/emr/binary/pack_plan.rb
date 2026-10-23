@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "pack_plan_check"
+require_relative "pack_plan_generate"
 require_relative "pack_plan_values"
 
 module Emf
@@ -22,6 +23,7 @@ module Emf
       class PackPlan
         include PackPlanCheck
         include PackPlanValues
+        include PackPlanGenerate
 
         LEAVES = {
           "BinData::Uint32le" => ["V", 0, (2**32) - 1],
@@ -50,14 +52,26 @@ module Emf
           @array = nil
           template.field_names.each { |name| @tree[name] = node_of(template.public_send(name), name) }
           @format = @leaves.map(&:first).join
+          @lows = @leaves.map { |leaf| leaf[1] }.freeze
+          @highs = @leaves.map { |leaf| leaf[2] }.freeze
           @size = filler.size
           @n_size = @tree.fetch(:n_size).index
           @coord_bytes = 0
           finish_points(filler)
+          generate_pack
         end
 
-        # The record's bytes, or nil when any attribute needs BinData.
-        def pack(attrs)
+        # The record's bytes, or nil when any attribute needs BinData. n_size
+        # is the record's size unless `size` is false, which leaves it as
+        # given (or its default).
+        def pack(attrs, size: true)
+          pack_interpreted(attrs, size: size)
+        end
+
+        # The same result computed by walking the attributes; the generated
+        # `pack` (see PackPlanGenerate) falls back to it for anything but plain
+        # in-range attributes.
+        def pack_interpreted(attrs, size: true)
           catch(:decline) do
             values = @defaults.dup
             coords = nil
@@ -67,7 +81,7 @@ module Emf
 
               node.equal?(@array) ? coords = coords_of(value) : (store(values, node, value) or throw :decline)
             end
-            finish(values, coords)
+            finish(values, coords, size)
           end
         end
 
@@ -104,10 +118,10 @@ module Emf
 
         # The wire read back from the bytes must be the wire BinData built,
         # so the count must be the array's length (an absent array is empty).
-        def finish(values, coords)
+        def finish(values, coords, size)
           throw :decline if @array && values[@count] != (coords ? coords.size / 2 : 0)
 
-          values[@n_size] = @size + (coords ? coords.size * @coord_bytes : 0)
+          values[@n_size] = @size + (coords ? coords.size * @coord_bytes : 0) if size
           values.concat(coords) if coords
           values.pack(coords ? @points_format : @format)
         end

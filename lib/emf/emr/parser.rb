@@ -22,9 +22,10 @@ module Emf
         emf_plus_bytes = +""
         trailing = +""
 
-        while pos < data.bytesize
+        size = data.bytesize
+        while pos < size
           offset = pos
-          if (source = filled_record_at(data, offset))
+          if (source = filled_record_at(data, offset, size))
             records << Model::Emr::Records::WireAdapter.lazy(source: source, offset: offset)
             pos = offset + source.length
             next
@@ -117,31 +118,37 @@ module Emf
 
       REGION_DATA_OFFSETS = { 71 => 32, 72 => 40, 73 => 28, 74 => 28, 75 => 16 }.freeze
 
+      # The checks read the record in place: `base` is its offset in `data`
+      # (0 for a record already sliced), `n_size` its length, so no slice or
+      # string is made per checked record.
       def variable_array_sane?(type_id, n_size, record_bytes)
-        region_data_sane?(type_id, n_size, record_bytes) &&
-          sized_arrays_sane?(type_id, n_size, record_bytes) &&
-          ext_text_out_sane?(type_id, n_size, record_bytes)
+        sane_at?(type_id, n_size, record_bytes, 0)
       end
 
-      def region_data_sane?(type_id, n_size, bytes)
+      def sane_at?(type_id, n_size, data, base)
+        region_data_sane?(type_id, n_size, data, base) &&
+          sized_arrays_sane?(type_id, n_size, data, base) &&
+          ext_text_out_sane?(type_id, n_size, data, base)
+      end
+
+      def region_data_sane?(type_id, n_size, data, base)
         data_offset = REGION_DATA_OFFSETS[type_id]
         return true unless data_offset
 
         length_offset = type_id == 75 ? 8 : 24
-        return false if bytes.bytesize < length_offset + 4
+        return false if n_size < length_offset + 4
 
-        length = read_uint32(bytes, length_offset)
-        length <= n_size - data_offset
+        data.unpack1(UINT32, offset: base + length_offset) <= n_size - data_offset
       end
 
-      def sized_arrays_sane?(type_id, n_size, full)
+      def sized_arrays_sane?(type_id, n_size, data, base)
         spec = VARIABLE_ARRAY_RECORDS[type_id]
         return true unless spec
 
         count_width = spec.fetch(:count_width, 4)
-        return true if full.bytesize < spec[:count_offset] + count_width
+        return true if n_size < spec[:count_offset] + count_width
 
-        count = full.byteslice(spec[:count_offset], count_width).unpack1(count_width == 2 ? "v" : "V")
+        count = data.unpack1(count_width == 2 ? UINT16 : UINT32, offset: base + spec[:count_offset])
         return false if count > MAX_SANE_ARRAY_LENGTH
 
         # For single-array records, element_size is the per-entry size.
@@ -155,12 +162,14 @@ module Emf
         # Multi-array records also need to validate the second count.
         return true unless spec[:count2_offset]
 
-        count2 = read_uint32(full, spec[:count2_offset])
+        count2 = data.unpack1(UINT32, offset: base + spec[:count2_offset])
         return false if count2 > MAX_SANE_ARRAY_LENGTH
 
         bytes_needed + (count2 * spec[:element_size]) <= n_size
       end
 
+      UINT32 = "V"
+      UINT16 = "v"
       ETO_NO_RECT = 0x100
       ETO_PDY = 0x2000
       EXT_TEXT_OUT_CHAR_WIDTH = {
@@ -174,25 +183,27 @@ module Emf
 
       # Mirrors the native decoder: the string and Dx spans implied by nChars
       # must lie inside the record, after the fixed fields, and not overlap.
-      def ext_text_out_sane?(type_id, n_size, full)
+      def ext_text_out_sane?(type_id, n_size, data, base)
         width = EXT_TEXT_OUT_CHAR_WIDTH[type_id]
         return true unless width
 
-        spans, fixed = ext_text_out_spans(full, width)
+        spans, fixed = ext_text_out_spans(n_size, data, base, width)
         return false unless spans
 
         spans.all? { |off, len, align| span_inside?(off, len, align, fixed, n_size) } &&
           (spans.size < 2 || !spans_overlap?(*spans))
       end
 
-      def ext_text_out_spans(full, width)
-        return if full.bytesize < 60
+      def ext_text_out_spans(n_size, data, base, width)
+        return if n_size < 60
 
-        count, off_string, options = full.byteslice(44, 12).unpack("V3")
+        count = data.unpack1(UINT32, offset: base + 44)
+        off_string = data.unpack1(UINT32, offset: base + 48)
+        options = data.unpack1(UINT32, offset: base + 52)
         dx_at = options.anybits?(ETO_NO_RECT) ? 56 : 72
-        return if full.bytesize < dx_at + 4
+        return if n_size < dx_at + 4
 
-        off_dx = read_uint32(full, dx_at)
+        off_dx = data.unpack1(UINT32, offset: base + dx_at)
         dx_entry = options.anybits?(ETO_PDY) ? 8 : 4
         string = [off_string, count * width, width] unless off_string.zero? && count.zero?
         dx = [off_dx, count * dx_entry, 4] unless off_dx.zero?
@@ -205,13 +216,6 @@ module Emf
 
       def spans_overlap?(first, second)
         first[0] < second[0] + second[1] && second[0] < first[0] + first[1]
-      end
-
-      def read_uint32(bytes, offset)
-        bytes.getbyte(offset) |
-          (bytes.getbyte(offset + 1) << 8) |
-          (bytes.getbyte(offset + 2) << 16) |
-          (bytes.getbyte(offset + 3) << 24)
       end
 
       def short_header?(available, offset, errors)
@@ -235,18 +239,18 @@ module Emf
       # `read_record_at` (any other type, a short or truncated span, a count
       # that overruns its record, or an error to report). The wire is made
       # only when asked for, from the same filler `read_typed` uses.
-      def filled_record_at(data, offset)
-        return if data.bytesize - offset < 8
+      def filled_record_at(data, offset, size)
+        return if size - offset < 8
 
-        type_id = data.unpack1("V", offset: offset)
-        n_size = data.unpack1("V", offset: offset + 4)
-        return if n_size < 8 || data.bytesize - offset < n_size
+        type_id = data.unpack1(UINT32, offset: offset)
+        n_size = data.unpack1(UINT32, offset: offset + 4)
+        return if n_size < 8 || size - offset < n_size
 
         source = Emr::FilledRecord.for(type_id, offset, n_size, data)
         return unless source
         return source unless CHECKED_TYPES.key?(type_id)
 
-        source if variable_array_sane?(type_id, n_size, data.byteslice(offset, n_size))
+        source if sane_at?(type_id, n_size, data, offset)
       end
 
       # The record starting at `offset` of the binary `data` as [wire, suffix],
@@ -298,6 +302,11 @@ module Emf
         record_bytes = data.byteslice(offset, n_size)
         wire = Emf::Emr::Binary::Records.lookup(type_id).read(record_bytes)
         [wire, Model::Emr::Records::WireAdapter.suffix_of(record_bytes, wire)]
+      end
+
+      # Public API since before the offset-aware checks; kept for callers.
+      def read_uint32(bytes, offset)
+        bytes.unpack1(UINT32, offset: offset)
       end
 
       def build_raw(record_bytes)

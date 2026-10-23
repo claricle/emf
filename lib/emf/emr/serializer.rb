@@ -6,15 +6,14 @@ module Emf
       module_function
 
       def call(metafile)
-        bytes = +""
+        bytes = String.new(encoding: Encoding::BINARY)
         bytes << metafile.header.to_wire.to_binary_s
         metafile.records.each do |record|
-          case record
-          when Model::Emr::Records::WireAdapter
-            bytes << record.to_binary_s
-          else
+          unless record.is_a?(Model::Emr::Records::WireAdapter)
             raise SerializeError, "cannot serialize #{record.class} (TODO 10 lands domain to_wire)"
           end
+
+          record.append_to(bytes)
         end
         bytes << metafile.trailing
         bytes

@@ -33,6 +33,10 @@ module Emf
         @bytes
       end
 
+      def append_to(out)
+        out << to_binary_s
+      end
+
       def wire_class
         @klass
       end

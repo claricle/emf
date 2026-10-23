@@ -132,6 +132,20 @@ module Emf
         WIDTHS = { "V" => 4, "l<" => 4, "C" => 1 }.freeze
         private_constant :WIDTHS
 
+        # `build` without a wire: a shell over the bytes PackPlan packs from
+        # the attributes, n_size as given. nil when there is no verified
+        # plan, the attributes are not ones it takes, or fields cannot be
+        # made lazily; the caller then builds.
+        def build_packed(attrs)
+          bytes = pack_plan&.pack(attrs, size: false) or return
+          bytes = bytes.b unless bytes.encoding == Encoding::BINARY
+          return eager(copy_shell, bytes, 0) unless @lazy_ok
+
+          copy_shell.packed_from(bytes, self)
+        rescue StandardError
+          nil
+        end
+
         private
 
         # A shell whose fields are made, from the record's bytes, as they are
@@ -609,11 +623,7 @@ module Emf
 
         # The PackPlan for the class (bytes straight from attributes), or nil
         # when no verified plan exists.
-        def pack_plan
-          return @pack_plan if defined?(@pack_plan)
-
-          @pack_plan = PackPlan.build(self)
-        end
+        def pack_plan = defined?(@pack_plan) ? @pack_plan : (@pack_plan = PackPlan.build(self))
 
         def initialize(klass)
           @wire_class = klass
@@ -652,6 +662,11 @@ module Emf
         def call_at(data, offset, n_size)
           [lazy_wire(data, offset), suffix(data, offset, n_size)]
         end
+
+        # The wire `call_at` answers for a record that is exactly the layout
+        # (no suffix), without the [wire, suffix] pair; nil for any other
+        # n_size, which `call_at` reads.
+        def exact_wire(data, offset, n_size) = (lazy_wire(data, offset) if n_size == @size)
 
         # Whether `call_at` reads the n_size-byte record at `offset`: always
         # for a fixed layout.
@@ -1006,6 +1021,9 @@ module Emf
           def call_at(data, offset, n_size)
             call(data.byteslice(offset, n_size))
           end
+
+          # A text record's layout varies with its options, so `call_at` reads it.
+          def exact_wire(_data, _offset, _n_size); end
 
           def call(record_bytes)
             return if record_bytes.bytesize < @size
