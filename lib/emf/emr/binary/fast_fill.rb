@@ -773,6 +773,12 @@ module Emf
             @flat_points ? false : super
           end
 
+          # Makes the points, so the array holds no filler (Marshal cannot
+          # dump generated code).
+          def settle_points
+            materialize_points if @flat_points
+          end
+
           def assign(array)
             return if equal?(array)
 

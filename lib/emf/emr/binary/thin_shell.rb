@@ -16,6 +16,8 @@ module Emf
         # made afterwards is the one every later read answers. Nothing read
         # straight from @field_objs may see an unmade field as a default, so
         # clear and clear? settle the shell first.
+        LAZY_IVARS = %i[@lazy_filler @lazy_data @lazy_base @lazy_built @lazy_patched].freeze
+
         def initialize_instance
           @lazy_filler = @lazy_data = @lazy_base = @lazy_built = @lazy_patched = nil
           super
@@ -37,6 +39,34 @@ module Emf
         def freeze
           hydrate if @lazy_filler
           super
+        end
+
+        # BinData's dup is shallow: a copy shares @field_objs, so a field
+        # either record makes or edits is the other's too. A thin source has
+        # no @field_objs yet, so it is made first and shared. The two also
+        # share their bytes, so neither is untouched any more.
+        def initialize_copy(source)
+          super
+          return unless @lazy_filler
+
+          source.send(:hydrate)
+          @field_objs = source.instance_variable_get(:@field_objs)
+          @lazy_patched = true
+          source.instance_variable_set(:@lazy_patched, true) unless source.frozen?
+        end
+
+        # The filler is generated code Marshal cannot dump, so a record is
+        # dumped as the plain BinData record it reads as: every field made,
+        # no lazy source.
+        def marshal_dump
+          instantiate_all_objs if @lazy_filler
+          @field_objs&.each { |field| field.settle_points if field.is_a?(FastFill::FlatPoints) }
+          (instance_variables - LAZY_IVARS).to_h { |name| [name, instance_variable_get(name)] }
+        end
+
+        def marshal_load(ivars)
+          ivars.each { |name, value| instance_variable_set(name, value) }
+          LAZY_IVARS.each { |name| instance_variable_set(name, nil) }
         end
 
         # Fixed-layout records serialize with one Array#pack, as WireAdapter
