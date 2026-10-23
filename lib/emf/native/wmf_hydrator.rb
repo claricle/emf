@@ -28,33 +28,33 @@ module Emf
 
       def call
         header = hydrate_header
-        records = hydrate_records(header)
+        records = hydrate_records
         Wmf::Binary.validate_objects(records, header.number_of_objects) do |record, message|
           fail_record(record.offset, record.type_id, message)
         end
-        Model::Metafile.new(format: :wmf, header: header, records: records, trailing: @snapshot.trailing)
+        Model::Metafile.new(format: :wmf, header: header, records: records, errors: Wmf::Evidence.drift_errors(@input),
+                            trailing: @snapshot.trailing)
       end
 
       private
 
       def hydrate_header
         type, size, version, words, objects, maximum, members, placeable, eof, reserved = @snapshot.header
-        validate_header(type, size, version, words, placeable, eof, reserved)
+        validate_header(type, size, version, placeable, eof, reserved)
         @start = placeable == 1 ? 22 : 0
-        @limit = @start + (words * 2)
-        raise FormatError, "invalid native WMF declared size" unless @limit <= @input.bytesize
+        # The record stream ends where the tail begins; the declared Size does not bound it (drift is recovered).
+        @limit = @input.bytesize - @snapshot.trailing.bytesize
 
         placeable_header = hydrate_placeable(type) if placeable == 1
         raise_framing_error unless eof_present?
-        raise FormatError, "invalid native WMF declared size" unless @input.byteslice(@limit..) == @snapshot.trailing
 
         Model::Wmf::Header.new(type: type, version: version, size_words: words, number_of_objects: objects,
                                max_record_words: maximum, number_of_members: members, placeable: placeable_header)
       end
 
-      def validate_header(type, size, version, words, placeable, eof, reserved)
+      def validate_header(type, size, version, placeable, eof, reserved)
         valid = [1, 2].include?(type) && size == 9 && [0x100, 0x300].include?(version) &&
-                [0, 1].include?(placeable) && [0, 1].include?(eof) && reserved.zero? && words >= 9
+                [0, 1].include?(placeable) && [0, 1].include?(eof) && reserved.zero?
         raise FormatError, "invalid native WMF header" unless valid
         raise FormatError, "invalid native WMF source length" unless @snapshot.source_length == @input.bytesize
         raise FormatError, "WMF input too large" if @input.bytesize > Wmf::Binary::MAX_INPUT_BYTES
@@ -89,7 +89,7 @@ module Emf
                                         inch: inch, checksum: checksum)
       end
 
-      def hydrate_records(header)
+      def hydrate_records
         if @snapshot.records.length > Wmf::Binary::MAX_RECORDS
           raise ResourceLimitError.new(resource: :record_count, limit: Wmf::Binary::MAX_RECORDS,
                                        actual: Wmf::Binary::MAX_RECORDS + 1)
@@ -106,9 +106,6 @@ module Emf
         unless position == @limit && records.last.is_a?(Model::Wmf::Records::Eof) && records.one?(Model::Wmf::Records::Eof)
           raise FormatError, "WMF requires one final EOF record"
         end
-
-        largest = @snapshot.records.map { |record| record.fetch(:length) / 2 }.max
-        raise FormatError, "WMF MaxRecord does not match largest record" unless largest == header.max_record_words
 
         records
       end

@@ -11,8 +11,10 @@ of times. Free the buffer with `emf_buffer_free`.
 Why a separate walk: `emf_wmf_parse` recovers past malformed records and keeps
 going, so its diagnostics cannot say what Ruby would have raised first. The walk
 in `emf_core::wmf::contract` follows Ruby's order: placeable, standard header,
-records in stream order (framing, then that record's payload), the object table,
-then the largest-record check. It reports the failure; it carries no wording.
+records in stream order (framing, then that record's payload), then the object table.
+Header file Size (305) and MaxRecord (1801) drift are not rejections: the parser keeps
+the records up to the first META_EOF and reports the drift as a recovered error. It
+reports the failure; it carries no wording.
 
 The two limits are the contract's own ceilings (Ruby: 200 MiB and 1,000,000 records,
 read from `Wmf::Binary` on each call), passed in so the answer never drifts from the

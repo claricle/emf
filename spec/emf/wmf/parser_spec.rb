@@ -43,7 +43,7 @@ RSpec.describe Emf::Wmf::Parser do
 
   it "rejects truncated headers and invalid standard fields" do
     [0, 3, 17].each { |length| expect { described_class.call(standard.byteslice(0, length)) }.to raise_error(Emf::FormatError) }
-    [[0, 3], [2, 8], [4, 0x200], [6, 8], [12, 4]].each do |offset, value|
+    [[0, 3], [2, 8], [4, 0x200]].each do |offset, value|
       bytes = standard.dup
       bytes[offset, 2] = [value].pack("v")
       expect { described_class.call(bytes) }.to raise_error(Emf::FormatError)
@@ -60,7 +60,7 @@ RSpec.describe Emf::Wmf::Parser do
     bytes = standard.byteslice(0, standard.bytesize - 6)
     bytes[6, 4] = [bytes.bytesize / 2].pack("V")
     expect { described_class.call(bytes) }.to raise_error(Emf::ParseError, /EOF/)
-    expect { described_class.call(standard.byteslice(0, standard.bytesize - 1)) }.to raise_error(Emf::FormatError)
+    expect { described_class.call(standard.byteslice(0, standard.bytesize - 1)) }.to raise_error(Emf::ParseError, /truncated record header/)
   end
 
   it "validates placeable checksum, reserved data and on-disk handle" do
@@ -105,11 +105,15 @@ RSpec.describe Emf::Wmf::Parser do
     expect(reparsed.records.map(&:type_id)).to eq([0])
   end
 
-  it "rejects EOF framing errors and partial record headers within the declared size" do
+  it "rejects EOF framing errors and partial record headers, and keeps what follows the first EOF as trailing data" do
     bytes = standard.dup
     bytes[6, 4] = [(standard.bytesize + 2) / 2].pack("V")
     bytes << "\x00\x00".b
-    expect { described_class.call(bytes) }.to raise_error(Emf::ParseError, /after EOF/)
+    expect(described_class.call(bytes)).to have_attributes(trailing: "\x00\x00".b, errors: satisfy { |errors|
+      errors.map { |e|
+        e.evidence.check
+      } == [:header_file_size_invalid]
+    })
     bytes[standard.bytesize - 6, 4] = [4].pack("V")
     expect { described_class.call(bytes) }.to raise_error(Emf::ParseError, /EOF length/)
     bytes = standard.byteslice(0, 20)

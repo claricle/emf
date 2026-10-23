@@ -7,7 +7,10 @@
 # `wmf.reject.rNNNN` row becomes one finding citing that row. Rejection is a no-model outcome, so strict and
 # tolerant both report an error (no tolerant_reason), like emf.parse.unparseable. Reasons that cannot surface
 # are left to emf.parse.unparseable: 101 and 401 need a 200 MiB or million-record input, and 301-303 are shadowed by
-# the format detector, which turns such inputs into :unrecognised_signature before any WMF check runs.
+# the format detector, which turns such inputs into :unrecognised_signature before any WMF check runs. 305 (header
+# Size) and 1801 (MaxRecord) are not rejections: the parser recovers, keeps the model and records the drift in
+# Metafile#errors, so the declared-size rules below (wmf.header.size_matches_records, wmf.header.max_record) report
+# it, as a warning in the tolerant profile.
 #
 # Declared size: on an accepted model each record carries the rdSize read from the source file
 # (Record#declared_size_words, nil for records built in memory). The rules compare it with the layout and with the
@@ -21,10 +24,11 @@ module Emf
       SHADOWED = [101, 401, 301, 302, 303].freeze
       FUNCTION_OFFSET = 4
       FIRST_RECORD_REASON = 402
-      HEADER_REASON = 1801 # MaxRecord is a header field; every other surviving reason from 402 on names a record
 
       # evidence check => reason code, for every reason that can produce a named finding
-      CHECKS = Emf::Wmf::Evidence::REASONS.except(*SHADOWED).to_h { |reason, (check, _text)| [check, reason] }.freeze
+      CHECKS = Emf::Wmf::Evidence::REASONS.except(*SHADOWED, *Emf::Wmf::Evidence::DRIFT_REASONS).to_h do |reason, (check, _text)|
+        [check, reason]
+      end.freeze
 
       module_function
 
@@ -51,7 +55,7 @@ module Emf
 
       # Record function word of the failing record, for record-level reasons whose bytes are available.
       def function(bytes, evidence, reason)
-        return if reason == HEADER_REASON || reason < FIRST_RECORD_REASON || bytes.nil? || evidence.offset.nil?
+        return if reason < FIRST_RECORD_REASON || bytes.nil? || evidence.offset.nil?
         return if evidence.offset + FUNCTION_OFFSET + 2 > bytes.bytesize
 
         bytes.unpack1("v", offset: evidence.offset + FUNCTION_OFFSET)
@@ -64,6 +68,8 @@ module Emf
       B = Emf::Wmf::Binary
       MIN_WORDS = 3
       HEADER_WORDS = 9
+      HEADER_DRIFT = "the parser recovered: the model is built from the records actually present and the header drift " \
+                     "is recorded in Metafile#errors (seen in files from Inkscape and ImageMagick)"
 
       module_function
 
@@ -159,10 +165,11 @@ module Emf
     [
       ["wmf.record.declared_size", :declared_size, :declared_size],
       ["wmf.buffer.declared_size", :buffer_declared_size, :buffer_declared_size],
-      ["wmf.header.max_record", :max_record, :max_record],
-      ["wmf.header.size_matches_records", :size_matches_records, :size_matches_records]
-    ].each do |id, method, kind|
-      registry.register(id: id, formats: WmfDeclaredSizeRules::WMF, citation: manifest.fetch(id), kind: kind) do |context|
+      ["wmf.header.max_record", :max_record, :max_record, WmfDeclaredSizeRules::HEADER_DRIFT],
+      ["wmf.header.size_matches_records", :size_matches_records, :size_matches_records, WmfDeclaredSizeRules::HEADER_DRIFT]
+    ].each do |id, method, kind, tolerant_reason|
+      registry.register(id: id, formats: WmfDeclaredSizeRules::WMF, citation: manifest.fetch(id), kind: kind,
+                        tolerant_reason: tolerant_reason) do |context|
         WmfDeclaredSizeRules.public_send(method, context)
       end
     end

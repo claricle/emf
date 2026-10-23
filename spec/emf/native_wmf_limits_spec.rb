@@ -66,7 +66,7 @@ RSpec.describe "Native WMF resource limits" do
     snapshot = instance_double(Emf::Native::WmfSnapshot, records: [nil, nil, nil])
     stub_const("Emf::Wmf::Binary::MAX_RECORDS", 1)
 
-    expect { Emf::Native::WmfHydrator.new(snapshot, bytes).send(:hydrate_records, nil) }
+    expect { Emf::Native::WmfHydrator.new(snapshot, bytes).send(:hydrate_records) }
       .to raise_error(Emf::ResourceLimitError) { |error|
         expect([error.resource, error.limit, error.actual]).to eq([:record_count, 1, 2])
       }

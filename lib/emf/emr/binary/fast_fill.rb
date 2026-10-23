@@ -141,23 +141,25 @@ module Emf
           bytes = bytes.b unless bytes.encoding == Encoding::BINARY
           return eager(copy_shell, bytes, 0) unless @lazy_ok
 
-          copy_shell.packed_from(bytes, self)
+          @wire_class.allocate.thin(bytes, 0, self, @shell_params, @shell_names, true)
         rescue StandardError
           nil
         end
 
         private
 
+        # [field count, params, field names] a thin shell shares with the template.
+        def shell_identity(sample)
+          [sample.instance_variable_get(:@field_objs).size, sample.instance_variable_get(:@params),
+           sample.instance_variable_get(:@field_names)]
+        end
+
         # A shell whose fields are made, from the record's bytes, as they are
         # first used.
         def lazy_wire(data, base)
-          wire = copy_shell
-          return eager(wire, data, base) unless @lazy_ok
+          return eager(copy_shell, data, base) unless @lazy_ok
 
-          wire.instance_variable_set(:@lazy_data, data)
-          wire.instance_variable_set(:@lazy_base, base)
-          wire.instance_variable_set(:@lazy_filler, self)
-          wire
+          @wire_class.allocate.thin(data, base, self, @shell_params, @shell_names, nil)
         end
 
         # The same record with every field made now: what lazy fill is
@@ -619,7 +621,7 @@ module Emf
           BY_CLASS[wire_class] || POINT_ARRAY_BY_CLASS[wire_class] || TEXT_BY_CLASS[wire_class]
         end
 
-        attr_reader :size, :wire_class, :template
+        attr_reader :size, :wire_class, :template, :field_count
 
         # The PackPlan for the class (bytes straight from attributes), or nil
         # when no verified plan exists.
@@ -633,6 +635,7 @@ module Emf
           @leaves = leaves = leaf_paths(sample, [])
           # leaf_paths touched every field, so the sample is fully instantiated.
           @template = sample
+          @field_count, @shell_params, @shell_names = shell_identity(sample)
           @format = leaves.map { |_, field| DIRECTIVES.fetch(field.name) }.join
           @leaf_reads = leaf_reads(leaves, DIRECTIVES)
           # Float layouts are not packed: measured on test-000, BinData writes
@@ -667,6 +670,9 @@ module Emf
         # (no suffix), without the [wire, suffix] pair; nil for any other
         # n_size, which `call_at` reads.
         def exact_wire(data, offset, n_size) = (lazy_wire(data, offset) if n_size == @size)
+
+        # The bytes a wire of the record at `base` of `data` is.
+        def record_size(_data, _base) = @size
 
         # Whether `call_at` reads the n_size-byte record at `offset`: always
         # for a fixed layout.
@@ -887,7 +893,11 @@ module Emf
           end
 
           def fits?(data, offset, n_size)
-            @size + (data.unpack1("V", offset: offset + @count_offset) * @point_bytes) <= n_size
+            record_size(data, offset) <= n_size
+          end
+
+          def record_size(data, base)
+            @size + (data.unpack1("V", offset: base + @count_offset) * @point_bytes)
           end
 
           # The array field of a lazy wire: its points, held flat or built.

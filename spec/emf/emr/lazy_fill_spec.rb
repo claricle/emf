@@ -8,8 +8,11 @@ RSpec.describe "Lazily filled records" do
   fill = Emf::Emr::Binary::FastFill
   bindata_writer = BinData::Base.instance_method(:to_binary_s)
 
+  def fill = Emf::Emr::Binary::FastFill
+
   def made_fields(wire)
-    wire.instance_variable_get(:@field_objs).map { |field| !field.nil? }
+    objs = wire.instance_variable_get(:@field_objs) || Array.new(fill.for_class(wire.class).field_count)
+    objs.map { |field| !field.nil? }
   end
 
   let(:select_bytes) { [codes::SELECTOBJECT, 12, 0x8000_0005].pack("V3") }

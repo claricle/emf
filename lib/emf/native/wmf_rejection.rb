@@ -8,7 +8,8 @@ module Emf
     module WmfRejection
       Found = Struct.new(:codec, :reason, :offset, :function, :detail)
 
-      # Whole-input failures: FormatError with the message as is.
+      # Whole-input failures: FormatError with the message as is. 305 (Size) and 1801 (MaxRecord) are recovered, not
+      # rejected, and 404 is retired with them.
       INPUT = {
         201 => "truncated WMF placeable header",
         202 => "WMF placeable reserved field must be zero",
@@ -17,15 +18,13 @@ module Emf
         302 => "invalid WMF Type",
         303 => "invalid WMF HeaderSize",
         304 => "invalid WMF Version",
-        305 => "invalid WMF file Size",
-        306 => "WMF on-disk placeable handle must be zero",
-        1801 => "WMF MaxRecord does not match largest record"
+        306 => "WMF on-disk placeable handle must be zero"
       }.freeze
 
       # Record failures: ParseError "WMF <text> at offset <offset>". `%d` takes the numeric detail.
       RECORD = {
         402 => "truncated record header", 403 => "invalid record length %d",
-        404 => "data after EOF inside declared WMF Size", 405 => "missing EOF record", 406 => "invalid EOF length",
+        405 => "missing EOF record", 406 => "invalid EOF length",
         501 => "invalid fixed record length", 601 => "invalid state record length", 701 => "invalid font record length",
         801 => "invalid object record length",
         901 => "missing point array count", 902 => "truncated polygon counts", 903 => "invalid point count",
