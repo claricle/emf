@@ -12,10 +12,11 @@ module Emf
       work_units: 64 * 1024 * 1024
     }.freeze
 
-    # Rust layouts observed in the existing arm64-darwin25 emf-core artifact by
-    # lowered allocation ceilings. Other target layouts are not yet verified.
+    # Native accounting widths, checked by resource_budget_layout.rs. The font
+    # charge conservatively covers both 392- and 400-byte Rust layouts so budget
+    # admission is independent of compiler layout; native has a compile-time guard.
     LAYOUT = {
-      record_span: 336, diagnostic: 32, font_record: 392,
+      record_span: 336, diagnostic: 32, font_record: 400,
       poly_text_entry_a: 136, poly_text_entry_w: 136,
       poly_text_span: 32, tri_vertex: 16
     }.freeze

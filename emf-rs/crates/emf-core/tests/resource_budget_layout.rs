@@ -1,9 +1,9 @@
 //! Conformance for the layout-dependent allocation charges replayed by Ruby.
 //!
-//! These `repr(Rust)` sizes were observed in the arm64-darwin native artifact;
-//! they are not a stable ABI guarantee across compilers or targets. On supported
-//! 64-bit targets this test must fail if a layout changes, requiring the Ruby
-//! `ResourceBudget::LAYOUT` constants and native parity evidence to be updated.
+//! Most widths are exact native layouts mirrored by Ruby. The font charge is
+//! deliberately conservative: supported compilers use either 392 or 400 bytes.
+//! Its compile-time guard also prevents under-accounting in non-test builds.
+//! Other layout changes still require updating both backends and parity evidence.
 
 #[cfg(target_pointer_width = "64")]
 use emf_core::{Diagnostic, FontRecord, PolyTextEntry, RecordSpan, TriVertex};
@@ -15,7 +15,10 @@ use std::mem::size_of;
 fn native_allocation_layout_matches_ruby_resource_budget() {
     assert_eq!(size_of::<RecordSpan>(), 336, "RecordSpan layout changed");
     assert_eq!(size_of::<Diagnostic>(), 32, "Diagnostic layout changed");
-    assert_eq!(size_of::<FontRecord>(), 392, "FontRecord layout changed");
+    assert!(
+        size_of::<FontRecord>() <= 400,
+        "FontRecord exceeds its portable charge"
+    );
     assert_eq!(
         size_of::<PolyTextEntry<u8>>(),
         136,

@@ -25,6 +25,19 @@ RSpec.shared_examples "public budget admission" do |backend|
     end
   end
 
+  it "uses the portable font allocation boundary and preserves record bytes" do
+    bytes = minimal_resource_emf + resource_record(82, 104)
+    # Owned input (192), first record slot (336), portable font charge (400).
+    defaults = Emf::ResourceBudget::DEFAULT_LIMITS
+    stub_const("Emf::ResourceBudget::DEFAULT_LIMITS", defaults.merge(allocated_bytes: 927))
+    expect { Emf.parse(bytes) }.to raise_error(Emf::ResourceLimitError) { |error|
+      expect([error.resource, error.limit, error.actual]).to eq([:allocated_bytes, 927, 928])
+    }
+
+    stub_const("Emf::ResourceBudget::DEFAULT_LIMITS", defaults.merge(allocated_bytes: 928))
+    expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
+  end
+
   it "preserves native work-before-allocation refusal order" do
     stub_const("Emf::ResourceBudget::DEFAULT_LIMITS",
                Emf::ResourceBudget::DEFAULT_LIMITS.merge(allocated_bytes: 0, work_units: 0))
