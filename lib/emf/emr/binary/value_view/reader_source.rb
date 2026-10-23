@@ -72,11 +72,12 @@ module Emf
           end
 
           # `construct` for the top struct with each field taken from the wire
-          # when the shell has made it (its slot in @field_objs is set).
+          # when the shell has made it (its slot in @field_objs is set; a thin shell
+          # has no @field_objs and has made none).
           def mixed_construct
             klass, children = @layout.tree
             args = children.each_with_index.map do |(name, child), slot|
-              "(objs[#{slot}] ? #{construct(child, :wire, "wire.#{name}")} : #{construct(child, :bytes, '')})"
+              "(objs&.[](#{slot}) ? #{construct(child, :wire, "wire.#{name}")} : #{construct(child, :bytes, '')})"
             end
             "CLASSES[#{@layout.classes.index(klass)}].new(#{args.join(', ')})"
           end

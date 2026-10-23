@@ -32,8 +32,9 @@ module Emf
           #   [v0, v1, ...].pack("<frozen format>")
           # end
           source = <<~RUBY
+            # frozen_string_literal: true
             def pack(attrs, size: true)
-              seen = 0
+            #{gen_exact}  seen = 0
             #{body}#{gen_array}  #{FALLBACK} unless seen == attrs.size
 
             #{gen_size}  [#{values.join(', ')}].pack(#{format})

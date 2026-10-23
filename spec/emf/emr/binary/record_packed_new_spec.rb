@@ -42,7 +42,7 @@ RSpec.describe Emf::Emr::Binary::Record, ".new with a pack plan" do
         wire = klass.new(**full)
         wire.n_size = wire.num_bytes
         expect(wire.lazy_source.last).to be(false)
-        expect(wire.instance_variable_get(:@field_objs).count(&:itself)).to eq(0)
+        expect(wire.instance_variable_get(:@field_objs)).to be_nil
         expected = reference.call(klass, full).tap { |ref| ref.n_size = ref.num_bytes }
         expect(wire.to_binary_s).to eq(expected.to_binary_s)
         expect(view.call(wire)).to eq(view.call(expected))
