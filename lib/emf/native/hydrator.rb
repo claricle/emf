@@ -25,12 +25,8 @@ module Emf
 
       def call
         diagnostics = Diagnostics.new(@snapshot, @input)
-        table = @snapshot.table
         plus_candidates = []
-        records = Array.new(@snapshot.record_count) do |index|
-          plus_candidates << index if diagnostics.recovered?(table[(index * 5) + 1]) || table[(index * 5) + 3] >> 32 == 4
-          diagnostics.adapter_at(table[(index * 5) + 1]) || hydrate_at(index, table)
-        end
+        records = hydrate_records(diagnostics, plus_candidates)
         emf_plus = emf_plus_stream(diagnostics, plus_candidates)
         Model::Metafile.new(
           format: emf_plus.empty? ? :emf : :emf_plus, header: Header.new.call(@snapshot.header, @snapshot.raw_header), records: records,
@@ -41,16 +37,29 @@ module Emf
 
       private
 
-      def hydrate_at(index, table)
-        base = index * 5
-        offset = table[base + 1]
-        length = table[base + 2]
-        raise FormatError, "invalid native record span" unless length >= 8 && offset >= 0 && offset <= @input.bytesize - length
+      # One pass over the snapshot table. Records the Ruby parser reads from
+      # bytes alone become lazy wires straight from the table's own type,
+      # family and span; the rest take the field path.
+      def hydrate_records(diagnostics, plus_candidates)
+        table = @snapshot.table
+        recovering = diagnostics.recovering?
+        limit = @input.bytesize
+        Array.new(@snapshot.record_count) do |index|
+          base = index * 5
+          offset = table[base + 1]
+          length = table[base + 2]
+          type_family = table[base + 3]
+          plus_candidates << index if (recovered = recovering && diagnostics.recovered?(offset)) || type_family >> 32 == 4
+          adapter = diagnostics.adapter_at(offset) if recovered
+          next adapter if adapter
 
-        filled = FilledWire.for(table[base + 3], offset, length, @data)
-        return Model::Emr::Records::WireAdapter.lazy(source: filled, offset: offset) if filled
+          raise FormatError, "invalid native record span" unless length >= 8 && offset >= 0 && offset <= limit - length
 
-        hydrate_record(@snapshot.record(index), offset, length)
+          filled = FilledWire.for(type_family, offset, length, @data)
+          next Model::Emr::Records::WireAdapter.lazy(source: filled, offset: offset) if filled
+
+          hydrate_record(@snapshot.record(index), offset, length)
+        end
       end
 
       def hydrate_record(record, offset, length)

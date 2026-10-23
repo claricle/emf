@@ -69,4 +69,23 @@ RSpec.describe "Native filled wires" do
     expect(filled?(record)).to be(false)
     expect(record.wire).to be_a(Emf::Emr::Binary::Records::Raw)
   end
+
+  it "takes the type and span from the snapshot word without re-reading the record header" do
+    Emf::Native.backend
+    type = 37
+    size = Emf::Emr::Binary::FastFill.for(type).size
+    data = ("\0" * size).b.freeze
+    source = Emf::Native::FilledWire.for(type | (7 << 32), 0, size, data)
+    expect(source).to be_a(Emf::Native::FilledWire)
+    expect(source.type_id).to eq(type)
+    expect(source.length).to eq(size)
+  end
+
+  it "keeps recovered, raw-family and unknown-type words on the field path" do
+    Emf::Native.backend
+    data = ("\0" * 64).b.freeze
+    [37 | (0 << 32), 37 | (4 << 32), 37 | (200 << 32), 9999 | (7 << 32)].each do |word|
+      expect(Emf::Native::FilledWire.for(word, 0, 64, data)).to be_nil
+    end
+  end
 end

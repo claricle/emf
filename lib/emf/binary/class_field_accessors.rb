@@ -27,18 +27,20 @@ module Emf
       # The generic assignment; a class that can take one into the bytes it
       # is still made from overrides it.
       def assign_field_at(index, val)
-        instantiate_obj_at(index) if @field_objs[index].nil?
+        instantiate_obj_at(index) if @field_objs.nil? || @field_objs[index].nil?
         @field_objs[index].assign(val)
       end
 
       def define_class_accessors(klass, name, index)
         klass.define_method(name) do
-          instantiate_obj_at(index) if @field_objs[index].nil?
-          @field_objs[index]
+          @field_objs&.at(index) || begin
+            instantiate_obj_at(index)
+            @field_objs[index]
+          end
         end
         define_setter(klass, name, index)
         klass.define_method("#{name}?") do
-          instantiate_obj_at(index) if @field_objs[index].nil?
+          instantiate_obj_at(index) if @field_objs.nil? || @field_objs[index].nil?
           include_obj?(@field_objs[index])
         end
       end

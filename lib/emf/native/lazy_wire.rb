@@ -77,22 +77,21 @@ module Emf
 
       # Snapshot families whose records the Ruby backend's fillers read from
       # bytes alone; any other family keeps its own validation in the Hydrator.
-      FAMILIES = [2, 3, *5..32, *35..57, *60..86].to_h { |family| [family, true] }.freeze
+      FAMILIES = Array.new(87) { |family| [2, 3, *5..32, *35..57, *60..86].include?(family) }.freeze
       # The filler of each EMR type, indexed by type; types past the table have none.
       FILLERS = Array.new(128) { |type| Emr::Binary::FastFill.for(type) || Emr::Binary::FastFill.for_points(type) }.freeze
       private_constant :FAMILIES, :FILLERS
 
       # The source for the fixed-layout or point-array record the snapshot
-      # places at `offset` of the frozen `data`, or nil. Recovered (family 0,
-      # including a count that overruns the bytes) records and a header
-      # disagreeing with the span keep the field path. The caller has
-      # bounds-checked the span.
-      # `type_family` is the snapshot table word: type | family << 32.
+      # places at `offset` of the frozen `data`, or nil. `type_family` is the
+      # snapshot table word, type | family << 32. The snapshot takes the type
+      # and `length` from the record's own header, so they are not read again.
+      # Recovered (family 0, including a count that overruns the bytes)
+      # records keep the field path. The caller has bounds-checked the span.
       def self.for(type_family, offset, length, data)
         type = type_family & 0xFFFF_FFFF
         filler = FILLERS[type]
         return unless filler && FAMILIES[type_family >> 32] && length >= filler.size
-        return unless data.unpack1("Q<", offset: offset) == (type | (length << 32))
 
         new(filler, data, offset, length, type)
       end

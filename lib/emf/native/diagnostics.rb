@@ -23,6 +23,10 @@ module Emf
         @recovered = invalid_payload_offsets.to_h { |offset, type| [offset, recover(offset, type)] }
       end
 
+      def recovering?
+        !@recovered.empty?
+      end
+
       def recovered?(offset)
         @recovered.key?(offset)
       end

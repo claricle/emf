@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "pack_plan_check"
+require_relative "pack_plan_exact"
 require_relative "pack_plan_generate"
 require_relative "pack_plan_values"
 
@@ -23,6 +24,7 @@ module Emf
       class PackPlan
         include PackPlanCheck
         include PackPlanValues
+        include PackPlanExact
         include PackPlanGenerate
 
         LEAVES = {
@@ -50,6 +52,7 @@ module Emf
           @defaults = []
           @tree = {}
           @array = nil
+          @plain_leaves = true
           template.field_names.each { |name| @tree[name] = node_of(template.public_send(name), name) }
           @format = @leaves.map(&:first).join
           @lows = @leaves.map { |leaf| leaf[1] }.freeze
@@ -95,6 +98,7 @@ module Emf
           return branch_of(field) if field.respond_to?(:field_names)
 
           directive, low, high = LEAVES.fetch(field.class.name)
+          @plain_leaves &&= !field.has_parameter?(:value)
           @leaves << [directive, low, high]
           @defaults << field.value
           Leaf.new(@leaves.size - 1)
@@ -112,8 +116,17 @@ module Emf
           raise ArgumentError, "array is not the last field" unless @tree.keys.last == @array_name
 
           @point_class, @coord_directive, @coord_low, @coord_high, @coord_bytes, count_name = filler.points_layout
+          @count_name = count_name
           @count = @tree.fetch(count_name).index
           @points_format = "#{@format}#{@coord_directive}*"
+          @plain_leaves &&= plain_point?
+        end
+
+        # A point is a struct of x and y, each a plain stored value, so a
+        # point's coordinates can be read from its field objects.
+        def plain_point?
+          point = @point_class.new
+          point.field_names == %i[x y] && %i[x y].none? { |name| point.public_send(name).has_parameter?(:value) }
         end
 
         # The wire read back from the bytes must be the wire BinData built,

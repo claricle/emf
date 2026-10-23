@@ -11,7 +11,7 @@ module Emf
         # leaf set alone, and for every leaf set at once.
         def verified?(filler)
           klass = filler.wire_class
-          cases = [{}] + each_leaf_attrs + [all_leaf_attrs]
+          cases = [{}] + each_leaf_attrs + [all_leaf_attrs, exact_attrs, exact_attrs(structs: true)]
           cases << { @array_name => [{ x: 3, y: -4 }, { x: 5, y: 6 }] } if @array
           return false unless pack({})
 
@@ -37,6 +37,19 @@ module Emf
 
             { name => sample_value(node, 1) }
           end
+        end
+
+        # Every field but n_size, the shape the generated `pack` takes first;
+        # `structs` gives nested structs and points as instances.
+        def exact_attrs(structs: false)
+          attrs = @tree.reject { |name, _| name == :n_size || name.equal?(@array_name) }
+                       .to_h { |name, node| [name, sample_value(node, 7)] }
+          attrs.each { |name, value| attrs[name] = @tree[name].klass.new(value) if structs && value.is_a?(Hash) }
+          return attrs unless @array
+
+          points = [{ x: 3, y: -4 }, { x: 5, y: 6 }]
+          points = points.map { |point| @point_class.new(point) } if structs
+          attrs.merge(@array_name => points, @count_name => 2)
         end
 
         def all_leaf_attrs
