@@ -11,5 +11,6 @@ module Emf
     autoload :EscapeViews, "emf/wmf/escape_views"
     autoload :EmbeddedEmf, "emf/wmf/embedded_emf"
     autoload :Evidence, "emf/wmf/evidence"
+    autoload :Recovery, "emf/wmf/recovery"
   end
 end

@@ -86,6 +86,8 @@ module Emf
       def unknown_function(context)
         context.records.each_with_index.filter_map do |record, index|
           next unless record.is_a?(Emf::Model::Wmf::Records::UnknownRecord)
+          # A specified text function kept verbatim for its negative StringLength is reported by wmf.text.negative_length.
+          next if Emf::Wmf::Binary::TYPED_FUNCTIONS.include?(record.type_id.to_i & 0xFF)
 
           at(record, index, format("record function 0x%04X is not a specified MS-WMF record type", record.type_id.to_i))
         end
@@ -124,7 +126,9 @@ module Emf
        "NumberOfMembers is reserved and no reader consults it", :warning],
       ["wmf.placeable.handle", :placeable_handle, "MS-WMF 2.3.2.3 META_PLACEABLE (HWmf)", :placeable_handle,
        "readers ignore the handle of an in-file placeable header"],
-      ["wmf.placeable.checksum", :placeable_checksum, "MS-WMF 2.3.2.3 META_PLACEABLE (Checksum)", :placeable_checksum, nil],
+      ["wmf.placeable.checksum", :placeable_checksum, "MS-WMF 2.3.2.3 META_PLACEABLE (Checksum)", :placeable_checksum,
+       "readers ignore the placeable checksum; the parser keeps the declared value and records the mismatch in " \
+       "Metafile#errors (seen in LibreOffice test files)"],
       ["wmf.eof.missing", :eof_missing, "MS-WMF 2.3.2.1 META_EOF", :eof_missing, nil],
       ["wmf.eof.not_last", :eof_not_last, "MS-WMF 2.3.2.1 META_EOF", :eof_not_last, nil],
       ["wmf.record.unknown_function", :unknown_function, "MS-WMF 2.1.1.1 RecordType Enumeration; " \

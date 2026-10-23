@@ -2,7 +2,7 @@
 
 module Emf
   module Wmf
-    # Neutral evidence for a WMF input the parser rejected, and for the two header drifts it recovers from. Both
+    # Neutral evidence for a WMF input the parser rejected, and for the header drifts and record shapes it recovers from. Both
     # backends choose the failing check (the Ruby parser by its own raise, the native backend by its
     # first-rejection reason) and the record offset;
     # the declared and actual values are then read from the input bytes the same way for both.
@@ -77,11 +77,18 @@ module Emf
         1801 => "WMF header MaxRecord is %<declared>d words but the largest record is %<actual>d words"
       }.freeze
 
+      # Recovered by Wmf::Recovery, the placeable reader and Binary.validate_objects: the model is kept and the
+      # evidence is a ParseError on Metafile#errors. RETIRED_REASONS can no longer be raised at all; 701 (font), 801
+      # (object record) and 1704 (a fill or frame region naming a non-region) are still raised for the shapes that
+      # cannot be recovered. Reference reasons are 1702 (no live object) and 1704 (a non-region for a clip, paint or
+      # invert record).
+      RETIRED_REASONS = [203, 406, 1003, 1702].freeze
+
       INPUT_REASONS = [101, 201, 202, 203, 301, 302, 303, 304, 305, 306, 1801].freeze
       REFERENCE_REASONS = (1702..1707).to_a.freeze
       WORD_BYTES = 2
 
-      MESSAGE_PATTERNS = REASONS.except(*DRIFT_REASONS).to_h do |reason, (_check, text)|
+      MESSAGE_PATTERNS = REASONS.except(*DRIFT_REASONS, *RETIRED_REASONS).to_h do |reason, (_check, text)|
         pattern = Regexp.escape(text).sub("%d", "(\\d+)")
         [reason, INPUT_REASONS.include?(reason) ? /\A#{pattern}\z/ : /\AWMF #{pattern} at offset (\d+)\z/]
       end.freeze
@@ -109,6 +116,27 @@ module Emf
                          message: format(DRIFT_MESSAGES.fetch(reason), declared: evidence.declared, actual: evidence.actual))
                     .with_evidence(evidence)
         end
+      end
+
+      # The ParseError (with evidence) for a recovered `reason`. A whole-input reason (203) carries the evidence
+      # offset and no record; a record reason carries the record's offset and function.
+      def recovered_error(reason, bytes, offset, function = nil, detail = nil)
+        evidence = build(reason, bytes, offset, detail)
+        text = REASONS.fetch(reason).last.sub("%d") { detail.to_s }
+        message = INPUT_REASONS.include?(reason) ? text : "WMF #{text} at offset #{offset}"
+        ParseError.new(offset: evidence.offset, record_code: function, message: message).with_evidence(evidence)
+      end
+
+      # Callback for Binary.validate_objects: appends the recovered reference errors to `errors`.
+      def reference_recovery(bytes, errors)
+        lambda do |record, reason, index|
+          errors << recovered_error(reason, bytes, record.offset, record.type_id, index)
+        end
+      end
+
+      # Recovered errors in input order (stable for equal offsets), so both backends list them identically.
+      def ordered(errors)
+        errors.each_with_index.sort_by { |error, index| [error.offset.to_i, index] }.map(&:first)
       end
 
       # The one evidence builder both backends use once they know the reason and (for record failures) the offset.

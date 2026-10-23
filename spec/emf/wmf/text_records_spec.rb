@@ -113,17 +113,24 @@ RSpec.describe "WMF text records" do
     end
   end
 
-  it "bounds signed counts before reading strings or allocating spacing arrays" do
-    invalid = [text_record(0x0521, [-1, 0, 0].pack("s<3")),
-               text_record(0x0521, [32_767, 0, 0].pack("s<3")),
-               text_record(0x0A32, [0, 0, -1, 0].pack("s<3v")),
-               text_record(0x0A32, [0, 0, 32_767, 0].pack("s<3v"))]
-    invalid.each do |raw|
+  it "rejects a count larger than the record before reading strings or allocating spacing arrays" do
+    [text_record(0x0521, [32_767, 0, 0].pack("s<3")), text_record(0x0A32, [0, 0, 32_767, 0].pack("s<3v"))].each do |raw|
       expect { Emf.parse(geometry_file([raw])) }.to raise_error(Emf::ParseError) do |error|
         expect(error.offset).to eq(18)
         expect(error.record_code).to eq(raw.byteslice(4, 2).unpack1("v"))
-        expect(error.message).to match(/negative text length|truncated text string/)
+        expect(error.message).to match(/truncated text string/)
       end
+    end
+  end
+
+  it "keeps a negative count's record verbatim and records it, instead of rejecting" do
+    [text_record(0x0521, [-1, 0, 0].pack("s<3")), text_record(0x0A32, [0, 0, -1, 0].pack("s<3v"))].each do |raw|
+      bytes = geometry_file([raw])
+      metafile = Emf.parse(bytes)
+      expect(metafile.records.first).to have_attributes(class: Emf::Model::Wmf::Records::UnknownRecord, raw_bytes: raw)
+      expect(metafile.errors.map { |error| [error.evidence.check, error.offset, error.record_code] })
+        .to eq([[:text_length_negative, 18, raw.byteslice(4, 2).unpack1("v")]])
+      expect(Emf.serialize(metafile)).to eq(bytes)
     end
   end
 

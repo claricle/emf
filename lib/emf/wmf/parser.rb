@@ -8,26 +8,31 @@ module Emf
       def call(bytes)
         raise FormatError, "WMF input too large" if bytes.bytesize > Binary::MAX_INPUT_BYTES
 
-        placeable, start = read_placeable(bytes)
+        errors = []
+        placeable, start = read_placeable(bytes, errors)
         header = read_header(bytes, start, placeable)
-        records = read_records(bytes, start + Binary::HEADER_BYTES, bytes.bytesize)
-        Binary.validate_objects(records, header.number_of_objects) do |record, message|
+        records = read_records(bytes, start + Binary::HEADER_BYTES, bytes.bytesize, errors)
+        Binary.validate_objects(records, header.number_of_objects,
+                                recovered: Evidence.reference_recovery(bytes, errors)) do |record, message|
           parse_error(record.offset, record.type_id, message)
         end
         # The walk is bounded by the real input and ends at the first EOF record, so a header Size or MaxRecord that
-        # disagrees with the records is recovered: the model is kept and the drift is recorded in errors.
+        # disagrees with the records is recovered, like the shapes of Recovery and the object references that
+        # name nothing usable: the model is kept and each departure is recorded in errors.
         stop = records.last.offset + (records.last.declared_size_words * 2)
-        Model::Metafile.new(format: :wmf, header: header, records: records, errors: Evidence.drift_errors(bytes),
+        Model::Metafile.new(format: :wmf, header: header, records: records,
+                            errors: Evidence.ordered(errors + Evidence.drift_errors(bytes)),
                             trailing: bytes.byteslice(stop..).to_s)
       end
 
-      def read_placeable(bytes)
+      def read_placeable(bytes, errors)
         return [nil, 0] unless bytes.bytesize >= 4 && bytes.unpack1("V") == Binary::PLACEABLE_KEY
         raise FormatError, "truncated WMF placeable header" if bytes.bytesize < Binary::PLACEABLE_BYTES
 
         _key, handle, left, top, right, bottom, inch, reserved, checksum = bytes.unpack("Vvs<4vVv")
         raise FormatError, "WMF placeable reserved field must be zero" unless reserved.zero?
-        raise FormatError, "WMF placeable checksum mismatch" unless checksum == Binary.checksum(bytes.byteslice(0, 20))
+
+        errors << Evidence.recovered_error(203, bytes, nil) unless checksum == Binary.checksum(bytes.byteslice(0, 20))
 
         header = Model::Wmf::PlaceableHeader.new(handle: handle, left: left, top: top, right: right, bottom: bottom,
                                                  inch: inch, checksum: checksum)
@@ -47,7 +52,7 @@ module Emf
                                max_record_words: max_record, number_of_members: members, placeable: placeable)
       end
 
-      def read_records(bytes, offset, limit)
+      def read_records(bytes, offset, limit, errors)
         records = []
         while offset < limit
           parse_error(offset, nil, "record limit exceeded") if records.length >= Binary::MAX_RECORDS
@@ -55,7 +60,9 @@ module Emf
           words, function = bytes.byteslice(offset, 6).unpack("Vv")
           parse_error(offset, function, "invalid record length #{words}") if words < 3 || words > (limit - offset) / 2
           raw = bytes.byteslice(offset, words * 2)
-          record = decode_record(raw, function, offset).declare_size(words)
+          record, reason = Recovery.record(raw, function, offset)
+          errors << Evidence.recovered_error(reason, bytes, offset, function) if reason
+          record = (record || decode_record(raw, function, offset)).declare_size(words)
           records << record
           offset += raw.bytesize
           return records if record.is_a?(Model::Wmf::Records::Eof)
@@ -64,10 +71,8 @@ module Emf
       end
 
       def decode_record(raw, function, offset)
-        if function.zero?
-          parse_error(offset, function, "invalid EOF length") unless raw.bytesize == 6
-          return Model::Wmf::Records::Eof.new(offset: offset)
-        end
+        return Model::Wmf::Records::Eof.new(offset: offset) if function.zero?
+
         return decode_prefix_record(raw, function, offset) if Binary::PREFIX_FUNCTIONS.include?(function & 0xFF)
         return decode_object(raw, function, offset) if Binary::OBJECT_RECORDS.key?(function & 0xFF)
         if Binary::TEXT_FUNCTIONS.include?(function & 0xFF)

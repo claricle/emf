@@ -80,8 +80,9 @@ RSpec.describe "WMF object records" do
     bytes = object_file([selector], capacity: 0)
     expect(Emf.parse(bytes).records.first.object_index).to eq(0x8007)
     expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
-    expect { Emf.parse(object_file([object_record(0x01F0, [0x8007].pack("v"))], capacity: 0)) }
-      .to raise_error(Emf::ParseError, /invalid object reference/)
+    # Deleting a stock selector names no live table object. That reference is ignored and recorded (1702), not rejected.
+    deleted = Emf.parse(object_file([object_record(0x01F0, [0x8007].pack("v"))], capacity: 0))
+    expect(deleted.errors.map { |error| error.evidence.check }).to eq([:object_reference_invalid])
   end
 
   it "rejects typed object functions disguised as opaque records" do
@@ -136,28 +137,39 @@ RSpec.describe "WMF object records" do
     expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
   end
 
-  it "rejects nonexistent, deleted and out-of-capacity handles with the record location" do
+  it "recovers a reference to a nonexistent or deleted object: the record is kept and the reference recorded" do
     [[[], select_zero, 0], [[pen], object_record(0x012D, [1].pack("v")), 1],
      [[pen, delete_zero], select_zero, 1], [[pen, delete_zero], delete_zero, 1],
-     [[], delete_zero, 2], [[], pen, 0], [[pen], brush, 1]].each do |prefix, invalid, capacity|
+     [[], delete_zero, 2]].each do |prefix, invalid, capacity|
+      metafile = Emf.parse(object_file(prefix + [invalid], capacity: capacity))
+      expect(metafile.records.size).to eq(prefix.size + 2)
+      expect(metafile.errors.size).to eq(1)
+      error = metafile.errors.first
+      expect([error.evidence.check, error.offset, error.record_code]).to eq([:object_reference_invalid, 18 + prefix.sum(&:bytesize),
+                                                                             invalid.byteslice(4, 2).unpack1("v")])
+    end
+  end
+
+  it "rejects an out-of-capacity handle with the record location" do
+    [[[], pen, 0], [[pen], brush, 1]].each do |prefix, invalid, capacity|
       bytes = object_file(prefix + [invalid], capacity: capacity)
       expect { Emf.parse(bytes) }.to raise_error(Emf::ParseError) do |error|
         expect(error.offset).to eq(18 + prefix.sum(&:bytesize))
         expect(error.record_code).to eq(invalid.byteslice(4, 2).unpack1("v"))
-        expect(error.message).to match(/object (reference|table capacity)/)
+        expect(error.message).to match(/object table capacity/)
       end
     end
   end
 
-  it "rejects malformed object payload lengths before object-table processing" do
+  it "rejects object payloads shorter than their layout and recovers ones with surplus bytes" do
     [[0x02FA, pen_payload], [0x02FC, brush_payload], [0x012D, [0].pack("v")], [0x01F0, [0].pack("v")]].each do |function, payload|
-      [payload.byteslice(0...-2), "#{payload}\x00\x00"].each do |invalid|
-        expect { Emf.parse(object_file([object_record(function, invalid)])) }.to raise_error(Emf::ParseError) do |error|
-          expect(error.offset).to eq(18)
-          expect(error.record_code).to eq(function)
-          expect(error.message).to include("invalid object record length")
-        end
+      expect { Emf.parse(object_file([object_record(function, payload.byteslice(0...-2))])) }.to raise_error(Emf::ParseError) do |error|
+        expect(error.offset).to eq(18)
+        expect(error.record_code).to eq(function)
+        expect(error.message).to include("invalid object record length")
       end
+      surplus = Emf.parse(object_file([object_record(function, "#{payload}\x00\x00")]))
+      expect(surplus.errors.map { |error| error.evidence.check }).to include(:object_record_length_invalid)
     end
   end
 
@@ -165,7 +177,7 @@ RSpec.describe "WMF object records" do
     metafile = Emf.parse(object_file([pen, brush, select_zero, delete_zero]))
     [[0, :pen_style, -1], [0, :width_x, 32_768], [0, :width_y, -32_769], [0, :color_ref, 0x100000000],
      [1, :brush_style, 65_536], [1, :color_ref, -1], [1, :brush_hatch, 65_536],
-     [2, :object_index, -1], [2, :object_index, 2], [3, :object_index, 65_536]].each do |index, field, value|
+     [2, :object_index, -1], [3, :object_index, 65_536]].each do |index, field, value|
       record = metafile.records[index]
       original = record.public_send(field)
       record.public_send("#{field}=", value)

@@ -4,7 +4,8 @@
 # records (MS-WMF 2.3.1 bitmap, 2.3.3 drawing, 2.3.4 object, 2.3.5 state and 2.3.6 escape
 # records). Only values the model exposes are judged: records the model keeps opaque
 # (UnknownRecord, escape subtypes without a view, undecodable bytes) are preserved and never
-# reported, and no rule here needs the declared record size.
+# reported, except a text record the parser kept verbatim because its StringLength is negative, and no rule
+# here needs the declared record size.
 return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
 
 module Emf
@@ -52,6 +53,19 @@ module Emf
           elsif (count + record.padding.bytesize).odd?
             "#{name(record)} string and padding take #{count + record.padding.bytesize} bytes, MUST be word aligned"
           end
+        end
+      end
+
+      # A text record with a negative StringLength cannot be framed as text, so the parser keeps it as an
+      # UnknownRecord (Wmf::Recovery); the sign is read from its own bytes.
+      def text_negative(context)
+        context.records.each_with_index.filter_map do |record, index|
+          next unless record.is_a?(R::UnknownRecord) && Emf::Wmf::Recovery.record(record.raw_bytes, record.type_id, nil)&.last == 1003
+
+          count_at = Emf::Wmf::Recovery::TEXT_COUNTS.fetch(record.type_id & 0xFF).first
+          { message: "#{record.type_id & 0xFF == 0x32 ? 'ExtTextOut' : 'TextOut'} StringLength is " \
+                     "#{record.raw_bytes.byteslice(count_at, 2).unpack1('s<')}, MUST NOT be negative",
+            offset: record.offset, record_index: index + 1, record_type: record.type_id.to_i }
         end
       end
 
@@ -190,6 +204,9 @@ module Emf
        :buffer_layout, WmfBufferRules::PRESERVED],
       ["wmf.text.length", :text_length, "MS-WMF 2.3.3.20 META_TEXTOUT, 2.3.3.5 META_EXTTEXTOUT (StringLength, String)",
        :string_length, nil],
+      ["wmf.text.negative_length", :text_negative,
+       "MS-WMF 2.3.3.20 META_TEXTOUT, 2.3.3.5 META_EXTTEXTOUT (StringLength, String)", :string_length,
+       "the parser keeps the record verbatim as an opaque record; readers (LibreOffice) import the file"],
       ["wmf.text.spacing_count", :text_spacing, "MS-WMF 2.3.3.5 META_EXTTEXTOUT (Dx)", :array_counts, nil],
       ["wmf.text.rectangle_options", :text_rectangle, "MS-WMF 2.3.3.5 META_EXTTEXTOUT (fwOpts, Rectangle)", :field_dependency,
        "readers ignore a Rectangle the options do not select"],

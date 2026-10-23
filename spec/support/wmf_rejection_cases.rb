@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # One crafted WMF input per rejection reason the native backend reports, keyed by reason code. Reasons that need
-# a 200 MiB input (101) or a million records (401) are covered by the Rust tests instead.
+# a 200 MiB input (101) or a million records (401) are covered by the Rust tests instead. Reasons 203, 406, 1003 and
+# 1702 are retired (recovered, see WmfRecovery), so they have no case.
 module WmfRejectionCases
   module_function
 
@@ -51,20 +52,19 @@ module WmfRejectionCases
     plain = wmf([eof])
     tweak = ->(at, value) { plain.dup.tap { |bytes| bytes.setbyte(at, value) } }
     { 201 => "\xD7\xCD\xC6\x9A\x01\x02\x03".b, 202 => placeable(reserved: 1) + plain,
-      203 => placeable(checksum: 0xFFFF) + plain, 301 => "\x01\x00\x09\x00\x00\x03".b, 302 => tweak.call(0, 3),
+      301 => "\x01\x00\x09\x00\x00\x03".b, 302 => tweak.call(0, 3),
       303 => tweak.call(2, 8), 304 => tweak.call(5, 2),
       306 => placeable(handle: 7) + tweak.call(0, 2) }
   end
 
   def framing
     bad_length = wmf([eof]).tap { |bytes| bytes.setbyte(18, 2) }
-    { 402 => header(11) + "\0\0\0\0".b, 403 => bad_length, 405 => wmf([rec(0x1E)]),
-      406 => alone(0, words(0, 0)) }
+    { 402 => header(11) + "\0\0\0\0".b, 403 => bad_length, 405 => wmf([rec(0x1E)]) }
   end
 
   def payload
-    { 501 => alone(0x14, words(0, 0, 0, 0)), 601 => alone(0x01, words(0)), 701 => alone(0xFB, "\0".b * 20),
-      801 => alone(0x2D, words(0, 0)) }.merge(points, text, palette_region, brush_bitmap, geometry_escape)
+    { 501 => alone(0x14, words(0, 0, 0, 0)), 601 => alone(0x01, words(0)), 701 => alone(0xFB, "\0".b * 10),
+      801 => alone(0x2D, "".b) }.merge(points, text, palette_region, brush_bitmap, geometry_escape)
   end
 
   def points
@@ -74,7 +74,7 @@ module WmfRejectionCases
 
   def text
     { 1001 => alone(0x21, "\0".b * 4), 1002 => alone(0x32, words(0, 0, 0, 2)),
-      1003 => alone(0x21, words(0xFFFF, 0, 0)), 1004 => alone(0x21, words(10, 0, 0)),
+      1004 => alone(0x21, words(10, 0, 0)),
       1005 => alone(0x32, "#{words(0, 0, 4, 0)}abcd#{words(0)}") }
   end
 
@@ -99,8 +99,8 @@ module WmfRejectionCases
     pen = rec(0xFA, words(0, 0, 0, 0, 0))
     brush = rec(0xFC, words(0, 0, 0, 0))
     region = rec(0xFF, words(0, 6, 0, 0, 22, 0, 0, 0, 0, 0, 0))
-    { 1701 => object_world(0, pen), 1702 => object_world(1, rec(0x2D, words(5))),
-      1703 => object_world(1, brush, rec(0x34, words(0))), 1704 => object_world(1, brush, rec(0x2A, words(0))),
+    { 1701 => object_world(0, pen), 1703 => object_world(1, brush, rec(0x34, words(0))),
+      1704 => object_world(2, brush, brush, rec(0x28, words(0, 1))),
       1705 => object_world(1, rec(0x28, words(0, 0))), 1706 => object_world(2, region, rec(0x28, words(0, 1))),
       1707 => object_world(2, region, pen, rec(0x28, words(0, 1))) }
   end

@@ -23,7 +23,7 @@ module WmfResilience
   end
 
   # Parsed means a document that serializes back to the input; recovered means a document that carries parse errors
-  # and serializes to a repaired file whose reparse has none, with the same records; rejected means an Emf::Error.
+  # and serializes to a repaired file whose reparse gains no error, with the same records; rejected means an Emf::Error.
   # Nothing else is defined.
   def classify(bytes)
     require "emf"
@@ -45,7 +45,10 @@ module WmfResilience
     repaired = Emf.serialize(document)
     reparsed = Emf.parse(repaired)
     same_records = record_state(reparsed) == record_state(document)
-    fixed = reparsed.errors.empty? && Emf.serialize(reparsed) == repaired && same_records
+    # Drift and the checksum are repaired; a record kept verbatim (a negative text length) keeps its error on reparse.
+    # A reparse may keep an error the input had, never gain one.
+    kept = reparsed.errors.map { |error| error.evidence.check } - document.errors.map { |error| error.evidence.check }
+    fixed = kept.empty? && Emf.serialize(reparsed) == repaired && same_records
     { "outcome" => "recovered", "round_trip" => fixed ? "ok" : "bytes_changed" }
   end
 

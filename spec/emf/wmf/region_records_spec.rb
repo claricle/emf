@@ -137,14 +137,26 @@ RSpec.describe "WMF region and clipping records" do
         bytes = native_wmf_bytes([create, select, delete, create, select], capacity: 1)
         expect(Emf.serialize(Emf.parse(bytes))).to eq(bytes)
         expect { Emf.parse(native_wmf_bytes([create, create], capacity: 1)) }.to raise_error(Emf::ParseError)
-        consumers.each_value do |function, body|
+        # Fill and frame name a brush too, so a bad reference there stays rejected. A clip, paint or invert record with
+        # a dead or non-region reference is recovered: the record is kept and the reference recorded (1702, 1704).
+        recovered = { [] => :object_reference_invalid, [create, brush, delete] => :object_reference_invalid,
+                      [brush, create] => :object_reference_not_region }
+        brush_consumers = %i[FillRegion FrameRegion]
+        consumers.each do |name, (function, body)|
           record = native_wmf_record(function, body)
-          expect { Emf.parse(native_wmf_bytes([record])) }.to raise_error(Emf::ParseError)
-          expect { Emf.parse(native_wmf_bytes([create, brush, delete, record])) }.to raise_error(Emf::ParseError)
-          expect { Emf.parse(native_wmf_bytes([brush, create, record])) }.to raise_error(Emf::ParseError)
+          recovered.each do |prefix, check|
+            file = native_wmf_bytes([*prefix, record])
+            if brush_consumers.include?(name)
+              expect { Emf.parse(file) }.to raise_error(Emf::ParseError), "#{name} after #{prefix.size} records"
+            else
+              expect(Emf.parse(file).errors.map { |error| error.evidence.check }).to eq([check]), "#{name} after #{prefix.size} records"
+              expect(Emf.serialize(Emf.parse(file))).to eq(file)
+            end
+          end
         end
         expect { Emf.parse(native_wmf_bytes([create, create, native_wmf_record(0x0228, fill_indices)])) }.to raise_error(Emf::ParseError)
-        expect { Emf.parse(native_wmf_bytes([create, native_wmf_record(0x012C, stock_index)])) }.to raise_error(Emf::ParseError)
+        stock = Emf.parse(native_wmf_bytes([create, native_wmf_record(0x012C, stock_index)]))
+        expect(stock.errors.map { |error| error.evidence.check }).to eq([:object_reference_invalid])
       end
 
       it "rejects malformed nested structures and truncated fixed prefixes" do
