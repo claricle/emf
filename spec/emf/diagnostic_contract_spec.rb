@@ -7,7 +7,7 @@ require_relative "../support/native_library_context"
 RSpec.describe "public parser diagnostics" do
   include DiagnosticContractSupport
 
-  let(:bytes) { File.binread(Emf::SpecSupport::FixturePath.fixture("diagnostics", "recovery.emf")) }
+  let(:bytes) { File.binread(Emf::SpecSupport::FixturePath.fixture("diagnostics", "recovery.bin")) }
   let(:header_size) { bytes.unpack1("V", offset: 4) }
   let(:expected) do
     [

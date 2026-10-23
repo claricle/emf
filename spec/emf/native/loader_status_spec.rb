@@ -20,6 +20,20 @@ RSpec.describe Emf::Native::Loader do
     allow(error_free).to receive(:call)
   end
 
+  it "rejects an incompatible ABI before resolving its operation symbols" do
+    library = double("library")
+    version = instance_double(Fiddle::Function, call: 9)
+    allow(Fiddle).to receive(:dlopen).with("wrong-abi").and_return(library)
+    allow(library).to receive(:[]).with("emf_abi_version").and_return(123)
+    allow(library).to receive(:[]).with("emf_parse").and_raise(Fiddle::DLError, "missing operation symbol")
+    allow(Fiddle::Function).to receive(:new)
+      .with(123, [], Fiddle::TYPE_INT).and_return(version)
+
+    expect { described_class.new("wrong-abi") }
+      .to raise_error(Emf::Native::Unavailable, "native backend ABI version mismatch (expected 1)")
+    expect(library).not_to have_received(:[]).with("emf_parse")
+  end
+
   # Numeric statuses are the public contract in emf-ffi/include/emf.h.
   { 1 => Emf::Error, 2 => Emf::FormatError,
     4 => Emf::SerializeError, 5 => Emf::Error, 6 => Emf::Error,
