@@ -28,4 +28,5 @@ Gem::Specification.new do |spec|
   spec.require_paths = %w[lib]
 
   spec.add_dependency "bindata", "~> 2.4"
+  spec.add_dependency "fiddle", "~> 1.1"
 end
