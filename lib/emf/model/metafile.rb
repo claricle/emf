@@ -5,17 +5,25 @@ module Emf
     class Metafile
       include Enumerable
 
-      def initialize(format:, header:, records:, errors: [], emf_plus: nil, trailing: "", emf_plus_source: nil)
+      def initialize(format:, header:, records:, errors: [], emf_plus: nil, trailing: "", emf_plus_source: nil, diagnostics: [])
         @format = format
         @header = header
         @records = records.freeze
         @errors = errors.freeze
+        @diagnostics = diagnostics.dup.freeze
         @emf_plus = emf_plus
         @trailing = trailing.freeze
         @emf_plus_source = emf_plus_source
       end
 
-      attr_reader :format, :header, :records, :errors, :emf_plus, :trailing
+      attr_reader :format, :header, :records, :errors, :emf_plus, :trailing, :diagnostics
+
+      # Return a new view while retaining backend-specific lazy sources.
+      def with_diagnostics(diagnostics)
+        copy = dup
+        copy.instance_variable_set(:@diagnostics, diagnostics.dup.freeze)
+        copy
+      end
 
       def each(&block)
         return to_enum unless block
