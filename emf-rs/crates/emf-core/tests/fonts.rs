@@ -282,10 +282,10 @@ fn extended_font_fields_are_semantic_and_lossless() {
 fn portable_font_allocation_boundaries_preserve_record_bytes() {
     use emf_core::{LimitKind, ParseFailure};
 
-    for size in [92, 320, 356, 364, 420] {
+    for size in [92_usize, 320, 356, 364, 420] {
         let mut bytes = document(size);
         bytes.truncate(88 + 12 + size);
-        let axes = if size >= 356 { size - 356 } else { 0 };
+        let axes = size.saturating_sub(356);
         // Owned input, first record slot, portable font charge, design axes.
         let expected = bytes.len() + 336 + 400 + axes;
         let mut limits = ParseLimits {
