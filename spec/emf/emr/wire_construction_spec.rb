@@ -112,10 +112,40 @@ RSpec.describe Emf::Emr::Binary::Record do
       expect(klass.new.snapshot).to eq(i_type: 0, n_size: 0, ih_object: 0)
     end
 
-    it "builds keyword calls from the FastFill template and writes with its pack" do
+    it "builds keyword calls as a packed shell and writes its bytes" do
+      filler = fast.for_class(klass)
+      allow(filler).to receive(:build_packed).and_call_original
+      wire = klass.new(ih_object: 5)
+      expect(filler).to have_received(:build_packed).with({ ih_object: 5 })
+      expect(wire.to_binary_s).to eq([0, 0, 5].pack("V3"))
+    end
+
+    it "appends a built shell's bytes without a copy, patching n_size only when it was changed" do
+      adapter_class = Emf::Model::Emr::Records::WireAdapter
+      wire = klass.new(ih_object: 5)
+      untouched = +"".b
+      expect(wire.append_built_to?(untouched)).to be(true)
+      expect(untouched).to eq(wire.to_binary_s)
+
+      wire.n_size = 12
+      patched = +"".b
+      adapter_class.new(wire: wire).append_to(patched)
+      expect(patched).to eq(wire.to_binary_s)
+      expect(patched.unpack1("V", offset: 4)).to eq(12)
+
+      wire.ih_object = 9
+      edited = +"".b
+      expect(wire.append_built_to?(edited)).to be(false)
+      expect(edited).to be_empty
+      adapter_class.new(wire: wire).append_to(edited)
+      expect(edited.unpack("V*")).to eq([0, 12, 9])
+    end
+
+    it "builds from the FastFill template, and packs the wire, once a field is edited" do
       filler = fast.for_class(klass)
       allow(filler).to receive(:build).and_call_original
       allow(filler).to receive(:pack).and_call_original
+      allow(filler).to receive(:pack_plan).and_return(nil)
       wire = klass.new(ih_object: 5)
       wire.to_binary_s
       expect(filler).to have_received(:build).with({ ih_object: 5 })

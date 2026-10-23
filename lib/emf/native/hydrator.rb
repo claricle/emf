@@ -45,7 +45,7 @@ module Emf
         base = index * 5
         offset = table[base + 1]
         length = table[base + 2]
-        raise FormatError, "invalid native record span" unless length >= 8 && (0..(@input.bytesize - length)).cover?(offset)
+        raise FormatError, "invalid native record span" unless length >= 8 && offset >= 0 && offset <= @input.bytesize - length
 
         filled = FilledWire.for(table[base + 3], offset, length, @data)
         return Model::Emr::Records::WireAdapter.lazy(source: filled, offset: offset) if filled

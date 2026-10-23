@@ -8,6 +8,9 @@ module Emf
     # reads the bytes directly. Materialising reads the span with the same
     # FastFill the eager parse uses, so the wire is the one a parse makes.
     class FilledRecord
+      EMPTY_SUFFIX = "".b.freeze
+      private_constant :EMPTY_SUFFIX
+
       # The source for the record at `offset` of the frozen binary `data`,
       # or nil when it needs the eager parse: no fixed-layout filler, a span
       # shorter than the layout, a point count past the span, or a header
@@ -40,6 +43,10 @@ module Emf
         @data.byteslice(@offset, @length)
       end
 
+      def append_to(out)
+        out << to_binary_s
+      end
+
       def wire_class
         @filler.wire_class
       end
@@ -51,6 +58,11 @@ module Emf
       end
 
       def materialize
+        if (wire = @filler.exact_wire(@data, @offset, @length))
+          @suffix = EMPTY_SUFFIX
+          return wire
+        end
+
         wire, @suffix = @filler.call_at(@data, @offset, @length)
         raise FormatError, "record disagrees with its bytes" unless wire
 

@@ -16,13 +16,13 @@ module Emf
         end
 
         def store_leaf(values, index, value)
-          _, low, high = @leaves[index]
-          ok = if low
-                 value.instance_of?(Integer) && value >= low && value <= high
-               else
-                 float32_exact?(value)
-               end
-          values[index] = value if ok
+          low = @lows[index]
+          if low
+            return unless value.instance_of?(Integer) && value >= low && value <= @highs[index]
+          else
+            return unless float32_exact?(value)
+          end
+          values[index] = value
         end
 
         # A Float a float32 leaf stores unchanged: it reads back as the same
@@ -59,27 +59,28 @@ module Emf
 
         # Flat coordinates of an Array of {x:, y:} Hashes or points of the
         # record's point class, all Integers in the point range; else declines.
+        # Each point is read in place: no per-point pair is allocated.
         def coords_of(points)
           throw :decline unless points.instance_of?(Array)
 
-          points.flat_map do |point|
-            x, y = point_xy(point)
+          coords = []
+          points.each do |point|
+            if point.instance_of?(Hash)
+              throw :decline unless point.size == 2
+
+              x = point[:x]
+              y = point[:y]
+            elsif point.instance_of?(@point_class)
+              x = point.x.snapshot
+              y = point.y.snapshot
+            else
+              throw :decline
+            end
             throw :decline unless in_point_range?(x) && in_point_range?(y)
 
-            [x, y]
+            coords << x << y
           end
-        end
-
-        def point_xy(point)
-          if point.instance_of?(Hash)
-            throw :decline unless point.size == 2
-
-            [point[:x], point[:y]]
-          elsif point.instance_of?(@point_class)
-            [point.x.snapshot, point.y.snapshot]
-          else
-            throw :decline
-          end
+          coords
         end
 
         def in_point_range?(value)

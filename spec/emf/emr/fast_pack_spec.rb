@@ -94,7 +94,7 @@ RSpec.describe Emf::Emr::Binary::FastFill, "#pack" do
             end
           else
             it "emits the original bytes when unedited, without BinData serialisation" do
-              expect(record.wire).not_to receive(:to_binary_s)
+              expect(record.wire).not_to receive(:do_write)
               expect(record.to_binary_s).to eq(bytes)
             end
           end

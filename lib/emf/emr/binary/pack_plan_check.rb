@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "bindata"
+
 module Emf
   module Emr
     module Binary
@@ -19,8 +21,12 @@ module Emf
 
         private
 
+        # BinData's own constructor: Record.new would consult this plan.
+        BINDATA_NEW = BinData::Base.method(:new).unbind
+        private_constant :BINDATA_NEW
+
         def reference(klass, attrs)
-          wire = klass.new(**attrs)
+          wire = BINDATA_NEW.bind_call(klass, **attrs)
           wire.n_size = wire.num_bytes
           wire.to_binary_s
         end

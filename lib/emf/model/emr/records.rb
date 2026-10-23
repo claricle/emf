@@ -73,6 +73,10 @@ module Emf
               @bytes.dup
             end
 
+            def append_to(out)
+              out << @bytes
+            end
+
             def materialize
               @filler.call_at(@bytes, 0, @bytes.bytesize)&.first || @klass.read(@bytes)
             end
@@ -94,7 +98,7 @@ module Emf
             record_bytes.byteslice(-extra, extra).b.freeze
           end
 
-          def initialize(wire:, offset: nil, suffix: "".b)
+          def initialize(wire:, offset: nil, suffix: EMPTY_SUFFIX)
             @wire = wire
             @offset = offset
             @suffix = suffix
@@ -119,11 +123,23 @@ module Emf
           def to_binary_s
             return @wire_source.to_binary_s unless @wire
 
-            bytes = Emf::Emr::Binary::FastFill.for_class(@wire.class)&.pack(@wire) || @wire.to_binary_s
+            bytes = @wire.to_binary_s
             return bytes if @suffix.empty?
 
             bytes[4, 4] = [bytes.bytesize + @suffix.bytesize].pack("V")
             bytes + @suffix
+          end
+
+          # Appends this record's wire bytes to `out` (a binary String). A record
+          # still held as bytes appends them without a copy; once `#wire` has
+          # been made the wire is the truth and is packed, so an edit is never
+          # served from stale bytes.
+          def append_to(out)
+            return @wire_source.append_to(out) unless @wire
+
+            return out if @suffix.empty? && @wire.append_built_to?(out)
+
+            out << to_binary_s
           end
 
           def type_id
