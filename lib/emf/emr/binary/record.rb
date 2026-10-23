@@ -107,7 +107,7 @@ module Emf
 
           bytes = @lazy_data.dup
           size = patched_size
-          bytes.bytesplice(4, 4, [size].pack("V")) if size
+          bytes[4, 4] = [size].pack("V") if size
           bytes
         end
 
