@@ -79,6 +79,13 @@ RSpec.describe Emf::Emr::Binary::Record, "thin shell" do
         other.clear
         expect(other.snapshot).to eq(klass.new.snapshot)
       end
+
+      it "reads its fields after being frozen, as a BinData-built record does" do
+        expected = reference.call(klass, full).tap { |ref| ref.n_size = ref.num_bytes }
+        shells.each_value do |wire|
+          expect(wire.freeze.snapshot).to eq(expected.snapshot)
+        end
+      end
     end
   end
 end

@@ -32,6 +32,13 @@ module Emf
           super
         end
 
+        # A frozen record cannot make @field_objs later, so it is made now;
+        # its fields still fill in lazily, as a BinData record's do.
+        def freeze
+          hydrate if @lazy_filler
+          super
+        end
+
         # Fixed-layout records serialize with one Array#pack, as WireAdapter
         # already does; a block or a layout with floats is BinData's writer.
         def to_binary_s(&block)
