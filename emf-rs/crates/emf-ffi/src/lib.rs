@@ -560,6 +560,50 @@ pub unsafe extern "C" fn emf_error_free(error: *mut EmfError) {
     }
 }
 
+fn resource_code(kind: emf_core::LimitKind) -> u32 {
+    match kind {
+        emf_core::LimitKind::InputBytes => 1,
+        emf_core::LimitKind::RecordBytes => 2,
+        emf_core::LimitKind::RecordCount => 3,
+        emf_core::LimitKind::AllocatedBytes => 4,
+        emf_core::LimitKind::WorkUnits => 5,
+        emf_core::LimitKind::OutputBytes => 6,
+    }
+}
+
+/// # Safety
+/// The error must be live; out_info must reference writable storage for its declared layout.
+#[no_mangle]
+pub unsafe extern "C" fn emf_error_resource_view(
+    error: *const EmfError,
+    out_info: *mut EmfResourceInfo,
+) -> i32 {
+    run(ptr::null_mut(), || {
+        if out_info.is_null() {
+            return Err(Failure::invalid("out_info is NULL"));
+        }
+        let struct_size = ptr::addr_of!((*out_info).struct_size).read();
+        if struct_size as usize != size_of::<EmfResourceInfo>() {
+            return Err(Failure::invalid("unsupported structure size"));
+        }
+        let version = ptr::addr_of!((*out_info).version).read();
+        metadata::<EmfResourceInfo>(struct_size, version)?;
+        let error = error
+            .as_ref()
+            .ok_or_else(|| Failure::invalid("error is NULL"))?;
+        let (resource, limit, actual) = error.resource.unwrap_or((0, 0, 0));
+        out_info.write(EmfResourceInfo {
+            struct_size,
+            version,
+            resource,
+            reserved: 0,
+            limit,
+            actual,
+        });
+        Ok(())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -728,48 +772,4 @@ mod tests {
         );
         assert_eq!(unsafe { run(ptr::null_mut(), || Ok(())) }, EMF_OK);
     }
-}
-
-fn resource_code(kind: emf_core::LimitKind) -> u32 {
-    match kind {
-        emf_core::LimitKind::InputBytes => 1,
-        emf_core::LimitKind::RecordBytes => 2,
-        emf_core::LimitKind::RecordCount => 3,
-        emf_core::LimitKind::AllocatedBytes => 4,
-        emf_core::LimitKind::WorkUnits => 5,
-        emf_core::LimitKind::OutputBytes => 6,
-    }
-}
-
-/// # Safety
-/// The error must be live; out_info must reference writable storage for its declared layout.
-#[no_mangle]
-pub unsafe extern "C" fn emf_error_resource_view(
-    error: *const EmfError,
-    out_info: *mut EmfResourceInfo,
-) -> i32 {
-    run(ptr::null_mut(), || {
-        if out_info.is_null() {
-            return Err(Failure::invalid("out_info is NULL"));
-        }
-        let struct_size = ptr::addr_of!((*out_info).struct_size).read();
-        if struct_size as usize != size_of::<EmfResourceInfo>() {
-            return Err(Failure::invalid("unsupported structure size"));
-        }
-        let version = ptr::addr_of!((*out_info).version).read();
-        metadata::<EmfResourceInfo>(struct_size, version)?;
-        let error = error
-            .as_ref()
-            .ok_or_else(|| Failure::invalid("error is NULL"))?;
-        let (resource, limit, actual) = error.resource.unwrap_or((0, 0, 0));
-        out_info.write(EmfResourceInfo {
-            struct_size,
-            version,
-            resource,
-            reserved: 0,
-            limit,
-            actual,
-        });
-        Ok(())
-    })
 }
