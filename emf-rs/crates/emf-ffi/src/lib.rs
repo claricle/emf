@@ -590,13 +590,21 @@ mod tests {
                     ..Default::default()
                 };
                 assert_eq!(emf_error_resource_view(error, &mut info), EMF_OK);
-                assert_eq!((info.resource, info.limit, info.actual), (index as u32 + 1, 17, 23));
+                assert_eq!(
+                    (info.resource, info.limit, info.actual),
+                    (index as u32 + 1, 17, 23)
+                );
                 emf_error_free(error);
             }
         }
         let mut error = ptr::null_mut();
         unsafe {
-            assert_eq!(run(&mut error, || Err(Failure::invalid("work_units limit exceeded"))), EMF_INVALID_ARGUMENT);
+            assert_eq!(
+                run(&mut error, || Err(Failure::invalid(
+                    "work_units limit exceeded"
+                ))),
+                EMF_INVALID_ARGUMENT
+            );
             let mut info = EmfResourceInfo {
                 struct_size: size_of::<EmfResourceInfo>() as u32,
                 version: EMF_ABI_VERSION,
@@ -604,10 +612,19 @@ mod tests {
             };
             assert_eq!(emf_error_resource_view(error, &mut info), EMF_OK);
             assert_eq!((info.resource, info.limit, info.actual), (0, 0, 0));
-            assert_eq!(emf_error_resource_view(ptr::null(), &mut info), EMF_INVALID_ARGUMENT);
-            assert_eq!(emf_error_resource_view(error, ptr::null_mut()), EMF_INVALID_ARGUMENT);
+            assert_eq!(
+                emf_error_resource_view(ptr::null(), &mut info),
+                EMF_INVALID_ARGUMENT
+            );
+            assert_eq!(
+                emf_error_resource_view(error, ptr::null_mut()),
+                EMF_INVALID_ARGUMENT
+            );
             info.struct_size = 8;
-            assert_eq!(emf_error_resource_view(error, &mut info), EMF_INVALID_ARGUMENT);
+            assert_eq!(
+                emf_error_resource_view(error, &mut info),
+                EMF_INVALID_ARGUMENT
+            );
             emf_error_free(error);
         }
     }
