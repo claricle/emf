@@ -32,8 +32,10 @@ RSpec.describe WmfResilienceSeeds do
     end
   end
 
-  it "builds the eight named malformed seeds that the Ruby parser rejects" do
-    malformed = seeds.select { |seed| seed.fetch("expected_outcome") == "rejected" }
+  it "builds the eight named malformed seeds: six the Ruby parser rejects, two it recovers" do
+    malformed = seeds.reject { |seed| seed.fetch("expected_outcome") == "parsed" }
+    expect(malformed.select { |seed| seed.fetch("expected_outcome") == "recovered" }.map { |seed| seed.fetch("name") })
+      .to match_array(%w[file-size max-record])
 
     expect(malformed.map { |seed| seed.fetch("name") }).to match_array(
       %w[header-size file-size max-record zero-record missing-eof negative-text-count placeable-checksum
@@ -41,15 +43,19 @@ RSpec.describe WmfResilienceSeeds do
     )
     expected_errors = {
       "header-size" => [Emf::FormatError, /HeaderSize/],
-      "file-size" => [Emf::FormatError, /file Size/],
-      "max-record" => [Emf::FormatError, /MaxRecord/],
       "zero-record" => [Emf::ParseError, /invalid record length/],
       "missing-eof" => [Emf::ParseError, /missing EOF/],
       "negative-text-count" => [Emf::ParseError, /negative text length/],
       "placeable-checksum" => [Emf::FormatError, /checksum mismatch/],
       "bitmap-short-record" => [Emf::ParseError, /truncated bitmap transfer prefix/]
     }
-    malformed.each do |seed|
+    # file-size and max-record are header drift: the parser recovers and records the drift in Metafile#errors.
+    drift = { "file-size" => :header_file_size_invalid, "max-record" => :max_record_mismatch }
+    malformed.select { |seed| drift.key?(seed.fetch("name")) }.each do |seed|
+      expect(Emf::Wmf::Parser.call(seed.fetch("bytes")).errors.map { |error| error.evidence.check })
+        .to eq([drift.fetch(seed.fetch("name"))])
+    end
+    malformed.reject { |seed| drift.key?(seed.fetch("name")) }.each do |seed|
       error_class, message = expected_errors.fetch(seed.fetch("name"))
       expect { Emf::Wmf::Parser.call(seed.fetch("bytes")) }.to raise_error(error_class, message)
     end

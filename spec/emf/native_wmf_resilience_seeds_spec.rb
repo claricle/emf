@@ -11,10 +11,11 @@ RSpec.describe "Native WMF resilience seeds" do
   let(:rejected_seeds) { seeds.select { |seed| seed.fetch("expected_outcome") == "rejected" } }
   let(:expected_rejected_seed_names) do
     %w[
-      header-size file-size max-record zero-record missing-eof negative-text-count
+      header-size zero-record missing-eof negative-text-count
       placeable-checksum bitmap-short-record
     ]
   end
+  let(:recovered_seeds) { seeds.select { |seed| seed.fetch("expected_outcome") == "recovered" } }
 
   it "parses and byte-preserves every generated valid seed through the native bridge" do
     expect(valid_seeds.length).to eq(8)
@@ -44,6 +45,22 @@ RSpec.describe "Native WMF resilience seeds" do
 
       recovered = Emf.parse(valid_bytes)
       expect(Emf.serialize(recovered)).to eq(valid_bytes), "after #{seed.fetch('name')}"
+    end
+  end
+
+  it "recovers header drift natively: the model is kept, the drift is recorded and the repair is clean" do
+    expect(recovered_seeds.map { |seed| seed.fetch("name") }).to match_array(%w[file-size max-record])
+    expect(Emf::Wmf::Parser).not_to receive(:call)
+    checks = { "file-size" => :header_file_size_invalid, "max-record" => :max_record_mismatch }
+
+    recovered_seeds.each do |seed|
+      name = seed.fetch("name")
+      parsed = Emf.parse(seed.fetch("bytes"))
+      repaired = Emf.serialize(parsed)
+
+      expect(parsed.errors.map { |error| error.evidence.check }).to eq([checks.fetch(name)]), name
+      expect(repaired).not_to eq(seed.fetch("bytes")), name
+      expect(Emf.parse(repaired).errors).to be_empty, name
     end
   end
 

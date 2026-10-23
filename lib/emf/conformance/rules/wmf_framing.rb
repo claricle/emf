@@ -95,7 +95,7 @@ module Emf
         extra = context.metafile.trailing.to_s.bytesize
         return [] if extra.zero?
 
-        [{ message: "#{extra} bytes follow the declared WMF Size", offset: context.byte_length && (context.byte_length - extra),
+        [{ message: "#{extra} bytes follow the first META_EOF record", offset: context.byte_length && (context.byte_length - extra),
            record_index: context.records.size }]
       end
 
@@ -117,7 +117,9 @@ module Emf
       ["wmf.header.type", :header_type, "MS-WMF 2.3.2.2 META_HEADER (Type); 2.1.1.18 MetafileType Enumeration", :header_type, nil],
       ["wmf.header.version", :header_version, "MS-WMF 2.3.2.2 META_HEADER (Version); " \
                                               "2.1.1.19 MetafileVersion Enumeration", :header_version, nil],
-      ["wmf.header.size", :header_size, "MS-WMF 2.3.2.2 META_HEADER (SizeLow, SizeHigh)", :header_size, nil],
+      ["wmf.header.size", :header_size, "MS-WMF 2.3.2.2 META_HEADER (SizeLow, SizeHigh)", :header_size,
+       "the parser reads the records actually present and records the Size drift in Metafile#errors " \
+       "(seen in files from Inkscape)"],
       ["wmf.header.number_of_members", :header_members, "MS-WMF 2.3.2.2 META_HEADER (NumberOfMembers)", :header_members,
        "NumberOfMembers is reserved and no reader consults it", :warning],
       ["wmf.placeable.handle", :placeable_handle, "MS-WMF 2.3.2.3 META_PLACEABLE (HWmf)", :placeable_handle,

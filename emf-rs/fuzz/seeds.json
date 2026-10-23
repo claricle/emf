@@ -2958,7 +2958,7 @@
       "sha256": "7662db66c627bc4892099295e2f978efb6d590678c70604f3a5fdf69d4cd6e69",
       "size_bytes": 44,
       "kind": "wmf",
-      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set standard file size at byte 6 to 8 words; Ruby outcome: rejected (native recovery may differ).",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set standard file size at byte 6 to 8 words; Ruby outcome: recovered (header drift kept as a ParseError).",
       "targets": [
         "parse",
         "serialize",
@@ -2970,7 +2970,7 @@
       "sha256": "b42d4321621f5b0de5e816d38980075725ea4f59dc87c16ca6c2583d58bdb067",
       "size_bytes": 44,
       "kind": "wmf",
-      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set maximum record size at byte 12 to zero; Ruby outcome: rejected (native recovery may differ).",
+      "provenance": "Project-authored synthetic WMF; BSD-2-Clause; script/wmf_resilience_seeds recipe: set maximum record size at byte 12 to zero; Ruby outcome: recovered (header drift kept as a ParseError).",
       "targets": [
         "parse",
         "serialize",

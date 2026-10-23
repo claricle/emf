@@ -206,15 +206,12 @@ RSpec.describe "Native WMF bridge" do
     placeable = native_wmf_bytes([move], placeable: true)
     malformed = [
       ordinary.dup.tap { |bytes| bytes[4, 2] = [0x200].pack("v") },
-      ordinary.dup.tap { |bytes| bytes[6, 4] = [8].pack("V") },
-      ordinary.dup.tap { |bytes| bytes[6, 4] = [bytes.bytesize].pack("V") },
       placeable.dup.tap { |bytes| bytes[20, 2] = [1].pack("v") },
       placeable.dup.tap do |bytes|
         bytes[16, 4] = [1].pack("V")
         bytes[20, 2] = [Emf::Wmf::Binary.checksum(bytes.byteslice(0, 20))].pack("v")
       end,
       native_wmf_bytes([native_wmf_record(0, "xx")]),
-      native_wmf_bytes([native_wmf_record(0, ""), move]),
       native_wmf_bytes([native_wmf_record(0x01F0, [0].pack("v"))])
     ]
     malformed.each { |bytes| expect { Emf::Wmf::Parser.call(bytes) }.to raise_error(Emf::Error) }
@@ -223,9 +220,12 @@ RSpec.describe "Native WMF bridge" do
     malformed.each { |bytes| expect { Emf.parse(bytes) }.to raise_error(Emf::Error) }
   end
 
-  it "rejects a wrong MaxRecord even when all individual records are valid" do
+  it "recovers from a wrong MaxRecord or Size, keeping the records and recording the drift" do
     input = native_wmf_bytes([move])
     input[12, 4] = [3].pack("V")
-    expect { Emf.parse(input) }.to raise_error(Emf::Error)
+    input[6, 4] = [8].pack("V")
+    parsed = Emf.parse(input)
+    expect(parsed.records.map(&:type_id)).to eq([move.unpack("Vv").last, 0])
+    expect(parsed.errors.map { |error| error.evidence.check }).to eq(%i[header_file_size_invalid max_record_mismatch])
   end
 end

@@ -52,13 +52,13 @@ module WmfRejectionCases
     tweak = ->(at, value) { plain.dup.tap { |bytes| bytes.setbyte(at, value) } }
     { 201 => "\xD7\xCD\xC6\x9A\x01\x02\x03".b, 202 => placeable(reserved: 1) + plain,
       203 => placeable(checksum: 0xFFFF) + plain, 301 => "\x01\x00\x09\x00\x00\x03".b, 302 => tweak.call(0, 3),
-      303 => tweak.call(2, 8), 304 => tweak.call(5, 2), 305 => tweak.call(6, 8),
-      306 => placeable(handle: 7) + tweak.call(0, 2), 1801 => tweak.call(12, 9) }
+      303 => tweak.call(2, 8), 304 => tweak.call(5, 2),
+      306 => placeable(handle: 7) + tweak.call(0, 2) }
   end
 
   def framing
     bad_length = wmf([eof]).tap { |bytes| bytes.setbyte(18, 2) }
-    { 402 => header(11) + "\0\0\0\0".b, 403 => bad_length, 404 => wmf([eof, rec(0x1E)]), 405 => wmf([rec(0x1E)]),
+    { 402 => header(11) + "\0\0\0\0".b, 403 => bad_length, 405 => wmf([rec(0x1E)]),
       406 => alone(0, words(0, 0)) }
   end
 
