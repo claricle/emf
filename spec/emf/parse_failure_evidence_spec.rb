@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "emf/native/wmf_rejection"
 require_relative "../support/native_library_context"
 require_relative "../support/wmf_mutation"
 require_relative "../support/wmf_rejection_cases"
@@ -54,7 +55,12 @@ RSpec.describe "Parse failure evidence" do
 
   it "keeps the evidence table in step with the native rejection table" do
     native = Emf::Native::WmfRejection
-    expect(Emf::Wmf::Evidence::REASONS.keys).to match_array(native::INPUT.keys + native::RECORD.keys)
+    resource_reasons = {
+      101 => [:input_too_large, "WMF input too large"],
+      401 => [:record_limit_exceeded, "record limit exceeded"]
+    }
+    expect(Emf::Wmf::Evidence::REASONS.keys).to match_array(native::INPUT.keys + native::RECORD.keys + resource_reasons.keys)
+    expect(Emf::Wmf::Evidence::REASONS.slice(*resource_reasons.keys)).to eq(resource_reasons)
     texts = Emf::Wmf::Evidence::REASONS.transform_values(&:last)
     expect(texts.slice(*native::INPUT.keys)).to eq(native::INPUT)
     expect(texts.slice(*native::RECORD.keys)).to eq(native::RECORD)
