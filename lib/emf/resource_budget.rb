@@ -59,8 +59,8 @@ module Emf
       end
     end
 
-    def self.check!(bytes, limits: {})
-      new(limits).replay!(bytes)
+    def self.check!(bytes, limits: {}, &admission)
+      new(limits).replay!(bytes, &admission)
     end
 
     def initialize(limits = {})
@@ -94,7 +94,7 @@ module Emf
       [start, finish] if start >= fixed && finish <= payload_length
     end
 
-    def replay!(bytes) # rubocop:disable Naming/PredicateMethod
+    def replay!(bytes, &) # rubocop:disable Naming/PredicateMethod
       check(:input_bytes, bytes.bytesize)
       return true unless Detector.call(bytes) == :emf
 
@@ -112,7 +112,7 @@ module Emf
 
       charge_work(ceil16(input.length))
       charge_alloc(input.length)
-      replay_records(input, header_size)
+      replay_records(input, header_size, &)
       true
     end
 
@@ -167,6 +167,7 @@ module Emf
         payload = input.slice(offset + 8, size - 8)
         typed = decode(kind, payload)
         diagnostic if !typed && invalid_when_raw?(kind, payload.length)
+        yield kind, size, offset if block_given?
         offset += size
         break if kind == 14 && typed
       end

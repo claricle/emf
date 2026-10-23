@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "resource_limits/emf_records"
+require_relative "resource_budget"
 
 module Emf
   # Shared admission checks run before either parser allocates its input model.
@@ -20,7 +21,13 @@ module Emf
               when :emf then Emr::Parser::MAX_INPUT_BYTES
               end
       check!(:input_bytes, limit, bytes.bytesize)
-      EmfRecords.check(bytes) if format == :emf
+      return unless format == :emf
+
+      ResourceBudget.check!(bytes, limits: { input_bytes: limit,
+                                             record_bytes: EmfRecords::MAX_RECORD_BYTES,
+                                             record_count: EmfRecords::MAX_RECORDS }) do |type, size, base|
+        EmfRecords.check_arrays(bytes, type, size, base)
+      end
     end
   end
 end
