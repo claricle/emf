@@ -540,10 +540,20 @@ fn header_size_and_max_record_drift_are_not_rejections() {
     let base = wmf(&[record(0x14, &words(&[1, 2])), eof()], 0);
     assert!(first_rejection(&base).is_none());
     // Size too large (Inkscape), Size too small, Size zero and MaxRecord too small, too large, zero.
-    for (at, value) in [(6, 9 + 8 + 1000), (6, 9 + 2), (6, 0), (12, 1), (12, 9999), (12, 0)] {
+    for (at, value) in [
+        (6, 9 + 8 + 1000),
+        (6, 9 + 2),
+        (6, 0),
+        (12, 1),
+        (12, 9999),
+        (12, 0),
+    ] {
         let mut bytes = base.clone();
         set_u32(&mut bytes, at, value);
-        assert!(first_rejection(&bytes).is_none(), "offset {at} value {value}");
+        assert!(
+            first_rejection(&bytes).is_none(),
+            "offset {at} value {value}"
+        );
     }
 }
 
