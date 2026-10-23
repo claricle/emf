@@ -153,8 +153,8 @@
   record_types:
   - META_SETLAYOUT
   citation: MS-WMF 2.3.5.16 META_SETLAYOUT (Reserved)
-  status: implemented
-  reason:
+  status: not_checkable
+  reason: the section says Reserved MUST be ignored, so no value is invalid
 - id: wmf.array.point_count
   format: wmf
   record_types:
@@ -796,6 +796,16 @@
   status: implemented
   reason:
 - id: wmf.fixed.colorref_reserved
+  format: wmf
+  record_types:
+  - META_FLOODFILL
+  - META_SETPIXEL
+  - META_SETBKCOLOR
+  - META_SETTEXTCOLOR
+  citation: MS-WMF 2.2.2.8 ColorRef Object (Reserved); 2.3.3.7 META_FLOODFILL, 2.3.3.19 META_SETPIXEL, 2.3.5.14 META_SETBKCOLOR, 2.3.5.26 META_SETTEXTCOLOR
+  status: implemented
+  reason:
+- id: wmf.fixed.colorref_palette
   format: wmf
   record_types:
   - META_FLOODFILL

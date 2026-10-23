@@ -34,11 +34,12 @@ module Emf
                                    "BrushStyle"]
       }.freeze
 
+      BS_PATTERN = 3
       COLOR_USAGE = [R::DibCreatePatternBrush, R::SetDibToDev, R::StretchDib].freeze
       TEXT_ALIGN_MASK = 0x011F
       HORIZONTAL_ALIGN = [0x0, 0x2, 0x6].freeze # TA_LEFT, TA_RIGHT, TA_CENTER (bit 0x4 alone is no value)
       VERTICAL_ALIGN = [0x0, 0x8, 0x18].freeze  # TA_TOP, TA_BOTTOM, TA_BASELINE (bit 0x10 alone is no value)
-      LAYOUT_MASK = 0x000F
+      LAYOUT_MASK = 0x0009 # LAYOUT_RTL | LAYOUT_BITMAPORIENTATIONPRESERVED; LAYOUT_LTR is 0
       PEN_CAPS = [0x0000, 0x0100, 0x0200].freeze
       PEN_JOINS = [0x0000, 0x1000, 0x2000].freeze
 
@@ -56,6 +57,8 @@ module Emf
       def color_usage(context)
         each_of(context, *COLOR_USAGE) do |record|
           value = record.color_usage
+          # META_DIBCREATEPATTERNBRUSH: with Style BS_PATTERN, DIB_RGB_COLORS is used regardless of this field.
+          next if record.is_a?(R::DibCreatePatternBrush) && record.style == BS_PATTERN
           next if [0, 1, 2].include?(value)
 
           "color usage is #{value.inspect}, MUST be DIB_RGB_COLORS, DIB_PAL_COLORS or DIB_PAL_INDICES"
@@ -101,12 +104,6 @@ module Emf
           next if record.layout.to_i.nobits?(~LAYOUT_MASK)
 
           format("layout 0x%04X sets bits outside the Layout flags", record.layout.to_i)
-        end
-      end
-
-      def layout_reserved(context)
-        each_of(context, R::SetLayout) do |record|
-          "SetLayout Reserved is #{record.reserved}, MUST be 0" unless record.reserved.to_i.zero?
         end
       end
 
@@ -173,8 +170,6 @@ module Emf
                                             "2.3.5.24 META_SETTEXTALIGN (TextAlignmentMode)", :flag_mask, WmfRecordRules::IGNORED],
       ["wmf.flags.layout", :layout, "MS-WMF 2.1.1.13 Layout Enumeration; " \
                                     "2.3.5.16 META_SETLAYOUT (Layout)", :flag_mask, WmfRecordRules::IGNORED],
-      ["wmf.fixed.layout_reserved", :layout_reserved, "MS-WMF 2.3.5.16 META_SETLAYOUT (Reserved)", :reserved_zero,
-       "reserved fields are ignored by readers"],
       ["wmf.array.point_count", :point_count, "MS-WMF 2.3.3.14 META_POLYLINE, 2.3.3.15 META_POLYGON (NumberOfPoints)", :point_count, nil],
       ["wmf.array.polypolygon_counts", :polypolygon_counts, "MS-WMF 2.2.2.17 PolyPolygon Object (NumberOfPolygons, aPointsPerPolygon); " \
                                                             "2.3.3.16 META_POLYPOLYGON",

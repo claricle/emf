@@ -53,12 +53,26 @@ module Emf
         expected = FIXED_DATA_SIZE[record.type]
         return unless expected
 
+        return if page_transform_bodyless?(record)
+
         size = Support.size_of(record)
         data_size = Support.data_size_of(record)
         problems = []
         problems << "DataSize is #{data_size}, MUST be #{expected}" unless data_size == expected
         problems << "Size is #{size}, MUST be #{expected + 12}" unless size == expected + 12 || SIZE_UNSPECIFIED.include?(record.type)
         "#{Support.type_name(record)} #{problems.join(' and ')}" unless problems.empty?
+      end
+
+      # The exact body-less SetPageTransform: Size 12, DataSize 0 (the spec says Size 16, DataSize 4).
+      def page_transform_bodyless?(record)
+        record.type == Records::SetPageTransform::TYPE && Support.data_size_of(record).zero? && Support.size_of(record) == 12
+      end
+
+      def page_transform_bodyless(located)
+        record = located.record
+        return unless page_transform_bodyless?(record)
+
+        "#{Support.type_name(record)} has Size 12 and DataSize 0, MUST be Size 16 and DataSize 4 (its PageScale is missing)"
       end
 
       # A defined record whose fields (padded to 4) decode to fewer bytes than DataSize leaves bytes unaccounted for.
@@ -127,6 +141,12 @@ module Emf
     registry = Registry.loading
     EmfPlusSupport.per_record(id: "emfplus.record.fixed_size", citation: "MS-EMFPLUS 2.3", kind: :record_fixed_size) do |located|
       EmfPlusFraming.fixed_size(located)
+    end
+    EmfPlusSupport.per_record(id: "emfplus.record.page_transform_bodyless", citation: "MS-EMFPLUS 2.3",
+                              kind: :record_page_transform_bodyless,
+                              tolerant_reason: "LibreOffice's TestAlignRtlReading and tdf93750 carry a body-less SetPageTransform and " \
+                                               "import; the record is kept with its bytes intact") do |located|
+      EmfPlusFraming.page_transform_bodyless(located)
     end
     EmfPlusSupport.per_record(id: "emfplus.record.data_size", citation: "MS-EMFPLUS 2.3", kind: :record_data_size,
                               tolerant_reason: "the surplus bytes stay in the record's trailing data, so nothing is dropped") do |located|

@@ -469,6 +469,20 @@
   citation: MS-WMF 2.2.2.8
   status: implemented
   reason:
+- id: emf.bitmap.colorref_palette
+  format: emf
+  record_types:
+  - EMR_ALPHABLEND
+  - EMR_BITBLT
+  - EMR_MASKBLT
+  - EMR_PLGBLT
+  - EMR_SETDIBITSTODEVICE
+  - EMR_STRETCHBLT
+  - EMR_STRETCHDIBITS
+  - EMR_TRANSPARENTBLT
+  citation: MS-WMF 2.2.2.8
+  status: implemented
+  reason:
 - id: emf.bitmap.source_rectangle
   format: emf
   record_types:

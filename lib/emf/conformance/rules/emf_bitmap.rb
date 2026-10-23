@@ -8,6 +8,7 @@ return if Emf::Conformance::Registry.loaded_elsewhere?(__FILE__)
 module Emf
   module Conformance
     module BitmapRules
+      PALETTE_COLORS = "GDI writes PALETTEINDEX and PALETTERGB colors with 0x01 or 0x02 in the Reserved byte, and readers resolve them"
       EMF = %i[emf emf_plus].freeze
       Slot = Struct.new(:name, :usage, :off_bmi, :cb_bmi, :off_bits, :cb_bits)
       SOURCE = Slot.new("source", 80, 84, 88, 92, 96)
@@ -57,6 +58,7 @@ module Emf
         "emf.bitmap.color_table_length" => ["MS-WMF 2.2.2.9", :color_table_length, :warning, nil],
         "emf.bitmap.bmi_v5_intent" => ["MS-WMF 2.2.2.5", :bmi_v5_intent, :error, nil],
         "emf.bitmap.colorref_reserved" => ["MS-WMF 2.2.2.8", :colorref_reserved, :error, nil],
+        "emf.bitmap.colorref_palette" => ["MS-WMF 2.2.2.8", :colorref_reserved, :error, PALETTE_COLORS],
         "emf.bitmap.mask_monochrome" => ["MS-EMF 2.3.1.2", :mask_monochrome, :error, nil],
         "emf.bitmap.raster_operation" => ["MS-EMF 2.3.1.1", :raster_operation, :error, nil],
         "emf.bitmap.rop4_reserved" => ["MS-EMF 2.3.1.2", :rop4_reserved, :warning, nil],
@@ -324,9 +326,11 @@ module Emf
 
         def colorrefs
           @layout[:colorrefs]&.each do |pos|
-            next if @bytes.getbyte(pos + 3).zero?
+            reserved = @bytes.getbyte(pos + 3)
+            next if reserved.zero?
 
-            add("emf.bitmap.colorref_reserved", "ColorRef at offset #{pos} has Reserved byte #{@bytes.getbyte(pos + 3)}, MUST be 0")
+            id = [1, 2].include?(reserved) ? "emf.bitmap.colorref_palette" : "emf.bitmap.colorref_reserved"
+            add(id, "ColorRef at offset #{pos} has Reserved byte #{reserved}, MUST be 0")
           end
         end
 

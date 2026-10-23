@@ -208,7 +208,9 @@ module Emf
                                                 "META_CREATEREGION", :array_counts, nil],
       ["wmf.region.size", :region_size, "MS-WMF 2.2.1.5 Region Object (RegionSize); 2.3.4.6 META_CREATEREGION", :buffer_layout, nil],
       ["wmf.escape.byte_count", :escape_count, "MS-WMF 2.3.6.1 META_ESCAPE (ByteCount, EscapeData)", :byte_count, nil],
-      ["wmf.escape.embedded_emf.segment", :embedded_segment, "MS-WMF 2.3.6.25 META_ESCAPE_ENHANCED_METAFILE", :buffer_layout, nil],
+      ["wmf.escape.embedded_emf.segment", :embedded_segment, "MS-WMF 2.3.6.25 META_ESCAPE_ENHANCED_METAFILE", :buffer_layout,
+       "producers write other data under Escape 0x000F (Micrografx Flowcharter); readers skip an embedded stream they " \
+       "cannot use and play the WMF records"],
       ["wmf.escape.embedded_emf.sequence", :embedded_sequence,
        "MS-WMF 2.3.6.25 META_ESCAPE_ENHANCED_METAFILE (CommentRecordCount, CurrentRecordSize, " \
        "RemainingBytes, EnhancedMetafileDataSize)",

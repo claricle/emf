@@ -14,6 +14,8 @@ module Emf
       R = Emf::Model::Wmf::Records
       KEPT = "the surplus words stay in the record's suffix, so nothing is dropped"
       COLORREF_RESERVED_SHIFT = 24
+      COLORREF_CITATION = "MS-WMF 2.2.2.8 ColorRef Object (Reserved); 2.3.3.7 META_FLOODFILL, 2.3.3.19 META_SETPIXEL, " \
+                          "2.3.5.14 META_SETBKCOLOR, 2.3.5.26 META_SETTEXTCOLOR"
 
       # record class => [parameter bytes the layout defines, section]. Each section lists the record's fields; none lists more.
       LAYOUTS = {
@@ -58,11 +60,21 @@ module Emf
         end
       end
 
+      PALETTE_RESERVED = [0x01, 0x02].freeze
+
       def colorref_reserved(context)
+        colorref_findings(context) { |reserved| !PALETTE_RESERVED.include?(reserved) }
+      end
+
+      def colorref_palette(context)
+        colorref_findings(context) { |reserved| PALETTE_RESERVED.include?(reserved) }
+      end
+
+      def colorref_findings(context)
         each_of(context, *COLOR_FIELDS.keys) do |record|
           value = record.public_send(COLOR_FIELDS.fetch(record.class)).to_i
           reserved = value >> COLORREF_RESERVED_SHIFT
-          next if reserved.zero?
+          next if reserved.zero? || !yield(reserved)
 
           format("%<name>s ColorRef 0x%<value>08X has Reserved byte 0x%<reserved>02X, MUST be 0x00",
                  name: record.class.name.split("::").last, value: value, reserved: reserved)
@@ -87,9 +99,10 @@ module Emf
        "2.3.5.26, 2.3.5.27 (RecordSize; the record lists no field after its last parameter)"],
       ["wmf.fixed.raster_operation", :raster_operation, :flag_mask, nil,
        "MS-WMF 2.3.3.12 META_PATBLT (RasterOperation); 2.1.1.31 TernaryRasterOperation Enumeration"],
-      ["wmf.fixed.colorref_reserved", :colorref_reserved, :reserved_zero, nil,
-       "MS-WMF 2.2.2.8 ColorRef Object (Reserved); 2.3.3.7 META_FLOODFILL, 2.3.3.19 META_SETPIXEL, 2.3.5.14 META_SETBKCOLOR, " \
-       "2.3.5.26 META_SETTEXTCOLOR"]
+      ["wmf.fixed.colorref_reserved", :colorref_reserved, :reserved_zero, nil, WmfLayoutRules::COLORREF_CITATION],
+      ["wmf.fixed.colorref_palette", :colorref_palette, :reserved_zero,
+       "GDI writes PALETTEINDEX and PALETTERGB colors with 0x01 or 0x02 in the Reserved byte, and readers resolve them",
+       WmfLayoutRules::COLORREF_CITATION]
     ].each do |id, method, kind, reason, citation|
       Registry.loading.register(id: id, formats: WmfLayoutRules::WMF, citation: citation, kind: kind, tolerant_reason: reason) do |context|
         WmfLayoutRules.public_send(method, context)

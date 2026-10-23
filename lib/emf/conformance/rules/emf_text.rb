@@ -10,6 +10,7 @@ module Emf
     module TextRules
       EMF = %i[emf emf_plus].freeze
       ETO_PDY = 0x2000
+      ETO_GLYPH_INDEX = 0x10
       ETO_NO_RECT = 0x100
       ETO_SMALL_CHARS = 0x200
       # ExtTextOutOptions (MS-EMF 2.1.11).
@@ -85,7 +86,7 @@ module Emf
                 "#{label} string of #{entry[:chars]} chars at #{entry[:off_string]} is outside the record body (#{fixed_end}..#{@size})")
           elsif (entry[:off_string] % width).positive?
             add(alignment_id, "#{label} offString #{entry[:off_string]} is not #{width * 8}-bit aligned")
-          elsif wide
+          elsif wide && entry[:options].nobits?(ETO_GLYPH_INDEX) # glyph indexes are arbitrary 16-bit codes, not UTF-16
             check_encoding(label, entry, length)
           end
         end

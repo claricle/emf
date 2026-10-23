@@ -30,6 +30,8 @@ module Emf
       PEN_BRUSH = "the same section's brush table lists BS_PATTERN and BS_DIBPATTERN as supported for the pen; GDI writes " \
                   "DIB-pattern geometric pens (5 corpus files)"
       FONT_SHORT = "the same section says a LogFont MAY be present instead of a LogFontExDv, so a shorter elw is not uniformly invalid"
+      HANDLE_RANGE = "vectory's svg2emf, ps2emf and eps2emf output declares Handles=1 while selecting object indices 1 and 2; " \
+                     "renderers resolve handles from the live table, not the header count, and display the file"
       UNKNOWN_HANDLE = "readers skip a SELECTOBJECT or DELETEOBJECT whose handle is not in the table and keep drawing"
 
       module_function
@@ -278,7 +280,7 @@ module Emf
       "emf.object.palette_size" => [:palette_size, "MS-EMF 2.3.7.6", :palette_size, nil],
       "emf.object.index_zero" => [:index_zero, "MS-EMF 2.3.8.5", :index_zero, nil],
       "emf.object.delete_stock" => [:delete_stock, "MS-EMF 2.3.8.3", :delete_stock, nil],
-      "emf.object.handle_range" => [:handle_range, "MS-EMF 2.3.8", :handle_range, nil],
+      "emf.object.handle_range" => [:handle_range, "MS-EMF 2.3.8", :handle_range, ObjectRules::HANDLE_RANGE],
       "emf.object.lifecycle" => [:lifecycle, "MS-EMF 2.3.8", :object_lifecycle, ObjectRules::UNKNOWN_HANDLE]
     }.each do |id, (method, citation, kind, reason)|
       registry.register(id: id, formats: ObjectRules::EMF, citation: citation, kind: kind, tolerant_reason: reason) do |context|

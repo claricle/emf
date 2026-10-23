@@ -136,9 +136,11 @@ RSpec.describe "Emf::Conformance bitmap rules" do
     end
 
     it "checks the Reserved byte of TransparentColor and of PlgBlt's BkColorSrc" do
-      expect(fired(support.file(support.bitmap(116, fields: { 43 => ["C", 1] })))).to eq(%w[emf.bitmap.colorref_reserved])
-      expect(fired(support.file(support.bitmap(116, fields: { 79 => ["C", 1] })))).to eq(%w[emf.bitmap.colorref_reserved])
-      expect(fired(support.file(support.bitmap(79, fields: { 91 => ["C", 1] })))).to eq(%w[emf.bitmap.colorref_reserved])
+      expect(fired(support.file(support.bitmap(116, fields: { 43 => ["C", 3] })))).to eq(%w[emf.bitmap.colorref_reserved])
+      expect(fired(support.file(support.bitmap(116, fields: { 79 => ["C", 3] })))).to eq(%w[emf.bitmap.colorref_reserved])
+      expect(fired(support.file(support.bitmap(79, fields: { 91 => ["C", 3] })))).to eq(%w[emf.bitmap.colorref_reserved])
+      expect(fired(support.file(support.bitmap(116, fields: { 43 => ["C", 1] })))).to eq(%w[emf.bitmap.colorref_palette])
+      expect(fired(support.file(support.bitmap(79, fields: { 91 => ["C", 2] })))).to eq(%w[emf.bitmap.colorref_palette])
       expect(fired(support.file(support.bitmap(76, fields: { 76 => ["C", 0xFF], 77 => ["C", 0xFF], 78 => ["C", 0xFF] })))).to be_empty
     end
 
