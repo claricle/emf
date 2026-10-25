@@ -11,7 +11,9 @@ module Emf
     def check!(resource, limit, actual)
       return if actual <= limit
 
-      raise ResourceLimitError.new(resource: resource, limit: limit, actual: actual)
+      error = ResourceLimitError.new(resource: resource, limit: limit, actual: actual)
+      error.with_evidence(yield) if block_given?
+      raise error
     end
 
     def preflight(bytes)
@@ -20,7 +22,10 @@ module Emf
               when :wmf_apm, :wmf_standard then Wmf::Binary::MAX_INPUT_BYTES
               when :emf then Emr::Parser::MAX_INPUT_BYTES
               end
-      check!(:input_bytes, limit, bytes.bytesize)
+      check!(:input_bytes, limit, bytes.bytesize) do
+        check = format == :emf ? :emf_input_too_large : :input_too_large
+        ParseEvidence.new(check: check, offset: 0, declared: limit, actual: bytes.bytesize)
+      end
       return unless format == :emf
 
       ResourceBudget.check!(bytes, limits: { input_bytes: limit,
