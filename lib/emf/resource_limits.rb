@@ -16,7 +16,7 @@ module Emf
       raise error
     end
 
-    def preflight(bytes)
+    def preflight(bytes, defer: false)
       format = Detector.call(bytes)
       limit = case format
               when :wmf_apm, :wmf_standard then Wmf::Binary::MAX_INPUT_BYTES
@@ -27,12 +27,32 @@ module Emf
         ParseEvidence.new(check: check, offset: 0, declared: limit, actual: bytes.bytesize)
       end
       return unless format == :emf
+      return :deferred if defer && bounded_emf?(bytes)
 
       ResourceBudget.check!(bytes, limits: { input_bytes: limit,
                                              record_bytes: EmfRecords::MAX_RECORD_BYTES,
                                              record_count: EmfRecords::MAX_RECORDS }) do |type, size, base|
         EmfRecords.check_arrays(bytes, type, size, base)
       end
+      nil
+    end
+
+    # Except for PolyText's potentially overlapping descriptors, native charges
+    # are bounded by input length. Geometric record/diagnostic reservations cost
+    # less than 184 bytes per input byte; input, font and payload copies fit in
+    # the remaining 72. Framing and payload work fit within four units per byte.
+    # The Ruby parser must request exact admission if it encounters PolyText.
+    def bounded_emf?(bytes)
+      size = bytes.bytesize
+      header = bytes.unpack1("V", offset: 4)
+      return false unless header <= size && (header == 88 || header == 100 || header >= 108)
+
+      limits = ResourceBudget::DEFAULT_LIMITS
+      size <= EmfRecords::MAX_RECORD_BYTES &&
+        size / 8 <= EmfRecords::MAX_RECORDS &&
+        size / 4 <= Emr::Parser::MAX_SANE_ARRAY_LENGTH &&
+        size * 256 <= limits.fetch(:allocated_bytes) &&
+        size * 4 <= limits.fetch(:work_units)
     end
   end
 end

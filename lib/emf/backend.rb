@@ -5,10 +5,10 @@ module Emf
     module Ruby
       class << self
         def parse(bytes)
-          ResourceLimits.preflight(bytes)
+          deferred = ResourceLimits.preflight(bytes, defer: true)
           case Detector.call(bytes)
           when :wmf_apm, :wmf_standard then Wmf::Parser.call(bytes)
-          when :emf then Emr::Parser.call(bytes)
+          when :emf then Emr::Parser.call(bytes, deferred_admission: deferred)
           end
         rescue FormatError, ParseError => e
           raise ParseEvidenceBuilder.attach(e, bytes)

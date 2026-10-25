@@ -7,7 +7,7 @@ module Emf
     module Parser
       module_function
 
-      def call(bytes)
+      def call(bytes, deferred_admission: nil)
         ResourceLimits.check!(:input_bytes, MAX_INPUT_BYTES, bytes.bytesize)
         raise FormatError, "not an EMF file (signature mismatch)" unless Emf::Detector.call(bytes) == :emf
 
@@ -32,6 +32,8 @@ module Emf
             next
           end
 
+          deferred_admission = admit_deferred(data, offset, deferred_admission)
+
           wire, suffix = read_record_at(data, offset, errors, diagnostics: diagnostics, record_index: records.length + 1)
           if wire.nil?
             trailing << bytes.byteslice(offset..)
@@ -50,6 +52,17 @@ module Emf
         end
 
         metafile(header, records, errors, emf_plus_bytes, trailing, diagnostics)
+      end
+
+      # PolyText can charge the same bytes repeatedly before rejecting
+      # overlapping descriptors. It has no FilledRecord fast path.
+      def admit_deferred(data, offset, deferred)
+        return unless deferred
+
+        type = data.unpack1("V", offset: offset)
+        return deferred unless [96, 97].include?(type)
+
+        ResourceLimits.preflight(data)
       end
 
       def metafile(header, records, errors, emf_plus_bytes, trailing, diagnostics = [])
