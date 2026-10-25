@@ -21,7 +21,6 @@ module Emf
         emf_record_bytes: [[POINTER, UINT64, POINTER, POINTER], Fiddle::TYPE_INT],
         emf_buffer_view: [[POINTER, POINTER, POINTER], Fiddle::TYPE_INT],
         emf_error_view: [[POINTER, POINTER], Fiddle::TYPE_INT],
-        emf_error_resource_view: [[POINTER, POINTER], Fiddle::TYPE_INT],
         emf_document_free: [[POINTER], Fiddle::TYPE_VOID],
         emf_buffer_free: [[POINTER], Fiddle::TYPE_VOID],
         emf_error_free: [[POINTER], Fiddle::TYPE_VOID]
@@ -39,6 +38,7 @@ module Emf
         SIGNATURES.each do |name, (arguments, result)|
           @functions[name] = Fiddle::Function.new(@library[name.to_s], arguments, result)
         end
+        optional(:emf_error_resource_view, [POINTER, POINTER])
         @snapshot_function = optional(SNAPSHOT_V3, [POINTER, POINTER, POINTER]) ? SNAPSHOT_V3 : :emf_document_snapshot
       rescue Fiddle::DLError => e
         raise Unavailable, "native backend could not load: #{e.message}"

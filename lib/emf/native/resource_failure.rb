@@ -9,6 +9,8 @@ module Emf
       private
 
       def resource_failure(error)
+        # Older ABI-1 libraries expose only the original status and message.
+        return FormatError.new(error_message(error, 3)) unless @functions.key?(:emf_error_resource_view)
         return Error.new("native resource failure has no error detail") if error.zero?
 
         info = Fiddle::Pointer[[32, 1].pack("L2") + ("\0" * 24)]
