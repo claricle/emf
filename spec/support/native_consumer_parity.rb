@@ -27,10 +27,10 @@ module NativeConsumerParity
     end
     [Emf::Emr::Parser, Emf::Wmf::Parser].each do |parser|
       probe = Module.new do
-        define_method(:call) do |bytes|
+        define_method(:call) do |bytes, **options|
           evidence[:ruby_calls] += 1
           raise "forced native invoked Ruby parser" if ENV.fetch("EMF_BACKEND") == "native"
-          super(bytes)
+          super(bytes, **options)
         end
       end
       parser.singleton_class.prepend(probe)
