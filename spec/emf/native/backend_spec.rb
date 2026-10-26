@@ -15,7 +15,7 @@ RSpec.describe "Backend selection" do
         bytes = File.binread("spec/fixtures/simple/image1.emf")
         begin
           parsed = Emf.parse(bytes)
-          result = { format: parsed.format, round_trip: Emf.serialize(parsed) == bytes }
+          result = { format: parsed.format, round_trip: Emf.serialize(parsed) == bytes, backend: Emf.backend }
         rescue StandardError => e
           result = { error: e.class.name, message: e.message }
         end
@@ -28,15 +28,36 @@ RSpec.describe "Backend selection" do
     [nil, "auto", "ruby"].each do |override|
       context "with #{override.inspect}" do
         let(:result) do
-          stdout, stderr, status = Open3.capture3({ "EMF_BACKEND" => override }, RbConfig.ruby, "-Ilib", "-e", script)
+          env = { "EMF_BACKEND" => override, "EMF_NATIVE_LIBRARY" => "" }
+          stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, "-Ilib", "-e", script)
           expect(status.success?).to be(true), stderr
           JSON.parse(stdout)
         end
 
         it "keeps the Ruby backend usable without native assets" do
-          expect(result).to include("format" => "emf_plus", "round_trip" => true, "before" => [])
+          expect(result).to include("format" => "emf_plus", "round_trip" => true, "backend" => "ruby", "before" => [])
           expect(result.fetch("after").grep(%r{fiddle|emf/native/loader})).to eq([])
           expect(result.fetch("after")).to eq([]) if override == "ruby"
+        end
+      end
+    end
+
+    context "with a native library" do
+      let(:library) do
+        ENV.fetch("EMF_TEST_NATIVE_LIBRARY") do
+          extension = RbConfig::CONFIG.fetch("host_os").include?("darwin") ? "dylib" : "so"
+          File.expand_path("../../../emf-rs/target/debug/libemf_ffi.#{extension}", __dir__)
+        end
+      end
+
+      before { skip "native library not built" unless File.file?(library) }
+
+      %w[auto native].each do |override|
+        it "reports native and preserves a real round trip with #{override}" do
+          env = { "EMF_BACKEND" => override, "EMF_NATIVE_LIBRARY" => library }
+          stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, "-Ilib", "-e", script)
+          expect(status.success?).to be(true), stderr
+          expect(JSON.parse(stdout)).to include("backend" => "native", "format" => "emf_plus", "round_trip" => true)
         end
       end
     end
@@ -45,12 +66,78 @@ RSpec.describe "Backend selection" do
       "invalid" => ["ArgumentError", /EMF_BACKEND.*invalid/],
       "" => ["ArgumentError", /EMF_BACKEND/] }.each do |override, (error_class, message)|
       it "rejects #{override.inspect} clearly" do
-        stdout, stderr, status = Open3.capture3({ "EMF_BACKEND" => override }, RbConfig.ruby, "-Ilib", "-e", script)
+        env = { "EMF_BACKEND" => override, "EMF_NATIVE_LIBRARY" => "" }
+        stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, "-Ilib", "-e", script)
         expect(status.success?).to be(true), stderr
         result = JSON.parse(stdout)
         expect(result.fetch("error")).to eq(error_class)
         expect(result.fetch("message")).to match(message)
       end
+    end
+  end
+
+  describe ".backend" do
+    let(:override) { "auto" }
+    let(:native) { double("native backend") }
+
+    before do
+      allow(ENV).to receive(:fetch).with("EMF_BACKEND", "auto").and_return(override)
+    end
+
+    context "when Ruby is forced" do
+      let(:override) { "ruby" }
+
+      it "reports Ruby without setting up native" do
+        expect(Emf::Native).not_to receive(:backend)
+        expect(Emf.backend).to eq(:ruby)
+      end
+    end
+
+    %w[auto native].each do |setting|
+      context "with #{setting}" do
+        let(:override) { setting }
+
+        it "reports an available native backend as a symbol" do
+          allow(Emf::Native).to receive(:backend).and_return(native)
+          expect(Emf.backend).to eq(:native)
+        end
+      end
+    end
+
+    it "reports Ruby when automatic native selection is unavailable" do
+      allow(Emf::Native).to receive(:backend).and_raise(Emf::Native::Unavailable, "missing native")
+      expect(Emf.backend).to eq(:ruby)
+    end
+
+    context "when native is forced but unavailable" do
+      let(:override) { "native" }
+
+      it "propagates unavailability" do
+        error = Emf::Native::Unavailable.new("missing native")
+        allow(Emf::Native).to receive(:backend).and_raise(error)
+        expect { Emf.backend }.to(raise_error { |raised| expect(raised).to equal(error) })
+      end
+    end
+
+    it "propagates unexpected native setup failures" do
+      error = RuntimeError.new("binding defect")
+      allow(Emf::Native).to receive(:backend).and_raise(error)
+      expect { Emf.backend }.to(raise_error { |raised| expect(raised).to equal(error) })
+    end
+
+    context "with an invalid override" do
+      let(:override) { "invalid" }
+
+      it "retains the selection error" do
+        expect { Emf.backend }.to raise_error(ArgumentError, /invalid EMF_BACKEND: "invalid"/)
+      end
+    end
+
+    it "resolves the current setting on each call" do
+      allow(ENV).to receive(:fetch).with("EMF_BACKEND", "auto").and_return("ruby", "auto")
+      allow(Emf::Native).to receive(:backend).and_return(native)
+      expect(Emf.backend).to eq(:ruby)
+      expect(Emf.backend).to eq(:native)
     end
   end
 

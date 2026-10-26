@@ -1448,7 +1448,7 @@ fn decode_font(
             design_vector: DesignVector { signature, values },
         })
     };
-    budget.charge_alloc(std::mem::size_of::<FontRecord>())?;
+    budget.charge_alloc(crate::limits::FONT_RECORD_BYTES)?;
     Ok((
         RecordData::CreateFontIndirectW(Box::new(FontRecord { ih_object, font })),
         r.position(),

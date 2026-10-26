@@ -2,6 +2,7 @@
 
 module Emf
   module Model
+    autoload :Diagnostic, "emf/model/diagnostic"
     autoload :Metafile, "emf/model/metafile"
     autoload :Record, "emf/model/record"
     autoload :Visitor, "emf/model/visitor"

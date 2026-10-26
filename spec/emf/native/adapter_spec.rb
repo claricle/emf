@@ -775,8 +775,11 @@ RSpec.describe Emf::Native do
       end
       limit_counts.each do |poly_count, point_count|
         bytes = bounds + [poly_count, point_count].pack("Q<2") + ("x" * ((poly_count * 4) + (point_count * width)))
+        expect(bytes).not_to receive(:unpack)
         expect { Emf::Native::Fields.multi_point_array(bytes, family) }
-          .to raise_error(Emf::FormatError, "native multi array exceeds Ruby model array limit")
+          .to raise_error(Emf::ResourceLimitError, "array_elements limit exceeded (1000001 > 1000000)") do |error|
+            expect([error.resource, error.limit, error.actual]).to eq([:array_elements, 1_000_000, 1_000_001])
+          end
       end
     end
   end
@@ -1091,8 +1094,11 @@ RSpec.describe Emf::Native do
         expect { Emf::Native::Fields.poly_draw(bytes, family) }.to raise_error(Emf::FormatError)
       end
       bytes = bounds + over_limit_count + ("x" * (1_000_001 * (width + 1)))
+      expect(bytes).not_to receive(:unpack)
       expect { Emf::Native::Fields.poly_draw(bytes, family) }
-        .to raise_error(Emf::FormatError, "native PolyDraw exceeds Ruby model array limit")
+        .to raise_error(Emf::ResourceLimitError, "array_elements limit exceeded (1000001 > 1000000)") do |error|
+          expect([error.resource, error.limit, error.actual]).to eq([:array_elements, 1_000_000, 1_000_001])
+        end
     end
   end
 

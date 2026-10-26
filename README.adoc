@@ -53,6 +53,13 @@ The public `Emf.parse`, `Emf.parse_file` and `Emf.serialize` APIs use
 |`native` |Require the native backend; unavailable setup raises `Emf::Native::Unavailable`.
 |===
 
+`Emf.backend` resolves the backend at call time and returns `:ruby` or `:native`.
+It uses the same selection as parsing and serialization, including the `auto`
+availability fallback. It returns a symbol rather than a backend adapter.
+Explicit `native` selection raises `Emf::Native::Unavailable` if unavailable;
+unexpected setup errors propagate. This query may load the native library, and
+its result describes the current settings rather than pinning future operations.
+
 Other values raise `ArgumentError`. A parsing or serialization error after
 backend selection propagates to the caller; it is not retried using Ruby.
 Both backends return the existing Ruby model and use the Ruby binary writers

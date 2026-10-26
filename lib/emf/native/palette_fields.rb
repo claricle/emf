@@ -18,14 +18,20 @@ module Emf
         [klass, fields]
       end
 
+      def self.palette_counts_valid?(family, scalar, count)
+        family != 83 || (scalar <= 0xFFFF && count <= 0xFFFF)
+      end
+
       def self.array_fields(payload, family, raw, klass)
         raise FormatError, "invalid native palette array payload" if payload.bytesize < 16
 
         handle, scalar, count = payload.unpack("V2Q<")
-        limit, fixed = { 83 => [0xFFFF, 16], 84 => [1_000_000, 20] }.fetch(family)
-        valid = count <= limit && payload.bytesize == 16 + (count * 4) && raw.bytesize >= fixed + (count * 4)
-        valid &&= scalar <= 0xFFFF if family == 83
+        fixed = family == 83 ? 16 : 20
+        valid = payload.bytesize == 16 + (count * 4) && raw.bytesize >= fixed + (count * 4)
+        valid &&= palette_counts_valid?(family, scalar, count)
         raise FormatError, "invalid native palette array length" unless valid
+
+        ResourceLimits::EmfRecords.check_count(count) if family == 84
 
         entries = payload.byteslice(16..).unpack("C*").each_slice(4).map do |red, green, blue, flags|
           { red: red, green: green, blue: blue, flags: flags }

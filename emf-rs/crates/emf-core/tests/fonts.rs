@@ -279,6 +279,46 @@ fn extended_font_fields_are_semantic_and_lossless() {
 }
 
 #[test]
+fn portable_font_allocation_boundaries_preserve_record_bytes() {
+    use emf_core::{LimitKind, ParseFailure};
+
+    for size in [92_usize, 320, 356, 364, 420] {
+        let mut bytes = document(size);
+        bytes.truncate(88 + 12 + size);
+        let axes = size.saturating_sub(356);
+        // Owned input, first record slot, portable font charge, design axes.
+        let expected = bytes.len() + 336 + 400 + axes;
+        let mut limits = ParseLimits {
+            max_allocated_bytes: expected - 1,
+            ..ParseLimits::default()
+        };
+        assert_eq!(
+            parse(&bytes, &limits).unwrap_err(),
+            ParseFailure::LimitExceeded {
+                kind: LimitKind::AllocatedBytes,
+                limit: (expected - 1) as u64,
+                requested: expected as u64,
+            },
+            "font bytes {size}"
+        );
+        limits.max_allocated_bytes = expected;
+        let mut doc = parse(&bytes, &limits).unwrap();
+        assert!(matches!(
+            doc.records()[0].data(),
+            RecordData::CreateFontIndirectW(_)
+        ));
+        assert_eq!(serialize(&doc).unwrap(), bytes);
+        doc.edit_record(0, doc.records()[0].data().clone()).unwrap();
+        let encoded = serialize(&doc).unwrap();
+        assert_eq!(&encoded[88..], &bytes[88..]);
+        assert_eq!(
+            parse(&encoded, &limits).unwrap().records()[0].data(),
+            doc.records()[0].data()
+        );
+    }
+}
+
+#[test]
 fn font_axis_resource_limits_are_inclusive() {
     use emf_core::{
         serialize_with_limits, LimitKind, ParseFailure, SerializeFailure, SerializeLimits,

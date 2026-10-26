@@ -13,7 +13,6 @@ module Emf
       # rejected, and 404 is retired with them. 701, 801 and 1704 are rejected only for the shapes Wmf::Recovery
       # cannot keep.
       INPUT = {
-        101 => "WMF input too large",
         201 => "truncated WMF placeable header",
         202 => "WMF placeable reserved field must be zero",
         301 => "truncated WMF standard header",
@@ -25,7 +24,7 @@ module Emf
 
       # Record failures: ParseError "WMF <text> at offset <offset>". `%d` takes the numeric detail.
       RECORD = {
-        401 => "record limit exceeded", 402 => "truncated record header", 403 => "invalid record length %d",
+        402 => "truncated record header", 403 => "invalid record length %d",
         405 => "missing EOF record",
         501 => "invalid fixed record length", 601 => "invalid state record length", 701 => "invalid font record length",
         801 => "invalid object record length",
@@ -65,6 +64,14 @@ module Emf
 
       def error(found, input)
         evidence = Wmf::Evidence.build(found.reason, input, found.offset, found.detail)
+        if found.reason == 101
+          return ResourceLimitError.new(resource: :input_bytes, limit: Wmf::Binary::MAX_INPUT_BYTES,
+                                        actual: input.bytesize).with_evidence(evidence)
+        end
+        if found.reason == 401
+          return ResourceLimitError.new(resource: :record_count, limit: Wmf::Binary::MAX_RECORDS,
+                                        actual: Wmf::Binary::MAX_RECORDS + 1).with_evidence(evidence)
+        end
         return FormatError.new(INPUT.fetch(found.reason)).with_evidence(evidence) if INPUT.key?(found.reason)
 
         template = RECORD.fetch(found.reason) { raise FormatError, "unknown native WMF rejection #{found.reason}" }
