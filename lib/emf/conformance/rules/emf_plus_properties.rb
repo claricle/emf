@@ -19,20 +19,20 @@ module Emf
         Records::SetInterpolationMode => [:interpolation_mode, (0..7), "InterpolationMode"],
         Records::SetPixelOffsetMode => [:pixel_offset_mode, (0..4), "PixelOffsetMode"],
         Records::SetCompositingMode => [:compositing_mode, (0..1), "CompositingMode"],
-        Records::SetCompositingQuality => [:compositing_quality, (1..5), "CompositingQuality"],
         Records::SetClipRect => [:combine_mode, (0..5), "CombineMode"],
         Records::SetClipPath => [:combine_mode, (0..5), "CombineMode"],
         Records::SetClipRegion => [:combine_mode, (0..5), "CombineMode"]
       }.freeze
+      QUALITY = [:compositing_quality, (1..5), "CompositingQuality"].freeze
       UNIT_TYPE = (0..6)
       UNIT_WORLD_OR_DISPLAY = (0..1)
       CONTRAST = (1000..2200)
 
       module_function
 
-      def enum_domain(located)
+      def enum_domain(located, table = ENUMS)
         record = located.record
-        reader, domain, name = ENUMS.find { |klass, _| record.is_a?(klass) }&.last
+        reader, domain, name = table.find { |klass, _| record.is_a?(klass) }&.last
         return unless reader
 
         value = record.public_send(reader)
@@ -40,6 +40,8 @@ module Emf
 
         "#{Support.type_name(record)} #{name} value #{value} is outside #{domain.first}..#{domain.last}"
       end
+
+      def compositing_quality(located) = enum_domain(located, { Records::SetCompositingQuality => QUALITY })
 
       def text_contrast(located)
         record = located.record
@@ -69,9 +71,16 @@ module Emf
       end
     end
 
-    EmfPlusSupport.per_record(id: "emfplus.property.enum", citation: "MS-EMFPLUS 2.3.6", kind: :property_enum,
-                              tolerant_reason: "a real producer writes CompositingQuality 0 (spec/fixtures/emf/test-000.emf)") do |located|
+    EmfPlusSupport.per_record(id: "emfplus.property.enum", citation: "MS-EMFPLUS 2.3.6", kind: :property_enum) do |located|
       EmfPlusProperties.enum_domain(located)
+    end
+    # Only CompositingQuality is waived: real producers write 0 (spec/fixtures/emf/test-000.emf) and Windows treats any
+    # invalid value as CompositingQualityDefault (MS-EMFPLUS product behavior note 3).
+    EmfPlusSupport.per_record(id: "emfplus.property.compositing_quality", citation: "MS-EMFPLUS 2.3.6.4",
+                              kind: :property_enum,
+                              tolerant_reason: "a real producer writes CompositingQuality 0 (spec/fixtures/emf/test-000.emf) " \
+                                               "and Windows treats an invalid value as CompositingQualityDefault") do |located|
+      EmfPlusProperties.compositing_quality(located)
     end
     EmfPlusSupport.per_record(id: "emfplus.property.text_contrast", citation: "MS-EMFPLUS 2.3.6.7", kind: :text_contrast) do |located|
       EmfPlusProperties.text_contrast(located)

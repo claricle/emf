@@ -52,8 +52,29 @@ module Emf
       def unparseable(context)
         failure = context.parse_failure
         return [] if WmfRejectionRules.reason_for(failure) # a named wmf.reject.rNNNN finding already explains it
+        return [] if wmf_header_fault(context.bytes) # wmf.header.unrecognised cites MS-WMF instead
 
         [{ message: "input could not be parsed: #{failure.message}", offset: 0 }]
+      end
+
+      WMF_TYPES = [1, 2].freeze
+      WMF_VERSIONS = [0x0100, 0x0300].freeze
+
+      # The detector accepts a standard WMF only when Type is 1 or 2 and HeaderSize is 9, so a META_HEADER with
+      # exactly one of those wrong (and a valid Version) never reaches the WMF parser. Name that field here.
+      def wmf_header_fault(bytes)
+        return unless bytes && bytes.bytesize >= 18
+
+        type, header_size, version = bytes.unpack("vvv")
+        return unless WMF_VERSIONS.include?(version)
+        return "HeaderSize #{header_size} is not 9" if WMF_TYPES.include?(type) && header_size != 9
+
+        "Type #{type} is not 1 (memory) or 2 (disk)" if header_size == 9 && !WMF_TYPES.include?(type)
+      end
+
+      def wmf_header(context)
+        fault = wmf_header_fault(context.bytes)
+        fault ? [{ message: "WMF META_HEADER #{fault}, so the input could not be parsed", offset: 0 }] : []
       end
     end
 
@@ -70,5 +91,7 @@ module Emf
 
     registry.register(id: "emf.parse.unparseable", formats: [:unparseable], citation: "MS-EMF 2.3.4.2",
                       kind: :unparseable) { |context| ParseRecoveryRules.unparseable(context) }
+    registry.register(id: "wmf.header.unrecognised", formats: [:unparseable], citation: "MS-WMF 2.3.2.2",
+                      kind: :unparseable) { |context| ParseRecoveryRules.wmf_header(context) }
   end
 end

@@ -17,8 +17,7 @@ RSpec.describe "EMF+ property, clip and page-unit rules" do
       ["SetTextRenderingHint", 0x401F, 6, 5],
       ["SetInterpolationMode", 0x4021, 8, 7],
       ["SetPixelOffsetMode", 0x4022, 5, 4],
-      ["SetCompositingMode", 0x4023, 2, 1],
-      ["SetCompositingQuality", 0x4024, 0, 5]
+      ["SetCompositingMode", 0x4023, 2, 1]
     ].each do |name, type, bad, good|
       it "#{name}: flags #{bad} and accepts #{good}" do
         expect(found(stream_of(type, bad), "emfplus.property.enum").size).to eq(1)
@@ -33,7 +32,9 @@ RSpec.describe "EMF+ property, clip and page-unit rules" do
     end
 
     it "is a warning under tolerant with the producer reason in the waiver" do
-      diagnostic = found(stream_of(0x4024, 0), "emfplus.property.enum", profile: :tolerant).first
+      expect(found(stream_of(0x4024, 6), "emfplus.property.compositing_quality").size).to eq(1)
+      expect(found(stream_of(0x4024, 5), "emfplus.property.compositing_quality")).to be_empty
+      diagnostic = found(stream_of(0x4024, 0), "emfplus.property.compositing_quality", profile: :tolerant).first
       expect(diagnostic.severity).to eq(:warning)
       expect(diagnostic.waiver).to include("CompositingQuality 0")
     end

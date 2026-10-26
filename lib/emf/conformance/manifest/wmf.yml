@@ -267,19 +267,19 @@
   record_types: []
   citation: MS-WMF 2.3.2.2 META_HEADER
   status: not_checkable
-  reason: 'the spec MUST holds, but the format detector turns such an input into an unrecognised signature before any WMF parse runs, so no WMF failure with this reason exists to report; the lens reports it as emf.parse.unparseable'
+  reason: 'the spec MUST holds, but the format detector turns such an input into an unrecognised signature before any WMF parse runs, so no WMF failure with this reason exists to report; the lens reports a wrong Type or HeaderSize as wmf.header.unrecognised and anything else as emf.parse.unparseable'
 - id: wmf.reject.r0302
   format: wmf
   record_types: []
   citation: MS-WMF 2.3.2.2 META_HEADER (Type); 2.1.1.18 MetafileType Enumeration
   status: not_checkable
-  reason: 'the spec MUST holds, but the format detector turns such an input into an unrecognised signature before any WMF parse runs, so no WMF failure with this reason exists to report; the lens reports it as emf.parse.unparseable'
+  reason: 'the spec MUST holds, but the format detector turns such an input into an unrecognised signature before any WMF parse runs, so no WMF failure with this reason exists to report; the lens reports a wrong Type or HeaderSize as wmf.header.unrecognised and anything else as emf.parse.unparseable'
 - id: wmf.reject.r0303
   format: wmf
   record_types: []
   citation: MS-WMF 2.3.2.2 META_HEADER (HeaderSize)
   status: not_checkable
-  reason: 'the spec MUST holds, but the format detector turns such an input into an unrecognised signature before any WMF parse runs, so no WMF failure with this reason exists to report; the lens reports it as emf.parse.unparseable'
+  reason: 'the spec MUST holds, but the format detector turns such an input into an unrecognised signature before any WMF parse runs, so no WMF failure with this reason exists to report; the lens reports a wrong Type or HeaderSize as wmf.header.unrecognised and anything else as emf.parse.unparseable'
 - id: wmf.reject.r0304
   format: wmf
   record_types: []
@@ -679,6 +679,20 @@
   citation: MS-WMF 2.3.3.20 META_TEXTOUT, 2.3.3.5 META_EXTTEXTOUT (StringLength, String)
   status: implemented
   reason:
+- id: wmf.region.header
+  format: wmf
+  record_types:
+  - META_CREATEREGION
+  citation: MS-WMF 2.2.1.5 Region Object (ObjectCount, RegionSize); 2.3.4.6 META_CREATEREGION
+  status: implemented
+  reason:
+- id: wmf.array.polygon_empty
+  format: wmf
+  record_types:
+  - META_POLYGON
+  citation: MS-WMF 2.3.3.15 META_POLYGON (NumberOfPoints)
+  status: implemented
+  reason:
 - id: wmf.text.spacing_count
   format: wmf
   record_types:
@@ -852,3 +866,9 @@
   citation: MS-WMF 2.3.3.1-2.3.3.19, 2.3.5.2-2.3.5.30 (coordinate, extent, offset, BreakCount, BreakExtra, CharExtra and MapperValues fields)
   status: not_checkable
   reason: 'each of these sections defines the coordinate, extent, offset or count fields only by type and meaning (a 16-bit signed or unsigned integer in logical or device units; META_SETMAPPERFLAGS says only that bit zero selects matching fonts) and states no MUST on their value, so no value is a violation'
+- id: wmf.header.unrecognised
+  format: wmf
+  record_types: []
+  citation: "MS-WMF 2.3.2.2"
+  status: implemented
+  reason: null

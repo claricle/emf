@@ -72,9 +72,10 @@ RSpec.describe "Emf::Conformance WMF forced-backend parity" do
     false
   end
 
-  # A rejected input reports emf.parse.unparseable, or the named WMF reason that replaces it.
+  # A rejected input reports emf.parse.unparseable, or the named WMF reason or header fault that replaces it.
   def rejected?(report)
-    report["errors"]["by_requirement"].each_key.any? { |id| id == "emf.parse.unparseable" || id.start_with?("wmf.reject.") }
+    named = %w[emf.parse.unparseable wmf.header.unrecognised]
+    report["errors"]["by_requirement"].each_key.any? { |id| named.include?(id) || id.start_with?("wmf.reject.") }
   end
 
   def compare(corpus, profile)

@@ -43,7 +43,7 @@ module Emf
       #   that depends only on the input and profile
       def to_h(timestamp: true)
         head = { "filename" => filename, "profile" => profile.to_s, "tool" => TOOL, "version" => Emf::VERSION }
-        head["timestamp"] = self.timestamp.utc.iso8601 if timestamp
+        head["timestamp"] = self.timestamp.getutc.iso8601 if timestamp
         head.merge("valid" => valid?, "errors" => summary(errors, "error"), "warnings" => summary(warnings, "warning"))
       end
 

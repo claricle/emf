@@ -15,6 +15,8 @@ module Emf
         0x16 => Model::Wmf::Records::IntersectClipRect
       }.freeze
       FUNCTIONS = RECORDS.invert.freeze
+      HEADER_BYTES = 22
+      KIND = 6
       BOUNDS_FIELDS = %i[left top right bottom].freeze
 
       module_function
@@ -32,11 +34,9 @@ module Emf
       end
 
       def decode_region(body, &)
-        yield "truncated region header" if body.bytesize < 22
-        next_in_chain, kind, object_count, size, count, max_scan, *bounds = body.unpack("v2Vs<7")
-        if kind != 6 || size < 22 || size > body.bytesize || count.negative? || max_scan.negative? || count > (size - 22) / 8
-          yield "invalid region header"
-        end
+        yield "truncated region header" if body.bytesize < HEADER_BYTES
+        next_in_chain, _kind, object_count, size, count, max_scan, *bounds = body.unpack("v2Vs<7")
+        yield "invalid region header" if header_invalid?(body)
         preflight_scans(body, size, count, max_scan, &)
         cursor = 22
         scans = Array.new(count) do
@@ -49,6 +49,18 @@ module Emf
         end
         [{ next_in_chain: next_in_chain, object_count: object_count,
            bounds: Model::Wmf::Records::RegionBounds.new(**BOUNDS_FIELDS.zip(bounds).to_h), scans: scans }, size]
+      end
+
+      def header_fields(body)
+        body.unpack("@2v@8s<s<")
+      end
+
+      # The spec's header checks, shared with Wmf::Recovery so a recovered shape is exactly one this rejects.
+      def header_invalid?(body)
+        kind, size, count = header_fields(body)
+        max_scan = body.unpack1("@12s<")
+        kind != KIND || size < HEADER_BYTES || size > body.bytesize || count.negative? || max_scan.negative? ||
+          count > (size - HEADER_BYTES) / 8
       end
 
       def preflight_scans(body, size, count, max_scan)
