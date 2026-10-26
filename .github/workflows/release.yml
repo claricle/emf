@@ -66,7 +66,10 @@ jobs:
         if: ${{ inputs.next_version != 'skip' }}
         env:
           NEXT_VERSION: ${{ inputs.next_version }}
+        # The runner has no git identity, and the bump commits and tags.
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           gem install gem-release --no-document
           gem bump --version "$NEXT_VERSION" --commit --tag --push
 
