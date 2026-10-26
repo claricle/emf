@@ -380,7 +380,9 @@ fn point_array(raw: &[u8], low: u8, offset: usize, function: u16) -> Result<(), 
     } else {
         let count = i64::from(le16(raw, 6) as i16);
         let minimum = if low == 0x24 { 2 } else { 0 };
-        if count < minimum {
+        // A polygon with no points and no point bytes is kept (Ruby Wmf::Recovery, reason 903).
+        let empty_polygon = low == 0x24 && count == 0 && raw.len() == 8;
+        if count < minimum && !empty_polygon {
             return fail(Reason::PointInvalidCount);
         }
         (8, count)
@@ -472,6 +474,13 @@ fn region_body(body: &[u8], offset: usize, function: u16) -> Result<(), Rejectio
         || max_scan < 0
         || count > (size - 22) / 8
     {
+        // libUEMF writes ObjectCount two bytes wide: RegionSize read two bytes early is the whole body, and the
+        // record is kept opaque (Ruby Wmf::Recovery, reason 1203).
+        let early_size = i64::from(le16(body, 6) as i16);
+        let early_count = i64::from(le16(body, 8) as i16);
+        if kind == 6 && early_size == body.len() as i64 && early_count >= 0 {
+            return Ok(());
+        }
         return fail(Reason::RegionInvalidHeader);
     }
     let size = size as usize;

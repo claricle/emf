@@ -40,10 +40,9 @@ RSpec.describe "Emf::Conformance WMF rejection and declared-size rules" do
       expect(check(WmfRejectionCases.cases.fetch(306)).diagnostics.first.record_type).to be_nil
     end
 
-    it "keeps emf.parse.unparseable for reasons the format detector shadows (301-303)" do
-      shadowed.each do |reason|
-        expect(ids(WmfRejectionCases.cases.fetch(reason))).to eq(["emf.parse.unparseable"])
-      end
+    it "cites MS-WMF for the detector-shadowed Type (302) and HeaderSize (303) faults, and keeps 301 unparseable" do
+      expected = { 301 => "emf.parse.unparseable", 302 => "wmf.header.unrecognised", 303 => "wmf.header.unrecognised" }
+      shadowed.each { |reason| expect(ids(WmfRejectionCases.cases.fetch(reason))).to eq([expected.fetch(reason)]) }
     end
 
     it "keeps emf.parse.unparseable for a failure without a named reason" do
@@ -64,7 +63,7 @@ RSpec.describe "Emf::Conformance WMF rejection and declared-size rules" do
 
     {
       "bitmap-short-record" => "wmf.reject.r1401", "missing-eof" => "wmf.reject.r0405", "zero-record" => "wmf.reject.r0403",
-      "header-size" => "emf.parse.unparseable"
+      "header-size" => "wmf.header.unrecognised"
     }.each do |name, id|
       it "seed #{name}.wmf gives #{id}" do
         profiles.each { |profile| expect(ids(File.join(seeds, "#{name}.wmf"), profile)).to eq([id]) }

@@ -24,13 +24,13 @@ module Emf
         case input
         when Model::Metafile then [nil, nil, input]
         when Pathname then [input.to_s, File.binread(input), nil]
-        else
-          path?(input) ? [input, File.binread(input), nil] : [nil, input.b, nil]
+        when String then path?(input) ? [input, File.binread(input), nil] : [nil, input.b, nil]
+        else raise ArgumentError, "expected a String, Pathname or Emf::Model::Metafile, got #{input.class}"
         end
       end
 
       def path?(input)
-        input.is_a?(String) && !input.include?("\0") && input.bytesize < 4096 && File.file?(input)
+        input.encoding.ascii_compatible? && !input.include?("\0") && input.bytesize < 4096 && File.file?(input)
       end
 
       def build_context(metafile, bytes)

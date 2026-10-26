@@ -59,6 +59,10 @@ RSpec.describe "Emf::Conformance WMF buffer rules" do
       "wmf.text.length" => model(records::TextOut.new(text: "abc".b, padding: "".b, x: 0, y: 0, offset: 18)),
       "wmf.text.negative_length" => model(records::UnknownRecord.new(type_id: 0x0521, raw_bytes: [3, 0x0521, -1, 0, 0].pack("Vvs<3"),
                                                                      offset: 18)),
+      "wmf.region.header" => model(records::UnknownRecord.new(
+                                     type_id: 0x06FF, offset: 18, raw_bytes: [17, 0x06FF, 0, 6, 0, 28, 1, 4, 0, 0, 1, 1, 2, 2, 0,
+                                                                              0].pack("Vv*")
+                                   )),
       "wmf.text.spacing_count" => model(records::ExtTextOut.new(text: "ab".b, padding: "".b, x: 0, y: 0, dx: [1], offset: 18)),
       "wmf.text.rectangle_options" => model(records::ExtTextOut.new(text: "ab".b, padding: "".b, x: 0, y: 0, options: 2, offset: 18)),
       "wmf.palette.entry_count" => model(records::ResizePalette.new(entry_count: 70_000, offset: 18)),

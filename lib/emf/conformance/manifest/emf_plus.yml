@@ -50,8 +50,14 @@
   reason: null
 - id: emfplus.property.enum
   format: emf_plus
-  record_types: [EmfPlusSetAntiAliasMode, EmfPlusSetTextRenderingHint, EmfPlusSetInterpolationMode, EmfPlusSetPixelOffsetMode, EmfPlusSetCompositingMode, EmfPlusSetCompositingQuality, EmfPlusSetClipRect, EmfPlusSetClipPath, EmfPlusSetClipRegion]
+  record_types: [EmfPlusSetAntiAliasMode, EmfPlusSetTextRenderingHint, EmfPlusSetInterpolationMode, EmfPlusSetPixelOffsetMode, EmfPlusSetCompositingMode, EmfPlusSetClipRect, EmfPlusSetClipPath, EmfPlusSetClipRegion]
   citation: "MS-EMFPLUS 2.3.6"
+  status: implemented
+  reason: null
+- id: emfplus.property.compositing_quality
+  format: emf_plus
+  record_types: [EmfPlusSetCompositingQuality]
+  citation: "MS-EMFPLUS 2.3.6.4"
   status: implemented
   reason: null
 - id: emfplus.property.text_contrast
@@ -263,8 +269,8 @@
   format: emf_plus
   record_types: [EmfPlusObject]
   citation: "MS-EMFPLUS 2.2.2.3"
-  status: deferred
-  reason: "Objects::Image#bitmap exposes width, height, stride, pixel format and the pixel bytes, so PixelData length against Stride * Height (and BitsPerPixel against Stride) is readable; no rule is written yet"
+  status: implemented
+  reason: null
 - id: emfplus.object.type
   format: emf_plus
   record_types: [EmfPlusObject]
@@ -281,8 +287,14 @@
   format: emf_plus
   record_types: [EmfPlusObject]
   citation: "MS-EMFPLUS 2.2.1"
-  status: deferred
-  reason: "Objects::Brush, Pen, Path, Region, Font, StringFormat, ImageAttributes and CustomLineCap decode publicly, so their field enumerations and ranges (BrushType, PenData flags, PathPointType, FamilyName length, WrapMode, ObjectClamp) are readable; only the bounds are checked (emfplus.object.payload) and no per-field rule is written yet"
+  status: implemented
+  reason: null
+- id: emfplus.object.pen_line_fields
+  format: emf_plus
+  record_types: [EmfPlusObject]
+  citation: "MS-EMFPLUS 2.2.2.34"
+  status: implemented
+  reason: null
 - id: emfplus.object.serializable
   format: emf_plus
   record_types: [EmfPlusSerializableObject]
@@ -305,8 +317,8 @@
   format: emf_plus
   record_types: [EmfPlusSerializableObject]
   citation: "MS-EMFPLUS 2.2.3"
-  status: deferred
-  reason: "Records::SerializableObject#effect decodes each effect (Blur, BrightnessContrast, ColorBalance, HueSaturationLightness, Levels, Sharpen, Tint, ColorMatrix, ...), so the per-effect ranges (BlurRadius 0..255, BrightnessLevel -255..255, ContrastLevel -100..100, ColorBalance -100..100, ColorMatrix row 4 columns 0..3 = 0.0) are readable; no rule is written yet"
+  status: implemented
+  reason: null
 - id: emfplus.terminal.graphics
   format: emf_plus
   record_types: [EmfPlusSetTSGraphics]

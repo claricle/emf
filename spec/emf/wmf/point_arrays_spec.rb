@@ -77,7 +77,7 @@ RSpec.describe "WMF point-array drawing records" do
   end
 
   it "rejects missing, signed-negative, undersized and mismatched payload counts with record context" do
-    malformed = [[0x0324, [], []], [0x0324, [0], []], [0x0324, [1], [[1, 2]]],
+    malformed = [[0x0324, [], []], [0x0324, [1], [[1, 2]]],
                  [0x0325, [], []], [0x0325, [0xFFFF], []], [0x0324, [0x8000], []],
                  [0x0324, [2], [[1, 2]]], [0x0325, [1], coordinates],
                  [0x0538, [], []], [0x0538, [0xFFFF], []], [0x0538, [2, 1], []],
@@ -90,6 +90,12 @@ RSpec.describe "WMF point-array drawing records" do
         expect(error.record_code).to eq(function)
       end
     end
+  end
+
+  it "keeps a zero-point polygon in an 8-byte record and records it as a parse error" do
+    metafile = Emf.parse(geometry_file([point_array_record(0x0324, [0], [])]))
+    expect(metafile.records.first.points).to eq([])
+    expect(metafile.errors.map { |error| [error.offset, error.record_code] }).to eq([[18, 0x0324]])
   end
 
   it "honors signed simple counts and unsigned polygon counts at their upper boundaries" do

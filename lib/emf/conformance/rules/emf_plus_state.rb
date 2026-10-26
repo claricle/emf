@@ -36,18 +36,20 @@ module Emf
       def unmatched(context, opens, closer, closer_name, opener_name, report = :any)
         stack = []
         seen = {}
+        open_count = Hash.new(0)
         Support.records(context).filter_map do |located|
           record = located.record
           if opens.any? { |klass| record.is_a?(klass) }
             stack.push(record.stack_index)
+            open_count[record.stack_index] += 1
             seen[record.stack_index] = true
             next
           end
           next unless record.is_a?(closer)
 
-          position = stack.rindex(record.stack_index)
-          if position
-            stack.slice!(position..)
+          # open_count keeps an unmatched index O(1) instead of a full-stack scan.
+          if open_count[record.stack_index].positive?
+            pop_to(stack, open_count, record.stack_index)
             next
           end
           unknown = !seen.key?(record.stack_index)
@@ -55,6 +57,10 @@ module Emf
 
           Support.finding(located, "#{closer_name} StackIndex #{record.stack_index} matches no open #{opener_name}")
         end
+      end
+
+      def pop_to(stack, open_count, index)
+        stack.slice!(stack.rindex(index)..).each { |popped| open_count[popped] -= 1 }
       end
     end
 

@@ -70,6 +70,7 @@ RSpec.describe "Emf::Conformance WMF rules" do
       "wmf.flags.text_align" => model([WmfSpec::R::SetTextAlign.new(alignment: 0x0004, offset: 18)]),
       "wmf.flags.layout" => model([WmfSpec::R::SetLayout.new(layout: 0x10, reserved: 0, offset: 18)]),
       "wmf.array.point_count" => model([WmfSpec::R::Polygon.new(points: [point(0, 0)], offset: 18)]),
+      "wmf.array.polygon_empty" => model([WmfSpec::R::Polygon.new(points: [], offset: 18)]),
       "wmf.array.polypolygon_counts" => model([WmfSpec::R::PolyPolygon.new(points: [point(0, 0)], points_per_polygon: [3], offset: 18)]),
       "wmf.record.layout_size" => model([WmfSpec::R::SetRelAbs.new(suffix: "\0\0".b, offset: 18)]),
       "wmf.fixed.raster_operation" => model([WmfSpec::R::PatBlt.new(raster_operation: 0x01F00021, height: 1, width: 1, y_left: 0, x_left: 0,
@@ -147,7 +148,8 @@ RSpec.describe "Emf::Conformance WMF rules" do
     let(:statuses) { rows.map { |row| row["status"] }.uniq }
 
     it "has a row for every registered WMF rule, marked implemented" do
-      registered = Emf::Conformance::Registry.default.rules_for(:wmf).map(&:id)
+      # wmf.header.unrecognised runs on input the detector rejected, so it registers under :unparseable.
+      registered = Emf::Conformance::Registry.default.rules_for(:wmf).map(&:id) + ["wmf.header.unrecognised"]
       implemented = rows.select { |row| row["status"] == "implemented" }.map { |row| row["id"] }
       expect(implemented).to match_array(registered)
     end

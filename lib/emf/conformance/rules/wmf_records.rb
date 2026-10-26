@@ -112,10 +112,15 @@ module Emf
           count = record.points.size
           if count > 0x7FFF
             "#{count} points do not fit the signed 16-bit NumberOfPoints"
-          elsif record.is_a?(R::Polygon) && count < 2
+          elsif record.is_a?(R::Polygon) && count == 1
             "polygon has #{count} point(s), MUST have at least 2"
           end
         end
+      end
+
+      # NumberOfPoints 0 is the one count below 2 the parser keeps (Wmf::Recovery); it draws nothing.
+      def polygon_empty(context)
+        each_of(context, R::Polygon) { |record| "polygon has no points, MUST have at least 2" if record.points.empty? }
       end
 
       def polypolygon_counts(context)
@@ -174,6 +179,8 @@ module Emf
       ["wmf.array.polypolygon_counts", :polypolygon_counts, "MS-WMF 2.2.2.17 PolyPolygon Object (NumberOfPolygons, aPointsPerPolygon); " \
                                                             "2.3.3.16 META_POLYPOLYGON",
        :array_counts, nil],
+      ["wmf.array.polygon_empty", :polygon_empty, "MS-WMF 2.3.3.15 META_POLYGON (NumberOfPoints)", :point_count,
+       "PowerPoint writes a polygon with no points (Apache POI empty-polygon-close.wmf); readers draw nothing and import the file"],
       ["wmf.fixed.point_range", :point_range, "MS-WMF 2.2.2.16 PointS Object", :coordinate_range, nil]
     ].each do |id, method, citation, kind, reason|
       registry.register(id: id, formats: WmfRecordRules::WMF, citation: citation, kind: kind, tolerant_reason: reason) do |context|

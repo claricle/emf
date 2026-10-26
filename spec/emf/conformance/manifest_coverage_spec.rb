@@ -7,6 +7,7 @@ RSpec.describe Emf::Conformance::Manifest do
   let(:rows) { described_class.rows }
   let(:registered) { Emf::Conformance::Registry.default.map(&:id) }
   let(:implemented) { rows.select(&:implemented?) }
+  let(:unparseable_row_formats) { %w[emf wmf] }
 
   it "finds at least one family file, and every file is a well-formed list of rows" do
     expect(Dir[File.join(described_class::DIR, "*.yml")]).not_to be_empty
@@ -39,7 +40,7 @@ RSpec.describe Emf::Conformance::Manifest do
   it "agrees with the registry on the format of every implemented row" do
     mismatched = implemented.reject do |row|
       rule = Emf::Conformance::Registry.default[row.id]
-      rule.formats.include?(row.format.to_sym) || (row.format == "emf" && rule.formats.include?(:unparseable))
+      rule.formats.include?(row.format.to_sym) || (unparseable_row_formats.include?(row.format) && rule.formats.include?(:unparseable))
     end
     expect(mismatched.map(&:id)).to eq([])
   end

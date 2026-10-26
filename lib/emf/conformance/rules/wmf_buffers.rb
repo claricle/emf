@@ -69,6 +69,18 @@ module Emf
         end
       end
 
+      # A region whose ObjectCount is two bytes wide (libUEMF) has no readable header under the spec layout, so the
+      # parser keeps it verbatim as an UnknownRecord (Wmf::Recovery).
+      def region_header(context)
+        context.records.each_with_index.filter_map do |record, index|
+          next unless record.is_a?(R::UnknownRecord) && record.type_id & 0xFF == Emf::Wmf::Recovery::REGION &&
+                      Emf::Wmf::Recovery.record(record.raw_bytes, record.type_id, nil)&.last == 1203
+
+          { message: "region header does not follow the Region Object layout (ObjectCount is not 4 bytes wide)",
+            offset: record.offset, record_index: index + 1, record_type: record.type_id.to_i }
+        end
+      end
+
       def text_spacing(context)
         each_of(context, R::ExtTextOut) do |record|
           next if record.dx.nil? || record.dx.size == record.text.bytesize
@@ -207,6 +219,10 @@ module Emf
       ["wmf.text.negative_length", :text_negative,
        "MS-WMF 2.3.3.20 META_TEXTOUT, 2.3.3.5 META_EXTTEXTOUT (StringLength, String)", :string_length,
        "the parser keeps the record verbatim as an opaque record; readers (LibreOffice) import the file"],
+      ["wmf.region.header", :region_header, "MS-WMF 2.2.1.5 Region Object (ObjectCount, RegionSize); 2.3.4.6 META_CREATEREGION",
+       :buffer_layout,
+       "libUEMF, the library Inkscape writes WMF with, declares ObjectCount as 2 bytes; the parser keeps the record " \
+       "verbatim as an opaque region and readers (LibreOffice) import the file"],
       ["wmf.text.spacing_count", :text_spacing, "MS-WMF 2.3.3.5 META_EXTTEXTOUT (Dx)", :array_counts, nil],
       ["wmf.text.rectangle_options", :text_rectangle, "MS-WMF 2.3.3.5 META_EXTTEXTOUT (fwOpts, Rectangle)", :field_dependency,
        "readers ignore a Rectangle the options do not select"],
