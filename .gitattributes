@@ -1,0 +1,2 @@
+# Release provenance hashes the lockfile bytes on every build platform.
+emf-rs/Cargo.lock text eol=lf
