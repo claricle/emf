@@ -148,7 +148,8 @@ RSpec.describe "Emf::Conformance WMF rules" do
     let(:statuses) { rows.map { |row| row["status"] }.uniq }
 
     it "has a row for every registered WMF rule, marked implemented" do
-      registered = Emf::Conformance::Registry.default.rules_for(:wmf).map(&:id)
+      # wmf.header.unrecognised runs on input the detector rejected, so it registers under :unparseable.
+      registered = Emf::Conformance::Registry.default.rules_for(:wmf).map(&:id) + ["wmf.header.unrecognised"]
       implemented = rows.select { |row| row["status"] == "implemented" }.map { |row| row["id"] }
       expect(implemented).to match_array(registered)
     end
