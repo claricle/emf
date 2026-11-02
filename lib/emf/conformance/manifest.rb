@@ -51,11 +51,56 @@ module Emf
       end
 
       def load_file(path)
-        entries = Yeptris::Psych.safe_load_file(path, permitted_classes: [], aliases: false)
+        source = File.read(path, encoding: "bom|utf-8")
+        document = Yeptris::Document.parse(source, schema: :compat_11) # rubocop:disable Naming/VariableNumber
+        if document&.root
+          normalized = Yeptris::Document.create
+          normalized.set_root(compatible_node(document.root, normalized))
+          source = normalized.serialize
+        end
+        entries = Yeptris::Psych.safe_load(source, permitted_classes: [], aliases: false)
         raise ArgumentError, "#{path}: expected an Array of rows" unless entries.is_a?(Array)
 
         entries.map { |entry| row(entry, File.basename(path)) }
+      ensure
+        normalized&.free
+        document&.free
       end
+
+      # Normalize binary integers in the syntax tree, where quoting and tags
+      # are still available. Preserve tags for the safe loader to validate;
+      # reject implicit symbols before yeptris can materialize them.
+      def compatible_node(node, document)
+        result = case node.kind
+                 when :alias then raise Yeptris::Psych::AliasesError, "Unknown alias"
+                 when :sequence
+                   document.new_sequence.tap do |sequence|
+                     node.each { |child| sequence.seq_add(compatible_node(child, document)) }
+                   end
+                 when :mapping
+                   document.new_mapping.tap do |mapping|
+                     node.each_pair do |key, value|
+                       mapping.map_add_node(compatible_node(key, document), compatible_node(value, document))
+                     end
+                   end
+                 else compatible_scalar(node, document)
+                 end
+        result.set_tag(node.tag) if node.tag
+        result
+      end
+
+      def compatible_scalar(node, document)
+        value = node.value
+        if node.style == :plain && node.tag.nil?
+          raise Yeptris::Psych::DisallowedClass, "Symbol" if node.symbol?
+
+          value = Integer(value.delete(",_"), 2).to_s if /\A[-+]?0b[_,]*[01][01_,]*\z/.match?(value.to_s)
+        end
+
+        document.new_scalar(value, node.style)
+      end
+
+      private_class_method :compatible_node, :compatible_scalar
 
       def row(entry, source)
         raise ArgumentError, "#{source}: row is not a mapping: #{entry.inspect}" unless entry.is_a?(Hash)

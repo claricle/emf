@@ -58,6 +58,33 @@ RSpec.describe Emf::Conformance::Manifest do
     expect { load_manifest("- &row {id: example}\n- *row\n") }.to raise_error(Yeptris::Psych::AliasesError)
   end
 
+  ["- id: :foo", "- record_types:\n  - :foo", "- reason:\n    nested: :foo", "- reason:\n    :foo: value"].each do |source|
+    it "rejects implicit symbols in #{source}" do
+      expect { Psych.safe_load(source) }.to raise_error(Psych::DisallowedClass)
+      expect { load_manifest(source) }.to raise_error(Yeptris::Psych::DisallowedClass)
+    end
+  end
+
+  ["0b11", "-0b11", "+0b1_1", "0b1,1", '"0b11"', "'0b11'", "!!str 0b11", "0b12"].each do |value|
+    it "matches Psych for binary-looking scalar #{value}" do
+      source = "- id: #{value}\n  record_types:\n  - #{value}\n  reason:\n    #{value}: #{value}\n"
+      expected = Psych.safe_load(source).first.transform_keys(&:to_sym)
+
+      expect(load_manifest(source).first.to_h.slice(*expected.keys)).to eq(expected)
+    end
+  end
+
+  it "preserves quoted symbol-looking strings" do
+    expect(load_manifest('- id: ":foo"').first.id).to eq(":foo")
+  end
+
+  it "preserves mapping merges while correcting binary scalars" do
+    source = "- <<: [{id: 0b11}, {id: 0b10, citation: test}]\n"
+    expected = Psych.safe_load(source).first.transform_keys(&:to_sym)
+
+    expect(load_manifest(source).first.to_h.slice(*expected.keys)).to eq(expected)
+  end
+
   ["!custom value", "!ruby/object:Object {}", "2001-01-01"].each do |value|
     it "rejects disallowed values such as #{value}" do
       expect { load_manifest("- id: #{value}\n") }.to raise_error(Yeptris::Psych::DisallowedClass)
