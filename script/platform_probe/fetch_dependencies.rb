@@ -2,6 +2,7 @@
 
 require "fileutils"
 require "rubygems/package"
+require "rubygems/remote_fetcher"
 require "rubygems/request_set"
 require "tmpdir"
 
