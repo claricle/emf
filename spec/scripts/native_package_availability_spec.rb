@@ -7,8 +7,11 @@ require "rubygems/package"
 require "tmpdir"
 
 require "spec_helper"
+require_relative "../support/runtime_dependency_packages"
 
 RSpec.describe "native availability matrix against an installed platform gem" do
+  include RuntimeDependencyPackages
+
   root = File.expand_path("../..", __dir__)
   on_path = ->(tool) { ENV.fetch("PATH", "").split(File::PATH_SEPARATOR).any? { |dir| File.executable?(File.join(dir, tool)) } }
   library = ENV["EMF_REAL_LIBRARY"] || Dir.glob(File.join(root, "emf-rs/target/release/{libemf_ffi.so,libemf_ffi.dylib,emf_ffi.dll}")).first
@@ -29,9 +32,9 @@ RSpec.describe "native availability matrix against an installed platform gem" do
                "--target", `rustc -vV`[/^host: (.+)$/, 1], "--revision", "a" * 40)
     @home = File.join(@tmp, "home")
     env = isolated_env
-    copy_bindata
+    stage_runtime_dependencies(gems)
     out, status = Open3.capture2e(env, RbConfig.ruby, "-rrubygems/gem_runner", "-e", "Gem::GemRunner.new.run(ARGV)",
-                                  "install", *Dir.glob(File.join(gems, "emf-*.gem")), "--local", "--ignore-dependencies", "--no-document")
+                                  "install", *Dir.glob(File.join(gems, "emf-*.gem")), "--local", "--no-document", chdir: gems)
     raise "install failed: #{out}" unless status.success?
 
     @out, @err, @status = run_matrix(root, library, fixture)
@@ -42,14 +45,6 @@ RSpec.describe "native availability matrix against an installed platform gem" do
   def isolated_env
     %w[RUBYOPT RUBYLIB BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLER_SETUP].to_h { |name| [name, nil] }
                                                                     .merge("GEM_HOME" => @home, "GEM_PATH" => @home)
-  end
-
-  # The installed gem has no .gem file to reuse offline, so its tree and spec are copied into the isolated home.
-  def copy_bindata
-    spec = Gem::Specification.find_by_name("bindata")
-    FileUtils.mkdir_p([File.join(@home, "gems"), File.join(@home, "specifications")])
-    FileUtils.cp_r(spec.full_gem_path, File.join(@home, "gems"))
-    FileUtils.cp(spec.spec_file, File.join(@home, "specifications"))
   end
 
   def run_matrix(root, library_path, fixture)

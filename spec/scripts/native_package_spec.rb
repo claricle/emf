@@ -8,8 +8,11 @@ require "rubygems/package"
 require "tmpdir"
 
 require "spec_helper"
+require_relative "../support/runtime_dependency_packages"
 
 RSpec.describe "native gem packaging scripts" do
+  include RuntimeDependencyPackages
+
   root = File.expand_path("../..", __dir__)
   probe = File.join(root, "script/platform_probe/hello")
   library_name = case RbConfig::CONFIG["host_os"]
@@ -120,7 +123,11 @@ RSpec.describe "native gem packaging scripts" do
   end
 
   it "fails the install when dependencies must be resolved and bindata is not in the directory" do
-    _out, err, status = script.call("native_install_smoke", "--directory", @good, "--platform", @platform,
+    directory = Dir.mktmpdir("missing-bindata", @tmp)
+    FileUtils.cp(Dir.glob(File.join(@good, "*.gem")), directory)
+    stage_runtime_dependencies(directory)
+    FileUtils.rm(Dir.glob(File.join(directory, "bindata-*.gem")))
+    _out, err, status = script.call("native_install_smoke", "--directory", directory, "--platform", @platform,
                                     "--abi-symbol", "emf_probe_abi_version", "--require-native", "--resolve-dependencies")
     expect([status.exitstatus, err]).to match([1, /gem install failed.*bindata/m])
   end

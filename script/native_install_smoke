@@ -10,11 +10,11 @@
 # was compiled, and that the installed library loads through Fiddle and returns
 # the ABI version recorded in platforms.json. Source gems must also load and
 # parse/mutate/serialize through Ruby in isolated auto and ruby processes.
-# Their BinData dependency must be staged and --resolve-dependencies enabled.
+# Their runtime dependencies must be staged and --resolve-dependencies enabled.
 #
 # --require-native: fail instead of skipping when this Ruby cannot use NAME.
 # --resolve-dependencies: resolve runtime dependencies from .gem files in DIR
-# instead of ignoring them (DIR must then hold a bindata .gem).
+# instead of ignoring them (DIR must hold the complete runtime dependency graph).
 # --forbid-compiler: fail when cc, gcc, clang or rustc is on PATH. CI sets it
 # to prove a no-compiler install; it is off by default because developer
 # machines have a compiler. Without it the compiler is only reported, and the

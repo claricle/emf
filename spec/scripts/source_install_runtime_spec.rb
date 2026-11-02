@@ -6,8 +6,11 @@ require "rbconfig"
 require "rubygems/package"
 require "tmpdir"
 require "spec_helper"
+require_relative "../support/runtime_dependency_packages"
 
 RSpec.describe "source gem installed runtime" do
+  include RuntimeDependencyPackages
+
   root = File.expand_path("../..", __dir__)
 
   before(:all) do
@@ -17,14 +20,7 @@ RSpec.describe "source gem installed runtime" do
                                       "--platform", "ruby", "--output", @packages)
     raise "source package failed: #{out} #{err}" unless status.success?
 
-    # Repackage the real locally installed dependency; no network or substitute implementation.
-    dependency = Gem::Specification.find_by_name("bindata").dup
-    Dir.chdir(dependency.full_gem_path) do
-      dependency.files = Dir.glob("**/*").select { |path| File.file?(path) }
-      Gem::DefaultUserInteraction.use_ui(Gem::SilentUI.new) do
-        Gem::Package.build(dependency, true, false, File.join(@packages, "#{dependency.full_name}.gem"))
-      end
-    end
+    stage_runtime_dependencies(@packages)
   end
 
   after(:all) { FileUtils.rm_rf(@tmp) if @tmp }
@@ -37,7 +33,7 @@ RSpec.describe "source gem installed runtime" do
                    "--directory", directory, "--platform", "ruby", "--require-native", "--forbid-compiler", *arguments)
   end
 
-  it "resolves BinData offline and preserves installed mutable-wire APIs in auto and Ruby modes" do
+  it "resolves runtime dependencies offline and preserves installed mutable-wire APIs in auto and Ruby modes" do
     out, err, status = result
     expect([status.exitstatus, err]).to eq([0, ""])
     %w[auto ruby].each do |mode|
@@ -51,7 +47,8 @@ RSpec.describe "source gem installed runtime" do
     let(:directory) { File.join(@tmp, "missing-dependency") }
     before do
       FileUtils.mkdir_p(directory)
-      FileUtils.cp(Dir.glob(File.join(@packages, "emf-*.gem")).first, directory)
+      packages = Dir.glob(File.join(@packages, "*.gem")).reject { |path| File.basename(path).start_with?("bindata-") }
+      FileUtils.cp(packages, directory)
     end
 
     it "reports dependency resolution failure rather than runtime availability success" do

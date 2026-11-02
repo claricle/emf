@@ -90,9 +90,6 @@ compiler_free_path() {
 gem_path() { ruby -e 'print [ARGV[0], Gem.default_dir].join(File::PATH_SEPARATOR)' "$1"; }
 
 # shellcheck disable=SC2329  # invoked through step
-fetch_in() { (cd "$1" && gem fetch "$2" --version "$3"); }
-
-# shellcheck disable=SC2329  # invoked through step
 install_gem() { # install_gem HOME STAGE VERSION : same command as native_install_smoke, RubyGems in-process
   (cd "$2" && env -u RUBYOPT -u RUBYLIB -u BUNDLE_GEMFILE PATH="$isolated" GEM_HOME="$1" GEM_PATH="$(gem_path "$1")" \
     "$ruby" -rrubygems/gem_runner -e 'Gem::GemRunner.new.run(ARGV)' -- \
@@ -140,7 +137,7 @@ fi
 
 package_steps() {
   local pkg=$out/package stage=$out/stage home=$out/gem-home
-  local nroot nlib npkg nstage nhome nhere nfixture req
+  local nroot nlib npkg nstage nhome nhere nfixture
   # Both gems and the package check are bound to one source revision: the release
   # revision in CI, else the checkout's HEAD.
   local revision=${EMF_RELEASE_REVISION:-${GITHUB_SHA:-}}
@@ -158,13 +155,11 @@ package_steps() {
     ruby "$nroot/script/build_source_release_gem" --revision "$revision" --output "$npkg" || return
   step "package_check" package-check.log \
     ruby "$nroot/script/check_native_package" --directory "$npkg" --revision "$revision" || return
-  req=$(cd "$root" && ruby -e 'print Gem::Specification.load("emf.gemspec").dependencies.find { |d| d.name == "bindata" }.requirement') ||
-    { blocker "could not read the bindata requirement from emf.gemspec"; return; }
   if ! { mkdir -p "$stage" && cp "$pkg"/*.gem "$stage"/; }; then
     blocker "could not stage gems for install"
     return
   fi
-  step "fetch_dependency" package-fetch.log fetch_in "$stage" bindata "$req" || return
+  step "fetch_dependency" package-fetch.log ruby "$nhere/fetch_dependencies.rb" "$nstage" || return
   isolated=$(compiler_free_path) || { blocker "could not build a compiler-free PATH"; return; }
   step "install_smoke" package-install.log env PATH="$isolated" "$ruby" "$nroot/script/native_install_smoke" \
     --directory "$nstage" --platform "$platform" \
