@@ -80,7 +80,7 @@ module Emf
                  when :mapping
                    document.new_mapping.tap do |mapping|
                      node.each_pair do |key, value|
-                       mapping.map_add_node(compatible_node(key, document), compatible_node(value, document))
+                       add_mapping_pair(mapping, compatible_node(key, document), compatible_node(value, document))
                      end
                    end
                  else compatible_scalar(node, document)
@@ -100,7 +100,26 @@ module Emf
         document.new_scalar(value, node.style)
       end
 
-      private_class_method :compatible_node, :compatible_scalar
+      def add_mapping_pair(mapping, key, value)
+        previous = mapping.each_pair.find { |old_key, _| old_key.value == key.value }
+        if previous
+          # Replacing a duplicate must not hide an unsafe key or value from
+          # safe_load, which normally validates every occurrence.
+          previous.each { |node| validate_replaced_node(node) }
+          mapping.map_del(key.value)
+        end
+        mapping.map_add_node(key, value)
+      end
+
+      def validate_replaced_node(node)
+        document = Yeptris::Document.create
+        document.set_root(compatible_node(node, document))
+        Yeptris::Psych.safe_load(document.serialize, permitted_classes: [], aliases: false)
+      ensure
+        document&.free
+      end
+
+      private_class_method :compatible_node, :compatible_scalar, :add_mapping_pair, :validate_replaced_node
 
       def row(entry, source)
         raise ArgumentError, "#{source}: row is not a mapping: #{entry.inspect}" unless entry.is_a?(Hash)

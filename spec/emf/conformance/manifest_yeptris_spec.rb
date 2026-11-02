@@ -78,6 +78,26 @@ RSpec.describe Emf::Conformance::Manifest do
     expect(load_manifest('- id: ":foo"').first.id).to eq(":foo")
   end
 
+  it "uses the last value for duplicate mapping keys" do
+    source = "- id: a\n  id: b\n"
+
+    expect(load_manifest(source).first.id).to eq(Psych.safe_load(source).first.fetch("id"))
+  end
+
+  it "uses the last value for nested duplicate mapping keys" do
+    source = "- reason:\n    code: 0b10\n    code: 0b11\n"
+
+    expect(load_manifest(source).first.reason).to eq(Psych.safe_load(source).first.fetch("reason"))
+  end
+
+  ["!custom value", "2001-01-01"].each do |value|
+    it "still rejects an unsafe duplicate value #{value} before it is overwritten" do
+      source = "- id: #{value}\n  id: safe\n"
+
+      expect { load_manifest(source) }.to raise_error(Yeptris::Psych::DisallowedClass)
+    end
+  end
+
   it "preserves mapping merges while correcting binary scalars" do
     source = "- <<: [{id: 0b11}, {id: 0b10, citation: test}]\n"
     expected = Psych.safe_load(source).first.transform_keys(&:to_sym)
