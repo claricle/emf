@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "yaml"
+require "yeptris"
 
 module Emf
   module Conformance
@@ -51,7 +51,7 @@ module Emf
       end
 
       def load_file(path)
-        entries = YAML.safe_load_file(path)
+        entries = Yeptris::Psych.safe_load_file(path, permitted_classes: [], aliases: false)
         raise ArgumentError, "#{path}: expected an Array of rows" unless entries.is_a?(Array)
 
         entries.map { |entry| row(entry, File.basename(path)) }
