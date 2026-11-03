@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "yeptris"
-
 module Emf
   module Conformance
     # The requirement manifest: one row per rule (implemented) or per known
@@ -51,6 +49,9 @@ module Emf
       end
 
       def load_file(path)
+        # Deferred: loading yeptris at autoload time breaks a later
+        # `require "leptris"` native layer on Linux (Ruby 3.3/3.4).
+        require "yeptris"
         source = File.read(path, encoding: "bom|utf-8")
         document = Yeptris::Document.parse(source, schema: :compat_11) # rubocop:disable Naming/VariableNumber
         if document&.root

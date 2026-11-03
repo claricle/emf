@@ -5,6 +5,10 @@ require "psych"
 require "tempfile"
 
 RSpec.describe Emf::Conformance::Manifest do
+  # Loaded per example, not at file load: an early yeptris load breaks a
+  # later `require "leptris"` native layer on Linux Ruby 3.3/3.4.
+  before { require "yeptris" }
+
   paths = Dir[File.join(described_class::DIR, "*.yml")]
 
   paths.each do |path|
@@ -109,5 +113,12 @@ RSpec.describe Emf::Conformance::Manifest do
     it "rejects disallowed values such as #{value}" do
       expect { load_manifest("- id: #{value}\n") }.to raise_error(Yeptris::Psych::DisallowedClass)
     end
+  end
+
+  it "does not load yeptris until a manifest is read" do
+    lib = File.expand_path("../../../lib", __dir__)
+    script = 'require "emf"; Emf::Conformance::Manifest; exit(defined?(Yeptris) ? 1 : 0)'
+
+    expect(system(RbConfig.ruby, "-I", lib, "-e", script, out: File::NULL, err: File::NULL)).to be(true)
   end
 end
