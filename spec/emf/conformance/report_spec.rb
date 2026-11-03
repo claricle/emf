@@ -55,6 +55,19 @@ RSpec.describe Emf::Conformance::Report do
     expect(YAML.safe_load(report.to_yaml)).to eq(hash)
   end
 
+  it "emits through yeptris, not stdlib Psych" do
+    require "yeptris/psych"
+    allow(Yeptris::Psych).to receive(:dump).and_call_original
+    report.to_yaml
+    expect(Yeptris::Psych).to have_received(:dump).with(hash)
+  end
+
+  it "leaves no require of stdlib yaml in lib/" do
+    lib = File.expand_path("../../../lib", __dir__)
+    offenders = Dir["#{lib}/**/*.rb"].select { |f| File.read(f).match?(/^\s*require\s+["'](yaml|psych)["']/) }
+    expect(offenders).to be_empty
+  end
+
   it "names known records by their MS-EMF constant" do
     comment = Emf::Conformance.check(Emf::SpecSupport::RuleCases.cases.fetch("emf.comment.data_size"))
     expect(comment.to_h.dig("errors", "issues", 0, "element")).to eq("emf:COMMENT")

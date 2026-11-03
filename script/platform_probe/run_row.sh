@@ -124,11 +124,8 @@ step() { # step NAME LOG COMMAND... : runs the command, logging to OUT/LOG, BLOC
   return 1
 }
 
-# shellcheck disable=SC2329  # invoked through step
-fetch_in() { (cd "$1" && gem fetch "$2" --version "$3"); }
-
 package_steps() {
-  local pkg=$out/package install_dir=$out/package-install req isolated
+  local pkg=$out/package install_dir=$out/package-install isolated
   local build_toolchain
   local nroot nlib npkg ninstall
   build_toolchain=$(cd "$crate" && rustup show active-toolchain 2>/dev/null | awk 'NR == 1 { print $1 }')
@@ -147,9 +144,7 @@ package_steps() {
     blocker "could not stage gems for install"
     return
   fi
-  req=$(cd "$root" && ruby -e 'print Gem::Specification.load("emf.gemspec").dependencies.find { |d| d.name == "bindata" }.requirement') ||
-    { blocker "could not read the bindata requirement from emf.gemspec"; return; }
-  step "fetch_dependency" package-fetch.log fetch_in "$install_dir" bindata "$req" || return
+  step "fetch_dependency" package-fetch.log ruby "$nroot/script/platform_probe/fetch_dependencies.rb" "$ninstall" || return
   isolated=$(compiler_free_path) || { blocker "could not build a compiler-free PATH"; return; }
   step "install_smoke" package-install.log env PATH="$isolated" "$(ruby -e 'print RbConfig.ruby')" "$nroot/script/native_install_smoke" \
     --directory "$ninstall" --platform "$platform" --abi-symbol emf_probe_abi_version \

@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "yaml"
-
 module Emf
   module Conformance
     # The requirement manifest: one row per rule (implemented) or per known
@@ -51,11 +49,78 @@ module Emf
       end
 
       def load_file(path)
-        entries = YAML.safe_load_file(path)
+        # Deferred: loading yeptris at autoload time breaks a later
+        # `require "leptris"` native layer on Linux (Ruby 3.3/3.4).
+        require "yeptris"
+        source = File.read(path, encoding: "bom|utf-8")
+        document = Yeptris::Document.parse(source, schema: :compat_11) # rubocop:disable Naming/VariableNumber
+        if document&.root
+          normalized = Yeptris::Document.create
+          normalized.set_root(compatible_node(document.root, normalized))
+          source = normalized.serialize
+        end
+        entries = Yeptris::Psych.safe_load(source, permitted_classes: [], aliases: false)
         raise ArgumentError, "#{path}: expected an Array of rows" unless entries.is_a?(Array)
 
         entries.map { |entry| row(entry, File.basename(path)) }
+      ensure
+        normalized&.free
+        document&.free
       end
+
+      # Normalize binary integers in the syntax tree, where quoting and tags
+      # are still available. Preserve tags for the safe loader to validate;
+      # reject implicit symbols before yeptris can materialize them.
+      def compatible_node(node, document)
+        result = case node.kind
+                 when :alias then raise Yeptris::Psych::AliasesError, "Unknown alias"
+                 when :sequence
+                   document.new_sequence.tap do |sequence|
+                     node.each { |child| sequence.seq_add(compatible_node(child, document)) }
+                   end
+                 when :mapping
+                   document.new_mapping.tap do |mapping|
+                     node.each_pair do |key, value|
+                       add_mapping_pair(mapping, compatible_node(key, document), compatible_node(value, document))
+                     end
+                   end
+                 else compatible_scalar(node, document)
+                 end
+        result.set_tag(node.tag) if node.tag
+        result
+      end
+
+      def compatible_scalar(node, document)
+        value = node.value
+        if node.style == :plain && node.tag.nil?
+          raise Yeptris::Psych::DisallowedClass, "Symbol" if node.symbol?
+
+          value = Integer(value.delete(",_"), 2).to_s if /\A[-+]?0b[_,]*[01][01_,]*\z/.match?(value.to_s)
+        end
+
+        document.new_scalar(value, node.style)
+      end
+
+      def add_mapping_pair(mapping, key, value)
+        previous = mapping.each_pair.find { |old_key, _| old_key.value == key.value }
+        if previous
+          # Replacing a duplicate must not hide an unsafe key or value from
+          # safe_load, which normally validates every occurrence.
+          previous.each { |node| validate_replaced_node(node) }
+          mapping.map_del(key.value)
+        end
+        mapping.map_add_node(key, value)
+      end
+
+      def validate_replaced_node(node)
+        document = Yeptris::Document.create
+        document.set_root(compatible_node(node, document))
+        Yeptris::Psych.safe_load(document.serialize, permitted_classes: [], aliases: false)
+      ensure
+        document&.free
+      end
+
+      private_class_method :compatible_node, :compatible_scalar, :add_mapping_pair, :validate_replaced_node
 
       def row(entry, source)
         raise ArgumentError, "#{source}: row is not a mapping: #{entry.inspect}" unless entry.is_a?(Hash)
