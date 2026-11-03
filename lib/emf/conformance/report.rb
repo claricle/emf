@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "time"
-require "yaml"
 
 module Emf
   module Conformance
@@ -47,7 +46,12 @@ module Emf
         head.merge("valid" => valid?, "errors" => summary(errors, "error"), "warnings" => summary(warnings, "warning"))
       end
 
-      def to_yaml(*options, timestamp: true) = to_h(timestamp: timestamp).to_yaml(*options)
+      # Deferred for the same reason as Manifest.load_file: loading yeptris
+      # before leptris breaks leptris's native layer on Linux.
+      def to_yaml(*options, timestamp: true)
+        require "yeptris/psych"
+        Yeptris::Psych.dump(to_h(timestamp: timestamp), *options)
+      end
 
       private
 
