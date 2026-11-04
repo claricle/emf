@@ -19,10 +19,11 @@ RSpec.describe "Native WireAdapter#values source" do
 
   let(:bytes) { Emf::SpecSupport::FixturePath.read_fixture("emf", "test-031.emf") }
   let(:records) do
+    previous = ENV.fetch("EMF_BACKEND", nil)
     ENV["EMF_BACKEND"] = "native"
     Emf.parse(bytes).records
   ensure
-    ENV.delete("EMF_BACKEND")
+    ENV["EMF_BACKEND"] = previous
   end
 
   it "serves every value-view record from bytes without making its wire" do
