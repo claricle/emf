@@ -72,13 +72,14 @@ RSpec.describe "Emf::Conformance on empty polygons and libUEMF regions" do
     library = ENV.fetch("EMF_TEST_NATIVE_LIBRARY", nil)
     skip "set EMF_TEST_NATIVE_LIBRARY to run native specs" if library.nil?
     inputs = [wmf(polygon(0)), wmf(uemf_region), wmf(polygon(1)), wmf(uemf_region.dup.tap { |r| r[8, 2] = [7].pack("v") })]
+    keys = %w[EMF_BACKEND EMF_NATIVE_LIBRARY]
     reports = %w[ruby native].map do |backend|
-      previous = ENV.to_h.slice("EMF_BACKEND", "EMF_NATIVE_LIBRARY")
+      previous = ENV.to_h.slice(*keys)
       ENV["EMF_BACKEND"] = backend
       ENV["EMF_NATIVE_LIBRARY"] = library
       inputs.flat_map { |bytes| profiles.map { |p| Emf::Conformance.check(bytes, profile: p).to_h(timestamp: false) } }
     ensure
-      previous.each { |key, value| ENV[key] = value }
+      keys.each { |key| ENV[key] = previous[key] }
     end
     expect(reports.first).to eq(reports.last)
   end
