@@ -168,5 +168,25 @@ RSpec.describe Emf::Conformance::Report do
         expect(YAML.safe_load(report.to_yaml(timestamp: false))).to eq(report.to_h(timestamp: false))
       end
     end
+
+    %i[strict tolerant].product([true, false]).each do |profile, timestamp|
+      it "matches Psych output for #{profile} with timestamp: #{timestamp}" do
+        report = public_send(profile)
+        expected = report.to_h(timestamp: timestamp)
+        yaml = report.to_yaml(timestamp: timestamp)
+
+        expect(yaml).to eq(Psych.dump(expected))
+        expect(Psych.safe_load(yaml)).to eq(expected)
+      end
+    end
+
+    it "passes positional dump options through with the timestamp selection" do
+      options = { line_width: -1 }
+      expected = strict.to_h(timestamp: false)
+      yaml = strict.to_yaml(options, timestamp: false)
+
+      expect(yaml).to eq(Psych.dump(expected, options))
+      expect(Psych.safe_load(yaml)).to eq(expected)
+    end
   end
 end
