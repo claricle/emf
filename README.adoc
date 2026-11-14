@@ -134,7 +134,7 @@ layout of `svg_conform`, so tools that read one can read the other.
   report.to_yaml
 
 The lens reads only the public model, so the Ruby and the native backend give
-the same report. It adds no runtime dependency: `bindata` is still the only one.
+the same report. It reads and writes YAML through `yeptris`, not Psych.
 
 === Input
 
