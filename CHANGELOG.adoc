@@ -7,6 +7,10 @@ and this project adheres to http://semver.org/spec/v2.0.0.html[Semantic Versioni
 
 == [Unreleased]
 
+=== Changed
+
+* YAML handling moved from Psych to `yeptris` (new runtime dependency, `~> 0.6.36`): conformance manifests load through `Yeptris::Psych.safe_load` and `Report#to_yaml` emits through `Yeptris::Psych.dump`. `lib/` no longer references `yaml` or `Psych`; a spec enforces this (issue #79).
+
 === Added
 
 * `WireAdapter#values`: a record's field values as plain frozen Ruby objects without BinData field objects, for fixed-layout and point-array records, identical on both backends.
