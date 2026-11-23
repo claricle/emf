@@ -182,3 +182,42 @@ JSON and terminal result (284.81 seconds). The earlier 200/14 run and its absent
 optional-field failure are retained in the parent evidence directory. This valid
 corpus result does not close malformed-input parity, release performance,
 platform matrix, installed-package or final whole-issue acceptance.
+
+## Parser diagnostics consumer contract — 2026-11-23
+
+`Emf::Model::Metafile#diagnostics` returns ordered, frozen
+`Emf::Model::Diagnostic` values with `record_index` (the zero-based physical
+record ordinal), `record_code`, `record_type` (the canonical `EMR_` name or
+`UNKNOWN(0xNNNNNNNN)`), `byte_offset` and `disposition` (exactly `:skipped`
+or `:preserved_raw`). The existing `Metafile#errors` compatibility is
+unchanged; consumers must not infer disposition from error text or from the
+presence of a Raw record. Valid unknown records preserved as Raw are not
+reported as skipped.
+
+The contract landed through
+[PR71](https://github.com/claricle/emf/pull/71), merged as `e0491ed`
+(branch head `eb6902d`). It is present unchanged at main `24edaf5c`; the
+contract source files and the Rust core are identical between those
+revisions.
+
+Conformance evidence: `spec/emf/diagnostic_contract_spec.rb` passed
+**3 examples, 0 failures** (seed 36397) against a compiled native library
+built from the in-repo `emf-rs` source at that revision
+(`EMF_TEST_NATIVE_LIBRARY` set). The pinned fixture
+`spec/fixtures/diagnostics/recovery.bin` carries skipped malformed and
+preserved-as-Raw records plus a valid unknown Raw control, and the complete
+diagnostic arrays are compared under `ruby`, `native` and `native`-selected
+`auto` with actual backend selection proven (`Emf::Backend.selected` is
+wrapped to assert the selected adapter and that `Emf::Emr::Parser` is not
+called under `native`/`auto`, so fallback cannot mask a difference). The
+example is pending, not passing, without a configured library. Hosted CI ran
+the whole `spec/emf` tree with a compiled native library on ubuntu-latest
+and macos-latest at main `24edaf5c`:
+[Rust run](https://github.com/claricle/emf/actions/runs/44444610352) and
+[Test run](https://github.com/claricle/emf/actions/runs/44444610454),
+both green.
+
+This record is revision-bound evidence for downstream pinning
+(claricle/emf#65). It does not authorize a release: final downstream
+qualification additionally requires a released package containing revision
+`e0491ed` or later.
