@@ -187,3 +187,42 @@ Evidence: `/private/tmp/emf-execution/p06-current-native-corrupt/`, including
 original-byte preservation and expected outcomes for these 21 inputs on this
 platform. Exact diagnostic/model parity, broader fuzz budgets and the remaining
 platform criteria above remain open.
+
+### Parser resource-refusal consumer contract — 2026-11-23
+
+Every parser-enforced resource refusal is exposed as the public
+`Emf::ResourceLimitError` (an `Emf::Error`, deliberately not a
+`FormatError` or `ParseError`) carrying stable `resource`, `limit` and
+`actual` values. Refused resources are `:input_bytes`, `:record_bytes`,
+`:record_count`, `:allocated_bytes`, `:work_units` and `:output_bytes`.
+Identical rejected inputs produce identical error class and metadata under
+the `ruby`, `native` and `auto` backends; no backend-specific exception or
+panic escapes as the public result. Unreadable native failure detail and
+unrelated backend failures stay unclassified rather than being reported as
+resource refusals.
+
+The contract landed through
+[PR71](https://github.com/claricle/emf/pull/71), merged as `e0491ed`
+(branch head `320a28d`). It is present unchanged at main `24edaf5c`; the
+contract source files and the Rust core are identical between those
+revisions.
+
+Conformance evidence: `spec/emf/resource_limit_contract_spec.rb` passed
+**19 examples, 0 failures** (seed 11603) against the compiled native
+library built from the in-repo `emf-rs` source at that revision
+(`EMF_TEST_NATIVE_LIBRARY` set), covering the public error identity,
+exact Ruby input/record-count boundaries, all six native resource kinds
+and the native ABI boundary metadata, with actual adapter selection proven
+for `native` and `auto` (`Emf::Emr::Parser` must not be called). The six
+native metadata examples use controlled Fiddle-boundary responses and run
+without a library; without one, the seven `Native resource limit ABI`
+examples are pending, not passing. Hosted CI ran the whole `spec/emf` tree with a
+compiled native library on ubuntu-latest and macos-latest at main
+`24edaf5c`: [Rust run](https://github.com/claricle/emf/actions/runs/44444610352)
+and [Test run](https://github.com/claricle/emf/actions/runs/44444610454),
+both green.
+
+This record is revision-bound evidence for downstream pinning
+(claricle/emf#66). It does not authorize a release: final downstream
+qualification additionally requires a released package containing revision
+`e0491ed` or later.
