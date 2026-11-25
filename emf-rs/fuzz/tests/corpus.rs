@@ -1,9 +1,17 @@
-// Compiled directly by check-stable.sh: no libFuzzer dependency required.
-fn main() {
-    let corpus = std::env::args().nth(1).expect("corpus directory");
+//! Stable corpus driver: replays the materialized seeds through the shared
+//! fuzz entry points without libFuzzer. check-stable.sh sets CORPUS_DIR;
+//! plain `cargo test` without it skips the replay.
+use emf_fuzz;
+
+#[test]
+fn replay_stable_corpus() {
+    let Some(corpus) = std::env::var_os("CORPUS_DIR") else {
+        eprintln!("CORPUS_DIR not set; skipping the stable corpus replay");
+        return;
+    };
     let mut count = 0;
-    for entry in std::fs::read_dir(corpus).unwrap() {
-        let path = entry.unwrap().path();
+    for entry in std::fs::read_dir(corpus).expect("corpus directory present") {
+        let path = entry.expect("corpus entry").path();
         eprintln!("seed {}", path.display());
         let data = std::fs::read(path).unwrap();
         for target in [emf_fuzz::parse, emf_fuzz::serialize, emf_fuzz::ffi] {
@@ -24,5 +32,6 @@ fn main() {
         }
         count += 1;
     }
+    assert!(count > 0, "no seeds materialized");
     println!("stable corpus regression passed: {count} seeds, 3 targets plus boundary mutations");
 }
