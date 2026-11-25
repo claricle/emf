@@ -39,6 +39,7 @@ class StableCompilationTest(unittest.TestCase):
             # their unhashed names.
             for dependency in ('liblibz_sys', 'liblibc'):
                 units = sorted(build.rglob(dependency + '-*.rlib'))
+                units.extend(build.rglob(dependency + '.rlib'))
                 self.assertTrue(units, dependency + ' unit built')
                 shutil.copy2(units[-1], target / 'debug' / (dependency + '.rlib'))
 
