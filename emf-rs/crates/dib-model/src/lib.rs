@@ -134,6 +134,15 @@ fn read_u32(bytes: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
 }
 
+/// Zeroed buffer for a header-declared pixel surface. Returns `None` when
+/// the allocator refuses (hostile header dimensions) instead of aborting.
+pub(crate) fn try_zeroed(len: usize) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    out.try_reserve_exact(len).ok()?;
+    out.resize(len, 0);
+    Some(out)
+}
+
 /// BITMAPCOREHEADER (the 12-byte OS/2-era header).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BitmapCoreHeader {

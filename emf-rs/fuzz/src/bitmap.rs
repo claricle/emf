@@ -8,6 +8,19 @@ use png_model;
 /// keep the pixel budget bounded.
 pub const MAX_BITMAP_INPUT: usize = 1024 * 1024;
 
+/// Pixel-surface budget for fuzzing: header-declared dimensions beyond this
+/// are allocation-hostile and add no parser coverage.
+const MAX_PIXEL_BYTES: usize = 64 * 1024 * 1024;
+
+fn within_pixel_budget(data: &[u8]) -> bool {
+    if data.len() < 40 {
+        return true;
+    }
+    let header = dib_model::BitmapInfoHeader::parse(data);
+    i64::from(header.width.unsigned_abs()) * i64::from(header.height.unsigned_abs()) * 4
+        <= MAX_PIXEL_BYTES as i64
+}
+
 pub fn dib(data: &[u8]) {
     let _ = dib_model::decode(data, None, None);
     let _ = dib_model::decode(data, Some(data.len() / 2), None);
@@ -19,6 +32,11 @@ pub fn dib(data: &[u8]) {
     let _ = dib_model::decode_rle8(data, None);
     let _ = dib_model::decode_rle4(data, None);
     let _ = dib_model::decode_bitfields(data, None);
+    if !within_pixel_budget(data) {
+        return;
+    }
+    let _ = dib_model::decode(data, None, None);
+    let _ = dib_model::decode(data, Some(data.len() / 2), None);
 }
 
 pub fn png(data: &[u8]) {

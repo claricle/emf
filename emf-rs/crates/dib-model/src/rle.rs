@@ -50,7 +50,7 @@ fn rle_header(dib: &[u8], compression: u32) -> Option<BitmapInfoHeader> {
 }
 
 fn rle_run(bytes: &[u8], width: usize, height: usize, bpp: u8) -> Option<IndexedBitmap> {
-    let mut indices = vec![0u8; width.checked_mul(height)?];
+    let mut indices = crate::try_zeroed(width.checked_mul(height)?)?;
     let mut x = 0usize;
     let mut y = 0usize;
     let mut i = 0usize;
