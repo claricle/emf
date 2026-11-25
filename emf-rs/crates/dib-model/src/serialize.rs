@@ -17,6 +17,10 @@ impl DibImage {
         let palette: Vec<PaletteEntry> = match &header {
             DibHeader::Core(core) => {
                 let entries = 1usize << core.bit_count.min(8);
+                match header_len.checked_add(entries * 3) {
+                    Some(end) if end <= bytes.len() => {}
+                    _ => return Err(crate::Error::Format("palette out of bounds")),
+                }
                 (0..entries)
                     .map(|i| {
                         let at = header_len + i * 3;
@@ -41,6 +45,12 @@ impl DibImage {
                     }
                     _ => 0,
                 };
+                // Structural strictness: a palette must lie inside the
+                // stream; short reads would fabricate entries.
+                match header_len.checked_add(entries * 4) {
+                    Some(end) if end <= bytes.len() => {}
+                    _ => return Err(crate::Error::Format("palette out of bounds")),
+                }
                 (0..entries)
                     .map(|i| PaletteEntry::parse_wire(bytes, header_len + i * 4))
                     .collect()
