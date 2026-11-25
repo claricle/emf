@@ -1,8 +1,6 @@
 //! Stable corpus driver: replays the materialized seeds through the shared
 //! fuzz entry points without libFuzzer. check-stable.sh sets CORPUS_DIR;
 //! plain `cargo test` without it skips the replay.
-use emf_fuzz;
-
 #[test]
 fn replay_stable_corpus() {
     let Some(corpus) = std::env::var_os("CORPUS_DIR") else {

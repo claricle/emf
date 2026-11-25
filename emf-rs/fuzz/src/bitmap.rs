@@ -16,8 +16,9 @@ fn within_pixel_budget(data: &[u8]) -> bool {
         return true;
     }
     let header = dib_model::BitmapInfoHeader::parse(data);
-    i64::from(header.width.unsigned_abs()) * i64::from(header.height.unsigned_abs()) * 4
-        <= MAX_PIXEL_BYTES as i64
+    // i128: two extreme i32 dimensions multiply past i64's range.
+    i128::from(header.width.unsigned_abs()) * i128::from(header.height.unsigned_abs()) * 4
+        <= MAX_PIXEL_BYTES as i128
 }
 
 pub fn dib(data: &[u8]) {
