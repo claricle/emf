@@ -1,0 +1,10 @@
+[package]
+name = "dib-model"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Windows DIB model: header zoo, pixel decode mirroring the Ruby ground truth, and serializer"
+
+[dependencies]

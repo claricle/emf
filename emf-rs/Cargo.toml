@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["crates/emf-core", "crates/emf-ffi"]
+members = [
+    "crates/emf-core",
+    "crates/emf-ffi",
+    "crates/png-model",
+    "crates/dib-model",
+    "crates/dib-png",
+]
 
 [workspace.package]
 edition = "2021"
