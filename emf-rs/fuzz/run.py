@@ -10,12 +10,16 @@ import time
 
 from seeds import HERE, TARGETS, validate
 
+# The bitmap-parser targets replay corpus seeds materialized from the
+# captured fixtures rather than the EMF seed manifest.
+RUN_TARGETS = TARGETS | {"dib", "png"}
+
 WORKSPACE = HERE.parent
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", choices=sorted(TARGETS))
+    parser.add_argument("target", choices=sorted(RUN_TARGETS))
     parser.add_argument("--seconds", type=int, choices=(30, 1800), default=30)
     args = parser.parse_args()
     counts = validate(json.loads((HERE / "seeds.json").read_text()))
