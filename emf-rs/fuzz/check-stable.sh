@@ -4,6 +4,21 @@ cd "$(dirname "$0")/../.."
 : "${CARGO_TARGET_DIR:?set a separate absolute CARGO_TARGET_DIR}"
 python3 emf-rs/fuzz/seeds.py --corpus "$CARGO_TARGET_DIR/fuzz-corpus"
 cargo build --manifest-path emf-rs/Cargo.toml -p emf-core -p emf-ffi -p dib-model -p png-model --locked
+# Cargo only materializes the unhashed rlib link for a crate's sole build
+# unit; when it is absent, restore it from the newest hashed unit in deps/
+# so the rustc commands below keep referencing exported-library paths.
+ensure_rlib() {
+  name="$1"
+  if [ ! -f "$CARGO_TARGET_DIR/debug/lib$name.rlib" ]; then
+    latest=$(ls "$CARGO_TARGET_DIR"/debug/deps/lib"$name"-*.rlib 2>/dev/null | sort | tail -n 1)
+    if [ -n "$latest" ]; then
+      cp "$latest" "$CARGO_TARGET_DIR/debug/lib$name.rlib"
+    fi
+  fi
+}
+ensure_rlib dib_model
+ensure_rlib png_model
+
 rustc --edition=2021 --crate-name emf_fuzz --crate-type rlib emf-rs/fuzz/src/lib.rs \
   -L "dependency=$CARGO_TARGET_DIR/debug" \
   -L "dependency=$CARGO_TARGET_DIR/debug/deps" \
