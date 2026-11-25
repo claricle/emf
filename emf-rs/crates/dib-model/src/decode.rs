@@ -89,7 +89,7 @@ pub fn decode_bi_rgb(
 
     let pixel_offset = bits_offset.unwrap_or(pal_start + pal_entries * 4);
     let row_stride = (bit_count * width).div_ceil(32) * 4;
-    let mut pixels = vec![0u8; width.checked_mul(height_abs)?.checked_mul(4)?];
+    let mut pixels = crate::try_zeroed(width.checked_mul(height_abs)?.checked_mul(4)?)?;
 
     for row in 0..height_abs {
         let src_row = if top_down { row } else { height_abs - 1 - row };
