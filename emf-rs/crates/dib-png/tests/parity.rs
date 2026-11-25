@@ -45,7 +45,11 @@ fn sha256_helper_matches_known_vectors() {
 }
 
 fn sha256_hex(data: &[u8]) -> String {
-    sha256(data).iter().map(|b| format!("{b:02x}")).collect()
+    let mut hex = String::with_capacity(64);
+    for byte in sha256(data) {
+        hex.push_str(&format!("{byte:02x}"));
+    }
+    hex
 }
 
 /// Compact SHA-256 (FIPS 180-4) so the fixture replay needs no digest

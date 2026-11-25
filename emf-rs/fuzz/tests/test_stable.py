@@ -20,15 +20,26 @@ class StableCompilationTest(unittest.TestCase):
             environment.pop('RUSTUP_TOOLCHAIN', None)
             subprocess.run([
                 'cargo', 'build', '--manifest-path', str(ROOT / 'emf-rs/Cargo.toml'),
-                '--target-dir', str(build), '-p', 'emf-core', '-p', 'emf-ffi', '--locked',
+                '--target-dir', str(build), '-p', 'emf-core', '-p', 'emf-ffi',
+                '-p', 'dib-model', '-p', 'png-model', '--locked',
             ], check=True, capture_output=True, text=True, env=environment)
 
             target = base / 'target'
             (target / 'debug/deps').mkdir(parents=True)
             # The direct rustc builds must also find transitive dependencies
             # beside the exported libraries, without Cargo's hashed copies.
-            for name in ['libemf_core.rlib', 'libemf_ffi.rlib']:
+            exported = ['libemf_core.rlib', 'libemf_ffi.rlib', 'libdib_model.rlib',
+                        'libpng_model.rlib']
+            for name in exported:
                 shutil.copy2(build / 'debug' / name, target / 'debug' / name)
+            # Transitive closure of png-model (zlib codec and its libc):
+            # cargo does not materialize unhashed links for non-selected
+            # packages, so take the newest hashed unit under its exported
+            # (unhashed) name.
+            for dependency in ('liblibz_sys', 'liblibc'):
+                units = sorted((build / 'debug/deps').glob(dependency + '-*.rlib'))
+                self.assertTrue(units, dependency + ' unit built')
+                shutil.copy2(units[-1], target / 'debug' / (dependency + '.rlib'))
 
             environment['CARGO_TARGET_DIR'] = str(target)
             script = (ROOT / 'emf-rs/fuzz/check-stable.sh').read_text()
