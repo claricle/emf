@@ -13,7 +13,7 @@ ensure_rlib() {
   name="$1"
   out="$CARGO_TARGET_DIR/debug/lib$name.rlib"
   if [ ! -f "$out" ]; then
-    latest=$(find "$CARGO_TARGET_DIR" -name "lib$name-*.rlib" -type f 2>/dev/null | sort | tail -n 1)
+    latest=$(find "$CARGO_TARGET_DIR" \( -name "lib$name-*.rlib" -o -name "lib$name.rlib" \) -type f 2>/dev/null | sort | tail -n 1)
     if [ -n "$latest" ]; then
       mkdir -p "$CARGO_TARGET_DIR/debug"
       cp "$latest" "$out"
