@@ -54,6 +54,11 @@ jobs:
           bundler-cache: true
           working-directory: .
 
+      - name: Check dependency direction
+        if: matrix.toolchain == 'stable' && matrix.os == 'ubuntu-latest'
+        working-directory: .
+        run: script/check_dep_direction
+
       - name: Run compiled native Ruby adapter specs
         if: matrix.toolchain == 'stable'
         working-directory: .
