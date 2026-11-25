@@ -34,10 +34,11 @@ class StableCompilationTest(unittest.TestCase):
                 shutil.copy2(build / 'debug' / name, target / 'debug' / name)
             # Transitive closure of png-model (zlib codec and its libc):
             # cargo does not materialize unhashed links for non-selected
-            # packages, so take the newest hashed unit under its exported
-            # (unhashed) name.
+            # packages, and unit placement varies across cargo versions, so
+            # search the fresh build tree and export the newest units under
+            # their unhashed names.
             for dependency in ('liblibz_sys', 'liblibc'):
-                units = sorted((build / 'debug/deps').glob(dependency + '-*.rlib'))
+                units = sorted(build.rglob(dependency + '-*.rlib'))
                 self.assertTrue(units, dependency + ' unit built')
                 shutil.copy2(units[-1], target / 'debug' / (dependency + '.rlib'))
 
