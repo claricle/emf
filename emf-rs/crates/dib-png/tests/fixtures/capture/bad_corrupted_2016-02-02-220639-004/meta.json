@@ -1,0 +1,11 @@
+{
+  "bits_offset": 40,
+  "mono_palette": null,
+  "width": 10,
+  "height": 10,
+  "color_type": "rgba",
+  "rgba_sha256": "b396723c997cf61d01dc3030d1d7da3f6ca8db3fba85f9d0b4fa280c0288f64c",
+  "decoded_width": 10,
+  "decoded_height": 10,
+  "decoded_rgba_sha256": "b396723c997cf61d01dc3030d1d7da3f6ca8db3fba85f9d0b4fa280c0288f64c"
+}
