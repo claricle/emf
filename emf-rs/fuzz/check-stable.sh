@@ -23,6 +23,15 @@ ensure_rlib() {
 ensure_rlib dib_model
 ensure_rlib png_model
 
+# Temporary diagnostics for the exported-library layout on CI runners.
+for name in dib_model png_model; do
+  if [ ! -f "$CARGO_TARGET_DIR/debug/lib$name.rlib" ]; then
+    echo "DIAGNOSTIC: exported rlib missing for $name" >&2
+    find "$CARGO_TARGET_DIR" -maxdepth 6 -name "*${name}*" 2>/dev/null | head -30 >&2
+    ls "$CARGO_TARGET_DIR/debug" 2>/dev/null | head -40 >&2
+  fi
+done
+
 rustc --edition=2021 --crate-name emf_fuzz --crate-type rlib emf-rs/fuzz/src/lib.rs \
   -L "dependency=$CARGO_TARGET_DIR/debug" \
   -L "dependency=$CARGO_TARGET_DIR/debug/deps" \
