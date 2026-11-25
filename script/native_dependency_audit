@@ -3,7 +3,7 @@
 
 # Usage: script/native_dependency_audit [--manifest-dir DIR] [--allow-list FILE]
 #
-# Without building: checks that Cargo.lock resolves unchanged (cargo metadata --locked --offline),
+# Without building: checks that Cargo.lock resolves unchanged (cargo metadata --locked),
 # lists every normal-dependency crate in emf-ffi's closure with version, source and license, and
 # checks each license expression against the allow-list. Vulnerability checking runs only when
 # `cargo audit` is installed; otherwise it is reported as NOT RUN. JSON goes to stdout, a human
@@ -134,7 +134,11 @@ class NativeDependencyAudit
   end
 
   def resolve
-    out, err, status = Open3.capture3("cargo", "metadata", "--locked", "--offline", "--format-version", "1",
+    # --offline is not used: the workspace carries registry dependencies
+    # since the bitmap-model crates, so a cold registry cache would fail
+    # resolution that --locked alone can satisfy. The lock digest still
+    # proves the lock was not rewritten; metadata never writes it.
+    out, err, status = Open3.capture3("cargo", "metadata", "--locked", "--format-version", "1",
                                       chdir: @manifest_dir)
     return [JSON.parse(out), nil] if status.success?
 
