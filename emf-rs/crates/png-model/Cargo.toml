@@ -1,0 +1,14 @@
+[package]
+name = "png-model"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "PNG chunk-tree model: strict decode, pixel surface, and byte-faithful serializer"
+
+[dependencies]
+# Stock zlib (vendored static build) — the deflate/inflate codec. Byte parity
+# with the Ruby ground truth (libpng + zlib) requires the reference zlib
+# implementation; every other part of PNG emission is implemented here.
+libz-sys = "1.1"

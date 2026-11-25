@@ -1,0 +1,12 @@
+[package]
+name = "dib-png"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "DIB ⇄ PNG bitmap transformer: the only place the DIB and PNG models meet"
+
+[dependencies]
+dib-model = { path = "../dib-model" }
+png-model = { path = "../png-model" }
