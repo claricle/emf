@@ -1,4 +1,6 @@
 //! Shared real fuzz entry points, also executable by the stable corpus driver.
+pub mod bitmap;
+
 use emf_core::{emf_plus, wmf, ParseLimits};
 use emf_ffi::*;
 use std::{mem::size_of, ptr, slice};

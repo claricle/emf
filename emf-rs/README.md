@@ -32,6 +32,15 @@ comment alignment and retain unknown records and opaque suffixes. Invalid edit
 layouts fail without mutating the document. Unchanged malformed payloads retain
 their original bytes.
 
+Two sibling workspace crates carry the embedded-bitmap formats, one model per
+format with transformers between them and no format mixing:
+`crates/png-model` (strict chunk-tree decode, pixel surface, and a serializer
+reproducing libpng 1.6's default write path byte for byte) and `crates/dib-model`
+(the BITMAPCORE..V5 header zoo and the pixel decode mirroring emfsvg's
+DibDecoder). `crates/dib-png` is the only crate where the two models meet, and
+is byte-exact against the Ruby dib->png chain on the captured corpus fixtures
+under its `tests/fixtures/capture/`.
+
 The remaining record families, structured EMF+, Ruby binding and full fixture
 parity remain open in `TODO.plan/03-rust-core.md`. An initial owned C ABI is
 provided by `emf-ffi`; see its README and public header for the raw-framing scope
