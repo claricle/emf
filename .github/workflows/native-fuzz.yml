@@ -32,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [parse, serialize, ffi]
+        target: [parse, serialize, ffi, dib, png]
     env:
       CARGO_BUILD_JOBS: 1
       RUSTUP_TOOLCHAIN: nightly-2025-04-01

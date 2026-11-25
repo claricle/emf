@@ -10,6 +10,7 @@ import shutil
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 TARGETS = {"parse", "serialize", "ffi"}
+CAPTURE_FIXTURES = HERE.parent / "crates/dib-png/tests/fixtures/capture"
 
 
 def validate(manifest):
@@ -61,6 +62,31 @@ def main():
             output.mkdir(parents=True, exist_ok=True)
             for number, seed in enumerate(eligible):
                 shutil.copyfile(ROOT / seed["path"], output / f'{number:04d}-{seed["sha256"]}')
+    # Bitmap-parser seeds derive from the captured corpus fixtures: every
+    # DIB payload feeds the dib target; every emitted or embedded PNG feeds
+    # the png target.
+    dib_count = png_count = 0
+    if args.corpus and CAPTURE_FIXTURES.is_dir():
+        dib_output = args.corpus / "dib"
+        png_output = args.corpus / "png"
+        dib_output.mkdir(parents=True, exist_ok=True)
+        png_output.mkdir(parents=True, exist_ok=True)
+        for directory in sorted(CAPTURE_FIXTURES.iterdir()):
+            dib_file = directory / "dib.bin"
+            if dib_file.exists():
+                payload = dib_file.read_bytes()
+                digest = hashlib.sha256(payload).hexdigest()
+                shutil.copyfile(dib_file, dib_output / f"{directory.name}-{digest}")
+                dib_count += 1
+            for name in ("expected.png", "passthrough.bin"):
+                png_file = directory / name
+                if png_file.exists():
+                    payload = png_file.read_bytes()
+                    digest = hashlib.sha256(payload).hexdigest()
+                    shutil.copyfile(png_file, png_output / f"{directory.name}-{digest}")
+                    png_count += 1
+    report["targets"]["dib"] = {"seed_count": dib_count}
+    report["targets"]["png"] = {"seed_count": png_count}
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, indent=2) + "\n")
